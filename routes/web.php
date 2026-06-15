@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\Student\DashboardController as StudentDashboardController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -21,7 +22,10 @@ Route::middleware(['auth', 'role:student'])
     ->prefix('student')
     ->name('student.')
     ->group(function () {
-        Route::get('/dashboard', fn () => view('student.dashboard'))->name('dashboard');
+        Route::get('/dashboard', StudentDashboardController::class)->name('dashboard');
+        Route::get('/appointments', fn () => view('student.stub', ['page' => 'Book Appointment']))->name('appointments');
+        Route::get('/records', fn () => view('student.stub', ['page' => 'My Records']))->name('records');
+        Route::get('/id-profile', fn () => view('student.stub', ['page' => 'My ID & Profile']))->name('id-profile');
     });
 
 // ── College Admin (FR-AUTH-03) ───────────────────────────────────────────────
