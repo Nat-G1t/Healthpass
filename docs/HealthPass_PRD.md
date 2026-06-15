@@ -81,6 +81,7 @@ Explicitly **out of scope** for this release:
 - Payments, pharmacy, medicine inventory
 - Laboratory results, imaging, or referral management
 - Native mobile applications (the web app is responsive desktop-first; the kiosk is fixed 800×480)
+- Faculty and NASA (non-academic staff) clearances — analytics and clearance records cover students only; Faculty and NASA visits are explicitly out of scope and excluded from all analytics
 - SMS notifications
 - Multi-clinic or multi-campus support (single PamSU campus clinic, one kiosk)
 - Real-time WebSockets (queue refresh is polling-based by design)
@@ -93,7 +94,7 @@ Only **students self-register**. `nurse`, `college_admin`, and `director` accoun
 
 ### 2.1 Student
 
-A PamSU student (any of the 6 colleges) who needs a Medical Clearance (graduation, OJT, sports, field trip, etc.) or a Dental Check. Uses the web app from a personal device to register, book, and view records; uses the kiosk on-site with a QR-coded ID. Technical skill: basic smartphone/web literacy. Key needs: book without queuing blind, finish the kiosk quickly, see their own history.
+A PamSU student (any of the 12 colleges) who needs a Medical Clearance (graduation, OJT, sports, field trip, etc.) or a Dental Check. Uses the web app from a personal device to register, book, and view records; uses the kiosk on-site with a QR-coded ID. Technical skill: basic smartphone/web literacy. Key needs: book without queuing blind, finish the kiosk quickly, see their own history.
 
 ### 2.2 College Admin
 
@@ -111,12 +112,18 @@ Head of the Health Services Unit. Approves or rejects college batch requests, mo
 
 | Code | Full name |
 |---|---|
-| CCS | College of Computing Studies |
-| CEA | College of Engineering & Architecture |
-| CBS | College of Business Studies |
-| CAS | College of Arts & Sciences |
-| CEduc | College of Education |
-| CHTM | College of Hospitality & Tourism Management |
+| COE  | College of Education |
+| CEA  | College of Architecture and Engineering |
+| CBS  | College of Business Studies |
+| CAS  | College of Arts and Science |
+| CSSP | College of Social Science and Philosophy |
+| CCS  | College of Computing Studies |
+| CHTM | College of Hospitality and Management |
+| CIT  | College of Industrial Technology |
+| LAW  | School of Law |
+| GS   | Graduate Studies |
+| SHS  | Senior High School |
+| LHS  | Laboratory High School |
 
 Each college has **exactly one** College Admin account.
 
@@ -188,7 +195,7 @@ Notation: each requirement has an ID, a MoSCoW priority — **M**ust (defense-cr
 |---|---|---|
 | FR-REG-01 | Registration shall be a 4-step wizard with a top progress bar: **Consent → Account Info → Email Verify → Link ID**. | M |
 | FR-REG-02 | **Step 1 (Consent):** display the RA 10173 data-privacy notice; the Continue button shall remain disabled until the consent checkbox is ticked. Consent timestamp is stored in `student_profiles.privacy_consent_at`. | M |
-| FR-REG-03 | **Step 2 (Personal Information):** capture First Name, Last Name, Student Number (unique), College (dropdown of the 6 colleges), Sex (M/F), Course & Year, Date of Birth (with auto-computed Age badge), Place of Birth, Civil Status (Single/Married/Widowed/Separated), Address, Email (unique), Password. All fields validated server-side. | M |
+| FR-REG-03 | **Step 2 (Personal Information):** capture First Name, Last Name, Student Number (unique), College (dropdown of the 12 colleges), Sex (M/F), Course & Year, Date of Birth (with auto-computed Age badge), Place of Birth, Civil Status (Single/Married/Widowed/Separated), Address, Email (unique), Password. All fields validated server-side. | M |
 | FR-REG-04 | **Step 3 (Email Verify):** the system shall verify email ownership via a 6-digit OTP entered in six auto-advancing boxes, with a Resend link; Verify & Continue is disabled until 6 digits are entered (Decision D-8: OTP is generated server-side, stored **hashed in cache with a TTL of 10 minutes** — no database table; mail driver is `log`/Mailtrap in dev, SMTP in production). | M |
 | FR-REG-05 | OTP attempts shall be rate-limited (max 5 verify attempts per code; resend invalidates the previous code). | S |
 | FR-REG-06 | **Step 4 (Link ID):** the student may link their physical ID by scanning its QR (USB scanner acting as keyboard input into a focused field) which binds `qr_token`, **or** press "Skip for now" and link later from the My ID screen. | M |
@@ -271,7 +278,7 @@ The kiosk is the route `/kiosk` rendered full-screen in Chromium kiosk mode on t
 |---|---|---|
 | FR-NRS-01 | **Live Queue** shall list visits with status `captured`, **oldest first (first come, first served)** — the top row is the longest-waiting student, tagged "NEXT" with a peach highlight; new submissions append at the bottom. Columns: Student (initials avatar + name), College, Vitals Summary inline (flagged values bold orange), Flags column (badges for temp/bp/bmi or "—"), capture Time, and an "Encode Result" action (primary button on the top row). | M |
 | FR-NRS-02 | The queue shall refresh by **polling** (JS `fetch` every 3–5 s) updating rows in place; the header shows a blinking LIVE pill and "{n} students waiting · updated just now". | M |
-| FR-NRS-03 | **Encode Result ("Doctor's Assessment"):** shall display the visit's full vitals (with flags), all questionnaire answers, and student identity; the nurse sets Result (**Fit/Unfit — required**), Medical Case Category (optional; one of Respiratory, Cardiovascular, Dermatologic, Gastrointestinal, ENT, Musculoskeletal, Vision, Other), Purpose (optional; one of Off Campus Procedure, On-the-job Training, Field Trip/Educational Tour, Sports Activities), and free-text Nurse Notes. | M |
+| FR-NRS-03 | **Encode Result ("Doctor's Assessment"):** shall display the visit's full vitals (with flags), all questionnaire answers, and student identity; the nurse sets Result (**Fit/Unfit — required**), Medical Case Category (optional; one of Alimentary System, Respiratory System, Musculo-Skeletal System, Integumentary System, Urinary System, Metabolic Endocrine System, Cardiovascular System, Eyes, Ears, Nose & Throat Disorders), Purpose (optional; one of Off Campus Procedure, On-the-job Training, Field Trip/Educational Tour, Sports Activities), and free-text Nurse Notes. | M |
 | FR-NRS-04 | **Save & Close** shall create the 1:1 `clearance_records` row (with `encoded_by`, `encoded_at`, pre-filled physician fields per §7.5) and flip the visit to `encoded`, removing it from the Live Queue. Encoding shall be idempotent — a visit can be encoded exactly once; subsequent opens are read/reprint-only. | M |
 | FR-NRS-05 | **Preview & Print** shall render the official clearance form (Module PRT) in an iframe inside the encode screen and trigger `window.print()` on the iframe's content window; printing stamps `printed_at`. Reprint is allowed and re-stamps `printed_at`. | M |
 | FR-NRS-06 | The nurse navigation shall include **Enable Kiosk Mode**, opening `/kiosk` in a new tab/window for the clinic terminal. | M |
@@ -297,14 +304,15 @@ The kiosk is the route `/kiosk` rendered full-screen in Chromium kiosk mode on t
 | ID | Requirement | Priority |
 |---|---|---|
 | FR-ANL-01 | **Director Dashboard** shall show KPI cards plus two preview panels — Pending Batch Approvals (count + preview rows → Batch Approvals) and Flagged Anomalies (count + preview rows → Flagged Anomalies) — each with "View all →". | M |
-| FR-ANL-02 | **Analytics — Medical Cases by College:** a Chart.js grouped bar chart of top case categories per college (series e.g. Vision, Respiratory, ENT, Cardiovascular), X-axis = 6 colleges, subtitle "Top case categories per college — Academic Year 2025–2026". | M |
-| FR-ANL-03 | **Summary of Medical Cases matrix:** a table of 8 case-category rows × 6 college-code columns + TOTAL column and a totals row, sourced from all **encoded** clearance records grouped by `student_profiles.college_id` × `clearance_records.case_category`. | M |
+| FR-ANL-02 | **Analytics — Medical Cases by College:** a horizontal stacked bar chart (Chart.js), one row per college/unit (all 12 units), each bar segmented by the 8 medical-system categories, sorted by total case volume descending, with a total-cases headline (e.g. '235 total cases'). Subtitle: 'Total cases per college, broken down by medical system — sorted by volume.' Students only — Faculty and NASA excluded. Series colors follow the prototype legend. Source: encoded `clearance_records` with non-null `case_category`, grouped by `student_profiles.college_id` × `case_category`. | M |
+| FR-ANL-03 | **Summary of Medical Cases matrix:** 8 medical-system rows × 12 college-code columns + a TOTAL column and a totals row. Fixed column order: COE, CEA, CBS, CAS, CSSP, CCS, CHTM, CIT, LAW, GS, SHS, LHS. Subtitle: 'Rows = medical system · Columns = college · Faculty & NASA excluded.' Source: encoded `clearance_records` with non-null `case_category`, grouped by `student_profiles.college_id` × `case_category`; NULL-category records excluded. | M |
 | FR-ANL-04 | **By-Sex donut** (Chart.js): Male vs Female counts of encoded records, center total, legend with count + %. | M |
 | FR-ANL-05 | **Flagged Anomalies screen:** three stat cards (High Blood Pressure, Fever, Abnormal BMI counts) and a table (Student, College, Flag badge, Value, Category, View), sourced from visits where any of `is_bp_flagged / is_temp_flagged / is_bmi_flagged` is true. | M |
 | FR-ANL-06 | **Export:** an Export action on Analytics and Flagged Anomalies producing at minimum a CSV of the underlying rows (print-friendly view acceptable as fallback). | S |
 | FR-ANL-07 | All analytics shall compute from encoded records only — `captured` (un-encoded) visits never enter case statistics; flags however surface immediately from capture. | M |
+| FR-ANL-08 | **Cases by Medical System:** a horizontal bar chart (Chart.js), one bar per medical-system category (the 8 above), showing the overall total per system across all units, sorted descending. Same source/scope as the matrix (FR-ANL-03). | M |
 
-**AC:** seeding a known dataset (e.g., 3 Respiratory cases in CCS, 2 in CEA) produces exactly those cells in the matrix and bars; the donut totals equal the matrix TOTAL; a freshly captured (not yet encoded) flagged visit appears in Flagged Anomalies but not in case counts.
+**AC:** seeding a known dataset (e.g., 3 Respiratory System cases in CCS, 2 in CEA) produces exactly those cells in the matrix and bars; a freshly captured (not yet encoded) flagged visit appears in Flagged Anomalies but not in case counts. The By-Sex donut counts students by sex across all encoded clinic visits in scope (one count per student/visit), so its total intentionally exceeds the cases total — visits with no assigned case category are still counted as people screened.
 
 ### 4.10 Module HW — Kiosk Hardware Integration
 
@@ -376,7 +384,7 @@ The finalized ERD (rendered June 10, 2026 in the project workspace) is the schem
 
 | Table | Purpose | Key columns (PK bold, FK →) |
 |---|---|---|
-| `colleges` | Reference: the 6 colleges | **id**, code UQ, name |
+| `colleges` | Reference: the 12 colleges | **id**, code UQ, name |
 | `users` | All accounts, 4 roles | **id**, role, name, email UQ, email_verified_at, password, managed_college_id →colleges (admins only), status |
 | `student_profiles` | 1:1 student detail | **id**, user_id UQ →users, college_id →colleges, student_number UQ, first/last name, sex, course, year_level, date_of_birth, place_of_birth, civil_status, address, qr_token UQ, privacy_consent_at |
 | `appointments` | Solo + batch-generated bookings | **id**, reference_no UQ, student_id →users, service_type, scheduled_date, status (scheduled/checked_in/completed/cancelled), source (self/batch), batch_request_id →batch_requests NULL, created_by →users NULL |
@@ -401,7 +409,7 @@ Framework tables created by Laravel/Breeze (`password_reset_tokens`, `sessions`,
 
 ### 6.5 Seed data
 
-Seeders shall provide: the 6 colleges; 1 director, 1 nurse, 6 college admins (one per college); a realistic demo cohort of students across colleges with profiles + QR tokens; and (for W10 demo prep) a seeded history of encoded visits spanning all 8 case categories and both sexes so analytics render meaningfully.
+Seeders shall provide: the 12 colleges; 1 director, 1 nurse, 12 college admins (one per college); a realistic demo cohort of students across colleges with profiles + QR tokens; and (for W10 demo prep) a seeded history of encoded visits spanning all 8 case categories and both sexes so analytics render meaningfully.
 
 ### 6.6 Data retention & privacy posture
 

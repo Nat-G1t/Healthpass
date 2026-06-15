@@ -53,6 +53,7 @@ HealthPass is a **single Laravel application** (plus a clinic kiosk that is a Bl
 - Payments, pharmacy, inventory
 - Laboratory results or referrals
 - Native mobile app
+- Faculty and NASA (non-academic staff) clearances — analytics and clearance records cover students only; Faculty and NASA visits are explicitly out of scope and excluded from all analytics
 
 ---
 
@@ -77,16 +78,22 @@ Only **students** self-register. `nurse`, `college_admin`, and `director` accoun
 | View analytics + flagged anomalies | | | | ✓ |
 | Seed colleges / provision staff accounts | (admin seed) | | | |
 
-**Colleges (6 total):**
+**Colleges (12 total):**
 
 | Code | Full name |
 |---|---|
-| CCS | College of Computing Studies |
-| CEA | College of Engineering & Architecture |
-| CBS | College of Business Studies |
-| CAS | College of Arts & Sciences |
-| CEduc | College of Education |
-| CHTM | College of Hospitality & Tourism Management |
+| COE  | College of Education |
+| CEA  | College of Architecture and Engineering |
+| CBS  | College of Business Studies |
+| CAS  | College of Arts and Science |
+| CSSP | College of Social Science and Philosophy |
+| CCS  | College of Computing Studies |
+| CHTM | College of Hospitality and Management |
+| CIT  | College of Industrial Technology |
+| LAW  | School of Law |
+| GS   | Graduate Studies |
+| SHS  | Senior High School |
+| LHS  | Laboratory High School |
 
 Each college has exactly one College Admin account. The admin's college is stored on their `users` record (`managed_college_id`). All screens, student lists, and batch request data are filtered by this value — it is never settable by the admin themselves.
 
@@ -252,7 +259,7 @@ Progress steps: Consent → Account Info → Email Verify → Link ID
 - Continue disabled until checked. "← Back to Login" link.
 
 **Step 2 — Personal Information (2-column grid)**
-- First Name, Last Name, Student Number, College (dropdown — 6 colleges), Sex (M/F), Course & Year, Date of Birth (+ auto-computed Age badge), Place of Birth, Civil Status (Single/Married/Widowed/Separated), Address, Email, Password.
+- First Name, Last Name, Student Number, College (dropdown — 12 colleges), Sex (M/F), Course & Year, Date of Birth (+ auto-computed Age badge), Place of Birth, Civil Status (Single/Married/Widowed/Separated), Address, Email, Password.
 
 **Step 3 — Email Verify**
 - 6 OTP boxes (auto-focus hidden input, visual boxes highlight as digits are entered).
@@ -347,7 +354,7 @@ Progress steps: Consent → Account Info → Email Verify → Link ID
     - Questionnaire answers card (Yes/No badges; Yes = flagged variant).
   - **Right column** — "Doctor's Assessment" card:
     - **Fit / Unfit** selector (two cards; selected = peach bg + orange border).
-    - **Medical Case Category** dropdown: Respiratory, Cardiovascular, Dermatologic, Gastrointestinal, ENT, Musculoskeletal, Vision, Other.
+    - **Medical Case Category** dropdown: Alimentary System, Respiratory System, Musculo-Skeletal System, Integumentary System, Urinary System, Metabolic Endocrine System, Cardiovascular System, Eyes, Ears, Nose & Throat Disorders.
     - **Purpose / Cleared For** dropdown: Off Campus Procedure, On-the-job Training, Field Trip/Educational Tour, Sports Activities.
     - **Nurse Notes** textarea (optional).
     - "Preview & Print Medical Clearance" button (ghost style, full width, Download icon).
@@ -406,9 +413,10 @@ Progress steps: Consent → Account Info → Email Verify → Link ID
 
 #### Analytics (`director-analytics`)
 - "Export Report" button (ghost sm, top-right, Download icon).
-- **Grouped bar chart** — "Medical Cases by College" (Chart.js). Series: Vision (orange), Respiratory (peach), ENT (slate-55), Cardiovascular (slate-30). X-axis: 6 colleges. Subtitle: "Top case categories per college — Academic Year 2025–2026".
-- **Summary of Medical Cases matrix** (table): rows = 8 case categories, columns = 6 college codes + TOTAL; total row at bottom in orange. Alternating row backgrounds. Data source: all encoded clearance records grouped by `student_profiles.college_id` and `clearance_records.case_category`.
-- **By Sex donut** (Chart.js) — 160px, Male (orange) + Female (peach), centre shows total count. Legend below with count + %.
+- **Medical Cases by College** — horizontal stacked bar chart (Chart.js). One row per college/unit (all 12 units), each bar segmented by the 8 medical-system categories, sorted by total case volume descending. Total-cases headline (e.g. '235 total cases'). Subtitle: 'Total cases per college, broken down by medical system — sorted by volume.' Students only — Faculty and NASA excluded. Series colors follow the prototype legend. Source: encoded `clearance_records` with non-null `case_category`, grouped by `student_profiles.college_id` × `case_category`.
+- **Summary of Medical Cases matrix** (table): 8 medical-system rows × 12 college-code columns + TOTAL column and totals row. Fixed column order: COE, CEA, CBS, CAS, CSSP, CCS, CHTM, CIT, LAW, GS, SHS, LHS. Subtitle: 'Rows = medical system · Columns = college · Faculty & NASA excluded.' Total row at bottom in orange. Alternating row backgrounds. Source: encoded `clearance_records` with non-null `case_category`; NULL-category records excluded.
+- **Cases by Medical System** — horizontal bar chart (Chart.js). One bar per medical-system category (the 8 above), overall total per system across all units, sorted descending. Same source/scope as the matrix.
+- **By-Sex donut** (Chart.js) — 160px, Male (orange) + Female (peach), centre shows total count. Legend below with count + %. The donut counts students by sex across all encoded clinic visits in scope (one count per student/visit), so its total intentionally exceeds the cases total — visits with no assigned case category are still counted as people screened.
 
 #### Flagged Anomalies (`director-flagged`)
 - **3 stat cards** (orange left border): High Blood Pressure count, Fever count, Abnormal BMI count.
@@ -495,7 +503,7 @@ Each vital screen has:
 ### `colleges`
 ```sql
 id              bigint PK
-code            varchar(10) UNIQUE          -- CCS, CEA, CBS, CAS, CEduc, CHTM
+code            varchar(10) UNIQUE          -- COE, CEA, CBS, CAS, CSSP, CCS, CHTM, CIT, LAW, GS, SHS, LHS
 name            varchar(120)
 created_at, updated_at
 ```
@@ -629,7 +637,7 @@ id                    bigint PK
 clinic_visit_id       bigint UNIQUE FK → clinic_visits.id
 encoded_by            bigint FK → users.id  -- the nurse
 result                enum('Fit','Unfit')
-case_category         enum('Respiratory','Cardiovascular','Dermatologic','Gastrointestinal','ENT','Musculoskeletal','Vision','Other') NULL
+case_category         enum('Alimentary System','Respiratory System','Musculo-Skeletal System','Integumentary System','Urinary System','Metabolic Endocrine System','Cardiovascular System','Eyes, Ears, Nose & Throat Disorders') NULL
 purpose               enum('Off Campus Procedure','On-the-job Training','Field Trip/Educational Tour','Sports Activities') NULL
 nurse_notes           text NULL
 physician_name        varchar(120) DEFAULT 'REYNALDO S. ALIPIO, MD'
