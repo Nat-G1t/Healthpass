@@ -1,3 +1,36 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ── HealthPass design tokens ──────────────────────────────────────────────── */
+:root {
+    --hp-white:  #FFFFFF;
+    --hp-bg:     #F6F2ED;
+    --hp-peach:  #FFCAA0;
+    --hp-orange: #FF8C2A;
+    --hp-slate:  #4B5563;
+}
+
+/* ── Base ───────────────────────────────────────────────────────────────────── */
+@layer base {
+    body {
+        font-family: 'Poppins', sans-serif;
+        color: var(--hp-slate);
+        background-color: var(--hp-bg);
+    }
+}
+
+/* ── Scrollbars (Chromium / WebKit) ─────────────────────────────────────────── */
+::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background-color: rgba(75, 85, 99, 0.28); /* slate at ~28% — visible but subtle */
+    border-radius: 9999px;
+}

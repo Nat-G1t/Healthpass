@@ -1,47 +1,92 @@
-<x-guest-layout>
-    <!-- Session Status -->
-    <x-auth-session-status class="mb-4" :status="session('status')" />
+<!DOCTYPE html>
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="h-full">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>Sign In — HealthPass</title>
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
+</head>
+<body class="flex min-h-full items-center justify-center bg-hp-bg px-4 py-12">
 
-    <form method="POST" action="{{ route('login') }}">
-        @csrf
+<div class="w-full max-w-[420px] space-y-8">
 
-        <!-- Email Address -->
-        <div>
-            <x-input-label for="email" :value="__('Email')" />
-            <x-text-input id="email" class="block mt-1 w-full" type="email" name="email" :value="old('email')" required autofocus autocomplete="username" />
-            <x-input-error :messages="$errors->get('email')" class="mt-2" />
-        </div>
+    {{-- Logo + tagline --}}
+    <div class="flex flex-col items-center gap-3 text-center">
+        <x-hp.logo size="lg" />
+        <p class="text-sm text-hp-slate/60">Medical Clearance — Pampanga State University</p>
+    </div>
 
-        <!-- Password -->
-        <div class="mt-4">
-            <x-input-label for="password" :value="__('Password')" />
+    {{-- Card --}}
+    <x-hp.card>
 
-            <x-text-input id="password" class="block mt-1 w-full"
-                            type="password"
-                            name="password"
-                            required autocomplete="current-password" />
+        {{-- Error / status flash --}}
+        @if (session('status'))
+            <div class="mb-4 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
+                {{ session('status') }}
+            </div>
+        @endif
 
-            <x-input-error :messages="$errors->get('password')" class="mt-2" />
-        </div>
+        <form method="POST" action="{{ route('login') }}" class="space-y-5">
+            @csrf
 
-        <!-- Remember Me -->
-        <div class="block mt-4">
-            <label for="remember_me" class="inline-flex items-center">
-                <input id="remember_me" type="checkbox" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" name="remember">
-                <span class="ms-2 text-sm text-gray-600">{{ __('Remember me') }}</span>
-            </label>
-        </div>
+            {{-- Email --}}
+            <x-hp.input
+                label="Email Address"
+                id="email"
+                type="email"
+                name="email"
+                :value="old('email')"
+                placeholder="you@example.com"
+                required
+                autofocus
+                autocomplete="username"
+                :error="$errors->first('email')"
+            />
 
-        <div class="flex items-center justify-end mt-4">
+            {{-- Password with eye toggle --}}
+            <x-hp.input
+                label="Password"
+                id="password"
+                :password="true"
+                name="password"
+                placeholder="••••••••"
+                required
+                autocomplete="current-password"
+                :error="$errors->first('password')"
+            />
+
+            {{-- Submit --}}
+            <x-hp.button type="submit" variant="primary" size="lg" class="w-full">
+                Sign In
+            </x-hp.button>
+
+        </form>
+
+        {{-- Links --}}
+        <div class="mt-5 flex flex-col items-center gap-2 text-sm text-hp-slate/60">
+            <p>
+                Don't have an account?
+                <a href="{{ route('register') }}" class="font-semibold text-hp-orange hover:underline">
+                    Register here
+                </a>
+            </p>
             @if (Route::has('password.request'))
-                <a class="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" href="{{ route('password.request') }}">
-                    {{ __('Forgot your password?') }}
+                <a href="{{ route('password.request') }}" class="hover:underline">
+                    Forgot your password?
                 </a>
             @endif
-
-            <x-primary-button class="ms-3">
-                {{ __('Log in') }}
-            </x-primary-button>
         </div>
-    </form>
-</x-guest-layout>
+
+    </x-hp.card>
+
+    {{-- RA 10173 footer note --}}
+    <p class="text-center text-[11px] leading-relaxed text-hp-slate/40">
+        Information collected is protected under the Data Privacy Act of 2012 (RA 10173).<br>
+        For concerns, contact the clinic or your Data Protection Officer.
+    </p>
+
+</div>
+
+</body>
+</html>

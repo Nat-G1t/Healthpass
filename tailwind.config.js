@@ -12,7 +12,14 @@ export default {
     theme: {
         extend: {
             fontFamily: {
-                sans: ['Figtree', ...defaultTheme.fontFamily.sans],
+                sans: ['Poppins', ...defaultTheme.fontFamily.sans],
+            },
+            colors: {
+                'hp-white':  '#FFFFFF',
+                'hp-bg':     '#F6F2ED',
+                'hp-peach':  '#FFCAA0',
+                'hp-orange': '#FF8C2A',
+                'hp-slate':  '#4B5563',
             },
         },
     },

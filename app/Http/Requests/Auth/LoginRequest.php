@@ -50,6 +50,16 @@ class LoginRequest extends FormRequest
             ]);
         }
 
+        // FR-AUTH-07: block inactive accounts after credentials pass
+        if (Auth::user()->status !== 'active') {
+            Auth::logout();
+            RateLimiter::hit($this->throttleKey());
+
+            throw ValidationException::withMessages([
+                'email' => 'Your account is inactive. Please contact the clinic for assistance.',
+            ]);
+        }
+
         RateLimiter::clear($this->throttleKey());
     }
 
