@@ -22,6 +22,9 @@
     }
 }
 
+/* ── Alpine x-cloak — hide elements until Alpine initialises ────────────────── */
+[x-cloak] { display: none !important; }
+
 /* ── Scrollbars (Chromium / WebKit) ─────────────────────────────────────────── */
 ::-webkit-scrollbar {
     width: 5px;

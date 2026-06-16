@@ -7,15 +7,30 @@ use App\Http\Controllers\Auth\EmailVerificationPromptController;
 use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
-use App\Http\Controllers\Auth\RegisteredUserController;
+use App\Http\Controllers\Auth\RegistrationWizardController;
 use App\Http\Controllers\Auth\VerifyEmailController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function () {
-    Route::get('register', [RegisteredUserController::class, 'create'])
+    // ── Registration wizard (FR-REG-01..08) ─────────────────────────────────
+    // Step 1: Consent
+    Route::get('register', [RegistrationWizardController::class, 'step1'])
         ->name('register');
+    Route::post('register/consent', [RegistrationWizardController::class, 'storeConsent'])
+        ->name('register.consent');
 
-    Route::post('register', [RegisteredUserController::class, 'store']);
+    // Step 2: Personal Information
+    Route::get('register/info', [RegistrationWizardController::class, 'step2'])
+        ->name('register.info');
+    Route::post('register/info', [RegistrationWizardController::class, 'storeInfo'])
+        ->name('register.info.store');
+
+    // Step 3: Email Verify (placeholder — OTP in next sprint)
+    Route::get('register/verify', [RegistrationWizardController::class, 'step3'])
+        ->name('register.verify');
+
+    // Legacy Breeze route — removed; RegistrationWizardController handles registration.
+    // Route::post('register', [RegisteredUserController::class, 'store']);
 
     Route::get('login', [AuthenticatedSessionController::class, 'create'])
         ->name('login');

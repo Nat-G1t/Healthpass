@@ -111,6 +111,7 @@ class StudentProfileFactory extends Factory
             'college_id' => College::inRandomOrder()->value('id') ?? 1,
             'student_number' => $this->faker->unique()->numerify('20##3#####'),
             'first_name' => $firstName,
+            'middle_name' => $this->faker->randomElement(self::$lastNames),
             'last_name' => $lastName,
             'sex' => $sex,
             'course' => 'Bachelor of Science in Information Technology',

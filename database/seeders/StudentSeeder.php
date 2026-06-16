@@ -33,6 +33,7 @@ class StudentSeeder extends Seeder
                 ->create([
                     'user_id'        => $user->id,
                     'first_name'     => $row['first'],
+                    'middle_name'    => $row['middle'],
                     'last_name'      => $row['last'],
                     'sex'            => $row['sex'],
                     'student_number' => $row['student_no'],
@@ -56,7 +57,7 @@ class StudentSeeder extends Seeder
         return [
             // ── CCS — College of Computing Studies (4 students) ──────────────
             [
-                'first' => 'Juan',   'last' => 'Santos',    'sex' => 'M',
+                'first' => 'Juan',   'middle' => 'Reyes',     'last' => 'Santos',    'sex' => 'M',
                 'college' => 'CCS',
                 'course' => 'Bachelor of Science in Computer Science',
                 'year' => '4th Year', 'dob' => '2002-03-15',
@@ -64,7 +65,7 @@ class StudentSeeder extends Seeder
                 'email' => 'juan.santos@psu.edu.ph',
             ],
             [
-                'first' => 'Maria',  'last' => 'Reyes',     'sex' => 'F',
+                'first' => 'Maria',  'middle' => 'Cruz',       'last' => 'Reyes',     'sex' => 'F',
                 'college' => 'CCS',
                 'course' => 'Bachelor of Science in Information Technology',
                 'year' => '3rd Year', 'dob' => '2003-07-22',
@@ -72,7 +73,7 @@ class StudentSeeder extends Seeder
                 'email' => 'maria.reyes@psu.edu.ph',
             ],
             [
-                'first' => 'Carlo',  'last' => 'Cruz',      'sex' => 'M',
+                'first' => 'Carlo',  'middle' => 'Bautista',   'last' => 'Cruz',      'sex' => 'M',
                 'college' => 'CCS',
                 'course' => 'Bachelor of Science in Information Systems',
                 'year' => '2nd Year', 'dob' => '2004-11-09',
@@ -80,7 +81,7 @@ class StudentSeeder extends Seeder
                 'email' => 'carlo.cruz@psu.edu.ph',
             ],
             [
-                'first' => 'Angel',  'last' => 'Garcia',    'sex' => 'F',
+                'first' => 'Angel',  'middle' => 'Ocampo',     'last' => 'Garcia',    'sex' => 'F',
                 'college' => 'CCS',
                 'course' => 'Bachelor of Science in Computer Science',
                 'year' => '1st Year', 'dob' => '2005-05-18',
@@ -90,7 +91,7 @@ class StudentSeeder extends Seeder
 
             // ── COE — College of Education (3 students) ──────────────────────
             [
-                'first' => 'Jose',   'last' => 'Bautista',  'sex' => 'M',
+                'first' => 'Jose',   'middle' => 'Mendoza',    'last' => 'Bautista',  'sex' => 'M',
                 'college' => 'COE',
                 'course' => 'Bachelor of Secondary Education',
                 'year' => '4th Year', 'dob' => '2001-09-03',
@@ -98,7 +99,7 @@ class StudentSeeder extends Seeder
                 'email' => 'jose.bautista@psu.edu.ph',
             ],
             [
-                'first' => 'Sofia',  'last' => 'Ocampo',    'sex' => 'F',
+                'first' => 'Sofia',  'middle' => 'Torres',     'last' => 'Ocampo',    'sex' => 'F',
                 'college' => 'COE',
                 'course' => 'Bachelor of Elementary Education',
                 'year' => '2nd Year', 'dob' => '2004-01-27',
@@ -106,7 +107,7 @@ class StudentSeeder extends Seeder
                 'email' => 'sofia.ocampo@psu.edu.ph',
             ],
             [
-                'first' => 'Darwin', 'last' => 'Mendoza',   'sex' => 'M',
+                'first' => 'Darwin', 'middle' => 'Castillo',   'last' => 'Mendoza',   'sex' => 'M',
                 'college' => 'COE',
                 'course' => 'Bachelor of Physical Education',
                 'year' => '3rd Year', 'dob' => '2003-06-14',
@@ -116,7 +117,7 @@ class StudentSeeder extends Seeder
 
             // ── CEA — College of Architecture and Engineering (3 students) ───
             [
-                'first' => 'Marco',    'last' => 'Torres',   'sex' => 'M',
+                'first' => 'Marco',    'middle' => 'Villanueva', 'last' => 'Torres',   'sex' => 'M',
                 'college' => 'CEA',
                 'course' => 'Bachelor of Science in Civil Engineering',
                 'year' => '3rd Year', 'dob' => '2002-12-30',
@@ -124,7 +125,7 @@ class StudentSeeder extends Seeder
                 'email' => 'marco.torres@psu.edu.ph',
             ],
             [
-                'first' => 'Kristine', 'last' => 'Ramirez',  'sex' => 'F',
+                'first' => 'Kristine', 'middle' => 'Gonzales',  'last' => 'Ramirez',  'sex' => 'F',
                 'college' => 'CEA',
                 'course' => 'Bachelor of Science in Architecture',
                 'year' => '2nd Year', 'dob' => '2004-04-05',
@@ -132,7 +133,7 @@ class StudentSeeder extends Seeder
                 'email' => 'kristine.ramirez@psu.edu.ph',
             ],
             [
-                'first' => 'Paolo',    'last' => 'Flores',   'sex' => 'M',
+                'first' => 'Paolo',    'middle' => 'Ramos',      'last' => 'Flores',   'sex' => 'M',
                 'college' => 'CEA',
                 'course' => 'Bachelor of Science in Electrical Engineering',
                 'year' => '4th Year', 'dob' => '2001-08-19',
@@ -142,7 +143,7 @@ class StudentSeeder extends Seeder
 
             // ── CBS — College of Business Studies (3 students) ───────────────
             [
-                'first' => 'Ana',      'last' => 'Mercado',  'sex' => 'F',
+                'first' => 'Ana',      'middle' => 'Padilla',    'last' => 'Mercado',  'sex' => 'F',
                 'college' => 'CBS',
                 'course' => 'Bachelor of Science in Accountancy',
                 'year' => '3rd Year', 'dob' => '2002-02-11',
@@ -150,7 +151,7 @@ class StudentSeeder extends Seeder
                 'email' => 'ana.mercado@psu.edu.ph',
             ],
             [
-                'first' => 'Kenneth',  'last' => 'Castillo', 'sex' => 'M',
+                'first' => 'Kenneth',  'middle' => 'Aquino',     'last' => 'Castillo', 'sex' => 'M',
                 'college' => 'CBS',
                 'course' => 'Bachelor of Science in Business Administration',
                 'year' => '2nd Year', 'dob' => '2004-10-07',
@@ -158,7 +159,7 @@ class StudentSeeder extends Seeder
                 'email' => 'kenneth.castillo@psu.edu.ph',
             ],
             [
-                'first' => 'Maricel',  'last' => 'Gonzales', 'sex' => 'F',
+                'first' => 'Maricel',  'middle' => 'Diaz',       'last' => 'Gonzales', 'sex' => 'F',
                 'college' => 'CBS',
                 'course' => 'Bachelor of Science in Marketing Management',
                 'year' => '4th Year', 'dob' => '2001-07-16',
@@ -168,7 +169,7 @@ class StudentSeeder extends Seeder
 
             // ── CAS — College of Arts and Science (3 students) ───────────────
             [
-                'first' => 'Jayson',  'last' => 'Diaz',    'sex' => 'M',
+                'first' => 'Jayson',  'middle' => 'Manalo',     'last' => 'Diaz',    'sex' => 'M',
                 'college' => 'CAS',
                 'course' => 'Bachelor of Science in Psychology',
                 'year' => '2nd Year', 'dob' => '2004-03-22',
@@ -176,7 +177,7 @@ class StudentSeeder extends Seeder
                 'email' => 'jayson.diaz@psu.edu.ph',
             ],
             [
-                'first' => 'Camille', 'last' => 'Castro',  'sex' => 'F',
+                'first' => 'Camille', 'middle' => 'Fernandez',  'last' => 'Castro',  'sex' => 'F',
                 'college' => 'CAS',
                 'course' => 'Bachelor of Arts in Communication',
                 'year' => '3rd Year', 'dob' => '2003-09-08',
@@ -184,7 +185,7 @@ class StudentSeeder extends Seeder
                 'email' => 'camille.castro@psu.edu.ph',
             ],
             [
-                'first' => 'Erwin',   'last' => 'Ramos',   'sex' => 'M',
+                'first' => 'Erwin',   'middle' => 'Santos',     'last' => 'Ramos',   'sex' => 'M',
                 'college' => 'CAS',
                 'course' => 'Bachelor of Science in Biology',
                 'year' => '1st Year', 'dob' => '2005-12-01',
@@ -194,7 +195,7 @@ class StudentSeeder extends Seeder
 
             // ── CSSP — College of Social Science and Philosophy (2 students) ─
             [
-                'first' => 'Tricia', 'last' => 'Tolentino', 'sex' => 'F',
+                'first' => 'Tricia', 'middle' => 'Mercado',    'last' => 'Tolentino', 'sex' => 'F',
                 'college' => 'CSSP',
                 'course' => 'Bachelor of Science in Social Work',
                 'year' => '3rd Year', 'dob' => '2003-05-30',
@@ -202,7 +203,7 @@ class StudentSeeder extends Seeder
                 'email' => 'tricia.tolentino@psu.edu.ph',
             ],
             [
-                'first' => 'Luis',   'last' => 'Villanueva', 'sex' => 'M',
+                'first' => 'Luis',   'middle' => 'Reyes',      'last' => 'Villanueva', 'sex' => 'M',
                 'college' => 'CSSP',
                 'course' => 'Bachelor of Arts in Sociology',
                 'year' => '2nd Year', 'dob' => '2004-08-25',
@@ -212,7 +213,7 @@ class StudentSeeder extends Seeder
 
             // ── CHTM — College of Hospitality and Management (2 students) ────
             [
-                'first' => 'Diane', 'last' => 'Padilla', 'sex' => 'F',
+                'first' => 'Diane', 'middle' => 'Cruz',        'last' => 'Padilla', 'sex' => 'F',
                 'college' => 'CHTM',
                 'course' => 'Bachelor of Science in Hospitality Management',
                 'year' => '2nd Year', 'dob' => '2004-06-12',
@@ -220,7 +221,7 @@ class StudentSeeder extends Seeder
                 'email' => 'diane.padilla@psu.edu.ph',
             ],
             [
-                'first' => 'Bryan', 'last' => 'Aquino',  'sex' => 'M',
+                'first' => 'Bryan', 'middle' => 'Garcia',      'last' => 'Aquino',  'sex' => 'M',
                 'college' => 'CHTM',
                 'course' => 'Bachelor of Science in Tourism Management',
                 'year' => '3rd Year', 'dob' => '2003-01-17',
@@ -230,7 +231,7 @@ class StudentSeeder extends Seeder
 
             // ── CIT — College of Industrial Technology (2 students) ──────────
             [
-                'first' => 'Jennifer', 'last' => 'Manalo', 'sex' => 'F',
+                'first' => 'Jennifer', 'middle' => 'Tolentino', 'last' => 'Manalo', 'sex' => 'F',
                 'college' => 'CIT',
                 'course' => 'Bachelor of Industrial Technology major in Electronics',
                 'year' => '2nd Year', 'dob' => '2004-07-04',
@@ -238,7 +239,7 @@ class StudentSeeder extends Seeder
                 'email' => 'jennifer.manalo@psu.edu.ph',
             ],
             [
-                'first' => 'Rex',      'last' => 'David',  'sex' => 'M',
+                'first' => 'Rex',      'middle' => 'Bautista',  'last' => 'David',  'sex' => 'M',
                 'college' => 'CIT',
                 'course' => 'Bachelor of Industrial Technology major in Computer Technology',
                 'year' => '3rd Year', 'dob' => '2002-11-20',
@@ -248,7 +249,7 @@ class StudentSeeder extends Seeder
 
             // ── LAW — School of Law (2 students) ────────────────────────────
             [
-                'first' => 'Aldrin', 'last' => 'Fernandez', 'sex' => 'M',
+                'first' => 'Aldrin', 'middle' => 'Castro',     'last' => 'Fernandez', 'sex' => 'M',
                 'college' => 'LAW',
                 'course' => 'Juris Doctor',
                 'year' => '2nd Year', 'dob' => '2000-04-15',
@@ -256,7 +257,7 @@ class StudentSeeder extends Seeder
                 'email' => 'aldrin.fernandez@psu.edu.ph',
             ],
             [
-                'first' => 'Rina',   'last' => 'Lim',       'sex' => 'F',
+                'first' => 'Rina',   'middle' => 'Flores',     'last' => 'Lim',       'sex' => 'F',
                 'college' => 'LAW',
                 'course' => 'Juris Doctor',
                 'year' => '3rd Year', 'dob' => '1999-08-03',
@@ -266,7 +267,7 @@ class StudentSeeder extends Seeder
 
             // ── GS — Graduate Studies (2 students) ──────────────────────────
             [
-                'first' => 'Christian', 'last' => 'Tan', 'sex' => 'M',
+                'first' => 'Christian', 'middle' => 'Ramirez',  'last' => 'Tan', 'sex' => 'M',
                 'college' => 'GS',
                 'course' => 'Master of Science in Computer Science',
                 'year' => '1st Year', 'dob' => '1998-02-28',
@@ -274,7 +275,7 @@ class StudentSeeder extends Seeder
                 'email' => 'christian.tan@psu.edu.ph',
             ],
             [
-                'first' => 'Sheila', 'last' => 'Go', 'sex' => 'F',
+                'first' => 'Sheila', 'middle' => 'Santos',      'last' => 'Go', 'sex' => 'F',
                 'college' => 'GS',
                 'course' => 'Master of Arts in Education',
                 'year' => '2nd Year', 'dob' => '1997-10-10',
@@ -284,7 +285,7 @@ class StudentSeeder extends Seeder
 
             // ── SHS — Senior High School (2 students) ───────────────────────
             [
-                'first' => 'Jessa', 'last' => 'Chua', 'sex' => 'F',
+                'first' => 'Jessa', 'middle' => 'Villanueva',   'last' => 'Chua', 'sex' => 'F',
                 'college' => 'SHS',
                 'course' => 'STEM Strand',
                 'year' => 'Grade 12', 'dob' => '2006-05-21',
@@ -292,7 +293,7 @@ class StudentSeeder extends Seeder
                 'email' => 'jessa.chua@psu.edu.ph',
             ],
             [
-                'first' => 'Renz', 'last' => 'Ong', 'sex' => 'M',
+                'first' => 'Renz', 'middle' => 'Mercado',        'last' => 'Ong', 'sex' => 'M',
                 'college' => 'SHS',
                 'course' => 'ABM Strand',
                 'year' => 'Grade 11', 'dob' => '2007-09-14',
@@ -302,7 +303,7 @@ class StudentSeeder extends Seeder
 
             // ── LHS — Laboratory High School (2 students) ───────────────────
             [
-                'first' => 'Hazel', 'last' => 'Abalos', 'sex' => 'F',
+                'first' => 'Hazel', 'middle' => 'Torres',        'last' => 'Abalos', 'sex' => 'F',
                 'college' => 'LHS',
                 'course' => 'General Secondary Education',
                 'year' => 'Grade 10', 'dob' => '2008-03-06',
@@ -310,7 +311,7 @@ class StudentSeeder extends Seeder
                 'email' => 'hazel.abalos@psu.edu.ph',
             ],
             [
-                'first' => 'Mark', 'last' => 'Pangan', 'sex' => 'M',
+                'first' => 'Mark', 'middle' => 'Diaz',            'last' => 'Pangan', 'sex' => 'M',
                 'college' => 'LHS',
                 'course' => 'General Secondary Education',
                 'year' => 'Grade 9', 'dob' => '2009-11-25',

@@ -14,6 +14,7 @@ return new class extends Migration
             $table->foreignId('college_id')->constrained('colleges')->restrictOnDelete();
             $table->string('student_number', 20)->unique();
             $table->string('first_name', 80);
+            $table->string('middle_name', 80)->nullable();
             $table->string('last_name', 80);
             $table->enum('sex', ['M', 'F']);
             $table->string('course', 120);
