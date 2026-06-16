@@ -19,6 +19,7 @@ class User extends Authenticatable
         'role',
         'name',
         'email',
+        'email_verified_at',
         'password',
         'managed_college_id',
         'status',

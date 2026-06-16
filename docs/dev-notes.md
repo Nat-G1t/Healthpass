@@ -1,7 +1,8 @@
 # HealthPass — Dev Notes
 
 Scratch pad for Nat and Baldo. Commands to run, tinker examples, integration notes.
-
+php artisan serve --port=8080
+npm run dev
 ---
 
 ## Seeded credentials (dev only — all passwords: `password`)

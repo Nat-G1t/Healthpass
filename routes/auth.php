@@ -25,9 +25,13 @@ Route::middleware('guest')->group(function () {
     Route::post('register/info', [RegistrationWizardController::class, 'storeInfo'])
         ->name('register.info.store');
 
-    // Step 3: Email Verify (placeholder — OTP in next sprint)
+    // Step 3: Email Verify (FR-REG-04 / FR-REG-05 / Decision D-8)
     Route::get('register/verify', [RegistrationWizardController::class, 'step3'])
         ->name('register.verify');
+    Route::post('register/verify', [RegistrationWizardController::class, 'verifyOtp'])
+        ->name('register.verify.submit');
+    Route::post('register/verify/resend', [RegistrationWizardController::class, 'resendOtp'])
+        ->name('register.verify.resend');
 
     // Legacy Breeze route — removed; RegistrationWizardController handles registration.
     // Route::post('register', [RegisteredUserController::class, 'store']);
@@ -51,6 +55,10 @@ Route::middleware('guest')->group(function () {
 });
 
 Route::middleware('auth')->group(function () {
+    // Step 4: Link ID — accessible after step3 creates + logs in the student (FR-REG-06)
+    Route::get('register/link-id', [RegistrationWizardController::class, 'step4'])
+        ->name('register.link-id');
+
     Route::get('verify-email', EmailVerificationPromptController::class)
         ->name('verification.notice');
 
