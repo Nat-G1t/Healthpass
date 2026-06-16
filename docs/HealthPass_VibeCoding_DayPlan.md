@@ -291,10 +291,11 @@ Step 1 (Consent): RA 10173 data-privacy notice; Continue disabled until the chec
 ticked; acceptance held server-side (session) — the final timestamp is written to
 student_profiles.privacy_consent_at when the account is created after OTP.
 
-Step 2 (Personal Information): every field in FR-REG-03 — First/Last Name, Student Number
-(unique), College (dropdown from DB), Sex (M/F), Course & Year, Date of Birth with an
-auto-computed Age badge (JS), Place of Birth, Civil Status (Single/Married/Widowed/
-Separated), Address, Email (unique), Password. Full server-side validation with
+Step 2 (Personal Information): every field in FR-REG-03 — First Name, Middle Name
+(optional), Last Name, Student Number (unique), College (dropdown from DB), Sex (M/F),
+Course & Year, Date of Birth with an auto-computed Age badge (JS), Place of Birth, Civil
+Status (Single/Married/Widowed/Separated), Address, Email (unique), Password. Full
+server-side validation with
 field-level errors.
 
 CRITICAL (FR-REG-08): no login-capable users row may exist before email verification —
@@ -322,8 +323,8 @@ Read docs/HealthPass_PRD.md  FR-REG-04/05 and Decision D-8. Build wizard Step 3 
   Verify & Continue disabled until 6 digits entered.
 - Rate limit: max 5 verify attempts per code, then the code is invalidated.
 - On success, inside one transaction: create the users row (role student,
-  email_verified_at now) + student_profiles row (including privacy_consent_at from
-  Step 1 and a server-generated unique qr_token), then advance to a Step 4 placeholder.
+  email_verified_at now) + student_profiles row (including middle_name, privacy_consent_at
+  from Step 1 and a server-generated unique qr_token), then advance to a Step 4 placeholder.
 Tell me exactly where to read the OTP in storage/logs/laravel.log for testing.
 ```
 

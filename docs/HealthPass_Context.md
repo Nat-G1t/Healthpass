@@ -259,7 +259,7 @@ Progress steps: Consent → Account Info → Email Verify → Link ID
 - Continue disabled until checked. "← Back to Login" link.
 
 **Step 2 — Personal Information (2-column grid)**
-- First Name, Last Name, Student Number, College (dropdown — 12 colleges), Sex (M/F), Course & Year, Date of Birth (+ auto-computed Age badge), Place of Birth, Civil Status (Single/Married/Widowed/Separated), Address, Email, Password.
+- First Name, Middle Name (optional), Last Name, Student Number, College (dropdown — 12 colleges), Sex (M/F), Course & Year, Date of Birth (+ auto-computed Age badge), Place of Birth, Civil Status (Single/Married/Widowed/Separated), Address, Email, Password.
 
 **Step 3 — Email Verify**
 - 6 OTP boxes (auto-focus hidden input, visual boxes highlight as digits are entered).
@@ -529,6 +529,7 @@ user_id               bigint UNIQUE FK → users.id
 college_id            bigint FK → colleges.id
 student_number        varchar(20) UNIQUE
 first_name            varchar(80)
+middle_name           varchar(80) NULL
 last_name             varchar(80)
 sex                   enum('M','F')
 course                varchar(120)

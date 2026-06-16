@@ -26,6 +26,7 @@ Pampanga State University · College of Computing Studies · Capstone Project
 |---|---|---|---|
 | 0.x | Pre-June 2026 | Team | Earlier AI-powered kiosk concept (superseded — see §1.3) |
 | 1.0 | June 11, 2026 | N. Medina | Baseline PRD for the no-AI HealthPass system. Incorporates locked schema decisions: BP flag threshold 140/90, `vital_signs.entry_method`, `batch_requests.scheduled_date`, clinic capacity as config value. |
+| 1.1 | June 16, 2026 | N. Medina | Added optional middle_name to student_profiles and the registration Step 2 form, aligning capture with the Middle Name field on official form DHVSU-QSP-OSS-004-FO002-R03. |
 
 ---
 
@@ -195,7 +196,7 @@ Notation: each requirement has an ID, a MoSCoW priority — **M**ust (defense-cr
 |---|---|---|
 | FR-REG-01 | Registration shall be a 4-step wizard with a top progress bar: **Consent → Account Info → Email Verify → Link ID**. | M |
 | FR-REG-02 | **Step 1 (Consent):** display the RA 10173 data-privacy notice; the Continue button shall remain disabled until the consent checkbox is ticked. Consent timestamp is stored in `student_profiles.privacy_consent_at`. | M |
-| FR-REG-03 | **Step 2 (Personal Information):** capture First Name, Last Name, Student Number (unique), College (dropdown of the 12 colleges), Sex (M/F), Course & Year, Date of Birth (with auto-computed Age badge), Place of Birth, Civil Status (Single/Married/Widowed/Separated), Address, Email (unique), Password. All fields validated server-side. | M |
+| FR-REG-03 | **Step 2 (Personal Information):** capture First Name, Middle Name (optional), Last Name, Student Number (unique), College (dropdown of the 12 colleges), Sex (M/F), Course & Year, Date of Birth (with auto-computed Age badge), Place of Birth, Civil Status (Single/Married/Widowed/Separated), Address, Email (unique), Password. All fields validated server-side. | M |
 | FR-REG-04 | **Step 3 (Email Verify):** the system shall verify email ownership via a 6-digit OTP entered in six auto-advancing boxes, with a Resend link; Verify & Continue is disabled until 6 digits are entered (Decision D-8: OTP is generated server-side, stored **hashed in cache with a TTL of 10 minutes** — no database table; mail driver is `log`/Mailtrap in dev, SMTP in production). | M |
 | FR-REG-05 | OTP attempts shall be rate-limited (max 5 verify attempts per code; resend invalidates the previous code). | S |
 | FR-REG-06 | **Step 4 (Link ID):** the student may link their physical ID by scanning its QR (USB scanner acting as keyboard input into a focused field) which binds `qr_token`, **or** press "Skip for now" and link later from the My ID screen. | M |
@@ -386,7 +387,7 @@ The finalized ERD (rendered June 10, 2026 in the project workspace) is the schem
 |---|---|---|
 | `colleges` | Reference: the 12 colleges | **id**, code UQ, name |
 | `users` | All accounts, 4 roles | **id**, role, name, email UQ, email_verified_at, password, managed_college_id →colleges (admins only), status |
-| `student_profiles` | 1:1 student detail | **id**, user_id UQ →users, college_id →colleges, student_number UQ, first/last name, sex, course, year_level, date_of_birth, place_of_birth, civil_status, address, qr_token UQ, privacy_consent_at |
+| `student_profiles` | 1:1 student detail | **id**, user_id UQ →users, college_id →colleges, student_number UQ, first/middle (opt.)/last name, sex, course, year_level, date_of_birth, place_of_birth, civil_status, address, qr_token UQ, privacy_consent_at |
 | `appointments` | Solo + batch-generated bookings | **id**, reference_no UQ, student_id →users, service_type, scheduled_date, status (scheduled/checked_in/completed/cancelled), source (self/batch), batch_request_id →batch_requests NULL, created_by →users NULL |
 | `batch_requests` | College Admin cohort requests | **id**, reference_no UQ, college_id →colleges, requested_by →users, reason, reason_detail, service_type, **scheduled_date NULL (new)**, status (pending/approved/rejected), reviewed_by →users NULL, reviewed_at |
 | `batch_request_students` | Batch ↔ student pivot | **id**, batch_request_id →, student_id →users, appointment_id →appointments NULL (set on approval); UQ(batch_request_id, student_id) |
