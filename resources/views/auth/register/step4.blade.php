@@ -10,21 +10,8 @@
         x-data="qrLinkId('{{ $studentNumberDigits }}')"
         x-cloak
     >
-        {{-- Icon --}}
-        <div class="mb-5 flex justify-center">
-            <div class="flex h-16 w-16 items-center justify-center rounded-full bg-hp-peach">
-                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"
-                     fill="none" stroke="#FF8C2A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
-                    <rect x="3" y="14" width="7" height="7" rx="1"/>
-                    <path d="M14 14h2v2h-2z"/><path d="M18 14h3"/><path d="M14 18h3v3"/>
-                    <path d="M18 21h3v-3"/>
-                </svg>
-            </div>
-        </div>
-
-        <h2 class="mb-2 text-center text-lg font-bold text-hp-slate">Link Your Student ID</h2>
-        <p class="mb-6 text-center text-sm text-hp-slate/60">
+        <h2 class="mb-[6px] text-center text-[15px] font-bold text-hp-slate">Step 4 — Link Your Student ID</h2>
+        <p class="mb-[18px] text-center text-[13px] leading-[1.6] text-hp-slate/[55%]">
             Scan your physical student ID's QR code to bind it to your account.
             You can skip this now and link later from <strong>My ID &amp; Profile</strong>.
         </p>
@@ -177,14 +164,9 @@
         {{-- ── Skip for now ─────────────────────────────────────────────────── --}}
         <form method="POST" action="{{ route('register.link-id.skip') }}">
             @csrf
-            <button
-                type="submit"
-                class="w-full rounded-lg border border-hp-slate/20 py-2.5 text-sm text-hp-slate/60
-                       hover:bg-hp-slate/5 transition-colors
-                       focus:outline-none focus:ring-2 focus:ring-hp-slate/20"
-            >
+            <x-hp.button type="submit" variant="muted" size="lg" class="w-full">
                 Skip for now — link it later from My ID &amp; Profile
-            </button>
+            </x-hp.button>
         </form>
 
         <p class="mt-3 text-center text-xs text-hp-slate/50">

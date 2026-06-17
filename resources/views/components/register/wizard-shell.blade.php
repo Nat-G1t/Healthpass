@@ -1,4 +1,4 @@
-@props(['step' => 1])
+@props(['step' => 1, 'maxWidth' => 'max-w-[480px]'])
 
 @php
     $steps = [
@@ -18,61 +18,36 @@
     <title>Register — HealthPass</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="flex min-h-full flex-col items-center bg-hp-bg px-4 py-10">
+<body class="flex min-h-full flex-col items-center bg-hp-bg p-6">
 
-    {{-- Logo --}}
-    <div class="mb-8 flex flex-col items-center gap-2 text-center">
-        <x-hp.logo size="lg" />
-        <p class="text-sm text-hp-slate/60">Medical Clearance — Pampanga State University</p>
+    {{-- Logo (md size, no subtitle — matches prototype) --}}
+    <div class="mb-[22px]">
+        <x-hp.logo size="md" />
     </div>
 
-    {{-- Progress bar --}}
-    <div class="mb-6 w-full max-w-2xl px-2">
-        <div class="flex items-start">
-            @foreach ($steps as $n => $label)
-                {{-- Step circle + label --}}
-                <div class="flex flex-1 flex-col items-center">
-                    <div class="flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold transition-colors
-                        @if ($n < $step) bg-hp-orange text-white
-                        @elseif ($n === $step) bg-hp-orange text-white ring-4 ring-hp-peach
-                        @else bg-white border-2 border-hp-slate/25 text-hp-slate/40
-                        @endif">
-                        @if ($n < $step)
-                            {{-- Checkmark for completed steps --}}
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
-                                 fill="none" stroke="currentColor" stroke-width="3"
-                                 stroke-linecap="round" stroke-linejoin="round">
-                                <polyline points="20 6 9 17 4 12"/>
-                            </svg>
-                        @else
-                            {{ $n }}
-                        @endif
-                    </div>
-                    <span class="mt-1.5 text-center text-[11px] font-semibold leading-tight
-                        @if ($n <= $step) text-hp-orange @else text-hp-slate/40 @endif">
-                        {{ $label }}
-                    </span>
-                </div>
-
-                {{-- Connector line between steps --}}
-                @if ($n < count($steps))
-                    <div class="mt-[18px] h-0.5 flex-1
-                        @if ($n < $step) bg-hp-orange @else bg-hp-slate/20 @endif">
-                    </div>
-                @endif
-            @endforeach
-        </div>
+    {{-- Progress bar — 4 coloured bar segments with labels below --}}
+    <div class="mb-[22px] flex w-full {{ $maxWidth }} gap-[6px]">
+        @foreach ($steps as $n => $label)
+            <div class="flex flex-1 flex-col text-center">
+                <div class="mb-[5px] h-1 rounded-sm transition-colors duration-300
+                            {{ $n <= $step ? 'bg-hp-orange' : 'bg-hp-slate/[18%]' }}"></div>
+                <span class="text-[10px] leading-none
+                             {{ $n === $step ? 'font-bold text-hp-orange' : 'font-normal text-hp-slate/[45%]' }}">
+                    {{ $label }}
+                </span>
+            </div>
+        @endforeach
     </div>
 
     {{-- Step card --}}
-    <x-hp.card class="w-full max-w-2xl">
+    <x-hp.card class="w-full {{ $maxWidth }}">
         {{ $slot }}
     </x-hp.card>
 
-    {{-- Footer --}}
-    <p class="mt-6 text-center text-[11px] leading-relaxed text-hp-slate/40">
-        Information collected is protected under the Data Privacy Act of 2012 (RA 10173).<br>
-        For concerns, contact the clinic or your Data Protection Officer.
+    {{-- RA 10173 footer --}}
+    <p class="mt-6 text-center text-[10.5px] leading-[1.7] text-hp-slate/[45%]">
+        This system is governed by <strong>RA 10173</strong> (Data Privacy Act of 2012).<br>
+        Health data is used solely for medical clearance purposes.
     </p>
 
 </body>

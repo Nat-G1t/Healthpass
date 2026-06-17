@@ -7,7 +7,7 @@
 
 @php
     $inputId      = $id ?? ($label ? Str::slug($label, '_') : null);
-    $baseClasses  = 'w-full rounded-lg border border-hp-slate/25 px-3 py-2 text-sm text-hp-slate
+    $baseClasses  = 'w-full rounded-lg border-[1.5px] border-hp-slate/25 px-3.5 py-2.5 text-sm text-hp-slate
                      placeholder-hp-slate/40 transition-colors duration-150
                      focus:border-hp-orange focus:ring-1 focus:ring-hp-orange focus:outline-none
                      disabled:bg-hp-slate/5 disabled:cursor-not-allowed';
@@ -17,7 +17,7 @@
     @if ($label)
         <label
             @if ($inputId) for="{{ $inputId }}" @endif
-            class="text-sm font-semibold text-hp-slate"
+            class="text-[13px] font-semibold text-hp-slate"
         >{{ $label }}</label>
     @endif
 

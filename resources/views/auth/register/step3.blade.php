@@ -1,19 +1,10 @@
 <x-register.wizard-shell :step="3">
 
-    {{-- Icon --}}
-    <div class="mb-5 flex justify-center">
-        <div class="flex h-16 w-16 items-center justify-center rounded-full bg-hp-peach">
-            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"
-                 fill="none" stroke="#FF8C2A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="2" y="4" width="20" height="16" rx="2"/>
-                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
-            </svg>
-        </div>
-    </div>
-
-    <h2 class="mb-2 text-center text-lg font-bold text-hp-slate">Check Your Email</h2>
-    <p class="mb-1 text-center text-sm text-hp-slate/70">We sent a 6-digit verification code to</p>
-    <p class="mb-6 text-center text-sm font-semibold text-hp-orange">{{ $email }}</p>
+    <h2 class="mb-[6px] text-center text-[15px] font-bold text-hp-slate">Step 3 — Verify Your Email</h2>
+    <p class="mb-[20px] text-center text-[13px] leading-[1.6] text-hp-slate/60">
+        A 6-digit verification code was sent to<br>
+        <strong class="text-hp-orange">{{ $email }}</strong>
+    </p>
 
     {{-- Resend success flash --}}
     @if (session('status'))
@@ -70,8 +61,8 @@
         {{-- Hidden field carries the joined 6-digit string to the server --}}
         <input type="hidden" name="otp" :value="code">
 
-        {{-- Six digit boxes --}}
-        <div class="mb-6 flex justify-center gap-3">
+        {{-- Six OTP boxes — sized and coloured to match the prototype --}}
+        <div class="mb-[20px] flex justify-center gap-[10px]">
             @for ($i = 0; $i < 6; $i++)
                 <input
                     type="text"
@@ -84,35 +75,38 @@
                     @input="onInput({{ $i }}, $event)"
                     @keydown="onKeydown({{ $i }}, $event)"
                     @paste="onPaste($event)"
-                    class="h-14 w-12 rounded-lg border border-hp-slate/25 text-center text-xl font-bold
-                           text-hp-slate transition-colors duration-150 focus:outline-none
-                           focus:border-hp-orange focus:ring-2 focus:ring-hp-orange/30
+                    class="h-[60px] w-[50px] rounded-[10px] border-2 text-center text-[26px] font-bold
+                           transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-hp-orange/30
                            [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none
                            [&::-webkit-outer-spin-button]:appearance-none"
+                    :class="digits[{{ $i }}]
+                        ? 'border-hp-orange bg-hp-peach text-hp-orange'
+                        : 'border-hp-slate/[22%] bg-white text-hp-slate'"
                     {{ $i === 0 ? 'autofocus' : '' }}
                 />
             @endfor
         </div>
 
-        <button
+        <x-hp.button
             type="submit"
-            :disabled="!ready"
-            class="w-full rounded-lg bg-hp-orange py-2.5 text-sm font-semibold text-white
-                   transition-opacity hover:bg-hp-orange/90 focus:outline-none focus:ring-2
-                   focus:ring-hp-orange/50 disabled:cursor-not-allowed disabled:opacity-40"
+            variant="primary"
+            size="lg"
+            class="w-full"
+            x-bind:disabled="!ready"
         >
-            Verify &amp; Continue
-        </button>
+            Verify &amp; Continue →
+        </x-hp.button>
+
     </form>
 
     {{-- Resend --}}
-    <div class="mt-4 text-center text-sm">
-        <span class="text-hp-slate/60">Didn't receive it?</span>
+    <div class="mt-[20px] text-center text-[12px] text-hp-slate/50">
+        Didn't receive a code?
         <form method="POST" action="{{ route('register.verify.resend') }}" class="inline">
             @csrf
             <button type="submit"
                     class="ml-1 font-semibold text-hp-orange underline-offset-2 hover:underline">
-                Resend code
+                Resend
             </button>
         </form>
     </div>
@@ -134,7 +128,7 @@
 
     {{-- Start over --}}
     <div class="mt-6 flex justify-center">
-        <a href="{{ route('register') }}" class="text-sm text-hp-slate/60 hover:underline">
+        <a href="{{ route('register') }}" class="text-[12px] text-hp-slate/50 hover:underline">
             ← Start over
         </a>
     </div>

@@ -1,16 +1,13 @@
 <x-register.wizard-shell :step="1">
 
-    <h2 class="mb-1 text-lg font-bold text-hp-slate">Data Privacy Consent</h2>
-    <p class="mb-5 text-sm text-hp-slate/60">
-        Please read the notice below before creating your account.
-    </p>
+    <h2 class="mb-[6px] text-[15px] font-bold text-hp-slate">Step 1 — Data Privacy Consent</h2>
 
     {{-- Scrollable notice --}}
-    <div class="mb-5 h-56 overflow-y-auto rounded-lg border border-hp-slate/20 bg-hp-bg px-5 py-4
-                text-sm leading-relaxed text-hp-slate/80">
+    <div class="mb-[14px] h-56 overflow-y-auto rounded-lg bg-hp-bg p-3.5
+                text-[12px] leading-[1.8] text-hp-slate/[75%]">
 
         <p class="mb-3 font-bold text-hp-slate">
-            RA 10173 — Data Privacy Notice
+            RA 10173 — Data Privacy Act of 2012
         </p>
 
         <p class="mb-3">
@@ -65,7 +62,7 @@
         @csrf
 
         {{-- Checkbox --}}
-        <label class="mb-5 flex cursor-pointer items-start gap-3">
+        <label class="mb-5 flex cursor-pointer items-start gap-[10px]">
             <input
                 type="checkbox"
                 name="consent"
@@ -74,10 +71,9 @@
                 class="mt-0.5 h-4 w-4 flex-shrink-0 rounded border-hp-slate/30
                        text-hp-orange focus:ring-hp-orange"
             >
-            <span class="text-sm text-hp-slate">
-                I have read and accept the RA 10173 Data Privacy Notice. I consent to the
-                collection and processing of my personal information by Pampanga State
-                University's Health Services Unit.
+            <span class="text-[12px] leading-[1.6] text-hp-slate">
+                I consent to the collection and processing of my personal health data by PamSU Campus
+                Clinic for medical clearance purposes, in accordance with RA 10173.
             </span>
         </label>
 
@@ -86,17 +82,20 @@
         @enderror
 
         {{-- Actions --}}
-        <div class="flex items-center justify-between">
-            <a href="{{ route('login') }}" class="text-sm text-hp-slate/60 hover:underline">
-                ← Back to login
+        <div class="flex items-center gap-[10px]">
+            <a href="{{ route('login') }}"
+               class="inline-flex items-center justify-center rounded-full px-8 py-[13px] text-[15px]
+                      font-semibold bg-transparent text-hp-slate border-[1.5px] border-hp-slate/30
+                      transition-colors hover:bg-hp-slate/5">
+                ← Back to Login
             </a>
 
-            {{-- x-bind:disabled passes Alpine binding through the component's $attributes->merge() --}}
             <x-hp.button
                 type="submit"
                 variant="primary"
                 size="lg"
                 x-bind:disabled="!agreed"
+                class="ml-auto"
             >
                 Continue →
             </x-hp.button>

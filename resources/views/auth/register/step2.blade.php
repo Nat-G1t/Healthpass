@@ -1,9 +1,6 @@
-<x-register.wizard-shell :step="2">
+<x-register.wizard-shell :step="2" maxWidth="max-w-[560px]">
 
-    <h2 class="mb-1 text-lg font-bold text-hp-slate">Personal Information</h2>
-    <p class="mb-6 text-sm text-hp-slate/60">
-        All fields are required. This information appears on your medical clearance.
-    </p>
+    <h2 class="mb-[18px] text-[15px] font-bold text-hp-slate">Step 2 — Personal Information</h2>
 
     <form method="POST" action="{{ route('register.info.store') }}" novalidate>
         @csrf
@@ -177,7 +174,7 @@
                 <span
                     x-show="age !== null"
                     x-cloak
-                    class="rounded-full bg-hp-peach px-3 py-1 text-xs font-bold text-hp-orange"
+                    class="rounded-lg bg-hp-peach px-3.5 py-[10px] text-[13px] font-semibold text-hp-orange whitespace-nowrap"
                 >
                     Age: <span x-text="age"></span>
                 </span>
@@ -288,11 +285,14 @@
         </div>
 
         {{-- Actions --}}
-        <div class="flex items-center justify-between">
-            <a href="{{ route('register') }}" class="text-sm text-hp-slate/60 hover:underline">
+        <div class="flex items-center gap-[10px]">
+            <a href="{{ route('register') }}"
+               class="inline-flex items-center justify-center rounded-full px-8 py-[13px] text-[15px]
+                      font-semibold bg-transparent text-hp-slate border-[1.5px] border-hp-slate/30
+                      transition-colors hover:bg-hp-slate/5">
                 ← Back
             </a>
-            <x-hp.button type="submit" variant="primary" size="lg">
+            <x-hp.button type="submit" variant="primary" size="lg" class="ml-auto">
                 Continue →
             </x-hp.button>
         </div>

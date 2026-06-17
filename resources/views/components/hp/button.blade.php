@@ -7,18 +7,18 @@
 @php
     $variantClasses = match ($variant) {
         'primary' => 'bg-hp-orange text-white hover:bg-orange-500 focus-visible:ring-hp-orange',
-        'ghost'   => 'bg-transparent text-hp-slate border border-hp-slate/40 hover:bg-hp-slate/8 focus-visible:ring-hp-slate',
+        'ghost'   => 'bg-transparent text-hp-slate border-[1.5px] border-hp-slate/30 hover:bg-hp-slate/8 focus-visible:ring-hp-slate',
         'soft'    => 'bg-hp-peach text-hp-orange hover:bg-orange-100 focus-visible:ring-hp-orange',
         'muted'   => 'bg-hp-slate/10 text-hp-slate hover:bg-hp-slate/20 focus-visible:ring-hp-slate',
         default   => '',
     };
 
     $sizeClasses = match ($size) {
-        'sm'  => 'px-3 py-1.5 text-xs',
-        'md'  => 'px-4 py-2 text-sm',
-        'lg'  => 'px-5 py-2.5 text-sm',
-        'xl'  => 'px-6 py-3 text-base',
-        default => 'px-4 py-2 text-sm',
+        'sm'  => 'px-4 py-1.5 text-xs',
+        'md'  => 'px-6 py-2.5 text-sm',
+        'lg'  => 'px-8 py-[13px] text-[15px]',
+        'xl'  => 'px-12 py-4 text-base',
+        default => 'px-6 py-2.5 text-sm',
     };
 @endphp
 

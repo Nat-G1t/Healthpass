@@ -7,18 +7,21 @@
     <title>Sign In — HealthPass</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="flex min-h-full items-center justify-center bg-hp-bg px-4 py-12">
+<body class="flex min-h-full items-center justify-center bg-hp-bg p-6">
 
-<div class="w-full max-w-[420px] space-y-8">
+<div class="w-full max-w-[420px]">
 
     {{-- Logo + tagline --}}
-    <div class="flex flex-col items-center gap-3 text-center">
+    <div class="mb-7 flex flex-col items-center gap-2 text-center">
         <x-hp.logo size="lg" />
-        <p class="text-sm text-hp-slate/60">Medical Clearance — Pampanga State University</p>
+        <p class="text-[13px] text-hp-slate/[65%]">Medical Clearance — Pampanga State University</p>
     </div>
 
     {{-- Card --}}
-    <x-hp.card>
+    <x-hp.card class="mb-3.5">
+
+        {{-- "Sign In" card heading --}}
+        <div class="mb-[18px] text-[17px] font-bold text-hp-slate">Sign In</div>
 
         {{-- Error / status flash --}}
         @if (session('status'))
@@ -27,7 +30,7 @@
             </div>
         @endif
 
-        <form method="POST" action="{{ route('login') }}" class="space-y-5">
+        <form method="POST" action="{{ route('login') }}" class="space-y-[13px]">
             @csrf
 
             {{-- Email --}}
@@ -37,7 +40,7 @@
                 type="email"
                 name="email"
                 :value="old('email')"
-                placeholder="you@example.com"
+                placeholder="you@psu.edu.ph"
                 required
                 autofocus
                 autocomplete="username"
@@ -50,40 +53,41 @@
                 id="password"
                 :password="true"
                 name="password"
-                placeholder="••••••••"
+                placeholder="Enter your password"
                 required
                 autocomplete="current-password"
                 :error="$errors->first('password')"
             />
 
             {{-- Submit --}}
-            <x-hp.button type="submit" variant="primary" size="lg" class="w-full">
+            <x-hp.button type="submit" variant="primary" size="lg" class="mt-0.5 w-full">
                 Sign In
             </x-hp.button>
 
         </form>
 
         {{-- Links --}}
-        <div class="mt-5 flex flex-col items-center gap-2 text-sm text-hp-slate/60">
-            <p>
-                Don't have an account?
-                <a href="{{ route('register') }}" class="font-semibold text-hp-orange hover:underline">
-                    Register here
-                </a>
-            </p>
-            @if (Route::has('password.request'))
-                <a href="{{ route('password.request') }}" class="hover:underline">
+        <div class="mt-[14px] text-center text-[12px] text-hp-slate/[55%]">
+            Don't have an account?
+            <a href="{{ route('register') }}" class="font-semibold text-hp-orange hover:underline">
+                Register here
+            </a>
+        </div>
+
+        @if (Route::has('password.request'))
+            <div class="mt-2 text-center text-[12px]">
+                <a href="{{ route('password.request') }}" class="text-hp-slate/[55%] hover:underline">
                     Forgot your password?
                 </a>
-            @endif
-        </div>
+            </div>
+        @endif
 
     </x-hp.card>
 
     {{-- RA 10173 footer note --}}
-    <p class="text-center text-[11px] leading-relaxed text-hp-slate/40">
-        Information collected is protected under the Data Privacy Act of 2012 (RA 10173).<br>
-        For concerns, contact the clinic or your Data Protection Officer.
+    <p class="text-center text-[10.5px] leading-[1.7] text-hp-slate/[45%]">
+        This system is governed by <strong>RA 10173</strong> (Data Privacy Act of 2012).<br>
+        Health data is used solely for medical clearance purposes.
     </p>
 
 </div>
