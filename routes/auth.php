@@ -58,6 +58,10 @@ Route::middleware('auth')->group(function () {
     // Step 4: Link ID — accessible after step3 creates + logs in the student (FR-REG-06)
     Route::get('register/link-id', [RegistrationWizardController::class, 'step4'])
         ->name('register.link-id');
+    Route::post('register/link-id', [RegistrationWizardController::class, 'linkId'])
+        ->name('register.link-id.store');
+    Route::post('register/link-id/skip', [RegistrationWizardController::class, 'skipLinkId'])
+        ->name('register.link-id.skip');
 
     Route::get('verify-email', EmailVerificationPromptController::class)
         ->name('verification.notice');

@@ -199,11 +199,11 @@ Notation: each requirement has an ID, a MoSCoW priority — **M**ust (defense-cr
 | FR-REG-03 | **Step 2 (Personal Information):** capture First Name, Middle Name (optional), Last Name, Student Number (unique), College (dropdown of the 12 colleges), Sex (M/F), Course & Year, Date of Birth (with auto-computed Age badge), Place of Birth, Civil Status (Single/Married/Widowed/Separated), Address, Email (unique), Password. All fields validated server-side. | M |
 | FR-REG-04 | **Step 3 (Email Verify):** the system shall verify email ownership via a 6-digit OTP entered in six auto-advancing boxes, with a Resend link; Verify & Continue is disabled until 6 digits are entered (Decision D-8: OTP is generated server-side, stored **hashed in cache with a TTL of 10 minutes** — no database table; mail driver is `log`/Mailtrap in dev, SMTP in production). | M |
 | FR-REG-05 | OTP attempts shall be rate-limited (max 5 verify attempts per code; resend invalidates the previous code). | S |
-| FR-REG-06 | **Step 4 (Link ID):** the student may link their physical ID by scanning its QR (USB scanner acting as keyboard input into a focused field) which binds `qr_token`, **or** press "Skip for now" and link later from the My ID screen. | M |
+| FR-REG-06 | **Step 4 (Link ID):** the student may link their physical ID by capturing its QR **in-browser** on their own device — either (a) pointing the device camera at the back of the physical DHVSU ID, or (b) uploading a photo of it — decoded client-side by `html5-qrcode`. The `IDNo` line is extracted from the multi-line QR payload; non-digit characters are stripped from both the extracted IDNo and the `student_number` entered in Step 2, then compared — a mismatch produces a clear error and no binding occurs. On a valid match, only the IDNo value is POSTed to the server, replacing the provisional `qr_token` generated at Step 3 (`qr_token` stays NOT NULL throughout). The student may also press "Skip for now" and link later from the My ID screen. There is **no USB scanner at registration** — students register on personal devices. | M |
 | FR-REG-07 | On completing (or skipping) Step 4 the system shall log the student in and route to the Student Dashboard. | M |
 | FR-REG-08 | A registration abandoned before Step 3 completion shall not create a verified, login-capable account. | M |
 
-**AC:** a new student can complete all 4 steps in one sitting; the OTP in `storage/logs/laravel.log` (dev) verifies successfully; a wrong OTP 5× invalidates the code; skipping QR still produces a working account; duplicate student number or email is rejected with a field-level error.
+**AC:** a new student can complete all 4 steps in one sitting; the OTP in `storage/logs/laravel.log` (dev) verifies successfully; a wrong OTP 5× invalidates the code; skipping QR still produces a working account (provisional `qr_token` retained); duplicate student number or email is rejected with a field-level error; an IDNo that does not match `student_number` (digit-normalized) is rejected with a clear error; a successful QR capture replaces the provisional `qr_token` with the IDNo; an IDNo already bound to another student is rejected.
 
 ### 4.3 Module STU — Student Portal
 
@@ -218,7 +218,7 @@ Notation: each requirement has an ID, a MoSCoW priority — **M**ust (defense-cr
 | FR-STU-07 | **My Records** shall list the student's clinic visits/clearances (Date, Service, Result badge, Reference No.) with a View action opening a record modal: left column = kiosk vitals (height, weight, BMI, temp, HR, BP) + case category badge if present; right column = the 9 questionnaire answers as Yes/No badges (Yes = flagged style). | M |
 | FR-STU-08 | The student shall **never** see the Fit/Unfit determination on the kiosk; results become visible in My Records only after nurse encoding. | M |
 | FR-STU-09 | **My ID & Profile** shall show the student's kiosk QR code (generated via `simplesoftwareio/simple-qrcode` from `qr_token`) with an Active badge, plus read-only profile fields, and an Edit Profile modal for: name, email, course, year, address, DOB, place of birth, civil status. Student number, college, and sex are not self-editable. | M |
-| FR-STU-10 | If the student skipped QR linking at registration, the My ID screen shall offer the linking flow. | M |
+| FR-STU-10 | If the student skipped QR linking at registration, the My ID screen shall offer the same in-browser capture flow used in Step 4: camera or uploaded ID photo decoded by `html5-qrcode`, `IDNo` extracted, IDNo↔`student_number` match verified, then bound as `qr_token`. | M |
 
 **AC:** booking a full day is impossible from the UI and rejected server-side if forced; the calendar never allows a Saturday/Sunday or yesterday; a fresh student sees an empty-state dashboard without errors; the QR rendered on My ID scans back to the same `qr_token` at the kiosk.
 
@@ -271,7 +271,7 @@ The kiosk is the route `/kiosk` rendered full-screen in Chromium kiosk mode on t
 | FR-KSK-15 | An idle timeout (no interaction for 90 s mid-flow) shall discard the session and reset to Welcome, to protect privacy on an abandoned kiosk. | S |
 | FR-KSK-16 | A discreet staff exit (e.g., 5 taps on the logo corner + nurse password) shall close kiosk mode; students cannot navigate out of `/kiosk` otherwise. | S |
 
-**AC:** scanning a valid QR lands on Identity in < 2 s; declining consent stores zero rows; pulling the MCU's USB cable mid-flow still allows finishing via manual entry; a submitted visit with no appointment shows as walk-in in the queue; after the 12 s countdown the next student sees a clean Welcome with no residue of the previous session.
+**AC:** scanning a valid QR (including a multi-line physical-ID payload — the IDNo is extracted before the lookup) lands on Identity in < 2 s; an invalid or unrecognized token shows a brief inline error and refocuses the hidden input; declining consent stores zero rows; pulling the MCU's USB cable mid-flow still allows finishing via manual entry; a submitted visit with no appointment shows as walk-in in the queue; after the 12 s countdown the next student sees a clean Welcome with no residue of the previous session.
 
 ### 4.7 Module NRS — Nurse Live Queue & Encoding
 
@@ -387,7 +387,7 @@ The finalized ERD (rendered June 10, 2026 in the project workspace) is the schem
 |---|---|---|
 | `colleges` | Reference: the 12 colleges | **id**, code UQ, name |
 | `users` | All accounts, 4 roles | **id**, role, name, email UQ, email_verified_at, password, managed_college_id →colleges (admins only), status |
-| `student_profiles` | 1:1 student detail | **id**, user_id UQ →users, college_id →colleges, student_number UQ, first/middle (opt.)/last name, sex, course, year_level, date_of_birth, place_of_birth, civil_status, address, qr_token UQ, privacy_consent_at |
+| `student_profiles` | 1:1 student detail | **id**, user_id UQ →users, college_id →colleges, student_number UQ, first/middle (opt.)/last name, sex, course, year_level, date_of_birth, place_of_birth, civil_status, address, qr_token UQ (IDNo parsed from physical ID QR = student_number; provisional until linked), privacy_consent_at |
 | `appointments` | Solo + batch-generated bookings | **id**, reference_no UQ, student_id →users, service_type, scheduled_date, status (scheduled/checked_in/completed/cancelled), source (self/batch), batch_request_id →batch_requests NULL, created_by →users NULL |
 | `batch_requests` | College Admin cohort requests | **id**, reference_no UQ, college_id →colleges, requested_by →users, reason, reason_detail, service_type, **scheduled_date NULL (new)**, status (pending/approved/rejected), reviewed_by →users NULL, reviewed_at |
 | `batch_request_students` | Batch ↔ student pivot | **id**, batch_request_id →, student_id →users, appointment_id →appointments NULL (set on approval); UQ(batch_request_id, student_id) |
@@ -506,7 +506,9 @@ A **single unified Laravel application** — no separate API service, no microse
 | Auth | Laravel Breeze (Blade stack), role middleware on top |
 | Styling | Prototype CSS variables + Poppins; Tailwind as utility layer |
 | Charts | Chart.js (Director analytics) |
-| QR | `simplesoftwareio/simple-qrcode` (generation); USB keyboard-wedge scanner (reading) |
+| QR — generation | `simplesoftwareio/simple-qrcode` — generates each student's kiosk QR from `qr_token` |
+| QR — kiosk read | USB keyboard-wedge scanner — "types" the ID's multi-line QR text + Enter into the Welcome screen's focused input; the kiosk normalizes by extracting the `IDNo:` line's value if present, falling back to the full string for single-token backup QRs |
+| QR — registration & late-linking capture | `html5-qrcode` (client-side JS) — camera or uploaded ID photo, decoded in-browser; `IDNo` extracted and matched to `student_number` before POSTing |
 | Printing | Blade print view in iframe + `window.print()`; dompdf optional later |
 | Queue refresh | Polling (`setInterval` + `fetch`, 3–5 s) — WebSockets deliberately excluded |
 | Mail | `MAIL_MAILER=log` / Mailtrap in dev; real SMTP at deployment |
@@ -613,8 +615,9 @@ Non-programmer team across all sprints: paper title/scope revision (R-6), test c
 | D-9 | **Laravel runs on the Pi; kiosk at `http://localhost`** | Satisfies Web Serial's secure-context rule with no TLS; staff use LAN |
 | D-10 | **BP flag threshold = systolic ≥ 140 OR diastolic ≥ 90** | Resolves the 130/85 vs 140/90 document discrepancy; aligned with stage-2 hypertension screening convention; canonical in config |
 | D-11 | **Polling, not WebSockets**, for the live queue | Single-clinic scale; massive complexity saving for two Laravel beginners |
-| D-12 | **USB keyboard-wedge QR scanner** (camera decode = fallback only) | Far more reliable for kiosk conditions |
+| D-12 | **Kiosk ID login uses a USB keyboard-wedge QR scanner** as the primary input path; email + virtual keyboard is the fallback. The kiosk normalizes multi-line QR payloads (format from physical DHVSU IDs) by extracting the `IDNo:` line's value; falls back to the full string for single-value tokens (phone-QR backup). | Far more reliable for unattended kiosk conditions than camera decode; the normalization step keeps both real-ID and phone-QR paths working against one `qr_token` field. |
 | D-13 | **Live Queue is FIFO (oldest first)** — top row = next to serve ("NEXT" badge); new arrivals append at the bottom | Matches real clinic fairness (first come, first served); the prototype's emphasized row-1 styling maps cleanly to "next to serve" |
+| D-14 | **Registration (Step 4) and late-linking (My ID) use in-browser camera or photo upload** for QR capture, decoded client-side by `html5-qrcode`; only the extracted `IDNo` is POSTed and stored as `qr_token`. | Students register on personal phones/laptops — a USB scanner is not available there. Camera/upload is the only viable primary path on personal devices. |
 
 ---
 

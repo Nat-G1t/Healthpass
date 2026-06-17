@@ -73,7 +73,9 @@ Web Serial only works in a **secure context**: `https://` **or** `http://localho
 | Styling | **CSS variables matching the prototype** (`--orange:#FF8C2A` etc.) | The prototype is already working HTML/CSS — lift its tokens directly. Tailwind optional. Font: **Poppins**. |
 | Charts | **Chart.js** | Director's grouped bar + sex donut. |
 | Clearance output | **Print-friendly Blade view + `window.print()`** first | Matches the prototype exactly, zero new dependencies. Upgrade to **dompdf** (`barryvdh/laravel-dompdf`) if you need a saved PDF file. |
-| QR (student ID) | **USB QR/barcode scanner** (keyboard-wedge) for reading + **`simplesoftwareio/simple-qrcode`** for generating | A USB scanner "types" the student number into a focused field — far more reliable for a kiosk than camera decoding. Camera decode is the fallback. |
+| QR — kiosk ID login | **USB keyboard-wedge scanner** | "Types" the ID's multi-line QR text + Enter at the kiosk Welcome screen; far more reliable for unattended use. Kiosk normalizes the payload: extracts `IDNo:` line's value if present, otherwise uses the full string (keeps phone-QR backup working). |
+| QR — generation | **`simplesoftwareio/simple-qrcode`** | Generates each student's kiosk QR from `qr_token` for the My ID screen. |
+| QR — registration capture | **`html5-qrcode`** (client-side JS, npm) | In-browser camera or uploaded ID photo, decoded on the student's own device; `IDNo` extracted and matched to `student_number` before POSTing. Students register on personal devices — a USB scanner is not available there. |
 | Live queue | **Polling** (JS fetch every 3–5s) | Real-time websockets are overkill for a single-clinic demo. |
 | Mail (OTP) | `MAIL_MAILER=log` or **Mailtrap** locally | Real SMTP only at deployment. |
 | Version control | **Git + GitHub**, feature branches + PRs | Critical with 2 programmers — see §7. |

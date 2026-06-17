@@ -24,7 +24,7 @@ class StoreRegistrationInfoRequest extends FormRequest
             'first_name'     => ['required', 'string', 'max:80'],
             'middle_name'    => ['nullable', 'string', 'max:80'],
             'last_name'      => ['required', 'string', 'max:80'],
-            'student_number' => ['required', 'string', 'max:20', 'regex:/^\d+$/', 'unique:student_profiles,student_number'],
+            'student_number' => ['required', 'string', 'max:20', 'regex:/^[\d-]+$/', 'unique:student_profiles,student_number'],
             'college_id'     => ['required', 'integer', 'exists:colleges,id'],
             'sex'            => ['required', 'in:M,F'],
             'course'         => ['required', 'string', 'max:120'],
@@ -41,7 +41,8 @@ class StoreRegistrationInfoRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'student_number.unique' => 'This student number is already registered.',
+            'student_number.unique'  => 'This student number is already registered.',
+            'student_number.regex'   => 'Student number may only contain digits and dashes (e.g. 2024-00001).',
             'email.unique'          => 'This email address is already registered.',
             'sex.in'                => 'Please select a sex.',
             'year_level.in'         => 'Please select a valid year level (1–5).',

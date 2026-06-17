@@ -2,10 +2,15 @@
 
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Student\DashboardController as StudentDashboardController;
+use App\Http\Middleware\EnsureRole;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
-    return view('welcome');
+    if (Auth::check()) {
+        return redirect(EnsureRole::dashboardFor(Auth::user()));
+    }
+    return redirect()->route('login');
 });
 
 // ── Profile (any authenticated user) ────────────────────────────────────────

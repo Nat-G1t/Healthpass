@@ -11,6 +11,7 @@ use App\Models\College;
 use App\Models\StudentProfile;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -221,11 +222,63 @@ class RegistrationWizardController extends Controller
             ->with('status', 'A new code has been sent to your email.');
     }
 
-    // ── Step 4: Link ID (placeholder — FR-REG-06, next sprint) ──────────────
+    // ── Step 4: Link ID (FR-REG-06) ─────────────────────────────────────────
 
-    public function step4(): View
+    /** GET /register/link-id — shown after OTP creates and logs in the student. */
+    public function step4(Request $request): View|RedirectResponse
     {
-        return view('auth.register.step4');
+        $profile = $request->user()?->studentProfile;
+
+        if (! $profile) {
+            return redirect()->route('student.dashboard');
+        }
+
+        // Digits-only version is passed to the client so the JS can compare
+        // against the QR payload without exposing the full student_number format.
+        $studentNumberDigits = preg_replace('/\D/', '', $profile->student_number);
+
+        return view('auth.register.step4', compact('studentNumberDigits'));
+    }
+
+    /** POST /register/link-id — store extracted IDNo, replacing the provisional qr_token. */
+    public function linkId(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'id_number' => ['required', 'string', 'max:30'],
+        ], [
+            'id_number.required' => 'No ID number was submitted.',
+        ]);
+
+        $profile         = $request->user()->studentProfile;
+        $submittedDigits = preg_replace('/\D/', '', $validated['id_number']);
+        $profileDigits   = preg_replace('/\D/', '', $profile->student_number);
+
+        // Server-side digit comparison is the authoritative check (the client
+        // comparison in JS is UX feedback only — never trust client-only validation).
+        if ($submittedDigits !== $profileDigits) {
+            return back()->withErrors([
+                'id_number' => 'The ID number does not match your registered student number.',
+            ]);
+        }
+
+        try {
+            $profile->update(['qr_token' => $validated['id_number']]);
+        } catch (UniqueConstraintViolationException) {
+            // Another student already has this IDNo linked — race condition or
+            // duplicate registration attempt.
+            return back()->withErrors([
+                'id_number' => 'This ID is already linked to another account. Contact the clinic if this is an error.',
+            ]);
+        }
+
+        return redirect()->route('student.dashboard')
+            ->with('status', 'Your student ID has been linked successfully.');
+    }
+
+    /** POST /register/link-id/skip — keep provisional token, go to dashboard (FR-REG-07). */
+    public function skipLinkId(): RedirectResponse
+    {
+        return redirect()->route('student.dashboard');
     }
 
     // ── Private helpers ──────────────────────────────────────────────────────

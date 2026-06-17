@@ -336,26 +336,32 @@ Tell me exactly where to read the OTP in storage/logs/laravel.log for testing.
 
 ### Day 9 — Wed, Jun 17 — Step 4: QR linking + full wizard E2E `[Medium]`
 
-**Ano'ng mangyayari:** ID linking via USB keyboard-wedge scanner (or skip), auto-login, tapos full end-to-end run ng buong wizard.
+**Ano'ng mangyayari:** ID linking via in-browser camera or uploaded ID photo — `html5-qrcode` decodes the physical ID's QR client-side, extracts the IDNo, verifies it matches the student_number, then binds qr_token (or skip) — auto-login, tapos full end-to-end run ng buong wizard.
 
 **Skill to invoke:** `/laravel-patterns`
 **Session 1 prompt:**
 ```text
 Read docs/HealthPass_PRD.md  FR-REG-06/07. Build wizard Step 4 (Link ID):
-- A clearly-focused input that receives a USB QR scanner's keyboard-wedge output (string +
-  Enter). The scanned string becomes/binds student_profiles.qr_token for this student —
-  must be unique; reject with a clear message if already bound to another student.
-  (Note: account creation in Step 3 already generated a provisional qr_token; scanning
-  REPLACES it with the physical ID's QR payload so the kiosk recognizes the actual ID.)
+- In-browser QR capture with two options: (a) "Use Camera" — opens the device camera via
+  html5-qrcode's scanner UI, targeting the rear camera on mobile; (b) "Upload ID Photo" —
+  file input, decoded by html5-qrcode. Both paths decode client-side and extract the IDNo
+  line from the multi-line payload (format: "IDNo: XXXXXXXXXX\nFull Name: …\nProgram: …").
+  Strip non-digits from both the extracted IDNo and the student_number from Step 2, then
+  compare — mismatch shows a clear error and the field stays unfilled.
+- On a valid match, POST ONLY the IDNo to the server. This REPLACES the provisional
+  qr_token generated at Step 3 (qr_token stays NOT NULL). Reject if the IDNo is already
+  bound to another student (unique constraint).
+- Dev-only: a plain text input labeled "Dev: paste IDNo (no camera needed)", visible only
+  when APP_ENV=local — allows E2E testing without a real camera or physical ID.
 - A "Skip for now" path — linking can be finished later from My ID (FR-STU-10).
 - Either path logs the student in and routes to /student/dashboard (FR-REG-07).
-Then run the whole 4-step wizard yourself with test data (simulate the scanner by typing a
-string + Enter) and list any rough edges you find — fix only blockers.
+Then run the whole 4-step wizard yourself using the dev paste field, list any rough edges,
+and fix only blockers.
 ```
 
 **Session 2:** buffer/fixes from the E2E run.
 
-**✅ Verify:** Buong wizard sa isang upo — consent → info → OTP from log → scan (type+Enter) → nakalanding sa dashboard, logged in; skip path works din; duplicate QR rejected.
+**✅ Verify:** Buong wizard sa isang upo — consent → info → OTP from log → paste IDNo in dev field → nakalanding sa dashboard, logged in; IDNo that doesn't match student_number → clear error; skip path works din; IDNo already bound to another account → rejected.
 
 ---
 
@@ -523,7 +529,7 @@ so every UI state is visible now.
 
 ### Day 18 — Fri, Jun 26 — My ID & Profile `[Medium]`
 
-**Ano'ng mangyayari:** QR display (ito ang ipapakita sa kiosk scanner), profile editing, at late QR-linking para sa nag-skip sa registration.
+**Ano'ng mangyayari:** QR display (ito ang ipapakita sa kiosk scanner), profile editing, at late QR-linking para sa nag-skip sa registration — same camera-or-photo capture flow as Step 4.
 
 **Skill to invoke:** `/laravel-patterns`
 **Session 1 prompt:**
@@ -531,8 +537,9 @@ so every UI state is visible now.
 Read docs/HealthPass_PRD.md  FR-STU-09/10. Install simplesoftwareio/simple-qrcode. Build
 /student/profile:
 - Left: the student's kiosk QR rendered from qr_token inside an HPCard with an Active
-  badge. If qr_token isn't linked yet, show the linking flow instead (focused
-  keyboard-wedge input + skip note), same rules as registration Step 4.
+  badge. If qr_token isn't linked yet, show the same in-browser capture flow as Step 4 —
+  camera or photo upload via html5-qrcode, IDNo extraction, IDNo↔student_number match
+  check — plus a "Skip again" note.
 - Right: read-only profile fields + an Edit Profile modal updating ONLY: name, email,
   course, year, address, DOB, place of birth, civil status. Student number, college, and
   sex are locked (display-only). Validate email uniqueness on edit.
@@ -797,14 +804,18 @@ http://localhost (D-9). Plan first, GO.
 **Session 1 prompt:**
 ```text
 Wire the kiosk QR login for real (FR-KSK-01 + its acceptance criteria): the invisible
-focused input's submitted string is looked up against student_profiles.qr_token — valid →
-load that student into kiosk state and show Identity Confirm in under 2 seconds; invalid →
+focused input's submitted string must first be normalized — if it contains "IDNo:", extract
+that line's value; otherwise treat the whole string as the token (this handles the physical
+ID's multi-line QR payload from the USB scanner AND keeps the simple single-token backup QR
+working). Look up the normalized value against student_profiles.qr_token — valid → load
+that student into kiosk state and show Identity Confirm in under 2 seconds; invalid →
 brief inline error + refocus, stay on Welcome. Re-assert focus whenever Welcome is
 (re)shown and on any blur, and make sure the hidden input NEVER steals input from the
 virtual keyboard screens.
 
-Then integration-test the kiosk's left edge both ways: QR login → consent → vitals via
-simulated readings → submit; and email login → same. Fix focus/keyboard conflicts found.
+Then integration-test the kiosk's left edge both ways: QR login (type the raw multi-line
+payload if you can, or just the IDNo) → consent → vitals via simulated readings → submit;
+and email login → same. Fix focus/keyboard conflicts found.
 ```
 
 **Session 2:** buffer.
