@@ -7,6 +7,8 @@ namespace Tests\Feature;
 use App\Models\College;
 use App\Models\StudentProfile;
 use App\Models\User;
+use Illuminate\Contracts\Encryption\Encrypter;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Mail;
@@ -42,20 +44,20 @@ class AuthSecurityTest extends TestCase
     private function registrationPayload(College $college, string $email = 'student@psu.edu.ph'): array
     {
         return [
-            'first_name'            => 'Juan',
-            'middle_name'           => 'Dela',
-            'last_name'             => 'Cruz',
-            'student_number'        => '2024-00001',
-            'college_id'            => $college->id,
-            'sex'                   => 'M',
-            'course'                => 'BS Information Technology',
-            'year_level'            => '1',
-            'date_of_birth'         => '2000-06-15',
-            'place_of_birth'        => 'San Fernando, Pampanga',
-            'civil_status'          => 'Single',
-            'address'               => '123 Sample St., San Fernando, Pampanga',
-            'email'                 => $email,
-            'password'              => 'Password123!',
+            'first_name' => 'Juan',
+            'middle_name' => 'Dela',
+            'last_name' => 'Cruz',
+            'student_number' => '2024-00001',
+            'college_id' => $college->id,
+            'sex' => 'M',
+            'course' => 'BS Information Technology',
+            'year_level' => '1',
+            'date_of_birth' => '2000-06-15',
+            'place_of_birth' => 'San Fernando, Pampanga',
+            'civil_status' => 'Single',
+            'address' => '123 Sample St., San Fernando, Pampanga',
+            'email' => $email,
+            'password' => 'Password123!',
             'password_confirmation' => 'Password123!',
         ];
     }
@@ -153,19 +155,19 @@ class AuthSecurityTest extends TestCase
 
         // Pre-existing profile occupying '2024-00001'
         StudentProfile::create([
-            'user_id'        => User::factory()->create(['role' => 'student'])->id,
-            'college_id'     => $college->id,
+            'user_id' => User::factory()->create(['role' => 'student'])->id,
+            'college_id' => $college->id,
             'student_number' => '2024-00001',
-            'first_name'     => 'Maria',
-            'last_name'      => 'Santos',
-            'sex'            => 'F',
-            'course'         => 'BS CS',
-            'year_level'     => '1',
-            'date_of_birth'  => '2001-03-10',
+            'first_name' => 'Maria',
+            'last_name' => 'Santos',
+            'sex' => 'F',
+            'course' => 'BS CS',
+            'year_level' => '1',
+            'date_of_birth' => '2001-03-10',
             'place_of_birth' => 'Angeles City',
-            'civil_status'   => 'Single',
-            'address'        => '1 Test St.',
-            'qr_token'       => Str::random(64),
+            'civil_status' => 'Single',
+            'address' => '1 Test St.',
+            'qr_token' => Str::random(64),
         ]);
 
         $this->withSession(['reg.consent_at' => now()->toIso8601String()])
@@ -208,7 +210,7 @@ class AuthSecurityTest extends TestCase
         $college = $this->createCollege();
         Mail::fake();
 
-        $email    = 'abandoned2@example.com';
+        $email = 'abandoned2@example.com';
         $password = 'Password123!';
 
         // Steps 1 and 2 only
@@ -240,12 +242,12 @@ class AuthSecurityTest extends TestCase
         $sessionId = $this->app['session.store']->getId();
         $this->withCookie(config('session.cookie'), $sessionId);
 
-        $cacheKey = 'reg_otp_' . $sessionId;
+        $cacheKey = 'reg_otp_'.$sessionId;
 
         // Replace the random OTP with a known hash so we control what "wrong" means
         Cache::put($cacheKey, [
-            'hash'       => hash('sha256', '654321'),
-            'attempts'   => 0,
+            'hash' => hash('sha256', '654321'),
+            'attempts' => 0,
             'expires_at' => now()->addMinutes(10)->toIso8601String(),
         ], now()->addMinutes(10));
 
@@ -284,13 +286,13 @@ class AuthSecurityTest extends TestCase
         $sessionId = $this->app['session.store']->getId();
         $this->withCookie(config('session.cookie'), $sessionId);
 
-        $cacheKey = 'reg_otp_' . $sessionId;
-        $oldOtp   = '111111';
-        $oldHash  = hash('sha256', $oldOtp);
+        $cacheKey = 'reg_otp_'.$sessionId;
+        $oldOtp = '111111';
+        $oldHash = hash('sha256', $oldOtp);
 
         Cache::put($cacheKey, [
-            'hash'       => $oldHash,
-            'attempts'   => 3, // simulate prior wrong guesses
+            'hash' => $oldHash,
+            'attempts' => 3, // simulate prior wrong guesses
             'expires_at' => now()->addMinutes(10)->toIso8601String(),
         ], now()->addMinutes(10));
 
@@ -314,13 +316,13 @@ class AuthSecurityTest extends TestCase
     public function test_inactive_account_is_refused_with_clear_message(): void
     {
         User::factory()->create([
-            'email'  => 'inactive@example.com',
+            'email' => 'inactive@example.com',
             'password' => 'Password123!',  // 'hashed' cast bcrypts this
             'status' => 'inactive',
         ]);
 
         $response = $this->post(route('login'), [
-            'email'    => 'inactive@example.com',
+            'email' => 'inactive@example.com',
             'password' => 'Password123!',
         ]);
 
@@ -345,11 +347,9 @@ class AuthSecurityTest extends TestCase
     public function test_csrf_is_enforced_on_all_post_routes(): void
     {
         $this->app->bind(
-            \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
-            fn ($app) => new class(
-                $app,
-                $app->make(\Illuminate\Contracts\Encryption\Encrypter::class)
-            ) extends \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken {
+            ValidateCsrfToken::class,
+            fn ($app) => new class($app, $app->make(Encrypter::class)) extends ValidateCsrfToken
+            {
                 protected function runningUnitTests(): bool
                 {
                     return false;

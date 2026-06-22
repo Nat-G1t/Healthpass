@@ -43,33 +43,33 @@ class StudentProfileFactory extends Factory
     ];
 
     private static array $courses = [
-        'COE'  => ['Bachelor of Secondary Education', 'Bachelor of Elementary Education', 'Bachelor of Physical Education'],
-        'CEA'  => ['Bachelor of Science in Civil Engineering', 'Bachelor of Science in Architecture', 'Bachelor of Science in Electrical Engineering'],
-        'CBS'  => ['Bachelor of Science in Accountancy', 'Bachelor of Science in Business Administration', 'Bachelor of Science in Marketing Management'],
-        'CAS'  => ['Bachelor of Science in Psychology', 'Bachelor of Arts in Communication', 'Bachelor of Science in Biology'],
+        'COE' => ['Bachelor of Secondary Education', 'Bachelor of Elementary Education', 'Bachelor of Physical Education'],
+        'CEA' => ['Bachelor of Science in Civil Engineering', 'Bachelor of Science in Architecture', 'Bachelor of Science in Electrical Engineering'],
+        'CBS' => ['Bachelor of Science in Accountancy', 'Bachelor of Science in Business Administration', 'Bachelor of Science in Marketing Management'],
+        'CAS' => ['Bachelor of Science in Psychology', 'Bachelor of Arts in Communication', 'Bachelor of Science in Biology'],
         'CSSP' => ['Bachelor of Science in Social Work', 'Bachelor of Arts in Sociology', 'Bachelor of Science in Political Science'],
-        'CCS'  => ['Bachelor of Science in Computer Science', 'Bachelor of Science in Information Technology', 'Bachelor of Science in Information Systems'],
+        'CCS' => ['Bachelor of Science in Computer Science', 'Bachelor of Science in Information Technology', 'Bachelor of Science in Information Systems'],
         'CHTM' => ['Bachelor of Science in Hospitality Management', 'Bachelor of Science in Tourism Management'],
-        'CIT'  => ['Bachelor of Industrial Technology major in Electronics', 'Bachelor of Industrial Technology major in Computer Technology', 'Bachelor of Industrial Technology major in Automotive Technology'],
-        'LAW'  => ['Juris Doctor'],
-        'GS'   => ['Master of Science in Computer Science', 'Master of Arts in Education', 'Master of Public Administration'],
-        'SHS'  => ['STEM Strand', 'ABM Strand', 'HUMSS Strand'],
-        'LHS'  => ['General Secondary Education'],
+        'CIT' => ['Bachelor of Industrial Technology major in Electronics', 'Bachelor of Industrial Technology major in Computer Technology', 'Bachelor of Industrial Technology major in Automotive Technology'],
+        'LAW' => ['Juris Doctor'],
+        'GS' => ['Master of Science in Computer Science', 'Master of Arts in Education', 'Master of Public Administration'],
+        'SHS' => ['STEM Strand', 'ABM Strand', 'HUMSS Strand'],
+        'LHS' => ['General Secondary Education'],
     ];
 
     private static array $yearLevels = [
-        'COE'  => ['1st Year', '2nd Year', '3rd Year', '4th Year'],
-        'CEA'  => ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year'],
-        'CBS'  => ['1st Year', '2nd Year', '3rd Year', '4th Year'],
-        'CAS'  => ['1st Year', '2nd Year', '3rd Year', '4th Year'],
+        'COE' => ['1st Year', '2nd Year', '3rd Year', '4th Year'],
+        'CEA' => ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year'],
+        'CBS' => ['1st Year', '2nd Year', '3rd Year', '4th Year'],
+        'CAS' => ['1st Year', '2nd Year', '3rd Year', '4th Year'],
         'CSSP' => ['1st Year', '2nd Year', '3rd Year', '4th Year'],
-        'CCS'  => ['1st Year', '2nd Year', '3rd Year', '4th Year'],
+        'CCS' => ['1st Year', '2nd Year', '3rd Year', '4th Year'],
         'CHTM' => ['1st Year', '2nd Year', '3rd Year', '4th Year'],
-        'CIT'  => ['1st Year', '2nd Year', '3rd Year', '4th Year'],
-        'LAW'  => ['1st Year', '2nd Year', '3rd Year', '4th Year'],
-        'GS'   => ['1st Year', '2nd Year'],
-        'SHS'  => ['Grade 11', 'Grade 12'],
-        'LHS'  => ['Grade 7', 'Grade 8', 'Grade 9', 'Grade 10'],
+        'CIT' => ['1st Year', '2nd Year', '3rd Year', '4th Year'],
+        'LAW' => ['1st Year', '2nd Year', '3rd Year', '4th Year'],
+        'GS' => ['1st Year', '2nd Year'],
+        'SHS' => ['Grade 11', 'Grade 12'],
+        'LHS' => ['Grade 7', 'Grade 8', 'Grade 9', 'Grade 10'],
     ];
 
     private static array $placesOfBirth = [

@@ -38,11 +38,11 @@ class RegisteredUserController extends Controller
 
         // FR-AUTH-05: public registration always creates a student (staff via seeders only)
         $user = User::create([
-            'name'     => $request->name,
-            'email'    => $request->email,
+            'name' => $request->name,
+            'email' => $request->email,
             'password' => Hash::make($request->password),
-            'role'     => 'student',
-            'status'   => 'active',
+            'role' => 'student',
+            'status' => 'active',
         ]);
 
         event(new Registered($user));

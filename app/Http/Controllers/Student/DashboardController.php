@@ -45,10 +45,10 @@ class DashboardController extends Controller
         $recentActivity = collect()
             ->merge(
                 $recentAppointments->map(fn ($a) => [
-                    'icon'   => $a->status === 'cancelled' ? 'x' : 'calendar',
-                    'label'  => $a->status === 'cancelled' ? 'Appointment cancelled' : 'Appointment booked',
-                    'detail' => $a->reference_no . ' · ' . ucfirst($a->service_type) . ' Clearance',
-                    'at'     => $a->created_at,
+                    'icon' => $a->status === 'cancelled' ? 'x' : 'calendar',
+                    'label' => $a->status === 'cancelled' ? 'Appointment cancelled' : 'Appointment booked',
+                    'detail' => $a->reference_no.' · '.ucfirst($a->service_type).' Clearance',
+                    'at' => $a->created_at,
                 ])
             )
             ->merge(
@@ -57,19 +57,19 @@ class DashboardController extends Controller
 
                     if ($v->checked_in_at) {
                         $events[] = [
-                            'icon'   => 'checkin',
-                            'label'  => 'Checked in at clinic',
+                            'icon' => 'checkin',
+                            'label' => 'Checked in at clinic',
                             'detail' => $v->reference_no,
-                            'at'     => $v->checked_in_at,
+                            'at' => $v->checked_in_at,
                         ];
                     }
 
                     if ($v->clearanceRecord) {
                         $events[] = [
-                            'icon'   => 'result',
-                            'label'  => 'Clearance result: ' . $v->clearanceRecord->result,
+                            'icon' => 'result',
+                            'label' => 'Clearance result: '.$v->clearanceRecord->result,
                             'detail' => $v->reference_no,
-                            'at'     => $v->clearanceRecord->encoded_at ?? $v->clearanceRecord->created_at,
+                            'at' => $v->clearanceRecord->encoded_at ?? $v->clearanceRecord->created_at,
                         ];
                     }
 

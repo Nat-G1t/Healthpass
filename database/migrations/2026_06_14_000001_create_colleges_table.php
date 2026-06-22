@@ -19,8 +19,8 @@ return new class extends Migration
         // Defined here (not in the users migration) because colleges must exist first.
         Schema::table('users', function (Blueprint $table) {
             $table->foreign('managed_college_id')
-                  ->references('id')->on('colleges')
-                  ->nullOnDelete();
+                ->references('id')->on('colleges')
+                ->nullOnDelete();
         });
     }
 

@@ -20,27 +20,27 @@ class StudentSeeder extends Seeder
             $college = $colleges[$row['college']];
 
             $user = User::create([
-                'role'              => 'student',
-                'name'              => "{$row['first']} {$row['last']}",
-                'email'             => $row['email'],
+                'role' => 'student',
+                'name' => "{$row['first']} {$row['last']}",
+                'email' => $row['email'],
                 'email_verified_at' => now(),
-                'password'          => Hash::make('password'),
-                'status'            => 'active',
+                'password' => Hash::make('password'),
+                'status' => 'active',
             ]);
 
             StudentProfile::factory()
                 ->forCollege($college)
                 ->create([
-                    'user_id'        => $user->id,
-                    'first_name'     => $row['first'],
-                    'middle_name'    => $row['middle'],
-                    'last_name'      => $row['last'],
-                    'sex'            => $row['sex'],
+                    'user_id' => $user->id,
+                    'first_name' => $row['first'],
+                    'middle_name' => $row['middle'],
+                    'last_name' => $row['last'],
+                    'sex' => $row['sex'],
                     'student_number' => $row['student_no'],
-                    'course'         => $row['course'],
-                    'year_level'     => $row['year'],
-                    'date_of_birth'  => $row['dob'],
-                    'qr_token'       => Str::random(32),
+                    'course' => $row['course'],
+                    'year_level' => $row['year'],
+                    'date_of_birth' => $row['dob'],
+                    'qr_token' => Str::random(32),
                 ]);
         }
     }

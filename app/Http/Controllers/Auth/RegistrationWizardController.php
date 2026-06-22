@@ -35,6 +35,7 @@ use Illuminate\View\View;
 class RegistrationWizardController extends Controller
 {
     private const OTP_TTL_MINUTES = 10;
+
     private const OTP_MAX_ATTEMPTS = 5;
 
     // ── Step 1: Consent ─────────────────────────────────────────────────────
@@ -116,8 +117,8 @@ class RegistrationWizardController extends Controller
             'otp' => ['required', 'string', 'size:6', 'regex:/^\d{6}$/'],
         ], [
             'otp.required' => 'Please enter the 6-digit code.',
-            'otp.size'     => 'The code must be exactly 6 digits.',
-            'otp.regex'    => 'The code must contain digits only.',
+            'otp.size' => 'The code must be exactly 6 digits.',
+            'otp.regex' => 'The code must contain digits only.',
         ]);
 
         $cacheKey = $this->otpCacheKey($request);
@@ -132,6 +133,7 @@ class RegistrationWizardController extends Controller
         // Guard: should have been deleted at 5 attempts, but be defensive.
         if ($entry['attempts'] >= self::OTP_MAX_ATTEMPTS) {
             Cache::forget($cacheKey);
+
             return back()->withErrors(['otp' => 'Too many incorrect attempts. Please request a new code.']);
         }
 
@@ -140,6 +142,7 @@ class RegistrationWizardController extends Controller
 
             if ($entry['attempts'] >= self::OTP_MAX_ATTEMPTS) {
                 Cache::forget($cacheKey);
+
                 return back()->withErrors([
                     'otp' => 'Incorrect code. You have used all 5 attempts — please request a new code.',
                 ]);
@@ -157,16 +160,16 @@ class RegistrationWizardController extends Controller
         Cache::forget($cacheKey);
 
         /** @var array<string,mixed> $info */
-        $info    = $request->session()->get('reg.info');
+        $info = $request->session()->get('reg.info');
         $consent = $request->session()->get('reg.consent_at');
 
         $user = DB::transaction(function () use ($info, $consent) {
             $user = User::create([
-                'role'              => 'student',
-                'name'              => trim($info['first_name'] . ' ' . $info['last_name']),
-                'email'             => $info['email'],
-                'password'          => $info['password'], // 'hashed' cast bcrypts on assignment
-                'status'            => 'active',
+                'role' => 'student',
+                'name' => trim($info['first_name'].' '.$info['last_name']),
+                'email' => $info['email'],
+                'password' => $info['password'], // 'hashed' cast bcrypts on assignment
+                'status' => 'active',
                 'email_verified_at' => now(),
             ]);
 
@@ -177,20 +180,20 @@ class RegistrationWizardController extends Controller
             } while (StudentProfile::where('qr_token', $token)->exists());
 
             StudentProfile::create([
-                'user_id'            => $user->id,
-                'college_id'         => (int) $info['college_id'],
-                'student_number'     => $info['student_number'],
-                'first_name'         => $info['first_name'],
-                'middle_name'        => $info['middle_name'] ?? null,
-                'last_name'          => $info['last_name'],
-                'sex'                => $info['sex'],
-                'course'             => $info['course'],
-                'year_level'         => $info['year_level'],
-                'date_of_birth'      => $info['date_of_birth'],
-                'place_of_birth'     => $info['place_of_birth'],
-                'civil_status'       => $info['civil_status'],
-                'address'            => $info['address'],
-                'qr_token'           => $token,
+                'user_id' => $user->id,
+                'college_id' => (int) $info['college_id'],
+                'student_number' => $info['student_number'],
+                'first_name' => $info['first_name'],
+                'middle_name' => $info['middle_name'] ?? null,
+                'last_name' => $info['last_name'],
+                'sex' => $info['sex'],
+                'course' => $info['course'],
+                'year_level' => $info['year_level'],
+                'date_of_birth' => $info['date_of_birth'],
+                'place_of_birth' => $info['place_of_birth'],
+                'civil_status' => $info['civil_status'],
+                'address' => $info['address'],
+                'qr_token' => $token,
                 'privacy_consent_at' => $consent,
             ]);
 
@@ -249,9 +252,9 @@ class RegistrationWizardController extends Controller
             'id_number.required' => 'No ID number was submitted.',
         ]);
 
-        $profile         = $request->user()->studentProfile;
+        $profile = $request->user()->studentProfile;
         $submittedDigits = preg_replace('/\D/', '', $validated['id_number']);
-        $profileDigits   = preg_replace('/\D/', '', $profile->student_number);
+        $profileDigits = preg_replace('/\D/', '', $profile->student_number);
 
         // Server-side digit comparison is the authoritative check (the client
         // comparison in JS is UX feedback only — never trust client-only validation).
@@ -286,7 +289,7 @@ class RegistrationWizardController extends Controller
     /** Cache key for this session's pending OTP entry. */
     private function otpCacheKey(Request $request): string
     {
-        return 'reg_otp_' . $request->session()->getId();
+        return 'reg_otp_'.$request->session()->getId();
     }
 
     /**
@@ -296,12 +299,12 @@ class RegistrationWizardController extends Controller
      */
     private function issueOtp(Request $request, string $email, string $firstName): void
     {
-        $otp       = str_pad((string) random_int(0, 999_999), 6, '0', STR_PAD_LEFT);
+        $otp = str_pad((string) random_int(0, 999_999), 6, '0', STR_PAD_LEFT);
         $expiresAt = now()->addMinutes(self::OTP_TTL_MINUTES);
 
         Cache::put($this->otpCacheKey($request), [
-            'hash'       => hash('sha256', $otp),
-            'attempts'   => 0,
+            'hash' => hash('sha256', $otp),
+            'attempts' => 0,
             'expires_at' => $expiresAt->toIso8601String(),
         ], $expiresAt);
 

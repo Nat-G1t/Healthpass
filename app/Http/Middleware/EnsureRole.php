@@ -16,10 +16,10 @@ class EnsureRole
      * Update this map when new roles are added.
      */
     private const DASHBOARDS = [
-        'student'       => '/student/dashboard',
+        'student' => '/student/dashboard',
         'college_admin' => '/admin/dashboard',
-        'nurse'         => '/nurse/queue',
-        'director'      => '/director/dashboard',
+        'nurse' => '/nurse/queue',
+        'director' => '/director/dashboard',
     ];
 
     public function handle(Request $request, Closure $next, string $role): Response

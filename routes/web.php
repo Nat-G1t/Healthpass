@@ -10,6 +10,7 @@ Route::get('/', function () {
     if (Auth::check()) {
         return redirect(EnsureRole::dashboardFor(Auth::user()));
     }
+
     return redirect()->route('login');
 });
 

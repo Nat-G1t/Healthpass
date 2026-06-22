@@ -63,7 +63,7 @@ class ReferenceNumberService
                         ? 1
                         : ((int) Str::afterLast($max, '-')) + 1;
 
-                    return sprintf('%s-%d-%0' . $pad . 'd', $prefix, $year, $seq);
+                    return sprintf('%s-%d-%0'.$pad.'d', $prefix, $year, $seq);
                 });
             } catch (UniqueConstraintViolationException $e) {
                 if ($attempt === 5) {
