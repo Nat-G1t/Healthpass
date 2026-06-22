@@ -6,12 +6,16 @@ return [
     // Clinic staff update this value without touching any controller or view.
     'daily_capacity' => env('HEALTHPASS_DAILY_CAPACITY', 40),
 
-    // BR-01: Monday–Friday, 7 AM–5 PM. Used to block off-hours self-bookings.
+    // BR-01 (updated): Clinic open daily, 7 AM–5 PM.
     'clinic_hours' => [
         'open' => '07:00',
         'close' => '17:00',
-        'days' => ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+        'days' => ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
     ],
+
+    // BR-01: Weekdays (Carbon / JS day-of-week integers, 0 = Sunday … 6 = Saturday) on which
+    // self-booking is allowed. Remove an integer to block that weekday clinic-wide.
+    'booking_days' => [0, 1, 2, 3, 4, 5, 6],
 
     // §7.4, D-10: Rule-based flag thresholds — screening signals, not diagnoses.
     // All flag logic (kiosk badges, nurse queue, Director anomalies) reads ONLY from here. (NFR-7, BR-13)

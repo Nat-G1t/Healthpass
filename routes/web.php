@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\Student\BookAppointmentController;
 use App\Http\Controllers\Student\DashboardController as StudentDashboardController;
 use App\Http\Middleware\EnsureRole;
 use Illuminate\Support\Facades\Auth;
@@ -29,7 +30,9 @@ Route::middleware(['auth', 'role:student'])
     ->name('student.')
     ->group(function () {
         Route::get('/dashboard', StudentDashboardController::class)->name('dashboard');
-        Route::get('/appointments', fn () => view('student.stub', ['page' => 'Book Appointment']))->name('appointments');
+        Route::get('/appointments', [BookAppointmentController::class, 'show'])->name('appointments');
+        Route::get('/appointments/availability', [BookAppointmentController::class, 'availability'])->name('appointments.availability');
+        Route::post('/appointments', [BookAppointmentController::class, 'store'])->name('appointments.store');
         Route::get('/records', fn () => view('student.stub', ['page' => 'My Records']))->name('records');
         Route::get('/id-profile', fn () => view('student.stub', ['page' => 'My ID & Profile']))->name('id-profile');
     });
