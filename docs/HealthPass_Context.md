@@ -143,9 +143,9 @@ Director analytics and flagged anomalies update from encoded records
 ## 5. Business rules
 
 ### Appointments / booking
-- Weekends and past dates are unbookable.
+- Past dates are unbookable.
 - Each clinic day has a configurable capacity; full days show as unavailable ("FULL").
-- Clinic hours: Monday–Friday, 7:00 AM–5:00 PM.
+- Clinic hours: 7:00 AM–5:00 PM, daily.
 - Service types: Medical Clearance, Dental Check.
 
 ### Batch requests
@@ -284,8 +284,8 @@ Progress steps: Consent → Account Info → Email Verify → Link ID
 
 #### Book Appointment (`student-book`)
 - **Service picker**: two selectable cards (Medical Clearance 🏥 / Dental Check 🦷). Selected card gets orange border + peach background.
-- **Month calendar**: 7-column grid. Weekends and past dates disabled (greyed/transparent). Full days greyed with "FULL" micro-label. Selected day orange fill + white text. Available days: white with slate-14 border.
-- **Clinic hours note**: "7:00 AM – 5:00 PM · Monday to Friday · Campus Clinic, Main Building".
+- **Month calendar**: 7-column grid. Past dates disabled (greyed/transparent). Full days greyed with "FULL" micro-label. Selected day orange fill + white text. Available days: white with slate-14 border.
+- **Clinic hours note**: "7:00 AM – 5:00 PM · Daily · Campus Clinic, Main Building".
 - "Confirm Booking" disabled until a date is selected. On confirm: creates appointment record, routes to confirmation screen.
 
 #### Booking Confirmed (`student-book-confirm`)

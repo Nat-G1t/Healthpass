@@ -439,7 +439,7 @@ fix you made per screen. Zero behavior changes.
 Read docs/HealthPass_PRD.md  FR-STU-02/03, BR-01/02, and the booking screen in docs/prototypes/web.
 Build /student/book (frontend + read-only queries today):
 - Service picker: Medical Clearance / Dental Check as selectable cards.
-- Month calendar grid with prev/next navigation: weekends and past dates disabled; a day
+- Month calendar grid with prev/next navigation: past dates disabled; a day
   is greyed with a "FULL" label when its count of non-cancelled appointments >=
   config('healthpass.daily_capacity').
 - "Confirm Booking" disabled until BOTH a service and a date are selected; clicking posts
@@ -449,7 +449,7 @@ Match the prototype's calendar styling closely. Plan first, GO.
 
 **Session 2:** continuation — calendar edge cases (month boundaries, today highlighting, FULL computation correctness).
 
-**✅ Verify:** Weekends/past unclickable; pag-seed ng appointments hanggang capacity sa isang date via tinker → nagiging FULL ang araw; button gating works.
+**✅ Verify:** Past dates unclickable; weekends selectable; pag-seed ng appointments hanggang capacity sa isang date via tinker → nagiging FULL ang araw; button gating works.
 
 ---
 
@@ -461,7 +461,7 @@ Match the prototype's calendar styling closely. Plan first, GO.
 **Session 1 prompt:**
 ```text
 Read docs/HealthPass_PRD.md  FR-STU-04/05/06, BR-04, §5.6. Implement booking submission:
-- Server-side validation: no weekends/past dates; capacity re-checked at write time;
+- Server-side validation: no past dates; capacity re-checked at write time;
   duplicate non-cancelled appointment for the same student+service+date rejected as a
   VALIDATION error, not a DB constraint (BR-04).
 - In a transaction: create the appointments row (source=self, status=scheduled, reference
@@ -469,7 +469,7 @@ Read docs/HealthPass_PRD.md  FR-STU-04/05/06, BR-04, §5.6. Implement booking su
   Hours (from config), Reference No.
 - FR-STU-06: students can cancel their own scheduled future appointments (confirm dialog;
   status → cancelled).
-Feature tests: full-day rejection, duplicate rejection, weekend rejection, successful
+Feature tests: full-day rejection, duplicate rejection, successful
 booking yields an APT-YYYY-#### reference.
 ```
 
@@ -1296,7 +1296,7 @@ Analytics, Flagged Anomalies):
   quotes, student count, submitted date.
 - Approve / Reject buttons rendered ONLY on pending rows; decided rows show static
   "✓ Approved" / "✕ Rejected" (FR-DIRA-05).
-- Approve opens a modal: date picker (default today; weekends/past disabled) + a capacity
+- Approve opens a modal: date picker (default today; past disabled) + a capacity
   warning line when the chosen date's non-cancelled appointment count is at/over
   config('healthpass.daily_capacity') — WARN, don't block (FR-DIRA-06).
 Buttons post to stubs today.

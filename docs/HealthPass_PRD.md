@@ -210,7 +210,7 @@ Notation: each requirement has an ID, a MoSCoW priority — **M**ust (defense-cr
 | ID | Requirement | Priority |
 |---|---|---|
 | FR-STU-01 | **Dashboard** shall show three stat cards — Clearance Status (latest result badge + "Book New Appointment" button), Next Appointment (date + service + clinic hours), Past Clearances (count + "View all") — plus a Recent Activity timeline of the student's own events. | M |
-| FR-STU-02 | **Book Appointment** shall present a service picker (Medical Clearance / Dental Check as selectable cards) and a month calendar grid in which weekends and past dates are disabled and full days are greyed with a "FULL" label. | M |
+| FR-STU-02 | **Book Appointment** shall present a service picker (Medical Clearance / Dental Check as selectable cards) and a month calendar grid in which past dates are disabled and full days are greyed with a "FULL" label. | M |
 | FR-STU-03 | Day capacity shall be evaluated as: count of non-cancelled appointments on that date ≥ configured capacity (`config/healthpass.php`, Decision D-4) → day is FULL. | M |
 | FR-STU-04 | Confirm Booking shall be disabled until both a service and a date are selected; on confirm the system creates an `appointments` row (`source = self`, status `scheduled`, reference `APT-YYYY-####`) and routes to a confirmation screen showing Service, Date, Clinic Hours, and Reference No. | M |
 | FR-STU-05 | The system shall reject (validation error, not DB constraint) a booking when the student already has a non-cancelled appointment for the same service on the same date. | M |
@@ -240,7 +240,7 @@ Notation: each requirement has an ID, a MoSCoW priority — **M**ust (defense-cr
 | ID | Requirement | Priority |
 |---|---|---|
 | FR-DIRA-01 | The Director shall see all colleges' batch requests as rows (Batch ID + status badge, college, reason in quotes, student count, submitted date), with Approve / Reject buttons on pending rows only. | M |
-| FR-DIRA-02 | **On Approve** the Director shall select an appointment date (date picker, defaulting to today; weekends/past dates disallowed — Decision D-5). The system then atomically (DB transaction): sets batch status `approved`, stamps `reviewed_by`/`reviewed_at` and `batch_requests.scheduled_date`, creates **one appointment per listed student** (service = batch's service type, date = selected date, `source = batch`, status `scheduled`, own `APT` reference), and writes each new `appointment_id` back to its `batch_request_students` row. | M |
+| FR-DIRA-02 | **On Approve** the Director shall select an appointment date (date picker, defaulting to today; past dates disallowed — Decision D-5). The system then atomically (DB transaction): sets batch status `approved`, stamps `reviewed_by`/`reviewed_at` and `batch_requests.scheduled_date`, creates **one appointment per listed student** (service = batch's service type, date = selected date, `source = batch`, status `scheduled`, own `APT` reference), and writes each new `appointment_id` back to its `batch_request_students` row. | M |
 | FR-DIRA-03 | Generated appointments shall immediately appear in each listed student's appointment list and dashboard, indistinguishable in downstream flow from self-booked ones. | M |
 | FR-DIRA-04 | **On Reject** the system sets status `rejected`, stamps reviewer fields, and creates no appointments. | M |
 | FR-DIRA-05 | Approved/rejected rows display static "✓ Approved" / "✕ Rejected" text; re-approval or re-rejection of a decided batch shall be impossible. | M |
@@ -333,7 +333,7 @@ The kiosk is the route `/kiosk` rendered full-screen in Chromium kiosk mode on t
 ## 5. Business Rules (normative)
 
 ### 5.1 Scheduling
-- **BR-01** Clinic hours: Monday–Friday, 7:00 AM–5:00 PM, Campus Clinic, Main Building. Weekends and past dates are never bookable.
+- **BR-01** Clinic hours: 7:00 AM–5:00 PM, daily (incl. weekends), Campus Clinic, Main Building. Past dates are never bookable.
 - **BR-02** Each clinic day has one global capacity (config value, Decision D-4). A day at capacity displays "FULL" and rejects self-bookings server-side.
 - **BR-03** Service types: `medical` (full clearance loop) and `dental` (scheduling only, Decision D-3).
 - **BR-04** One active (non-cancelled) appointment per student per service per date — enforced by validation, **not** a DB unique constraint (cancelled rows would collide).
@@ -618,6 +618,7 @@ Non-programmer team across all sprints: paper title/scope revision (R-6), test c
 | D-12 | **Kiosk ID login uses a USB keyboard-wedge QR scanner** as the primary input path; email + virtual keyboard is the fallback. The kiosk normalizes multi-line QR payloads (format from physical DHVSU IDs) by extracting the `IDNo:` line's value; falls back to the full string for single-value tokens (phone-QR backup). | Far more reliable for unattended kiosk conditions than camera decode; the normalization step keeps both real-ID and phone-QR paths working against one `qr_token` field. |
 | D-13 | **Live Queue is FIFO (oldest first)** — top row = next to serve ("NEXT" badge); new arrivals append at the bottom | Matches real clinic fairness (first come, first served); the prototype's emphasized row-1 styling maps cleanly to "next to serve" |
 | D-14 | **Registration (Step 4) and late-linking (My ID) use in-browser camera or photo upload** for QR capture, decoded client-side by `html5-qrcode`; only the extracted `IDNo` is POSTed and stored as `qr_token`. | Students register on personal phones/laptops — a USB scanner is not available there. Camera/upload is the only viable primary path on personal devices. |
+| D-15 | **Booking available on weekends (clinic open daily)** — past dates still unbookable; capacity rule unchanged | Scope change approved by team/adviser |
 
 ---
 
