@@ -278,7 +278,7 @@ Progress steps: Consent → Account Info → Email Verify → Link ID
 #### Student Dashboard (`student-dashboard`)
 - 3 stat cards across:
   - **Clearance Status** (with status badge + orange left border; "Book New Appointment" button).
-  - **Next Appointment** (date + service + time).
+  - **Next Appointment** (nearest upcoming non-cancelled appointment — date + service + time) with a "Cancel appointment" action (ghost, sm) that opens a confirm modal: "Cancel your {service} appointment on {date}? This frees the slot." → Yes, cancel / Keep appointment. After cancelling, the card re-queries and shows the next upcoming appointment or a clean empty state.
   - **Past Clearances** (large count, "View all →" link).
 - **Recent Activity** timeline card below (bullet list of timestamped events).
 
@@ -286,7 +286,7 @@ Progress steps: Consent → Account Info → Email Verify → Link ID
 - **Service picker**: two selectable cards (Medical Clearance 🏥 / Dental Check 🦷). Selected card gets orange border + peach background.
 - **Month calendar**: 7-column grid. Past dates disabled (greyed/transparent). Full days greyed with "FULL" micro-label. Selected day orange fill + white text. Available days: white with slate-14 border.
 - **Clinic hours note**: "7:00 AM – 5:00 PM · Daily · Campus Clinic, Main Building".
-- "Confirm Booking" disabled until a date is selected. On confirm: creates appointment record, routes to confirmation screen.
+- "Confirm Booking" disabled until a service and date are both selected. On click, a confirmation modal opens ("Book {Service} on {date}?" → Yes, book it / Cancel) before the record is created. A same-service-same-date duplicate (BR-04 / FR-STU-05) is surfaced as an in-page modal with a "Choose another date" action — no page reload, selected service and date preserved.
 
 #### Booking Confirmed (`student-book-confirm`)
 - Centered success: orange circle with check icon.

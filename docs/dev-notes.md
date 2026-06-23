@@ -226,3 +226,18 @@ App\Models\StudentProfile::where('college_id', $collegeId)
     ->with('user')
     ->get();
 ```
+
+---
+
+## Booking UX — Day 15 S2
+
+- **Confirm-before-book:** clicking "Confirm Booking" opens an in-page confirmation modal
+  ("Book {Service} on {date}?" → Yes, book it / Cancel) before the `POST` fires. The form
+  submits via `fetch` with `Accept: application/json`; success returns 201 and routes to
+  the confirmation screen; a BR-04 / FR-STU-05 duplicate returns 422.
+- **Duplicate rejection as modal:** a 422 response is surfaced as an in-page modal with a
+  "Choose another date" action — no page reload, selected service and date preserved.
+- **Cancel from dashboard:** the Next Appointment card's "Cancel appointment" ghost action
+  opens a confirm modal; on confirm the JS re-queries the nearest upcoming non-cancelled
+  appointment via `fetch` and swaps the card content — no full page reload.
+- **No schema change. No new packages.**
