@@ -6,20 +6,6 @@
     <p class="mt-0.5 text-sm text-hp-slate/50">Choose a service and a date to get started.</p>
 </div>
 
-{{-- ── Stub success flash ──────────────────────────────────────────────────── --}}
-@if (session('status') === 'booking-submitted')
-<div class="mb-5 flex items-center gap-3 rounded-xl border border-hp-peach bg-hp-peach/20 px-4 py-3">
-    <svg class="h-4 w-4 shrink-0 text-hp-orange" fill="none" viewBox="0 0 24 24"
-         stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round"
-              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-    </svg>
-    <p class="text-sm font-medium text-hp-orange">
-        Booking submitted — full save (FR-STU-04) coming next.
-    </p>
-</div>
-@endif
-
 {{--
     Alpine component: bookCalendar()
     Defined in an inline <script> so server-side PHP values ($year, $month, $fullDays)
@@ -37,10 +23,29 @@ function bookCalendar() {
         bookingDays:     @json($bookingDays),
         loading:         false,
 
+        bookingUrl:   @json(route('student.appointments.store')),
+        confirmModal: false,
+        errorModal:   false,
+        errorMessage: '',
+        submitting:   false,
+
         /** "June 2026" — re-evaluates when currentYear / currentMonth change. */
         get monthLabel() {
             return new Date(this.currentYear, this.currentMonth - 1, 1)
                 .toLocaleString('en-US', { month: 'long', year: 'numeric' });
+        },
+
+        get serviceLabel() {
+            return this.selectedService === 'medical' ? 'Medical Clearance' : 'Dental Check';
+        },
+
+        /** Human-readable date for modal copy — parsed as local time to avoid TZ shift. */
+        get formattedDate() {
+            if (!this.selectedDate) return '';
+            const [y, m, d] = this.selectedDate.split('-').map(Number);
+            return new Date(y, m - 1, d).toLocaleDateString('en-US', {
+                weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+            });
         },
 
         /** Prev-arrow is disabled when already on the current month. */
@@ -66,15 +71,15 @@ function bookCalendar() {
             }
 
             for (let d = 1; d <= daysInMonth; d++) {
-                const date       = new Date(this.currentYear, this.currentMonth - 1, d);
-                const dow           = date.getDay();
-                const isPast        = date < today;
-                const isBlockedDay  = !this.bookingDays.includes(dow);
-                const isFull        = this.fullDays.includes(d);
-                const isDisabled    = isPast || isBlockedDay || isFull;
-                const mm            = String(this.currentMonth).padStart(2, '0');
-                const dd            = String(d).padStart(2, '0');
-                const dateStr       = `${this.currentYear}-${mm}-${dd}`;
+                const date         = new Date(this.currentYear, this.currentMonth - 1, d);
+                const dow          = date.getDay();
+                const isPast       = date < today;
+                const isBlockedDay = !this.bookingDays.includes(dow);
+                const isFull       = this.fullDays.includes(d);
+                const isDisabled   = isPast || isBlockedDay || isFull;
+                const mm           = String(this.currentMonth).padStart(2, '0');
+                const dd           = String(d).padStart(2, '0');
+                const dateStr      = `${this.currentYear}-${mm}-${dd}`;
                 const isToday      = date.getTime() === today.getTime();
                 cells.push({ blank: false, d, isDisabled, isFull, isPast, isToday, dateStr, key: dateStr });
             }
@@ -112,11 +117,79 @@ function bookCalendar() {
                 this.loading = false;
             }
         },
+
+        /** Step 2: open the confirm-before-book modal. */
+        openConfirmModal() {
+            if (!this.selectedService || !this.selectedDate || this.submitting) return;
+            this.confirmModal = true;
+        },
+
+        /**
+         * Step 1 (on "Yes, book it"): POST via fetch with Accept: application/json.
+         * Laravel returns 422 JSON on validation failure (duplicate / full day / past
+         * date), or 200 JSON {redirect: url} on success. Server is the sole authority.
+         */
+        async submitBooking() {
+            if (this.submitting) return;
+            this.submitting   = true;
+            this.confirmModal = false;
+
+            try {
+                const token = document.querySelector('meta[name="csrf-token"]').content;
+                const body  = new URLSearchParams({
+                    _token:  token,
+                    service: this.selectedService,
+                    date:    this.selectedDate,
+                });
+
+                const response = await fetch(this.bookingUrl, {
+                    method:  'POST',
+                    headers: {
+                        'Accept':       'application/json',
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: body.toString(),
+                });
+
+                const data = await response.json();
+
+                if (response.status === 422) {
+                    this.errorMessage = data.errors?.date?.[0]
+                        ?? data.errors?.service?.[0]
+                        ?? data.message
+                        ?? 'Booking could not be completed.';
+                    this.errorModal = true;
+                    return;
+                }
+
+                if (response.ok) {
+                    window.location.href = data.redirect;
+                    return;
+                }
+
+                this.errorMessage = 'An unexpected error occurred. Please try again.';
+                this.errorModal   = true;
+            } catch {
+                this.errorMessage = 'Could not reach the server. Please check your connection.';
+                this.errorModal   = true;
+            } finally {
+                this.submitting = false;
+            }
+        },
+
+        /** Close the error modal without losing selected service / date / calendar month. */
+        closeErrorModal() {
+            this.errorModal   = false;
+            this.errorMessage = '';
+        },
     };
 }
 </script>
 
-<form method="POST" action="{{ route('student.appointments.store') }}" x-data="bookCalendar()">
+{{-- x-data wraps the form AND both modals so Alpine scope covers all three. --}}
+<div x-data="bookCalendar()">
+
+<form @submit.prevent>
     @csrf
     <input type="hidden" name="service" :value="selectedService">
     <input type="hidden" name="date"    :value="selectedDate">
@@ -171,7 +244,6 @@ function bookCalendar() {
 
                 <div class="mb-3 flex h-10 w-10 items-center justify-center rounded-xl transition-colors"
                      :class="selectedService === 'dental' ? 'bg-hp-orange' : 'bg-white'">
-                    {{-- Tooth outline icon --}}
                     <svg class="h-5 w-5 transition-colors"
                          :class="selectedService === 'dental' ? 'text-white' : 'text-hp-orange'"
                          fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75">
@@ -255,10 +327,6 @@ function bookCalendar() {
             <div class="grid grid-cols-7 gap-y-0.5">
                 <template x-for="cell in calendarCells" :key="cell.key">
                     <div class="flex items-center justify-center py-0.5">
-                        {{--
-                            Hidden for blank filler cells; shown for actual days.
-                            :disabled prevents click events on disabled days even if @click guard fires.
-                        --}}
                         <button
                             x-show="!cell.blank"
                             type="button"
@@ -279,7 +347,6 @@ function bookCalendar() {
                                     !cell.blank && !cell.isDisabled && selectedDate !== cell.dateStr,
                             }">
                             <span x-text="cell.d" class="leading-none"></span>
-                            {{-- "FULL" sub-label appears only for at-capacity days --}}
                             <span x-show="cell.isFull"
                                   class="mt-0.5 block text-[8px] font-bold uppercase leading-none tracking-wide">
                                 FULL
@@ -310,14 +377,24 @@ function bookCalendar() {
         </div>
     </x-hp.card>
 
-    {{-- ── Confirm Booking ──────────────────────────────────────────────────── --}}
-    <button type="submit"
-        :disabled="!selectedService || !selectedDate"
+    {{-- ── Confirm Booking button ───────────────────────────────────────────── --}}
+    <button type="button"
+        @click="openConfirmModal()"
+        :disabled="!selectedService || !selectedDate || submitting"
         class="w-full rounded-full py-3.5 text-sm font-semibold text-white transition-all focus:outline-none"
-        :class="(!selectedService || !selectedDate)
+        :class="(!selectedService || !selectedDate || submitting)
             ? 'cursor-not-allowed bg-hp-slate/20 text-hp-slate/40'
             : 'cursor-pointer bg-hp-orange shadow-sm hover:bg-orange-500'">
-        Confirm Booking
+        <span x-show="!submitting">Confirm Booking</span>
+        <span x-show="submitting" x-cloak class="flex items-center justify-center gap-2">
+            <svg class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10"
+                        stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+            </svg>
+            Booking…
+        </span>
     </button>
 
     <p x-show="!selectedService || !selectedDate" x-cloak
@@ -326,5 +403,87 @@ function bookCalendar() {
     </p>
 
 </form>
+
+{{-- ── Confirm-before-book modal ────────────────────────────────────────────── --}}
+<div x-show="confirmModal" x-cloak
+     class="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center"
+     style="background-color: rgba(75,85,99,0.45);">
+    <div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl"
+         @click.outside="confirmModal = false">
+
+        <div class="mb-3 flex items-center gap-3">
+            <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-hp-peach">
+                <svg class="h-4 w-4 text-hp-orange" fill="none" viewBox="0 0 24 24"
+                     stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                </svg>
+            </div>
+            <h3 class="text-base font-semibold text-hp-slate">Confirm Booking</h3>
+        </div>
+
+        <p class="text-sm text-hp-slate/70">
+            Book
+            <span class="font-semibold text-hp-slate" x-text="serviceLabel"></span>
+            on
+            <span class="font-semibold text-hp-slate" x-text="formattedDate"></span>?
+        </p>
+        <p class="mt-1 text-xs text-hp-slate/50">Clinic hours: 7:00 AM – 5:00 PM</p>
+
+        <div class="mt-5 flex gap-3">
+            <button type="button"
+                    @click="confirmModal = false"
+                    :disabled="submitting"
+                    class="flex-1 rounded-full border border-hp-slate/25 py-2.5 text-sm
+                           font-semibold text-hp-slate transition-colors
+                           hover:bg-hp-slate/5 disabled:opacity-50">
+                Cancel
+            </button>
+            <button type="button"
+                    @click="submitBooking()"
+                    :disabled="submitting"
+                    class="flex-1 rounded-full bg-hp-orange py-2.5 text-sm font-semibold
+                           text-white transition-colors hover:bg-orange-500 disabled:opacity-50">
+                Yes, book it
+            </button>
+        </div>
+
+    </div>
+</div>
+
+{{-- ── Already-booked / full-day error modal ───────────────────────────────── --}}
+<div x-show="errorModal" x-cloak
+     class="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center"
+     style="background-color: rgba(75,85,99,0.45);">
+    <div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+
+        <div class="mb-3 flex items-center gap-3">
+            <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-50">
+                <svg class="h-4 w-4 text-red-500" fill="none" viewBox="0 0 24 24"
+                     stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667
+                             1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77
+                             1.333.192 3 1.732 3z"/>
+                </svg>
+            </div>
+            <h3 class="text-base font-semibold text-hp-slate">Booking Not Available</h3>
+        </div>
+
+        <p class="text-sm text-hp-slate/70" x-text="errorMessage"></p>
+
+        <div class="mt-5">
+            <button type="button"
+                    @click="closeErrorModal()"
+                    class="w-full rounded-full bg-hp-orange py-2.5 text-sm font-semibold
+                           text-white transition-colors hover:bg-orange-500">
+                Choose another date
+            </button>
+        </div>
+
+    </div>
+</div>
+
+</div>{{-- /x-data wrapper --}}
 
 </x-layout.sidebar>

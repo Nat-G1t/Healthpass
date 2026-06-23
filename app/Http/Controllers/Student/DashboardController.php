@@ -24,7 +24,7 @@ class DashboardController extends Controller
 
         // Nearest upcoming scheduled appointment
         $nextAppointment = $user->appointments()
-            ->where('status', 'scheduled')
+            ->where('status', '!=', 'cancelled')
             ->where('scheduled_date', '>=', today())
             ->oldest('scheduled_date')
             ->first();

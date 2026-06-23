@@ -10,6 +10,7 @@
         'ghost'   => 'bg-transparent text-hp-slate border-[1.5px] border-hp-slate/30 hover:bg-hp-slate/8 focus-visible:ring-hp-slate',
         'soft'    => 'bg-hp-peach text-hp-orange hover:bg-orange-100 focus-visible:ring-hp-orange',
         'muted'   => 'bg-hp-slate/10 text-hp-slate hover:bg-hp-slate/20 focus-visible:ring-hp-slate',
+        'danger'  => 'bg-transparent text-red-500 border-[1.5px] border-red-300 hover:bg-red-50 focus-visible:ring-red-500',
         default   => '',
     };
 

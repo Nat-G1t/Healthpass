@@ -15,10 +15,10 @@
 </div>
 
 {{-- ── Stat cards ──────────────────────────────────────────────────────────── --}}
-<div class="grid grid-cols-1 gap-5 sm:grid-cols-3 mb-6">
+<div class="grid grid-cols-1 gap-5 md:grid-cols-3 mb-6">
 
     {{-- Card 1: Clearance Status --}}
-    <x-hp.card>
+    <x-hp.card class="flex flex-col">
         <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
             Clearance Status
         </p>
@@ -34,7 +34,7 @@
                 </p>
             </div>
         @else
-            <div class="mt-4 flex flex-col items-center py-4 text-center">
+            <div class="mt-4 flex-1 flex flex-col items-center py-4 text-center">
                 <div class="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-hp-bg">
                     <svg class="h-5 w-5 text-hp-slate/30" fill="none" viewBox="0 0 24 24"
                          stroke="currentColor" stroke-width="1.5">
@@ -57,8 +57,9 @@
         </div>
     </x-hp.card>
 
-    {{-- Card 2: Next Appointment --}}
-    <x-hp.card>
+    {{-- Card 2: Next Appointment — wrapped in Alpine for the cancel confirm modal. --}}
+    <div x-data="{ cancelModal: false }">
+    <x-hp.card class="h-full flex flex-col">
         <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
             Next Appointment
         </p>
@@ -79,8 +80,16 @@
                 </div>
                 <p class="mt-2 text-xs text-hp-slate/40">{{ $nextAppointment->reference_no }}</p>
             </div>
+
+            @if ($nextAppointment->scheduled_date->gt(today()))
+                <div class="mt-5">
+                    <x-hp.button variant="danger" size="sm" class="w-full" @click="cancelModal = true">
+                        Cancel appointment
+                    </x-hp.button>
+                </div>
+            @endif
         @else
-            <div class="mt-4 flex flex-col items-center py-4 text-center">
+            <div class="mt-4 flex-1 flex flex-col items-center py-4 text-center">
                 <div class="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-hp-bg">
                     <svg class="h-5 w-5 text-hp-slate/30" fill="none" viewBox="0 0 24 24"
                          stroke="currentColor" stroke-width="1.5">
@@ -91,9 +100,6 @@
                 <p class="text-sm font-medium text-hp-slate">No upcoming appointment</p>
                 <p class="mt-0.5 text-xs text-hp-slate/50">Your schedule is clear</p>
             </div>
-        @endif
-
-        @unless ($nextAppointment)
             <div class="mt-5">
                 <a href="{{ route('student.appointments') }}"
                    class="inline-flex w-full items-center justify-center gap-1.5 rounded-full
@@ -102,11 +108,67 @@
                     Book Appointment
                 </a>
             </div>
-        @endunless
+        @endif
     </x-hp.card>
 
+    {{-- Cancel confirm modal — only rendered when there is a cancellable future appointment. --}}
+    @if ($nextAppointment && $nextAppointment->scheduled_date->gt(today()))
+    <div x-show="cancelModal" x-cloak
+         class="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center"
+         style="background-color: rgba(75,85,99,0.45);">
+        <div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+
+            <div class="mb-3 flex items-center gap-3">
+                <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-50">
+                    <svg class="h-4 w-4 text-red-500" fill="none" viewBox="0 0 24 24"
+                         stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                              d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </div>
+                <h3 class="text-base font-semibold text-hp-slate">Cancel appointment?</h3>
+            </div>
+
+            <p class="text-sm text-hp-slate/70">
+                Cancel your
+                <span class="font-semibold text-hp-slate">
+                    {{ ucfirst($nextAppointment->service_type) }}
+                </span>
+                appointment on
+                <span class="font-semibold text-hp-slate">
+                    {{ $nextAppointment->scheduled_date->format('F j, Y') }}
+                </span>?
+                This frees the slot for another student.
+            </p>
+
+            <div class="mt-5 flex gap-3">
+                <button type="button"
+                        @click="cancelModal = false"
+                        class="flex-1 rounded-full border border-hp-slate/25 py-2.5 text-sm
+                               font-semibold text-hp-slate transition-colors hover:bg-hp-slate/5">
+                    Keep appointment
+                </button>
+                <form method="POST"
+                      action="{{ route('student.appointments.cancel', $nextAppointment) }}"
+                      class="flex-1">
+                    @csrf
+                    @method('DELETE')
+                    <button type="submit"
+                            class="w-full rounded-full bg-red-500 py-2.5 text-sm font-semibold
+                                   text-white transition-colors hover:bg-red-600">
+                        Yes, cancel
+                    </button>
+                </form>
+            </div>
+
+        </div>
+    </div>
+    @endif
+
+    </div>{{-- /x-data --}}
+
     {{-- Card 3: Past Clearances --}}
-    <x-hp.card>
+    <x-hp.card class="flex flex-col">
         <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
             Past Clearances
         </p>

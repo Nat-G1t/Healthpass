@@ -33,6 +33,8 @@ Route::middleware(['auth', 'role:student'])
         Route::get('/appointments', [BookAppointmentController::class, 'show'])->name('appointments');
         Route::get('/appointments/availability', [BookAppointmentController::class, 'availability'])->name('appointments.availability');
         Route::post('/appointments', [BookAppointmentController::class, 'store'])->name('appointments.store');
+        Route::get('/appointments/{appointment}/confirmed', [BookAppointmentController::class, 'confirmed'])->name('appointments.confirmed');
+        Route::delete('/appointments/{appointment}', [BookAppointmentController::class, 'cancel'])->name('appointments.cancel');
         Route::get('/records', fn () => view('student.stub', ['page' => 'My Records']))->name('records');
         Route::get('/id-profile', fn () => view('student.stub', ['page' => 'My ID & Profile']))->name('id-profile');
     });
