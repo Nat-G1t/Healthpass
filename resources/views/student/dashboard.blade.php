@@ -78,7 +78,15 @@
                     </x-hp.badge>
                     <x-hp.badge variant="pending">Scheduled</x-hp.badge>
                 </div>
-                <p class="mt-2 text-xs text-hp-slate/40">{{ $nextAppointment->reference_no }}</p>
+                <p class="mt-2 flex items-center gap-1 text-xs text-hp-slate/50">
+                    <svg class="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24"
+                         stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    {{ $clinicHoursLabel }}
+                </p>
+                <p class="mt-1 text-xs text-hp-slate/40">{{ $nextAppointment->reference_no }}</p>
             </div>
 
             @if ($nextAppointment->scheduled_date->gt(today()))
@@ -241,11 +249,17 @@
                                     <path stroke-linecap="round" stroke-linejoin="round"
                                           d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/>
                                 </svg>
-                            @else {{-- result --}}
+                            @elseif ($event['icon'] === 'result')
                                 <svg class="h-3.5 w-3.5 text-hp-orange" fill="none"
                                      viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                     <path stroke-linecap="round" stroke-linejoin="round"
                                           d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                            @else {{-- registered --}}
+                                <svg class="h-3.5 w-3.5 text-hp-slate/40" fill="none"
+                                     viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                          d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
                                 </svg>
                             @endif
                         </div>

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Student;
 
 use App\Http\Controllers\Controller;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -34,12 +35,19 @@ class DashboardController extends Controller
             ->whereHas('clearanceRecord')
             ->count();
 
-        // Recent activity feed — up to 8 events, newest first
-        $recentAppointments = $user->appointments()->latest()->take(8)->get();
+        // Clinic hours formatted for display in the Next Appointment card
+        $clinicHoursLabel = sprintf(
+            '%s – %s',
+            Carbon::createFromTimeString(config('healthpass.clinic_hours.open'))->format('g:i A'),
+            Carbon::createFromTimeString(config('healthpass.clinic_hours.close'))->format('g:i A'),
+        );
+
+        // Fetch more than 8 per source so the merged sort picks the true 8 newest overall
+        $recentAppointments = $user->appointments()->latest()->take(16)->get();
         $recentVisits = $user->clinicVisits()
             ->with('clearanceRecord')
             ->latest()
-            ->take(8)
+            ->take(16)
             ->get();
 
         $recentActivity = collect()
@@ -76,6 +84,14 @@ class DashboardController extends Controller
                     return $events;
                 })
             )
+            ->merge([
+                [
+                    'icon' => 'registered',
+                    'label' => 'Account registered',
+                    'detail' => $user->email,
+                    'at' => $user->created_at,
+                ],
+            ])
             ->filter(fn ($item) => $item['at'] !== null)
             ->sortByDesc('at')
             ->take(8)
@@ -85,6 +101,7 @@ class DashboardController extends Controller
             'latestClearance',
             'nextAppointment',
             'pastClearancesCount',
+            'clinicHoursLabel',
             'recentActivity',
         ));
     }
