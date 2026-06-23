@@ -14,6 +14,7 @@ class DatabaseSeeder extends Seeder
             CollegeSeeder::class,
             StaffSeeder::class,
             StudentSeeder::class,
+            DemoClinicVisitSeeder::class, // DEV ONLY — remove when kiosk writes real visits
         ]);
     }
 }

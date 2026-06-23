@@ -406,7 +406,7 @@ function bookCalendar() {
 
 {{-- ── Confirm-before-book modal ────────────────────────────────────────────── --}}
 <div x-show="confirmModal" x-cloak
-     class="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center"
+     class="fixed inset-0 z-50 flex items-center justify-center p-4"
      style="background-color: rgba(75,85,99,0.45);">
     <div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl"
          @click.outside="confirmModal = false">
@@ -453,7 +453,7 @@ function bookCalendar() {
 
 {{-- ── Already-booked / full-day error modal ───────────────────────────────── --}}
 <div x-show="errorModal" x-cloak
-     class="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center"
+     class="fixed inset-0 z-50 flex items-center justify-center p-4"
      style="background-color: rgba(75,85,99,0.45);">
     <div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
 

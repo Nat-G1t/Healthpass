@@ -3,6 +3,7 @@
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Student\BookAppointmentController;
 use App\Http\Controllers\Student\DashboardController as StudentDashboardController;
+use App\Http\Controllers\Student\RecordsController as StudentRecordsController;
 use App\Http\Middleware\EnsureRole;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
@@ -35,7 +36,7 @@ Route::middleware(['auth', 'role:student'])
         Route::post('/appointments', [BookAppointmentController::class, 'store'])->name('appointments.store');
         Route::get('/appointments/{appointment}/confirmed', [BookAppointmentController::class, 'confirmed'])->name('appointments.confirmed');
         Route::delete('/appointments/{appointment}', [BookAppointmentController::class, 'cancel'])->name('appointments.cancel');
-        Route::get('/records', fn () => view('student.stub', ['page' => 'My Records']))->name('records');
+        Route::get('/records', StudentRecordsController::class)->name('records');
         Route::get('/id-profile', fn () => view('student.stub', ['page' => 'My ID & Profile']))->name('id-profile');
     });
 
