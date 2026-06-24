@@ -3,6 +3,7 @@
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Student\BookAppointmentController;
 use App\Http\Controllers\Student\DashboardController as StudentDashboardController;
+use App\Http\Controllers\Student\ProfileController as StudentProfileController;
 use App\Http\Controllers\Student\RecordsController as StudentRecordsController;
 use App\Http\Middleware\EnsureRole;
 use Illuminate\Support\Facades\Auth;
@@ -37,7 +38,13 @@ Route::middleware(['auth', 'role:student'])
         Route::get('/appointments/{appointment}/confirmed', [BookAppointmentController::class, 'confirmed'])->name('appointments.confirmed');
         Route::delete('/appointments/{appointment}', [BookAppointmentController::class, 'cancel'])->name('appointments.cancel');
         Route::get('/records', StudentRecordsController::class)->name('records');
-        Route::get('/id-profile', fn () => view('student.stub', ['page' => 'My ID & Profile']))->name('id-profile');
+        Route::get('/id-profile', [StudentProfileController::class, 'show'])->name('id-profile');
+        Route::patch('/id-profile', [StudentProfileController::class, 'update'])->name('id-profile.update');
+        Route::post('/id-profile/link-id', [StudentProfileController::class, 'linkId'])->name('id-profile.link-id');
+        Route::get('/id-profile/verify-email', [StudentProfileController::class, 'showEmailVerification'])->name('id-profile.verify-email');
+        Route::post('/id-profile/verify-email', [StudentProfileController::class, 'verifyEmail'])->name('id-profile.verify-email.submit');
+        Route::post('/id-profile/verify-email/resend', [StudentProfileController::class, 'resendEmailOtp'])->name('id-profile.verify-email.resend');
+        Route::post('/id-profile/verify-email/cancel', [StudentProfileController::class, 'cancelEmailChange'])->name('id-profile.verify-email.cancel');
     });
 
 // ── College Admin (FR-AUTH-03) ───────────────────────────────────────────────

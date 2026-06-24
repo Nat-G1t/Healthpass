@@ -54,18 +54,148 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ $title ? $title . ' — HealthPass' : 'HealthPass' }}</title>
+
+    {{--
+        Read the saved sidebar choice BEFORE the page paints. We add the
+        `sidebar-collapsed` class to <html> here so the first frame already
+        has the correct width — this is what prevents the width "flash" (FOUC)
+        on reload. Alpine boots a moment later and just keeps this in sync.
+    --}}
+    <script>
+        window.__hpSidebarCollapsed = localStorage.getItem('hp-sidebar-collapsed') === 'true';
+        if (window.__hpSidebarCollapsed) {
+            document.documentElement.classList.add('sidebar-collapsed');
+        }
+    </script>
+
+    <style>
+        /* Sidebar width is a CSS variable so the rail and the main column
+           always stay in step on desktop. */
+        :root { --hp-sidebar-w: 220px; }
+
+        /* ── Mobile-first: the sidebar is an off-canvas DRAWER ──────────────
+           It floats above the page and slides in from the left. Content keeps
+           the full screen width (padding-left: 0) so nothing gets squeezed. */
+        .hp-sidebar {
+            width: 256px;
+            transform: translateX(-100%);
+            transition: transform 200ms ease, width 180ms ease;
+            z-index: 50;
+        }
+        .hp-sidebar.is-open { transform: translateX(0); }
+
+        .hp-main-col { padding-left: 0; transition: padding-left 180ms ease; }
+
+        .hp-user-meta { transition: opacity 150ms ease; }
+
+        /* ── Desktop (lg+): the sidebar PUSHES content (collapsible rail) ───
+           This is the original behaviour. The rail "collapsed" look only
+           exists here — phones always get the full-width drawer above. */
+        @media (min-width: 1024px) {
+            .hp-sidebar  { width: var(--hp-sidebar-w); transform: translateX(0); }
+            .hp-main-col { padding-left: var(--hp-sidebar-w); }
+
+            html.sidebar-collapsed { --hp-sidebar-w: 72px; }
+
+            /* Center the rail toggle when collapsed. */
+            html.sidebar-collapsed .hp-logo-row { justify-content: center; }
+
+            /* Hide the name/role block in the footer. */
+            html.sidebar-collapsed .hp-user-meta { display: none; }
+
+            /* Collapsed nav item: icon STACKED ABOVE a tiny label.
+               The label font is small and wraps inside the 72px rail so long
+               labels (e.g. "Book Appointment") never spill over the pill. */
+            html.sidebar-collapsed .hp-nav-link {
+                flex-direction: column;
+                gap: 4px;
+                padding: 8px 6px;
+                text-align: center;
+            }
+            html.sidebar-collapsed .hp-nav-label {
+                font-size: 9px;
+                line-height: 1.15;
+                width: 100%;
+                overflow-wrap: anywhere;
+                word-break: break-word;
+            }
+
+            /* Collapsed footer: initials circle above the logout icon. */
+            html.sidebar-collapsed .hp-user-row {
+                flex-direction: column;
+                gap: 8px;
+            }
+        }
+    </style>
+
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="h-full">
 
-<div class="flex h-full">
+{{--
+    Alpine holds the open/closed flag (`collapsed`). toggle() flips it,
+    writes the choice to localStorage so it survives reloads + navigation,
+    and toggles the <html> class that the CSS above reacts to.
+--}}
+<div
+    class="flex h-full"
+    x-data="{
+        collapsed: window.__hpSidebarCollapsed,
+        mobileOpen: false,
+        toggle() {
+            this.collapsed = !this.collapsed;
+            localStorage.setItem('hp-sidebar-collapsed', this.collapsed);
+            document.documentElement.classList.toggle('sidebar-collapsed', this.collapsed);
+        }
+    }"
+    @keydown.escape.window="mobileOpen = false"
+>
+
+    {{-- Dim backdrop behind the mobile drawer (phones only). --}}
+    <div x-show="mobileOpen" x-cloak
+         x-transition.opacity
+         @click="mobileOpen = false"
+         class="fixed inset-0 z-40 bg-hp-slate/40 lg:hidden"
+         aria-hidden="true"></div>
 
     {{-- ── Sidebar ──────────────────────────────────────────────────────── --}}
-    <aside class="fixed inset-y-0 left-0 z-30 flex w-[220px] flex-col bg-white border-r border-hp-slate/10">
+    <aside class="hp-sidebar fixed inset-y-0 left-0 flex flex-col bg-white border-r border-hp-slate/10"
+           :class="{ 'is-open': mobileOpen }">
 
-        {{-- Logo --}}
-        <div class="flex h-14 shrink-0 items-center px-5 border-b border-hp-slate/10">
-            <x-hp.logo size="md" />
+        {{-- Top strip — keeps the 56px alignment line with the header.
+             Desktop shows the rail toggle; phones show a close button. --}}
+        <div class="hp-logo-row flex h-14 shrink-0 items-center px-4 border-b border-hp-slate/10">
+
+            {{-- Desktop: collapse / expand the rail --}}
+            <button
+                type="button"
+                @click="toggle()"
+                aria-label="Toggle sidebar"
+                :aria-expanded="(!collapsed).toString()"
+                class="hidden lg:flex shrink-0 rounded-md p-1.5 text-hp-slate/60 hover:bg-hp-slate/8 hover:text-hp-slate transition-colors"
+            >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <line x1="3" y1="6"  x2="21" y2="6"/>
+                    <line x1="3" y1="12" x2="21" y2="12"/>
+                    <line x1="3" y1="18" x2="21" y2="18"/>
+                </svg>
+            </button>
+
+            {{-- Phones: close the drawer --}}
+            <button
+                type="button"
+                @click="mobileOpen = false"
+                aria-label="Close menu"
+                class="lg:hidden ml-auto shrink-0 rounded-md p-1.5 text-hp-slate/60 hover:bg-hp-slate/8 hover:text-hp-slate transition-colors"
+            >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
         </div>
 
         {{-- Nav --}}
@@ -76,7 +206,7 @@
                 @endphp
                 <a
                     href="{{ route($routeName) }}"
-                    class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors duration-100
+                    class="hp-nav-link flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors duration-100
                            {{ $isActive
                                ? 'bg-hp-peach text-hp-orange font-semibold'
                                : 'text-hp-slate/70 hover:bg-hp-slate/8 hover:text-hp-slate font-medium' }}"
@@ -87,19 +217,19 @@
                          class="shrink-0">
                         <path d="{{ $iconPath }}"/>
                     </svg>
-                    {{ $label }}
+                    <span class="hp-nav-label">{{ $label }}</span>
                 </a>
             @endforeach
         </nav>
 
         {{-- User footer --}}
         <div class="shrink-0 border-t border-hp-slate/10 p-3">
-            <div class="flex items-center gap-3 rounded-lg px-2 py-2">
+            <div class="hp-user-row flex items-center gap-3 rounded-lg px-2 py-2">
                 {{-- Initials circle --}}
                 <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-hp-peach text-xs font-bold text-hp-orange">
                     {{ $initials }}
                 </div>
-                <div class="min-w-0 flex-1">
+                <div class="hp-user-meta min-w-0 flex-1">
                     <p class="truncate text-sm font-semibold text-hp-slate leading-tight">{{ $user?->name }}</p>
                     <p class="text-[11px] text-hp-slate/50 leading-tight">{{ $roleLabel }}</p>
                 </div>
@@ -122,15 +252,40 @@
     </aside>
 
     {{-- ── Right column ─────────────────────────────────────────────────── --}}
-    <div class="flex flex-1 flex-col pl-[220px] min-h-full">
+    <div class="hp-main-col flex flex-1 flex-col min-h-full">
 
-        {{-- Header bar --}}
-        <header class="sticky top-0 z-20 flex h-14 items-center bg-white border-b border-hp-slate/10 px-6">
-            <h1 class="text-sm font-semibold text-hp-slate">{{ $title }}</h1>
+        {{-- Header bar — burger (phones only), HealthPass logo, then page title --}}
+        <header class="sticky top-0 z-20 flex h-14 items-center gap-3 bg-white border-b border-hp-slate/10 px-4 sm:px-6">
+
+            {{-- Phones: open the drawer --}}
+            <button
+                type="button"
+                @click="mobileOpen = true"
+                aria-label="Open menu"
+                :aria-expanded="mobileOpen.toString()"
+                class="lg:hidden shrink-0 rounded-md p-1.5 text-hp-slate/60 hover:bg-hp-slate/8 hover:text-hp-slate transition-colors"
+            >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <line x1="3" y1="6"  x2="21" y2="6"/>
+                    <line x1="3" y1="12" x2="21" y2="12"/>
+                    <line x1="3" y1="18" x2="21" y2="18"/>
+                </svg>
+            </button>
+
+            {{-- HealthPass logo — now lives beside the page title, outside the sidebar --}}
+            <div class="shrink-0">
+                <x-hp.logo size="sm" />
+            </div>
+
+            <span class="h-5 w-px shrink-0 bg-hp-slate/15"></span>
+
+            <h1 class="truncate text-sm font-semibold text-hp-slate">{{ $title }}</h1>
         </header>
 
         {{-- Main content --}}
-        <main class="flex-1 overflow-y-auto bg-hp-bg p-7">
+        <main class="flex-1 overflow-y-auto bg-hp-bg p-4 sm:p-6 lg:p-7">
             {{ $slot }}
         </main>
 

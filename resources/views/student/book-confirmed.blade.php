@@ -101,25 +101,25 @@
 <div class="flex flex-col gap-3 sm:flex-row sm:justify-between">
 
     <a href="{{ route('student.appointments') }}"
-       class="inline-flex items-center justify-center gap-2 rounded-full border border-hp-slate/20
+       class="inline-flex w-full items-center justify-center gap-2 rounded-full border border-hp-slate/20
               px-5 py-2.5 text-sm font-semibold text-hp-slate transition-colors
-              hover:border-hp-orange/40 hover:text-hp-orange">
+              hover:border-hp-orange/40 hover:text-hp-orange sm:w-auto">
         Book Another
     </a>
 
     {{-- FR-STU-06: cancel button (only shown for future dates) --}}
     @if ($appointment->scheduled_date->gt(today()))
-        <div x-data="{ confirming: false }">
+        <div x-data="{ confirming: false }" class="w-full sm:w-auto">
 
             <button type="button" @click="confirming = true"
                 x-show="!confirming"
-                class="inline-flex items-center justify-center gap-1.5 rounded-full border
+                class="inline-flex w-full items-center justify-center gap-1.5 rounded-full border
                        border-red-200 px-5 py-2.5 text-sm font-semibold text-red-500
-                       transition-colors hover:bg-red-50">
+                       transition-colors hover:bg-red-50 sm:w-auto">
                 Cancel Appointment
             </button>
 
-            <div x-show="confirming" x-cloak class="flex items-center gap-3">
+            <div x-show="confirming" x-cloak class="flex flex-wrap items-center gap-3">
                 <p class="text-sm text-hp-slate/70">Cancel this appointment?</p>
                 <form method="POST"
                       action="{{ route('student.appointments.cancel', $appointment) }}">
