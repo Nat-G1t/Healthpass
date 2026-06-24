@@ -59,6 +59,32 @@ Do not silently reconcile conflicts.
   Chromium kiosk mode hitting Laravel on `localhost` (Web Serial requires
   a secure context — this is why the Pi runs the app locally)
 
+## Kiosk architecture
+
+- **State machine: Alpine.js, one reactive `state` object.** Chosen over
+  vanilla JS because Alpine is already the house framework (registered in
+  `app.js`, `[x-cloak]` styled), it's beginner-readable for Nat/Baldo
+  (declarative `x-show="state.screen==='…'"` beats hand-rolled DOM swaps),
+  and a single reactive object makes reset-to-Welcome a wholesale replacement
+  with no per-field teardown (FR-KSK-13). ALL session state lives in
+  `state` (`resources/js/kiosk/state-machine.js`).
+- **Dedicated Vite entry** `resources/js/kiosk/kiosk.js` (not `app.js`) so the
+  kiosk bundle stays lean (no `html5-qrcode` etc.) and grows independently
+  (Web Serial, virtual keyboards). The kiosk page is a standalone Blade doc
+  (`resources/views/kiosk/index.blade.php`) — no app nav/sidebar.
+- **One Blade partial per screen** under `resources/views/kiosk/screens/`;
+  `vitals` is a single screen with an internal `state.vitalStep` (1–4).
+- The kiosk route is **public** (no Laravel auth) — identity is established
+  inside the flow via QR scan / email login.
+- **Display sizing: responsive fill + zoom** (supersedes the original fixed
+  800×480 letterbox for real hardware). The panel fills the viewport
+  (`.kiosk-panel { inset: 0 }`) so there are no black bars on any screen;
+  on the actual 800×480 target it maps 1:1. A single `--k-zoom` CSS var
+  (default `1.3`) scales every rem-based size for readability on the 7″
+  screen — tune it in `kiosk/index.blade.php`. **PRD divergence flagged:**
+  the design-system "800×480 fixed" line refers to the design canvas; the
+  hardware still renders at 800×480, so layout fidelity is preserved.
+
 ## Run / dev commands
 
 ```

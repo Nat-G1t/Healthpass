@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Kiosk\KioskController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Student\BookAppointmentController;
 use App\Http\Controllers\Student\DashboardController as StudentDashboardController;
@@ -73,6 +74,16 @@ Route::middleware(['auth', 'role:director'])
     ->group(function () {
         Route::get('/dashboard', fn () => view('director.dashboard'))->name('dashboard');
     });
+
+// ── Kiosk (Module KSK, FR-KSK-01..16) — PUBLIC clinic terminal ───────────────
+// No auth: identity is established inside the flow (QR scan / email login),
+// not via a logged-in session. On the Pi this is opened full-screen.
+Route::prefix('kiosk')->name('kiosk.')->group(function () {
+    Route::get('/', [KioskController::class, 'index'])->name('index');
+    Route::post('/scan', [KioskController::class, 'scan'])
+        ->middleware('throttle:30,1')
+        ->name('scan');
+});
 
 // ── Dev component showcase (local only) ──────────────────────────────────────
 if (app()->isLocal()) {
