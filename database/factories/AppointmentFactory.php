@@ -22,14 +22,14 @@ class AppointmentFactory extends Factory
         $year = now()->year;
 
         return [
-            'reference_no'     => sprintf('APT-%d-%04d', $year, $seq),
-            'student_id'       => User::factory(),
-            'service_type'     => $this->faker->randomElement(['medical', 'dental']),
-            'scheduled_date'   => now()->addDays($this->faker->numberBetween(1, 30))->toDateString(),
-            'status'           => 'scheduled',
-            'source'           => 'self',
+            'reference_no' => sprintf('APT-%d-%04d', $year, $seq),
+            'student_id' => User::factory(),
+            'service_type' => $this->faker->randomElement(['medical', 'dental']),
+            'scheduled_date' => now()->addDays($this->faker->numberBetween(1, 30))->toDateString(),
+            'status' => 'scheduled',
+            'source' => 'self',
             'batch_request_id' => null,
-            'created_by'       => null,
+            'created_by' => null,
         ];
     }
 

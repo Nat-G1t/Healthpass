@@ -14,18 +14,17 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
-
 class BookAppointmentController extends Controller
 {
     public function show(): View
     {
-        $year  = (int) now()->format('Y');
+        $year = (int) now()->format('Y');
         $month = (int) now()->format('n');
 
         return view('student.book', [
-            'year'        => $year,
-            'month'       => $month,
-            'fullDays'    => $this->fullDaysForMonth($year, $month),
+            'year' => $year,
+            'month' => $month,
+            'fullDays' => $this->fullDaysForMonth($year, $month),
             'bookingDays' => config('healthpass.booking_days'),
         ]);
     }
@@ -36,7 +35,7 @@ class BookAppointmentController extends Controller
      */
     public function availability(Request $request): JsonResponse
     {
-        $year  = max(now()->year, min((int) $request->query('year', now()->year), now()->year + 2));
+        $year = max(now()->year, min((int) $request->query('year', now()->year), now()->year + 2));
         $month = max(1, min((int) $request->query('month', now()->month), 12));
 
         return response()->json(['full_days' => $this->fullDaysForMonth($year, $month)]);
@@ -52,12 +51,12 @@ class BookAppointmentController extends Controller
     {
         $appointment = DB::transaction(function () use ($request, $refService): Appointment {
             return Appointment::create([
-                'reference_no'   => $refService->generateAppointmentRef(),
-                'student_id'     => $request->user()->id,
-                'service_type'   => $request->validated('service'),
+                'reference_no' => $refService->generateAppointmentRef(),
+                'student_id' => $request->user()->id,
+                'service_type' => $request->validated('service'),
                 'scheduled_date' => $request->validated('date'),
-                'status'         => 'scheduled',
-                'source'         => 'self',
+                'status' => 'scheduled',
+                'source' => 'self',
             ]);
         });
 

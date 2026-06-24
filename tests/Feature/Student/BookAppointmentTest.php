@@ -45,7 +45,7 @@ class BookAppointmentTest extends TestCase
     {
         $this->post(route('student.appointments.store'), [
             'service' => 'medical',
-            'date'    => $this->futureDate(),
+            'date' => $this->futureDate(),
         ])->assertRedirect(route('login'));
     }
 
@@ -58,7 +58,7 @@ class BookAppointmentTest extends TestCase
         $this->actingAs($student)
             ->post(route('student.appointments.store'), [
                 'service' => 'medical',
-                'date'    => now()->subDay()->toDateString(),
+                'date' => now()->subDay()->toDateString(),
             ])
             ->assertSessionHasErrors('date');
 
@@ -72,7 +72,7 @@ class BookAppointmentTest extends TestCase
         $this->actingAs($student)
             ->post(route('student.appointments.store'), [
                 'service' => 'medical',
-                'date'    => today()->toDateString(),
+                'date' => today()->toDateString(),
             ])
             ->assertRedirect();
 
@@ -85,25 +85,25 @@ class BookAppointmentTest extends TestCase
     {
         config(['healthpass.daily_capacity' => 2]);
 
-        $date    = $this->futureDate();
+        $date = $this->futureDate();
         $student = $this->student();
 
         // Fill the day to capacity using two different students
         Appointment::factory()->count(2)->create([
             'scheduled_date' => $date,
-            'status'         => 'scheduled',
+            'status' => 'scheduled',
         ]);
 
         $this->actingAs($student)
             ->post(route('student.appointments.store'), [
                 'service' => 'medical',
-                'date'    => $date,
+                'date' => $date,
             ])
             ->assertSessionHasErrors('date');
 
         // Confirm the student's appointment was NOT created
         $this->assertDatabaseMissing('appointments', [
-            'student_id'     => $student->id,
+            'student_id' => $student->id,
             'scheduled_date' => $date,
         ]);
     }
@@ -112,7 +112,7 @@ class BookAppointmentTest extends TestCase
     {
         config(['healthpass.daily_capacity' => 1]);
 
-        $date    = $this->futureDate();
+        $date = $this->futureDate();
         $student = $this->student();
 
         // A cancelled appointment on that day — must not block booking
@@ -121,13 +121,13 @@ class BookAppointmentTest extends TestCase
         $this->actingAs($student)
             ->post(route('student.appointments.store'), [
                 'service' => 'medical',
-                'date'    => $date,
+                'date' => $date,
             ])
             ->assertRedirect(); // Not a validation error
 
         $this->assertDatabaseHas('appointments', [
             'student_id' => $student->id,
-            'status'     => 'scheduled',
+            'status' => 'scheduled',
         ]);
     }
 
@@ -135,21 +135,21 @@ class BookAppointmentTest extends TestCase
 
     public function test_duplicate_active_appointment_for_same_service_and_date_is_rejected(): void
     {
-        $date    = $this->futureDate();
+        $date = $this->futureDate();
         $student = $this->student();
 
         // Existing scheduled appointment
         Appointment::factory()->create([
-            'student_id'     => $student->id,
-            'service_type'   => 'medical',
+            'student_id' => $student->id,
+            'service_type' => 'medical',
             'scheduled_date' => $date,
-            'status'         => 'scheduled',
+            'status' => 'scheduled',
         ]);
 
         $this->actingAs($student)
             ->post(route('student.appointments.store'), [
                 'service' => 'medical',
-                'date'    => $date,
+                'date' => $date,
             ])
             ->assertSessionHasErrors('date');
 
@@ -159,20 +159,20 @@ class BookAppointmentTest extends TestCase
 
     public function test_different_service_on_same_date_is_allowed(): void
     {
-        $date    = $this->futureDate();
+        $date = $this->futureDate();
         $student = $this->student();
 
         Appointment::factory()->create([
-            'student_id'     => $student->id,
-            'service_type'   => 'medical',
+            'student_id' => $student->id,
+            'service_type' => 'medical',
             'scheduled_date' => $date,
-            'status'         => 'scheduled',
+            'status' => 'scheduled',
         ]);
 
         $this->actingAs($student)
             ->post(route('student.appointments.store'), [
                 'service' => 'dental',
-                'date'    => $date,
+                'date' => $date,
             ])
             ->assertRedirect();
 
@@ -181,27 +181,27 @@ class BookAppointmentTest extends TestCase
 
     public function test_cancelled_appointment_does_not_block_rebooking_same_service_and_date(): void
     {
-        $date    = $this->futureDate();
+        $date = $this->futureDate();
         $student = $this->student();
 
         // A previously cancelled appointment — should NOT block rebooking
         Appointment::factory()->cancelled()->create([
-            'student_id'     => $student->id,
-            'service_type'   => 'medical',
+            'student_id' => $student->id,
+            'service_type' => 'medical',
             'scheduled_date' => $date,
         ]);
 
         $this->actingAs($student)
             ->post(route('student.appointments.store'), [
                 'service' => 'medical',
-                'date'    => $date,
+                'date' => $date,
             ])
             ->assertRedirect();
 
         $this->assertDatabaseHas('appointments', [
-            'student_id'   => $student->id,
+            'student_id' => $student->id,
             'service_type' => 'medical',
-            'status'       => 'scheduled',
+            'status' => 'scheduled',
         ]);
     }
 
@@ -214,7 +214,7 @@ class BookAppointmentTest extends TestCase
         $this->actingAs($student)
             ->post(route('student.appointments.store'), [
                 'service' => 'medical',
-                'date'    => $this->futureDate(),
+                'date' => $this->futureDate(),
             ]);
 
         $appointment = Appointment::where('student_id', $student->id)->firstOrFail();
@@ -236,7 +236,7 @@ class BookAppointmentTest extends TestCase
         $response = $this->actingAs($student)
             ->post(route('student.appointments.store'), [
                 'service' => 'medical',
-                'date'    => $this->futureDate(),
+                'date' => $this->futureDate(),
             ]);
 
         $appointment = Appointment::where('student_id', $student->id)->firstOrFail();
@@ -247,14 +247,14 @@ class BookAppointmentTest extends TestCase
     public function test_confirmation_screen_shows_service_date_clinic_hours_and_reference(): void
     {
         $student = $this->student();
-        $date    = $this->futureDate(10);
+        $date = $this->futureDate(10);
 
         $appointment = Appointment::factory()->create([
-            'student_id'     => $student->id,
-            'service_type'   => 'medical',
+            'student_id' => $student->id,
+            'service_type' => 'medical',
             'scheduled_date' => $date,
-            'status'         => 'scheduled',
-            'source'         => 'self',
+            'status' => 'scheduled',
+            'source' => 'self',
         ]);
 
         $this->actingAs($student)
@@ -282,11 +282,11 @@ class BookAppointmentTest extends TestCase
 
     public function test_student_can_cancel_own_scheduled_future_appointment(): void
     {
-        $student     = $this->student();
+        $student = $this->student();
         $appointment = Appointment::factory()->create([
-            'student_id'     => $student->id,
+            'student_id' => $student->id,
             'scheduled_date' => $this->futureDate(3),
-            'status'         => 'scheduled',
+            'status' => 'scheduled',
         ]);
 
         $this->actingAs($student)
@@ -294,7 +294,7 @@ class BookAppointmentTest extends TestCase
             ->assertRedirect(route('student.dashboard'));
 
         $this->assertDatabaseHas('appointments', [
-            'id'     => $appointment->id,
+            'id' => $appointment->id,
             'status' => 'cancelled',
         ]);
     }
@@ -305,9 +305,9 @@ class BookAppointmentTest extends TestCase
         $other = $this->student();
 
         $appointment = Appointment::factory()->create([
-            'student_id'     => $owner->id,
+            'student_id' => $owner->id,
             'scheduled_date' => $this->futureDate(3),
-            'status'         => 'scheduled',
+            'status' => 'scheduled',
         ]);
 
         $this->actingAs($other)
@@ -315,18 +315,18 @@ class BookAppointmentTest extends TestCase
             ->assertForbidden();
 
         $this->assertDatabaseHas('appointments', [
-            'id'     => $appointment->id,
+            'id' => $appointment->id,
             'status' => 'scheduled',
         ]);
     }
 
     public function test_student_cannot_cancel_appointment_on_its_scheduled_date(): void
     {
-        $student     = $this->student();
+        $student = $this->student();
         $appointment = Appointment::factory()->create([
-            'student_id'     => $student->id,
+            'student_id' => $student->id,
             'scheduled_date' => today()->toDateString(),
-            'status'         => 'scheduled',
+            'status' => 'scheduled',
         ]);
 
         $this->actingAs($student)
@@ -334,17 +334,17 @@ class BookAppointmentTest extends TestCase
             ->assertForbidden();
 
         $this->assertDatabaseHas('appointments', [
-            'id'     => $appointment->id,
+            'id' => $appointment->id,
             'status' => 'scheduled',
         ]);
     }
 
     public function test_student_cannot_cancel_past_appointment(): void
     {
-        $student     = $this->student();
+        $student = $this->student();
         $appointment = Appointment::factory()->past()->create([
             'student_id' => $student->id,
-            'status'     => 'scheduled',
+            'status' => 'scheduled',
         ]);
 
         $this->actingAs($student)
@@ -354,9 +354,9 @@ class BookAppointmentTest extends TestCase
 
     public function test_student_cannot_cancel_already_cancelled_appointment(): void
     {
-        $student     = $this->student();
+        $student = $this->student();
         $appointment = Appointment::factory()->cancelled()->create([
-            'student_id'     => $student->id,
+            'student_id' => $student->id,
             'scheduled_date' => $this->futureDate(3),
         ]);
 
@@ -373,20 +373,20 @@ class BookAppointmentTest extends TestCase
      */
     public function test_duplicate_booking_with_json_accept_returns_422_json(): void
     {
-        $date    = $this->futureDate();
+        $date = $this->futureDate();
         $student = $this->student();
 
         Appointment::factory()->create([
-            'student_id'     => $student->id,
-            'service_type'   => 'medical',
+            'student_id' => $student->id,
+            'service_type' => 'medical',
             'scheduled_date' => $date,
-            'status'         => 'scheduled',
+            'status' => 'scheduled',
         ]);
 
         $response = $this->actingAs($student)
             ->postJson(route('student.appointments.store'), [
                 'service' => 'medical',
-                'date'    => $date,
+                'date' => $date,
             ]);
 
         $response->assertStatus(422);
@@ -403,7 +403,7 @@ class BookAppointmentTest extends TestCase
         $response = $this->actingAs($student)
             ->postJson(route('student.appointments.store'), [
                 'service' => 'medical',
-                'date'    => $this->futureDate(),
+                'date' => $this->futureDate(),
             ]);
 
         $response->assertOk();
@@ -421,16 +421,16 @@ class BookAppointmentTest extends TestCase
 
     public function test_cancelling_nearest_appointment_shows_next_one_on_dashboard(): void
     {
-        $student     = $this->student();
+        $student = $this->student();
         $appointmentA = Appointment::factory()->create([
-            'student_id'     => $student->id,
+            'student_id' => $student->id,
             'scheduled_date' => $this->futureDate(3),
-            'status'         => 'scheduled',
+            'status' => 'scheduled',
         ]);
         $appointmentB = Appointment::factory()->create([
-            'student_id'     => $student->id,
+            'student_id' => $student->id,
             'scheduled_date' => $this->futureDate(10),
-            'status'         => 'scheduled',
+            'status' => 'scheduled',
         ]);
 
         // Dashboard initially shows A (the nearest)
@@ -451,11 +451,11 @@ class BookAppointmentTest extends TestCase
 
     public function test_cancelling_only_appointment_shows_empty_state_on_dashboard(): void
     {
-        $student     = $this->student();
+        $student = $this->student();
         $appointment = Appointment::factory()->create([
-            'student_id'     => $student->id,
+            'student_id' => $student->id,
             'scheduled_date' => $this->futureDate(3),
-            'status'         => 'scheduled',
+            'status' => 'scheduled',
         ]);
 
         $this->actingAs($student)

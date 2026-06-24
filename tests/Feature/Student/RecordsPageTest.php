@@ -41,38 +41,38 @@ class RecordsPageTest extends TestCase
     private function makeCapturedVisit(User $student, string $refNo = 'HP-2026-T001'): ClinicVisit
     {
         $visit = ClinicVisit::create([
-            'reference_no'       => $refNo,
-            'student_id'         => $student->id,
-            'login_method'       => 'qr',
-            'status'             => 'captured',
+            'reference_no' => $refNo,
+            'student_id' => $student->id,
+            'login_method' => 'qr',
+            'status' => 'captured',
             'privacy_consent_at' => now(),
-            'checked_in_at'      => now(),
+            'checked_in_at' => now(),
         ]);
 
         VitalSigns::create([
             'clinic_visit_id' => $visit->id,
-            'height_cm'       => 165.0,
-            'weight_kg'       => 60.0,
-            'bmi'             => 22.0,
-            'temperature_c'   => 36.5,
-            'heart_rate_bpm'  => 75,
-            'bp_systolic'     => 115,
-            'bp_diastolic'    => 75,
-            'entry_method'    => 'manual',
+            'height_cm' => 165.0,
+            'weight_kg' => 60.0,
+            'bmi' => 22.0,
+            'temperature_c' => 36.5,
+            'heart_rate_bpm' => 75,
+            'bp_systolic' => 115,
+            'bp_diastolic' => 75,
+            'entry_method' => 'manual',
         ]);
 
         ScreeningResponse::create([
             'clinic_visit_id' => $visit->id,
-            'vision'          => false,
-            'hearing'         => false,
-            'nose'            => false,
-            'skin'            => false,
-            'respiratory'     => false,
-            'heart'           => false,
-            'digestive'       => false,
-            'bones'           => false,
-            'nervous'         => false,
-            'is_pregnant'     => false,
+            'vision' => false,
+            'hearing' => false,
+            'nose' => false,
+            'skin' => false,
+            'respiratory' => false,
+            'heart' => false,
+            'digestive' => false,
+            'bones' => false,
+            'nervous' => false,
+            'is_pregnant' => false,
         ]);
 
         return $visit;
@@ -93,12 +93,12 @@ class RecordsPageTest extends TestCase
         $visit->update(['status' => 'encoded']);
 
         ClearanceRecord::create([
-            'clinic_visit_id'     => $visit->id,
-            'encoded_by'          => $nurse->id,
-            'result'              => $result,
-            'physician_name'      => 'Test Physician, MD',
-            'physician_license_no'=> '00000',
-            'encoded_at'          => now(),
+            'clinic_visit_id' => $visit->id,
+            'encoded_by' => $nurse->id,
+            'result' => $result,
+            'physician_name' => 'Test Physician, MD',
+            'physician_license_no' => '00000',
+            'encoded_at' => now(),
         ]);
 
         return $visit;
@@ -178,7 +178,7 @@ class RecordsPageTest extends TestCase
     public function test_encoded_fit_visit_shows_result(): void
     {
         $student = $this->student();
-        $nurse   = $this->nurse();
+        $nurse = $this->nurse();
         $this->makeEncodedVisit($student, $nurse, 'Fit', 'HP-2026-T020');
 
         $this->actingAs($student)
@@ -192,7 +192,7 @@ class RecordsPageTest extends TestCase
     public function test_encoded_unfit_visit_shows_result(): void
     {
         $student = $this->student();
-        $nurse   = $this->nurse();
+        $nurse = $this->nurse();
         $this->makeEncodedVisit($student, $nurse, 'Unfit', 'HP-2026-T021');
 
         $this->actingAs($student)
@@ -206,8 +206,8 @@ class RecordsPageTest extends TestCase
     public function test_encoded_visit_data_present_in_page_for_modal(): void
     {
         $student = $this->student();
-        $nurse   = $this->nurse();
-        $visit   = $this->makeEncodedVisit($student, $nurse, 'Fit', 'HP-2026-T022');
+        $nurse = $this->nurse();
+        $visit = $this->makeEncodedVisit($student, $nurse, 'Fit', 'HP-2026-T022');
 
         // The visitData JSON is embedded in the page for the Alpine modal.
         // Assert that the reference number appears in the serialised data.
@@ -222,7 +222,7 @@ class RecordsPageTest extends TestCase
     public function test_pending_and_encoded_visits_coexist_correctly(): void
     {
         $student = $this->student();
-        $nurse   = $this->nurse();
+        $nurse = $this->nurse();
 
         $this->makeCapturedVisit($student, 'HP-2026-T030');
         $this->makeEncodedVisit($student, $nurse, 'Fit', 'HP-2026-T031');

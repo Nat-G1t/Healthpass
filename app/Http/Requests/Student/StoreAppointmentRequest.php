@@ -26,7 +26,7 @@ class StoreAppointmentRequest extends FormRequest
     {
         return [
             'service' => ['required', 'in:medical,dental'],
-            'date'    => ['required', 'date_format:Y-m-d', 'after_or_equal:today'],
+            'date' => ['required', 'date_format:Y-m-d', 'after_or_equal:today'],
         ];
     }
 
@@ -34,8 +34,8 @@ class StoreAppointmentRequest extends FormRequest
     {
         return [
             'service.required' => 'Please select a service.',
-            'service.in'       => 'Invalid service type.',
-            'date.required'    => 'Please pick a date.',
+            'service.in' => 'Invalid service type.',
+            'date.required' => 'Please pick a date.',
             'date.date_format' => 'Invalid date format.',
             'date.after_or_equal' => 'The booking date cannot be in the past.',
         ];
@@ -48,12 +48,12 @@ class StoreAppointmentRequest extends FormRequest
                 return;
             }
 
-            $date    = $this->input('date');
+            $date = $this->input('date');
             $service = $this->input('service');
 
             // BR-02: capacity re-check at write time (prevents race-condition over-bookings).
             $capacity = (int) config('healthpass.daily_capacity');
-            $booked   = Appointment::whereDate('scheduled_date', $date)
+            $booked = Appointment::whereDate('scheduled_date', $date)
                 ->where('status', '!=', 'cancelled')
                 ->count();
 
