@@ -127,11 +127,16 @@
         data-scan-url="{{ route('kiosk.scan') }}"
         data-login-url="{{ route('kiosk.login') }}"
         data-csrf="{{ csrf_token() }}"
-        {{-- Plausibility ranges (FR-KSK-08) + BMI flag threshold (BR-13) straight
-             from config/healthpass.php, so client checks match the server. --}}
+        {{-- Plausibility ranges (FR-KSK-08) + flag thresholds (BR-13) straight
+             from config/healthpass.php, so client badges/checks match the server. --}}
         data-config="{{ json_encode([
             'validation' => config('healthpass.validation'),
             'bmiObese' => config('healthpass.thresholds.bmi_obese'),
+            'thresholds' => [
+                'tempMax' => config('healthpass.thresholds.temperature_max'),
+                'bpSystolic' => config('healthpass.thresholds.bp_systolic'),
+                'bpDiastolic' => config('healthpass.thresholds.bp_diastolic'),
+            ],
         ]) }}"
     >
         <div class="kiosk-stage">

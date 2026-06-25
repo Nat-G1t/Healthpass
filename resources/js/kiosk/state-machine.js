@@ -32,43 +32,68 @@ const SCAN_MS = 1200;
 const GESTURE_WINDOW_MS = 1500;
 
 /**
- * Per-step metadata for the vitals sequence (FR-KSK-05). One entry drives one
- * step of the reusable 3-phase card, so adding Temperature/BP later is just two
- * more entries here — no new Blade. `range` names the bounds key in
- * config/healthpass.php (FR-KSK-08, single source of truth); `sensorKey` is the
- * letter the Web Serial reading line uses (§11.2); `sample` feeds the dev-only
- * "Simulate reading" button.
+ * Per-step metadata for the vitals sequence (FR-KSK-05). Each step is pure
+ * DATA — the Blade renders ANY step from this config, so the four steps are not
+ * four copies of code. A step owns one or more `fields`; most steps have a
+ * single field, but Blood Pressure (step 4) groups three (systolic, diastolic,
+ * heart rate) captured together in one reading.
  *
- * Steps 3–4 are intentionally omitted for now — this slice builds 1–2.
+ * Per field: `range` names the bounds key in config/healthpass.php (FR-KSK-08,
+ * single source of truth); `sensorKey` is the letter the Web Serial handoff
+ * uses (§11.2 → H / W / T / S / D / R); `sample` feeds the dev-only "Simulate
+ * reading" button; `decimals` fixes display precision (temperature shows 1).
+ *
+ * Step extras: `showsBmi` renders the computed BMI panel (FR-KSK-09); `badge`
+ * selects the neutral status badge ('temperature' | 'bp') — never a diagnosis
+ * or Fit/Unfit (FR-KSK-14).
  */
 export const VITALS = {
     1: {
-        key: 'height',
         label: 'Height',
-        unit: 'cm',
-        sensorKey: 'H',
-        range: 'height_cm',
         instruction: 'Stand straight under the stadiometer, heels together, looking forward.',
-        sample: 163,
+        fields: [
+            { key: 'height', unit: 'cm', range: 'height_cm', sensorKey: 'H', sample: 163 },
+        ],
     },
     2: {
-        key: 'weight',
         label: 'Weight',
-        unit: 'kg',
-        sensorKey: 'W',
-        range: 'weight_kg',
         instruction: 'Step onto the scale and stand still, arms relaxed at your sides.',
-        sample: 58,
+        fields: [
+            { key: 'weight', unit: 'kg', range: 'weight_kg', sensorKey: 'W', sample: 58 },
+        ],
+        showsBmi: true,
+    },
+    3: {
+        label: 'Temperature',
+        instruction: 'Hold your forehead a few centimetres from the infrared thermometer and stay still.',
+        badge: 'temperature',
+        fields: [
+            { key: 'temperature', unit: '°C', range: 'temperature_c', sensorKey: 'T', sample: 36.8, decimals: 1 },
+        ],
+    },
+    4: {
+        label: 'Blood Pressure',
+        instruction: 'Rest your arm in the cuff, palm up, and stay relaxed while it inflates.',
+        badge: 'bp',
+        fields: [
+            { key: 'systolic', label: 'Systolic', unit: 'mmHg', range: 'bp_systolic', sensorKey: 'S', sample: 118 },
+            { key: 'diastolic', label: 'Diastolic', unit: 'mmHg', range: 'bp_diastolic', sensorKey: 'D', sample: 76 },
+            { key: 'heartRate', label: 'Heart Rate', unit: 'bpm', range: 'heart_rate', sensorKey: 'R', sample: 72 },
+        ],
     },
 };
 
-/** A fresh, uncaptured vital record. phase: ready → scanning → captured. */
-function vital() {
+/**
+ * A fresh, uncaptured step. phase: ready → scanning → captured. `values` holds
+ * each field's reading by key (one key for most steps, three for BP); `method`
+ * is the step's provenance for vital_signs.entry_method (FR-KSK-06).
+ */
+function vitalStep() {
     return {
-        value: null,
         phase: 'ready',
-        method: null, // 'sensor' | 'manual' — provenance for vital_signs.entry_method
+        method: null, // 'sensor' | 'manual'
         notice: '', // non-blocking nudge (e.g. sensor degraded to manual)
+        values: {}, // field key → number, filled on capture
     };
 }
 
@@ -103,20 +128,20 @@ function freshState() {
         identity: null,
         consentAt: null,
 
-        // Each vital is its own 3-phase record (FR-KSK-05). Step 4 (BP) reuses
-        // systolic/diastolic/heartRate; only height + weight are wired so far.
-        vitals: {
-            height: vital(),
-            weight: vital(),
-            temperature: vital(),
-            systolic: vital(),
-            diastolic: vital(),
-            heartRate: vital(),
+        // Each vital step is its own 3-phase record (FR-KSK-05): ready →
+        // scanning → captured. Steps 1–3 hold a single reading; step 4 (BP)
+        // groups systolic/diastolic/heart-rate captured together.
+        vitalSteps: {
+            1: vitalStep(),
+            2: vitalStep(),
+            3: vitalStep(),
+            4: vitalStep(),
         },
 
-        // Numeric on-screen pad for manual entry (FR-KSK-06). `target` is the
-        // vital key being edited; one pad serves every step.
-        pad: { open: false, target: null, value: '', error: '' },
+        // Numeric on-screen pad for manual entry (FR-KSK-06). It walks the
+        // fields of the step being edited one at a time (BP = three prompts);
+        // `draft` collects them and commits only when the last is confirmed.
+        pad: { open: false, step: null, fieldIndex: 0, value: '', error: '', draft: {} },
 
         questionnaire: {},
     };
@@ -133,6 +158,10 @@ export function kioskMachine() {
         // Tap bookkeeping for the disguised manual-entry gesture (see logoTap).
         _logoTaps: 0,
         _lastLogoTap: 0,
+
+        // Timers for the email keyboard's backspace long-press (see backspaceDown).
+        _bsRepeat: null,
+        _bsClearTimer: null,
 
         init() {
             this.config = JSON.parse(this.$refs.root.dataset.config || '{}');
@@ -293,6 +322,34 @@ export function kioskMachine() {
             if (login.shift) login.shift = false;
         },
 
+        // Backspace long-press (email keyboard). A quick tap deletes one
+        // character; holding repeats with an accelerating speed; holding for a
+        // full 2 s clears the active field entirely. Driven by pointer events so
+        // it behaves the same on the touchscreen and a mouse.
+        backspaceDown() {
+            this.keyPress('backspace'); // immediate single delete on tap
+            // Hold for 2 s → wipe the whole field, then stop repeating.
+            this._bsClearTimer = setTimeout(() => {
+                this.state.login[this.state.login.field] = '';
+                this.backspaceUp();
+            }, 2000);
+            // After a short initial hold, begin an accelerating repeat.
+            this._bsRepeat = setTimeout(() => this.backspaceTick(150), 400);
+        },
+
+        backspaceTick(delay) {
+            this.keyPress('backspace');
+            const next = Math.max(40, delay - 15); // speeds up to a 40 ms floor
+            this._bsRepeat = setTimeout(() => this.backspaceTick(next), delay);
+        },
+
+        backspaceUp() {
+            clearTimeout(this._bsRepeat);
+            clearTimeout(this._bsClearTimer);
+            this._bsRepeat = null;
+            this._bsClearTimer = null;
+        },
+
         async submitLogin() {
             const login = this.state.login;
             if (login.status === 'sending') return;
@@ -350,74 +407,119 @@ export function kioskMachine() {
             this.go('vitals');
         },
 
-        // ── Vitals sequence (FR-KSK-05/06/08/09) ─────────────────────────────
-        // One reusable 3-phase step (ready → scanning → captured). Steps 1–2
-        // (Height, Weight+BMI) are 1:1 with a single vital, so "the current
-        // step's vital" is unambiguous; step 4 (BP) will group three values.
+        // ── Vitals sequence (FR-KSK-05/06/08/09/14) ──────────────────────────
+        // One reusable 3-phase step (ready → scanning → captured) renders EVERY
+        // step from VITALS metadata. A step owns one or more fields; BP (step 4)
+        // groups three values captured in a single reading.
 
-        /** Metadata for a step (1–4), or null for not-yet-built steps. */
+        /** Metadata for a step (1–4), or null if out of range. */
         vitalMeta(step) {
             return VITALS[step] ?? null;
         },
 
-        /** The vital record for the current step. */
-        currentVital() {
-            const meta = this.vitalMeta(this.state.vitalStep);
-            return meta ? this.state.vitals[meta.key] : null;
+        /** The 3-phase record for the current step. */
+        currentStep() {
+            return this.state.vitalSteps[this.state.vitalStep];
         },
 
-        /** {min,max} bounds for a step, from injected config (FR-KSK-08). */
-        rangeFor(meta) {
-            return this.config.validation?.[meta.range] ?? { min: 0, max: 0 };
+        /** Convenience: the current step's phase ('ready' | 'scanning' | 'captured'). */
+        stepPhase() {
+            return this.currentStep().phase;
         },
 
-        inRange(meta, value) {
-            const r = this.rangeFor(meta);
+        /** A step's first field — the primary reading for single-field steps. */
+        primaryField(step = this.state.vitalStep) {
+            return this.vitalMeta(step)?.fields[0] ?? null;
+        },
+
+        /** A captured field value by key, searched across all steps (null if unset). */
+        fieldValue(key) {
+            for (const s of Object.values(this.state.vitalSteps)) {
+                if (s.values[key] != null) return s.values[key];
+            }
+            return null;
+        },
+
+        /** Display string for a value, honouring the field's decimals (e.g. 36.8). */
+        formatField(field, value) {
+            if (value == null) return '';
+            return field.decimals != null ? value.toFixed(field.decimals) : String(value);
+        },
+
+        /** {min,max} bounds for a field, from injected config (FR-KSK-08). */
+        rangeFor(field) {
+            return this.config.validation?.[field.range] ?? { min: 0, max: 0 };
+        },
+
+        inRange(field, value) {
+            const r = this.rangeFor(field);
             return !Number.isNaN(value) && value >= r.min && value <= r.max;
         },
 
         // ── Sensor path (FR-KSK-07 stub — wired now, hardware in W5) ──────────
         /**
          * THE entry point for sensor readings. The Web Serial module (W5) parses
-         * the combined reading line and calls this with an object keyed by sensor
-         * letters — e.g. receiveReading({ H: 163 }) or { H, W, T, S, D, R }. The
-         * dev "Simulate reading" button calls this SAME function, so manual
-         * testing exercises the exact production path.
+         * the combined reading line (§11.2) and calls this with an object keyed by
+         * sensor letters — e.g. { H: 163 } or { T: 37.9, S: 118, D: 76, R: 72 }.
+         * The dev "Simulate reading" button calls this SAME function, so manual
+         * testing exercises the exact production path. Readings are grouped by the
+         * step they belong to, so BP's three values capture together.
          */
         receiveReading(reading) {
+            const byStep = {};
             for (const [sensorKey, raw] of Object.entries(reading)) {
-                const step = Object.keys(VITALS).find(
-                    (s) => VITALS[s].sensorKey === sensorKey,
-                );
-                if (step) this.captureFromSensor(VITALS[step], Number(raw));
+                const found = this.findField(sensorKey);
+                if (!found) continue; // unknown key — ignore (forward compatibility)
+                (byStep[found.step] ??= []).push({ field: found.field, value: Number(raw) });
+            }
+            for (const [step, items] of Object.entries(byStep)) {
+                this.captureStepFromSensor(Number(step), items);
             }
         },
 
-        /** Run a reading through scanning → captured, degrading if implausible. */
-        captureFromSensor(meta, value) {
-            const v = this.state.vitals[meta.key];
-            v.phase = 'scanning';
-            v.notice = '';
+        /** Locate which step + field a sensor letter belongs to. */
+        findField(sensorKey) {
+            for (const step of Object.keys(VITALS)) {
+                const field = VITALS[step].fields.find((f) => f.sensorKey === sensorKey);
+                if (field) return { step: Number(step), field };
+            }
+            return null;
+        },
+
+        /**
+         * Run a step's reading through scanning → captured. Degrades gracefully
+         * (FR-KSK-07): an incomplete or out-of-range reading is never a dead end —
+         * it falls back to ready with a nudge to retry or enter it manually.
+         */
+        captureStepFromSensor(step, items) {
+            const s = this.state.vitalSteps[step];
+            const meta = VITALS[step];
+            s.phase = 'scanning';
+            s.notice = '';
             setTimeout(() => {
-                // Graceful degrade (FR-KSK-07): an out-of-range/garbled reading is
-                // never a dead end — fall back to ready with a nudge to manual.
-                if (!this.inRange(meta, value)) {
-                    const r = this.rangeFor(meta);
-                    v.phase = 'ready';
-                    v.notice = `Sensor reading looked off (expected ${r.min}–${r.max} ${meta.unit}). Try again or enter it manually.`;
+                const complete = meta.fields.every((f) => items.some((i) => i.field.key === f.key));
+                const bad = items.find((i) => !this.inRange(i.field, i.value));
+                if (!complete || bad) {
+                    s.phase = 'ready';
+                    s.notice = `Sensor reading for ${meta.label.toLowerCase()} looked off. Try again or enter it manually.`;
                     return;
                 }
-                v.value = value;
-                v.method = 'sensor';
-                v.phase = 'captured';
-                v.notice = '';
+                const values = {};
+                for (const i of items) values[i.field.key] = i.value;
+                s.values = values;
+                s.method = 'sensor';
+                s.phase = 'captured';
+                s.notice = '';
             }, SCAN_MS);
         },
 
-        /** Dev-only: inject a plausible reading for the current step. */
+        /** Dev-only: inject a plausible reading for every field of the current step. */
         simulateReading() {
             const meta = this.vitalMeta(this.state.vitalStep);
-            if (meta) this.receiveReading({ [meta.sensorKey]: meta.sample });
+            if (!meta) return;
+            const reading = {};
+            for (const f of meta.fields) reading[f.sensorKey] = f.sample;
+            this.receiveReading(reading);
         },
 
         // ── Manual entry pad (FR-KSK-06 — first-class on every step) ──────────
@@ -425,7 +527,7 @@ export function kioskMachine() {
          * Disguised trigger for manual entry. The visible "Enter manually" button
          * was removed so a student can't simply fake a reading; instead an operator
          * (nurse/staff) triple-taps the corner HealthPass logo to reveal the numeric
-         * pad for whatever vital is on screen. Taps must land within GESTURE_WINDOW_MS
+         * pad for whatever step is on screen. Taps must land within GESTURE_WINDOW_MS
          * of each other, so stray single taps never open it.
          */
         logoTap() {
@@ -442,7 +544,31 @@ export function kioskMachine() {
         openPad() {
             const meta = this.vitalMeta(this.state.vitalStep);
             if (!meta) return;
-            this.state.pad = { open: true, target: meta.key, value: '', error: '' };
+            // Manual entry is a first-class path only BEFORE a reading is taken
+            // (the 'ready' phase) — "just about to read each vital". Once the
+            // step is captured (or mid-scan), the disguised gesture does nothing,
+            // so a finished result can never be silently retyped.
+            if (this.stepPhase() !== 'ready') return;
+            this.state.pad = {
+                open: true,
+                step: this.state.vitalStep,
+                fieldIndex: 0,
+                value: '',
+                error: '',
+                draft: {},
+            };
+        },
+
+        /** The field the pad is currently collecting. */
+        padField() {
+            const meta = this.vitalMeta(this.state.pad.step);
+            return meta?.fields[this.state.pad.fieldIndex] ?? null;
+        },
+
+        /** Whether the pad is on the last field of its step (BP has three). */
+        padIsLastField() {
+            const meta = this.vitalMeta(this.state.pad.step);
+            return meta ? this.state.pad.fieldIndex >= meta.fields.length - 1 : true;
         },
 
         padCancel() {
@@ -470,31 +596,41 @@ export function kioskMachine() {
 
         padConfirm() {
             const pad = this.state.pad;
-            const meta = this.vitalMeta(this.state.vitalStep);
+            const field = this.padField();
             const value = Number(pad.value);
             if (pad.value === '' || Number.isNaN(value)) {
                 pad.error = 'Enter a number.';
                 return;
             }
             // Same ranges as the sensor path; out-of-range prompts re-entry (FR-KSK-08).
-            if (!this.inRange(meta, value)) {
-                const r = this.rangeFor(meta);
-                pad.error = `Enter a value between ${r.min} and ${r.max} ${meta.unit}.`;
+            if (!this.inRange(field, value)) {
+                const r = this.rangeFor(field);
+                pad.error = `Enter a value between ${r.min} and ${r.max} ${field.unit}.`;
                 return;
             }
-            const v = this.state.vitals[meta.key];
-            v.value = value;
-            v.method = 'manual';
-            v.phase = 'captured';
-            v.notice = '';
+            pad.draft = { ...pad.draft, [field.key]: value };
+
+            // More fields to collect (e.g. BP: systolic → diastolic → heart rate).
+            if (!this.padIsLastField()) {
+                pad.fieldIndex += 1;
+                pad.value = '';
+                pad.error = '';
+                return;
+            }
+
+            // Last field confirmed → commit the whole step in one go.
+            const s = this.state.vitalSteps[pad.step];
+            s.values = { ...s.values, ...pad.draft };
+            s.method = 'manual';
+            s.phase = 'captured';
+            s.notice = '';
             pad.open = false;
         },
 
         // ── Step navigation + retake ─────────────────────────────────────────
         /** Discard the current step's reading and return it to "ready". */
         retryVital() {
-            const meta = this.vitalMeta(this.state.vitalStep);
-            if (meta) this.state.vitals[meta.key] = vital();
+            this.state.vitalSteps[this.state.vitalStep] = vitalStep();
         },
 
         nextVital() {
@@ -509,8 +645,8 @@ export function kioskMachine() {
         // ── BMI (FR-KSK-09 — computed, never entered) ────────────────────────
         /** weight(kg) ÷ height(m)², rounded to 1 decimal; null until both exist. */
         bmiValue() {
-            const h = this.state.vitals.height.value;
-            const w = this.state.vitals.weight.value;
+            const h = this.fieldValue('height');
+            const w = this.fieldValue('weight');
             if (!h || !w) return null;
             const m = h / 100;
             return Math.round((w / (m * m)) * 10) / 10;
@@ -544,11 +680,45 @@ export function kioskMachine() {
             }
         },
 
+        // ── Temperature status badge (FR-KSK-14 — neutral wording ONLY) ──────
+        // Threshold from config (BR-13). The kiosk shows ONLY "Normal" /
+        // "Slightly Elevated" — never "Fever" or any clinical interpretation.
+        tempFlagged(t) {
+            return t != null && t > (this.config.thresholds?.tempMax ?? 37.2);
+        },
+        tempStatus(t) {
+            return this.tempFlagged(t) ? 'Slightly Elevated' : 'Normal';
+        },
+        tempBadgeClass(t) {
+            return this.tempFlagged(t)
+                ? 'bg-hp-orange/15 text-hp-orange'
+                : 'bg-emerald-50 text-emerald-600';
+        },
+
+        // ── Blood-pressure status badge (FR-KSK-14 — neutral wording ONLY) ───
+        // Flag if systolic ≥ 140 OR diastolic ≥ 90 (D-10, config). Neutral
+        // wording only — never "High Blood Pressure" or any diagnosis.
+        bpFlagged(sys, dia) {
+            const t = this.config.thresholds ?? {};
+            return (
+                (sys != null && sys >= (t.bpSystolic ?? 140)) ||
+                (dia != null && dia >= (t.bpDiastolic ?? 90))
+            );
+        },
+        bpStatus(sys, dia) {
+            return this.bpFlagged(sys, dia) ? 'Slightly Elevated' : 'Normal';
+        },
+        bpBadgeClass(sys, dia) {
+            return this.bpFlagged(sys, dia)
+                ? 'bg-hp-orange/15 text-hp-orange'
+                : 'bg-emerald-50 text-emerald-600';
+        },
+
         // ── Provenance roll-up for vital_signs.entry_method (FR-KSK-06) ───────
         // Consumed at final submit (FR-KSK-12). 'sensor' / 'manual' / 'mixed'.
         entryMethod() {
-            const methods = Object.values(this.state.vitals)
-                .map((v) => v.method)
+            const methods = Object.values(this.state.vitalSteps)
+                .map((s) => s.method)
                 .filter(Boolean);
             if (methods.length === 0) return null;
             if (methods.every((m) => m === 'sensor')) return 'sensor';

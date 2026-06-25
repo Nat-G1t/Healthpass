@@ -128,9 +128,14 @@
                     @click="keyPress('space')"
                     class="h-9 flex-[4] rounded-lg bg-hp-white text-sm font-medium text-hp-slate/70 shadow-sm transition active:scale-95 active:bg-hp-peach/60"
                 >Space</button>
+                {{-- Long-press accelerates the delete and clears the field after
+                     2 s held (backspaceDown/Up). Pointer capture guarantees the
+                     release fires on this button even if the finger drifts off. --}}
                 <button
                     type="button"
-                    @click="keyPress('backspace')"
+                    @pointerdown="$event.currentTarget.setPointerCapture($event.pointerId); backspaceDown()"
+                    @pointerup="backspaceUp()"
+                    @pointercancel="backspaceUp()"
                     class="h-9 flex-[2] rounded-lg bg-hp-peach text-sm font-semibold text-hp-slate shadow-sm transition active:scale-95 active:brightness-90"
                 >⌫ Delete</button>
                 <button
