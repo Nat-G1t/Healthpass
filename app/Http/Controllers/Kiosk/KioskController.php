@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Kiosk;
 
+use App\Actions\Kiosk\SubmitKioskVisit;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Kiosk\KioskSubmitRequest;
 use App\Models\StudentProfile;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -113,20 +115,21 @@ final class KioskController extends Controller
     }
 
     /**
-     * Final submit — STUB (FR-KSK-11 review → Complete).
+     * Final submit (FR-KSK-12): persist the whole kiosk session.
      *
-     * The real implementation (FR-KSK-12) will create, in one transaction, the
-     * clinic_visits + vital_signs + screening_responses rows and compute the
-     * authoritative flag booleans server-side (§7.4). For now this endpoint only
-     * acknowledges the payload so the front-end can advance to the Complete
-     * screen during kiosk-flow development. It deliberately persists NOTHING.
+     * The Form Request has already re-validated everything server-side (ranges,
+     * completeness, consent, active-student gate). The Action then writes the
+     * clinic_visits + vital_signs + screening_responses rows in one transaction
+     * and computes the authoritative flag booleans (§7.4). We return the minted
+     * HP-YYYY-#### reference so the Complete screen can show it (FR-KSK-13).
      */
-    public function submit(Request $request): JsonResponse
+    public function submit(KioskSubmitRequest $request, SubmitKioskVisit $action): JsonResponse
     {
+        $visit = $action->handle($request->validated());
+
         return response()->json([
             'ok' => true,
-            // Placeholder reference; FR-KSK-12 will mint the real HP-YYYY-#### here.
-            'reference' => 'HP-PENDING',
+            'reference' => $visit->reference_no,
         ]);
     }
 

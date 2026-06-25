@@ -177,8 +177,9 @@ function freshState() {
             calMonth: null,
         },
 
-        // Final-submit request sub-state (FR-KSK-11 → stub). Mirrors login/scan.
-        submit: { status: 'idle', error: '' }, // idle | sending | error
+        // Final-submit request sub-state (FR-KSK-11/12). Mirrors login/scan;
+        // `reference` holds the server-minted HP-YYYY-#### shown on Complete.
+        submit: { status: 'idle', error: '', reference: null }, // idle | sending | error
     };
 }
 
@@ -202,8 +203,22 @@ export function kioskMachine() {
         _bsRepeat: null,
         _bsClearTimer: null,
 
+        // Session-lifecycle timers (FR-KSK-13/15). Held on the component (not in
+        // `state`) so a wholesale state reset never strands a running timer.
+        _idleTimer: null,
+        _completeInterval: null,
+        // Seconds left on the Complete auto-reset pill; reactive so Blade tracks it.
+        completeCountdown: 0,
+
         init() {
             this.config = JSON.parse(this.$refs.root.dataset.config || '{}');
+            // React to every screen change: (re)arm the idle timer mid-flow, and
+            // run the Complete countdown only while the Complete screen is up.
+            this.$watch('state.screen', (screen) => {
+                this.bumpIdle();
+                if (screen === 'complete') this.startCompleteCountdown();
+                else this.clearCompleteCountdown();
+            });
             this.focusWedge();
         },
 
@@ -220,8 +235,51 @@ export function kioskMachine() {
 
         /** Wipe everything and return to Welcome (FR-KSK-13). */
         reset() {
+            this.clearIdle();
+            this.clearCompleteCountdown();
             this.state = freshState();
             this.focusWedge();
+        },
+
+        // ── Session lifecycle timers (FR-KSK-13/15) ──────────────────────────
+        // Idle: 90s of no interaction MID-FLOW discards the session and resets,
+        // so an abandoned kiosk can't leave a student's data on screen (FR-KSK-15).
+        // Welcome (nothing entered yet) and Complete (its own countdown) are exempt.
+        startIdle() {
+            this.clearIdle();
+            const secs = this.config.kiosk?.idleTimeoutSeconds ?? 90;
+            this._idleTimer = setTimeout(() => this.reset(), secs * 1000);
+        },
+
+        clearIdle() {
+            if (this._idleTimer) clearTimeout(this._idleTimer);
+            this._idleTimer = null;
+        },
+
+        /** Restart the idle countdown on any interaction — but only mid-flow. */
+        bumpIdle() {
+            const screen = this.state.screen;
+            if (screen === 'welcome' || screen === 'complete') {
+                this.clearIdle();
+                return;
+            }
+            this.startIdle();
+        },
+
+        // Complete: a countdown pill ticks down and auto-resets to Welcome after
+        // 12s (FR-KSK-13); a Done tap resets instantly via reset().
+        startCompleteCountdown() {
+            this.clearCompleteCountdown();
+            this.completeCountdown = this.config.kiosk?.completeResetSeconds ?? 12;
+            this._completeInterval = setInterval(() => {
+                this.completeCountdown -= 1;
+                if (this.completeCountdown <= 0) this.reset();
+            }, 1000);
+        },
+
+        clearCompleteCountdown() {
+            if (this._completeInterval) clearInterval(this._completeInterval);
+            this._completeInterval = null;
         },
 
         // ── QR keyboard-wedge (FR-KSK-01) ────────────────────────────────────
@@ -753,18 +811,6 @@ export function kioskMachine() {
                 : 'bg-emerald-50 text-emerald-600';
         },
 
-        // ── Provenance roll-up for vital_signs.entry_method (FR-KSK-06) ───────
-        // Consumed at final submit (FR-KSK-12). 'sensor' / 'manual' / 'mixed'.
-        entryMethod() {
-            const methods = Object.values(this.state.vitalSteps)
-                .map((s) => s.method)
-                .filter(Boolean);
-            if (methods.length === 0) return null;
-            if (methods.every((m) => m === 'sensor')) return 'sensor';
-            if (methods.every((m) => m === 'manual')) return 'manual';
-            return 'mixed';
-        },
-
         // ── 9-system questionnaire (FR-KSK-10) ───────────────────────────────
         /** Record a Yes (true) / No (false) answer for one system card. */
         setSystem(key, value) {
@@ -925,7 +971,11 @@ export function kioskMachine() {
                 studentUserId: this.state.identity?.studentUserId ?? null,
                 loginMethod: this.state.identity?.loginMethod ?? null,
                 privacyConsentAt: this.state.consentAt,
-                entryMethod: this.entryMethod(),
+                // Per-step provenance; the server rolls these up to the stored
+                // entry_method (sensor / manual / mixed) (FR-KSK-06).
+                vitalMethods: Object.values(this.state.vitalSteps)
+                    .map((s) => s.method)
+                    .filter(Boolean),
                 vitals: {
                     height: this.fieldValue('height'),
                     weight: this.fieldValue('weight'),
@@ -963,13 +1013,14 @@ export function kioskMachine() {
                 });
                 const data = await response.json();
                 if (response.ok && data.ok) {
-                    this.state.submit = { status: 'idle', error: '' };
+                    this.state.submit = { status: 'idle', error: '', reference: data.reference ?? null };
                     this.go('complete');
                     return;
                 }
                 this.state.submit = {
                     status: 'error',
                     error: data.message ?? 'Could not submit. Please try again.',
+                    reference: null,
                 };
             } catch {
                 this.state.submit = {

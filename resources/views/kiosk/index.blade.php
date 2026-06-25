@@ -138,7 +138,14 @@
                 'bpSystolic' => config('healthpass.thresholds.bp_systolic'),
                 'bpDiastolic' => config('healthpass.thresholds.bp_diastolic'),
             ],
+            'kiosk' => [
+                'completeResetSeconds' => config('healthpass.kiosk.complete_reset_seconds'),
+                'idleTimeoutSeconds' => config('healthpass.kiosk.idle_timeout_seconds'),
+            ],
         ]) }}"
+        {{-- Any touch/keypress mid-flow restarts the 90s idle countdown (FR-KSK-15). --}}
+        @pointerdown="bumpIdle()"
+        @keydown="bumpIdle()"
     >
         <div class="kiosk-stage">
             {{-- Tapping anywhere on the panel returns focus to the scanner input. --}}
