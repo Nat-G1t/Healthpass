@@ -9,6 +9,14 @@ export default {
         './resources/views/**/*.blade.php',
     ],
 
+    // Touch-kiosk friendly: only apply `hover:` styles on devices that actually
+    // support hovering (a mouse). On the Pi's touchscreen, tapping a button no
+    // longer leaves its hover colour "stuck" — press feedback comes from
+    // `active:` instead, which fires only while the finger is down.
+    future: {
+        hoverOnlyWhenSupported: true,
+    },
+
     theme: {
         extend: {
             fontFamily: {

@@ -62,6 +62,18 @@
             padding: 0;
         }
 
+        /* Per-tap key-press pop for the on-screen keyboard (FR-KSK-02).
+           Starts in the "pressed" look (shrunk + orange flash) and animates
+           back to rest, so a full animation plays on EVERY touch even if the
+           tap is instant — `:active` alone is too brief to notice. */
+        @keyframes k-key-press {
+            0%   { transform: scale(0.88); background-color: #FF8C2A; color: #FFFFFF; }
+            100% { transform: scale(1); }
+        }
+        .k-key-press {
+            animation: k-key-press 180ms ease-out;
+        }
+
         /* Pulsing QR target ring (FR-KSK-01). */
         @keyframes k-pulse {
             0%   { transform: scale(1);    opacity: 0.55; }
@@ -103,6 +115,7 @@
         x-data="kiosk()"
         x-ref="root"
         data-scan-url="{{ route('kiosk.scan') }}"
+        data-login-url="{{ route('kiosk.login') }}"
         data-csrf="{{ csrf_token() }}"
     >
         <div class="kiosk-stage">

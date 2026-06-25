@@ -46,7 +46,7 @@
             </p>
             <button
                 type="button"
-                @click="go('email_login')"
+                @click="goEmailLogin()"
                 class="rounded-xl bg-hp-orange px-8 py-4 text-base font-semibold text-hp-white shadow-sm transition hover:brightness-95 active:scale-[0.98]"
             >
                 Log in with email

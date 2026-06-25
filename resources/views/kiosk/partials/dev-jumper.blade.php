@@ -4,7 +4,7 @@
 <div class="kiosk-devbar">
     <span class="self-center pr-1 text-[10px] font-semibold uppercase tracking-wider text-white/50">dev</span>
     <button type="button" @click="go('welcome')">welcome</button>
-    <button type="button" @click="go('email_login')">email</button>
+    <button type="button" @click="goEmailLogin()">email</button>
     <button type="button" @click="go('identity')">identity</button>
     <button type="button" @click="go('consent')">consent</button>
     <button type="button" @click="go('vitals')">vitals</button>

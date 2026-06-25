@@ -1,12 +1,45 @@
-{{-- Privacy consent (FR-KSK-04) — placeholder. --}}
+{{-- Privacy Consent (FR-KSK-04): RA 10173 notice shown once per session.
+     "I Agree" stamps state.consentAt (persisted to clinic_visits.privacy_consent_at
+     at final submit) and proceeds to Vitals. "Decline" resets to Welcome storing
+     NOTHING (no DB write happens on this screen either way). --}}
 <section class="kiosk-screen" x-show="state.screen === 'consent'" x-cloak>
-    <div class="flex w-full flex-col items-center justify-center gap-3 px-10 text-center">
-        <span class="rounded-full bg-hp-peach/40 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-hp-orange">Consent</span>
-        <h1 class="text-2xl font-semibold text-hp-slate">Privacy Consent</h1>
-        <p class="max-w-md text-sm text-hp-slate/70">Placeholder for FR-KSK-04 (RA 10173 text; Decline resets and stores nothing).</p>
-        <div class="mt-3 flex gap-3">
-            <button type="button" @click="go('welcome')" class="text-sm font-medium text-hp-slate/70 hover:underline">Decline</button>
-            <button type="button" @click="go('vitals')" class="rounded-xl bg-hp-orange px-6 py-3 text-sm font-semibold text-hp-white hover:brightness-95">I Agree — Proceed</button>
+    <div class="flex w-full flex-col items-center px-8 py-6">
+        <span class="rounded-full bg-hp-peach/40 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-hp-orange">Data Privacy</span>
+        <h1 class="mt-2 text-xl font-semibold text-hp-slate">Privacy Consent</h1>
+        <p class="mt-1 text-sm text-hp-slate/70">Republic Act No. 10173 — Data Privacy Act of 2012</p>
+
+        {{-- Scrollable notice --}}
+        <div class="mt-4 max-h-56 w-full max-w-xl overflow-y-auto rounded-2xl bg-hp-white p-5 text-left text-sm leading-relaxed text-hp-slate shadow-sm">
+            <p>
+                By proceeding, you consent to PSU University Health Services collecting
+                and processing your <strong>vital signs and health-screening responses</strong>
+                captured at this kiosk for the purpose of your medical clearance.
+            </p>
+            <p class="mt-3">
+                Your information will be reviewed only by authorized clinic staff (nurse and
+                University Physician), stored securely on University systems, and will
+                <strong>not</strong> be shared with third parties or used for any purpose
+                other than your clearance.
+            </p>
+            <p class="mt-3">
+                Under RA 10173 you have the right to access, correct, and object to the
+                processing of your personal data. This consent applies to
+                <strong>this session only</strong>.
+            </p>
+        </div>
+
+        {{-- Actions --}}
+        <div class="mt-5 flex items-center gap-3">
+            <button
+                type="button"
+                @click="reset()"
+                class="rounded-xl px-6 py-3 text-sm font-medium text-hp-slate/70 transition hover:text-hp-orange"
+            >Decline</button>
+            <button
+                type="button"
+                @click="agreeConsent()"
+                class="rounded-xl bg-hp-orange px-8 py-3 text-base font-semibold text-hp-white shadow-sm transition hover:brightness-95 active:scale-[0.98]"
+            >I Agree — Proceed</button>
         </div>
     </div>
 </section>

@@ -83,6 +83,11 @@ Route::prefix('kiosk')->name('kiosk.')->group(function () {
     Route::post('/scan', [KioskController::class, 'scan'])
         ->middleware('throttle:30,1')
         ->name('scan');
+    // Email fallback login (FR-KSK-02). Tighter throttle than scan — this is a
+    // credential check, so we cap brute-force attempts per kiosk IP.
+    Route::post('/login', [KioskController::class, 'login'])
+        ->middleware('throttle:10,1')
+        ->name('login');
 });
 
 // ── Dev component showcase (local only) ──────────────────────────────────────
