@@ -19,9 +19,17 @@
                (fonts, spacing, the QR target) scales with this, so tune the
                whole UI bigger/smaller from this one place. */
             --k-zoom: 1.3;
+            /* The vitals screen runs 30% larger for legibility of the readings
+               on the 7″ panel — applied ONLY while that screen is active (class
+               toggled by Alpine), so every other screen keeps the 1.3 baseline.
+               The 800×480 panel is pixel-based, so only rem content scales. */
+            --k-zoom-vitals: 1.69;
         }
         html {
             font-size: calc(100% * var(--k-zoom));
+        }
+        html.k-zoom-vitals {
+            font-size: calc(100% * var(--k-zoom-vitals));
         }
         html, body {
             margin: 0;
@@ -114,9 +122,17 @@
     <div
         x-data="kiosk()"
         x-ref="root"
+        {{-- Scale up only while the vitals screen is showing (see --k-zoom-vitals). --}}
+        x-effect="document.documentElement.classList.toggle('k-zoom-vitals', state.screen === 'vitals')"
         data-scan-url="{{ route('kiosk.scan') }}"
         data-login-url="{{ route('kiosk.login') }}"
         data-csrf="{{ csrf_token() }}"
+        {{-- Plausibility ranges (FR-KSK-08) + BMI flag threshold (BR-13) straight
+             from config/healthpass.php, so client checks match the server. --}}
+        data-config="{{ json_encode([
+            'validation' => config('healthpass.validation'),
+            'bmiObese' => config('healthpass.thresholds.bmi_obese'),
+        ]) }}"
     >
         <div class="kiosk-stage">
             {{-- Tapping anywhere on the panel returns focus to the scanner input. --}}

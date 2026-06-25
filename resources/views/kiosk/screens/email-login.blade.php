@@ -40,7 +40,13 @@
                 :class="state.login.field === 'email' ? 'border-hp-orange' : 'border-hp-slate/15'"
             >
                 <span class="text-[0.65rem] font-semibold uppercase tracking-wider text-hp-slate/50">Email</span>
-                <span class="min-h-[1.5rem] w-full break-all text-base text-hp-slate" x-text="state.login.email || ' '"></span>
+                {{-- Single line that scrolls sideways instead of wrapping/growing the
+                     field; auto-scrolls to the end so the latest typed text stays in view. --}}
+                <span
+                    class="block min-h-[1.5rem] w-full overflow-x-auto whitespace-nowrap text-base text-hp-slate [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                    x-text="state.login.email || ' '"
+                    x-effect="state.login.email; $nextTick(() => $el.scrollLeft = $el.scrollWidth)"
+                ></span>
             </button>
 
             {{-- Password (eye toggle) --}}
@@ -48,9 +54,15 @@
                 class="flex items-center rounded-xl border-2 bg-hp-white px-4 py-1.5 transition"
                 :class="state.login.field === 'password' ? 'border-hp-orange' : 'border-hp-slate/15'"
             >
-                <button type="button" @click="focusField('password')" class="flex flex-1 flex-col items-start text-left">
+                {{-- min-w-0 lets this flex item shrink below the text's width so the
+                     password scrolls inside it instead of pushing the eye icon (which
+                     stays fixed via shrink-0 on its button). --}}
+                <button type="button" @click="focusField('password')" class="flex min-w-0 flex-1 flex-col items-start text-left">
                     <span class="text-[0.65rem] font-semibold uppercase tracking-wider text-hp-slate/50">Password</span>
-                    <span class="min-h-[1.5rem] w-full break-all text-base text-hp-slate">
+                    <span
+                        class="block min-h-[1.5rem] w-full overflow-x-auto whitespace-nowrap text-base text-hp-slate [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                        x-effect="state.login.password; $nextTick(() => $el.scrollLeft = $el.scrollWidth)"
+                    >
                         <span x-show="!state.login.showPassword" x-text="'•'.repeat(state.login.password.length) || ' '"></span>
                         <span x-show="state.login.showPassword" x-text="state.login.password || ' '"></span>
                     </span>
