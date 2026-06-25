@@ -113,6 +113,24 @@ final class KioskController extends Controller
     }
 
     /**
+     * Final submit — STUB (FR-KSK-11 review → Complete).
+     *
+     * The real implementation (FR-KSK-12) will create, in one transaction, the
+     * clinic_visits + vital_signs + screening_responses rows and compute the
+     * authoritative flag booleans server-side (§7.4). For now this endpoint only
+     * acknowledges the payload so the front-end can advance to the Complete
+     * screen during kiosk-flow development. It deliberately persists NOTHING.
+     */
+    public function submit(Request $request): JsonResponse
+    {
+        return response()->json([
+            'ok' => true,
+            // Placeholder reference; FR-KSK-12 will mint the real HP-YYYY-#### here.
+            'reference' => 'HP-PENDING',
+        ]);
+    }
+
+    /**
      * Shape the student identity sent to the front-end (FR-KSK-03).
      *
      * Only display-safe fields leave the server — the kiosk never needs the

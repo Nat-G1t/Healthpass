@@ -126,6 +126,7 @@
         x-effect="document.documentElement.classList.toggle('k-zoom-vitals', state.screen === 'vitals')"
         data-scan-url="{{ route('kiosk.scan') }}"
         data-login-url="{{ route('kiosk.login') }}"
+        data-submit-url="{{ route('kiosk.submit') }}"
         data-csrf="{{ csrf_token() }}"
         {{-- Plausibility ranges (FR-KSK-08) + flag thresholds (BR-13) straight
              from config/healthpass.php, so client badges/checks match the server. --}}

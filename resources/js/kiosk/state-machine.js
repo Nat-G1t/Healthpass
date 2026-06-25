@@ -24,6 +24,27 @@ export const SCREENS = [
 
 export const VITAL_STEPS = 4;
 
+/**
+ * The nine body systems of the screening questionnaire (FR-KSK-10). Pure DATA —
+ * the Blade renders all nine cards from this list, so they are not nine copies
+ * of markup. `key` is the canonical screening_responses boolean column (PRD data
+ * dictionary §6); `label` is the on-screen title. Order matches the PRD.
+ */
+export const SYSTEMS = [
+    { key: 'vision', label: 'Vision / Eyes' },
+    { key: 'hearing', label: 'Hearing / Ears' },
+    { key: 'nose', label: 'Nose & Throat' },
+    { key: 'skin', label: 'Skin' },
+    { key: 'respiratory', label: 'Respiratory / Breathing' },
+    { key: 'heart', label: 'Heart / Circulation' },
+    { key: 'digestive', label: 'Digestive / Stomach' },
+    { key: 'bones', label: 'Bones & Joints' },
+    { key: 'nervous', label: 'Nervous / Neurological' },
+];
+
+// 9 system cards + the pregnancy item = 10 questions to answer (FR-KSK-10).
+export const QUESTION_COUNT = SYSTEMS.length + 1;
+
 // How long the "scanning" animation runs before a sensor reading settles to
 // "captured". Long enough to read the animation, short enough to feel snappy.
 const SCAN_MS = 1200;
@@ -143,7 +164,21 @@ function freshState() {
         // `draft` collects them and commits only when the last is confirmed.
         pad: { open: false, step: null, fieldIndex: 0, value: '', error: '', draft: {} },
 
-        questionnaire: {},
+        // 9-system screening + pregnancy (FR-KSK-10). `systems` maps a system
+        // key → true (Yes) | false (No); an unanswered system is simply absent.
+        // `isPregnant` is true | false | null (unanswered); `lmp` holds the Last
+        // Menstrual Period as an ISO 'YYYY-MM-DD' string, required only when
+        // pregnant. `calMonth` is the {year, month} the inline LMP calendar is
+        // viewing (month is 0-based, matching JS Date).
+        questionnaire: {
+            systems: {},
+            isPregnant: null,
+            lmp: null,
+            calMonth: null,
+        },
+
+        // Final-submit request sub-state (FR-KSK-11 → stub). Mirrors login/scan.
+        submit: { status: 'idle', error: '' }, // idle | sending | error
     };
 }
 
@@ -154,6 +189,10 @@ export function kioskMachine() {
         // Server-injected plausibility ranges + BMI threshold (config/healthpass.php).
         // Read once so client validation uses the SAME numbers as the server (FR-KSK-08).
         config: {},
+
+        // The nine screening systems, exposed so Blade can x-for over them
+        // (FR-KSK-10) — the cards are data-driven, not nine copies of markup.
+        systemList: SYSTEMS,
 
         // Tap bookkeeping for the disguised manual-entry gesture (see logoTap).
         _logoTaps: 0,
@@ -724,6 +763,220 @@ export function kioskMachine() {
             if (methods.every((m) => m === 'sensor')) return 'sensor';
             if (methods.every((m) => m === 'manual')) return 'manual';
             return 'mixed';
+        },
+
+        // ── 9-system questionnaire (FR-KSK-10) ───────────────────────────────
+        /** Record a Yes (true) / No (false) answer for one system card. */
+        setSystem(key, value) {
+            this.state.questionnaire.systems[key] = value;
+        },
+
+        /** A system's answer: true (Yes) | false (No) | undefined (unanswered). */
+        systemAnswer(key) {
+            return this.state.questionnaire.systems[key];
+        },
+
+        // ── Pregnancy + Last Menstrual Period (FR-KSK-10) ────────────────────
+        /**
+         * Answer the pregnancy question. "No" clears any LMP. "Yes" opens the
+         * inline calendar on the current month (so a date is one tap away) and
+         * leaves LMP unset — it stays required until a day is picked.
+         */
+        setPregnant(value) {
+            const q = this.state.questionnaire;
+            q.isPregnant = value;
+            if (value === false) {
+                q.lmp = null;
+                q.calMonth = null;
+                return;
+            }
+            if (q.calMonth === null) {
+                const now = new Date();
+                q.calMonth = { year: now.getFullYear(), month: now.getMonth() };
+            }
+        },
+
+        /** Heading for the calendar's current month, e.g. "June 2026". */
+        calMonthLabel() {
+            const c = this.state.questionnaire.calMonth;
+            if (!c) return '';
+            return new Date(c.year, c.month, 1).toLocaleDateString('en-US', {
+                month: 'long',
+                year: 'numeric',
+            });
+        },
+
+        /**
+         * Calendar cells for the current month: leading blanks (null) to align
+         * the 1st under its weekday, then 1..daysInMonth. Sunday-first grid.
+         */
+        calDays() {
+            const c = this.state.questionnaire.calMonth;
+            if (!c) return [];
+            const firstWeekday = new Date(c.year, c.month, 1).getDay(); // 0 = Sun
+            const daysInMonth = new Date(c.year, c.month + 1, 0).getDate();
+            const cells = [];
+            for (let i = 0; i < firstWeekday; i += 1) cells.push(null);
+            for (let d = 1; d <= daysInMonth; d += 1) cells.push(d);
+            return cells;
+        },
+
+        /** True when the calendar is showing the present month (block forward nav). */
+        calIsCurrentMonth() {
+            const c = this.state.questionnaire.calMonth;
+            const now = new Date();
+            return !!c && c.year === now.getFullYear() && c.month === now.getMonth();
+        },
+
+        calPrevMonth() {
+            const c = this.state.questionnaire.calMonth;
+            const d = new Date(c.year, c.month - 1, 1);
+            this.state.questionnaire.calMonth = { year: d.getFullYear(), month: d.getMonth() };
+        },
+
+        calNextMonth() {
+            // No future months — an LMP can't be after today (FR-KSK-10).
+            if (this.calIsCurrentMonth()) return;
+            const c = this.state.questionnaire.calMonth;
+            const d = new Date(c.year, c.month + 1, 1);
+            this.state.questionnaire.calMonth = { year: d.getFullYear(), month: d.getMonth() };
+        },
+
+        /** ISO 'YYYY-MM-DD' for a day in the current calendar month. */
+        calDayIso(day) {
+            const c = this.state.questionnaire.calMonth;
+            const mm = String(c.month + 1).padStart(2, '0');
+            const dd = String(day).padStart(2, '0');
+            return `${c.year}-${mm}-${dd}`;
+        },
+
+        /** A future date — disabled and unselectable (FR-KSK-10). */
+        calDayIsFuture(day) {
+            const c = this.state.questionnaire.calMonth;
+            const date = new Date(c.year, c.month, day);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            return date > today;
+        },
+
+        calDayIsSelected(day) {
+            return this.state.questionnaire.lmp === this.calDayIso(day);
+        },
+
+        /** Pick a day as the LMP (no-op for future dates). */
+        selectLmp(day) {
+            if (this.calDayIsFuture(day)) return;
+            this.state.questionnaire.lmp = this.calDayIso(day);
+        },
+
+        /** Human label for the chosen LMP, e.g. "June 3, 2026" ('' if none). */
+        lmpLabel() {
+            const lmp = this.state.questionnaire.lmp;
+            if (!lmp) return '';
+            const [y, m, d] = lmp.split('-').map(Number);
+            return new Date(y, m - 1, d).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+            });
+        },
+
+        // ── Completion gate (FR-KSK-10) ──────────────────────────────────────
+        /**
+         * Whether the pregnancy item counts as answered: "No" alone is enough,
+         * but "Yes" also requires an LMP date (FR-KSK-10).
+         */
+        pregnancyAnswered() {
+            const q = this.state.questionnaire;
+            return q.isPregnant === false || (q.isPregnant === true && q.lmp !== null);
+        },
+
+        /** How many of the 10 questions are answered (footer "{N} of 10"). */
+        answeredCount() {
+            const answered = SYSTEMS.filter(
+                (s) => this.state.questionnaire.systems[s.key] !== undefined,
+            ).length;
+            return answered + (this.pregnancyAnswered() ? 1 : 0);
+        },
+
+        /** All 10 answered → Review & Submit unlocks (FR-KSK-10). */
+        questionnaireComplete() {
+            return this.answeredCount() === QUESTION_COUNT;
+        },
+
+        /** Advance to Review only once every question is answered. */
+        goReview() {
+            if (this.questionnaireComplete()) this.go('review');
+        },
+
+        // ── Submit to clinic (FR-KSK-11 → stub) ──────────────────────────────
+        /**
+         * Assemble the full kiosk session for submission. Vitals are flattened
+         * to the columns the server will persist; screening maps each system to
+         * its boolean column (null if somehow unanswered) plus pregnancy/LMP.
+         * The AUTHORITATIVE flag booleans are computed server-side (§7.4) — the
+         * review screen's orange ⚑ are display-time hints only.
+         */
+        buildSubmission() {
+            const q = this.state.questionnaire;
+            const screening = {};
+            for (const s of SYSTEMS) screening[s.key] = q.systems[s.key] ?? null;
+            return {
+                studentUserId: this.state.identity?.studentUserId ?? null,
+                loginMethod: this.state.identity?.loginMethod ?? null,
+                privacyConsentAt: this.state.consentAt,
+                entryMethod: this.entryMethod(),
+                vitals: {
+                    height: this.fieldValue('height'),
+                    weight: this.fieldValue('weight'),
+                    bmi: this.bmiValue(),
+                    temperature: this.fieldValue('temperature'),
+                    systolic: this.fieldValue('systolic'),
+                    diastolic: this.fieldValue('diastolic'),
+                    heartRate: this.fieldValue('heartRate'),
+                },
+                screening: {
+                    ...screening,
+                    isPregnant: q.isPregnant,
+                    lastMenstrualPeriod: q.lmp,
+                },
+            };
+        },
+
+        /**
+         * POST the session to the submit endpoint (currently a stub; the full
+         * transactional write is FR-KSK-12, a later week). On success the kiosk
+         * advances to the Complete screen (FR-KSK-13).
+         */
+        async submitToClinic() {
+            if (this.state.submit.status === 'sending') return;
+            this.state.submit = { status: 'sending', error: '' };
+            try {
+                const response = await fetch(this.$refs.root.dataset.submitUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': this.$refs.root.dataset.csrf,
+                        Accept: 'application/json',
+                    },
+                    body: JSON.stringify(this.buildSubmission()),
+                });
+                const data = await response.json();
+                if (response.ok && data.ok) {
+                    this.state.submit = { status: 'idle', error: '' };
+                    this.go('complete');
+                    return;
+                }
+                this.state.submit = {
+                    status: 'error',
+                    error: data.message ?? 'Could not submit. Please try again.',
+                };
+            } catch {
+                this.state.submit = {
+                    status: 'error',
+                    error: 'Network problem submitting. Please try again.',
+                };
+            }
         },
     };
 }

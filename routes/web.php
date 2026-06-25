@@ -88,6 +88,12 @@ Route::prefix('kiosk')->name('kiosk.')->group(function () {
     Route::post('/login', [KioskController::class, 'login'])
         ->middleware('throttle:10,1')
         ->name('login');
+    // Final submit (FR-KSK-11 review → stub). The full transactional write of
+    // clinic_visits + vital_signs + screening_responses is FR-KSK-12 (a later
+    // week); for now this acknowledges the payload so the flow reaches Complete.
+    Route::post('/submit', [KioskController::class, 'submit'])
+        ->middleware('throttle:20,1')
+        ->name('submit');
 });
 
 // ── Dev component showcase (local only) ──────────────────────────────────────
