@@ -166,6 +166,7 @@
                 @include('kiosk.screens.welcome')
                 @include('kiosk.screens.email-login')
                 @include('kiosk.screens.identity')
+                @include('kiosk.screens.walkin')
                 @include('kiosk.screens.consent')
                 @include('kiosk.screens.vitals')
                 @include('kiosk.screens.questionnaire')

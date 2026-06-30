@@ -122,7 +122,7 @@ Student arrives at clinic
                     └── 9-item questionnaire + pregnancy/LMP
                     │
                     └── Review & Submit → Clinic Visit created (status: captured)
-                            │ (links to today's appointment if one exists, else walk-in)
+                            │ (links to today's MEDICAL appointment if one exists, else walk-in)
 
 Nurse sees visit in Live Queue
          │
@@ -157,8 +157,8 @@ Director analytics and flagged anomalies update from encoded records
 - Batch reasons: graduation clearance, OJT/practicum, general enrollment, scholarship, sports/athletics, field trip/educational tour, others.
 
 ### Visit linkage
-- On kiosk submit, the visit links to the student's booked appointment for that date if one exists (`appointment_id` FK).
-- If no appointment exists, it is a **walk-in** (`appointment_id` = null).
+- On kiosk submit, the visit links to the student's booked **medical** appointment for that date if one exists (`appointment_id` FK). Dental is scheduling-only (Decision D-3) and never links.
+- If no medical appointment exists, it is a **walk-in** (`appointment_id` = null) — including a student with only a dental booking that day.
 
 ### Rule-based vital flags (not diagnoses — screening signals only)
 
@@ -436,7 +436,7 @@ Welcome
   ├── QR scan (USB scanner as keyboard input; multi-line payload normalized to IDNo) → Identity
   └── "Lost ID?" → Email Login (virtual keyboard) → Identity
 
-Identity → Walk-in check (skip if a medical appt is booked today) → Privacy Consent → vital-height → vital-weight → vital-temp → vital-bp → Questionnaire → Review → Complete (12s auto-reset → Welcome)
+Identity → Walk-in check (skip if any appt — medical or dental — is booked today) → Privacy Consent → vital-height → vital-weight → vital-temp → vital-bp → Questionnaire → Review → Complete (12s auto-reset → Welcome)
 ```
 
 #### Screen 1 — Welcome
@@ -458,11 +458,11 @@ Identity → Walk-in check (skip if a medical appt is booked today) → Privacy 
 - "Not you?" (ghost lg) → resets to Welcome.
 
 #### Screen 3a — Walk-in Check / No Scheduled Clearance (FR-KSK-03a)
-- Shown only when the identified student has **no non-cancelled MEDICAL appointment dated today** (dental never counts — Decision D-3).
-- Calendar/info icon; "No Scheduled Clearance Today" heading; body explaining no clearance is booked for today.
+- Shown only when the identified student has **no non-cancelled appointment dated today at all — medical OR dental**.
+- Calendar/info icon; "No Scheduled Clearance Today" heading; body explaining nothing is booked for today.
 - "Proceed as Walk-in" (lg) → Privacy Consent (Screen 3b).
 - Exit / "Not now" (ghost lg) → resets to Welcome.
-- If a same-day medical appointment **does** exist, this screen is skipped and the flow goes straight to Privacy Consent (an optional brief "Appointment found ✓" toast may be shown). The submit-time `appointment_id` linkage (FR-KSK-12 / BR-10) is unchanged — this screen only moves the check earlier.
+- If ANY same-day appointment exists (medical or dental), this screen is skipped and the flow goes straight to Privacy Consent. The submit-time `appointment_id` linkage (FR-KSK-12 / BR-10) is **medical-only and unchanged** — a dental-only booking suppresses this screen but still records as a walk-in (`appointment_id` NULL); dental stays scheduling-only (Decision D-3).
 
 #### Screen 3b — Privacy Consent
 - Shield icon (orange stroke on peach bg).

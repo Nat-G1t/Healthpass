@@ -7,10 +7,12 @@ namespace App\Http\Controllers\Kiosk;
 use App\Actions\Kiosk\SubmitKioskVisit;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Kiosk\KioskSubmitRequest;
+use App\Models\Appointment;
 use App\Models\StudentProfile;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\View\View;
@@ -207,6 +209,11 @@ final class KioskController extends Controller
      * Only display-safe fields leave the server — the kiosk never needs the
      * full profile. `studentUserId` + `loginMethod` are carried so a later
      * week can stamp the clinic_visits row (login_method) at submit.
+     *
+     * `hasAppointmentToday` is computed HERE, server-side, so the Walk-in
+     * Check (FR-KSK-03a) can never be spoofed by client state: the front-end
+     * only uses this boolean to pick which screen to show. The authoritative
+     * appointment_id linkage is still re-resolved at submit.
      */
     private function identityPayload(StudentProfile $profile, string $loginMethod): array
     {
@@ -224,6 +231,26 @@ final class KioskController extends Controller
             'college' => $profile->college?->name,
             'course' => $profile->course,
             'yearLevel' => $profile->year_level,
+            'hasAppointmentToday' => $this->hasAppointmentToday($profile->user_id),
         ];
+    }
+
+    /**
+     * Walk-in Check (FR-KSK-03a): does this student have ANY non-cancelled
+     * appointment dated today — medical OR dental? When false (literally
+     * nothing booked today), the kiosk shows the "No Scheduled Clearance
+     * Today" screen; when true, it goes straight to Privacy Consent.
+     *
+     * Dental is still scheduling-only (Decision D-3): it suppresses this notice
+     * but does NOT link at submit — a dental-only student proceeds through the
+     * medical vitals flow and is recorded as a walk-in (appointment_id NULL).
+     */
+    private function hasAppointmentToday(int $studentId): bool
+    {
+        return Appointment::query()
+            ->where('student_id', $studentId)
+            ->whereDate('scheduled_date', Carbon::today())
+            ->where('status', '!=', 'cancelled')
+            ->exists();
     }
 }

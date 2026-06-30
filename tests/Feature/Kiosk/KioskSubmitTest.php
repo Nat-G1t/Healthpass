@@ -156,7 +156,7 @@ class KioskSubmitTest extends TestCase
     public function test_booked_student_links_todays_appointment(): void
     {
         $student = $this->student();
-        $appointment = Appointment::factory()->create([
+        $appointment = Appointment::factory()->medical()->create([
             'student_id' => $student->id,
             'scheduled_date' => now()->toDateString(),
             'status' => 'scheduled',
@@ -165,6 +165,25 @@ class KioskSubmitTest extends TestCase
         $this->submit($student->id)->assertOk();
 
         $this->assertSame($appointment->id, ClinicVisit::first()->appointment_id);
+    }
+
+    /**
+     * Dental is scheduling-only (Decision D-3) and never enters the kiosk loop:
+     * a student with only a dental appointment today is a WALK-IN, so the submit
+     * linkage stays NULL — consistent with the Walk-in Check gate (FR-KSK-03a).
+     */
+    public function test_dental_only_same_day_appointment_is_a_walk_in(): void
+    {
+        $student = $this->student();
+        Appointment::factory()->dental()->create([
+            'student_id' => $student->id,
+            'scheduled_date' => now()->toDateString(),
+            'status' => 'scheduled',
+        ]);
+
+        $this->submit($student->id)->assertOk();
+
+        $this->assertNull(ClinicVisit::first()->appointment_id);
     }
 
     public function test_walk_in_gets_null_appointment(): void

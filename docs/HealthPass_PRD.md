@@ -149,10 +149,11 @@ Student arrives at clinic (booked or walk-in)
          └── Kiosk login (QR scan via USB scanner OR email + virtual keyboard)
                 │
                 └── Identity Confirm → Walk-in check (FR-KSK-03a):
-                │     no non-cancelled MEDICAL appointment dated today
+                │     no non-cancelled appointment dated today (medical OR dental)
                 │     → "No Scheduled Clearance Today" → Proceed as Walk-in
-                │       (or exit to Welcome); a same-day medical appointment
-                │       proceeds as today. Dental never counts (Decision D-3).
+                │       (or exit to Welcome); any same-day appointment skips the
+                │       notice. Dental suppresses the notice but never links at
+                │       submit — it stays scheduling-only (Decision D-3).
                 │
                 └── Privacy consent (RA 10173) — decline resets to Welcome
                 │
@@ -162,7 +163,7 @@ Student arrives at clinic (booked or walk-in)
                 └── 9-item body-system questionnaire + pregnancy/LMP
                 │
                 └── Review & Submit → Clinic Visit created (status: captured)
-                        (links to today's appointment if one exists, else walk-in)
+                        (links to today's MEDICAL appointment if one exists, else walk-in)
 
 Nurse sees the visit in the Live Queue (polling, ≤ 5 s)
          │
@@ -265,7 +266,7 @@ The kiosk is the route `/kiosk` rendered full-screen in Chromium kiosk mode on t
 | FR-KSK-01 | **Welcome screen:** pulsing QR target + "Tap to Scan Your ID" on the left, divider, "Lost ID? Log in with email" on the right. The page shall keep an invisible focused input so a USB QR scanner (keyboard-wedge) can type the `qr_token` + Enter at any time. | M |
 | FR-KSK-02 | **Email login screen:** email + password fields with an on-screen QWERTY virtual keyboard (4 rows incl. digits and `@ . _ -`, Delete/Space/Enter; Enter orange, Delete peach); typing routes to the focused field; password has an eye toggle; "← Cancel" returns to Welcome. | M |
 | FR-KSK-03 | **Identity Confirm:** large initials avatar, "Identity Verified ✓", greeting with first name, college/course/year/student number, "That's me — Continue" and "Not you?" (resets to Welcome). | M |
-| FR-KSK-03a | **Walk-in check (after Identity Confirm, before Privacy Consent):** the kiosk shall look up whether the identified student has a **non-cancelled MEDICAL appointment dated today** (dental is scheduling-only — Decision D-3 — and never counts). **If none exists**, a "No Scheduled Clearance Today" screen shall explain that no clearance is booked for today and offer **"Proceed as Walk-in"** (→ Privacy Consent) and an exit/cancel action (→ Welcome). **If a same-day medical appointment exists**, the flow proceeds to Privacy Consent as today (an optional brief "Appointment found ✓" confirmation may be shown). This screen is a UI gate only — it surfaces the appointment check earlier; the submit-time linkage in FR-KSK-12 / BR-10 (`appointment_id` = today's appointment else NULL) is **unchanged**. | S |
+| FR-KSK-03a | **Walk-in check (after Identity Confirm, before Privacy Consent):** the kiosk shall look up whether the identified student has **any non-cancelled appointment dated today — medical *or* dental**. **If none exists** (literally nothing booked today), a "No Scheduled Clearance Today" screen shall explain that no appointment is booked for today and offer **"Proceed as Walk-in"** (→ Privacy Consent) and an exit/cancel action (→ Welcome). **If a same-day appointment exists** (medical or dental), this screen is skipped and the flow proceeds to Privacy Consent. This screen is a UI gate only. The submit-time linkage in FR-KSK-12 / BR-10 remains **MEDICAL-only and unchanged** (`appointment_id` = today's medical appointment else NULL): a dental-only same-day booking suppresses the notice but still proceeds through the medical vitals flow and is recorded as a **walk-in** (`appointment_id` NULL) — dental stays scheduling-only (Decision D-3) and never links. | S |
 | FR-KSK-04 | **Privacy Consent (per session):** RA 10173 text with "I Agree — Proceed" and "Decline" (Decline resets to Welcome and stores nothing). Agreement timestamps `clinic_visits.privacy_consent_at`. | M |
 | FR-KSK-05 | **Vitals sequence** of four steps with progress dots — Height (cm) → Weight (kg, with computed BMI panel showing value + status + "from X cm + Y kg") → Temperature (°C) → Blood Pressure (systolic/diastolic mmHg + Heart Rate bpm in a peach sub-panel). Each step has a 3-phase UI: ready (instructions) → scanning (animation) → captured (large value + unit + status badge), with Retry and Next actions. | M |
 | FR-KSK-06 | **Manual entry shall exist on every vital step as a first-class path** (Decision D-7): a "Enter manually" action opens a numeric on-screen pad; manual values pass the same validation ranges. The visit's `vital_signs.entry_method` records `sensor`, `manual`, or `mixed`. | M |
@@ -628,7 +629,7 @@ Non-programmer team across all sprints: paper title/scope revision (R-6), test c
 | D-13 | **Live Queue is FIFO (oldest first)** — top row = next to serve ("NEXT" badge); new arrivals append at the bottom | Matches real clinic fairness (first come, first served); the prototype's emphasized row-1 styling maps cleanly to "next to serve" |
 | D-14 | **Registration (Step 4) and late-linking (My ID) use in-browser camera or photo upload** for QR capture, decoded client-side by `html5-qrcode`; only the extracted `IDNo` is POSTed and stored as `qr_token`. | Students register on personal phones/laptops — a USB scanner is not available there. Camera/upload is the only viable primary path on personal devices. |
 | D-15 | **Booking available on weekends (clinic open daily)** — past dates still unbookable; capacity rule unchanged | Scope change approved by team/adviser |
-| D-16 | **Kiosk surfaces a walk-in confirmation gate** (FR-KSK-03a) after Identity Confirm and before Privacy Consent, shown only when the student has no non-cancelled medical appointment dated today (dental excluded). Submit-time `appointment_id` linkage (FR-KSK-12 / BR-10) is unchanged — the check is moved earlier and given a UI gate. | Sets the student's expectation up front (booked clearance vs. walk-in) without altering how the visit links to an appointment; dental stays scheduling-only (D-3). |
+| D-16 | **Kiosk surfaces a walk-in confirmation gate** (FR-KSK-03a) after Identity Confirm and before Privacy Consent, shown only when the student has **no non-cancelled appointment dated today at all — medical *or* dental**. Submit-time `appointment_id` linkage (FR-KSK-12 / BR-10) stays **medical-only** and unchanged. | Sets the student's expectation up front (anything booked today vs. nothing) without altering how the visit links to an appointment. A dental booking suppresses the "no clearance" notice but does not link at submit — dental stays scheduling-only (D-3), so a dental-only student records as a walk-in. |
 | D-17 | **Student college is self-editable; current `college_id` drives all forward-looking behavior, a per-visit snapshot freezes history.** Changing a student's college re-scopes them live: future kiosk visits and College-Admin student lists/batch eligibility follow the current `student_profiles.college_id`, so admin reassignment is automatic (no manual move). Historical analytics stay frozen because each `clinic_visits` row snapshots `college_id` at submit (FR-KSK-12); FR-ANL-02/03/05/08 read that snapshot, so a transfer never re-attributes past cases or flags. | One editable field serves both "where the student is now" and "where they were screened" without a separate transfer table or history log. |
 
 ---
