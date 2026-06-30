@@ -27,6 +27,7 @@ Pampanga State University · College of Computing Studies · Capstone Project
 | 0.x | Pre-June 2026 | Team | Earlier AI-powered kiosk concept (superseded — see §1.3) |
 | 1.0 | June 11, 2026 | N. Medina | Baseline PRD for the no-AI HealthPass system. Incorporates locked schema decisions: BP flag threshold 140/90, `vital_signs.entry_method`, `batch_requests.scheduled_date`, clinic capacity as config value. |
 | 1.1 | June 16, 2026 | N. Medina | Added optional middle_name to student_profiles and the registration Step 2 form, aligning capture with the Middle Name field on official form DHVSU-QSP-OSS-004-FO002-R03. |
+| 1.2 | June 30, 2026 | N. Medina | Three spec changes: (1) login page becomes a two-panel layout (login card + right illustration, curved divider, collapses on narrow screens; card internals unchanged) — FR-AUTH-08; (2) student college becomes self-editable on transfer, with analytics frozen to a capture-time snapshot via a new `clinic_visits.college_id` column — FR-STU-09 (schema add flagged); (3) new kiosk walk-in confirmation gate after Identity Confirm when no medical appointment is booked today — FR-KSK-03a / Decision D-16 (submit-time appointment linkage unchanged). |
 
 ---
 
@@ -146,6 +147,12 @@ Student arrives at clinic (booked or walk-in)
          │
          └── Kiosk login (QR scan via USB scanner OR email + virtual keyboard)
                 │
+                └── Identity Confirm → Walk-in check (FR-KSK-03a):
+                │     no non-cancelled MEDICAL appointment dated today
+                │     → "No Scheduled Clearance Today" → Proceed as Walk-in
+                │       (or exit to Welcome); a same-day medical appointment
+                │       proceeds as today. Dental never counts (Decision D-3).
+                │
                 └── Privacy consent (RA 10173) — decline resets to Welcome
                 │
                 └── Vitals: Height → Weight (+ auto BMI) → Temperature → BP (+ Heart Rate)
@@ -185,7 +192,7 @@ Notation: each requirement has an ID, a MoSCoW priority — **M**ust (defense-cr
 | FR-AUTH-05 | Staff accounts (`nurse`, `college_admin`, `director`) shall be created only via database seeders / provisioning — no public staff registration path shall exist. | M |
 | FR-AUTH-06 | College Admin accounts shall carry a non-null `managed_college_id`; **all** Admin queries shall be filtered by this value server-side. The value shall never be settable through any Admin-facing request. | M |
 | FR-AUTH-07 | The system shall support an `active`/`inactive` user status; inactive users cannot log in. | S |
-| FR-AUTH-08 | The login screen shall follow the prototype: centered 420px column, HPLogo + tagline, email + password (with eye toggle), "Register here" link, RA 10173 footer note. | S |
+| FR-AUTH-08 | The login **page** shall use a **two-panel layout**: the login **card** on the left (the existing 420px column — HPLogo + tagline, email + password with eye toggle, "Register here" link, RA 10173 footer note; **card internals unchanged**) and a decorative illustration panel on the right, separated by a **curved/organic divider**. On narrow screens the layout **collapses back to the centered single-column card** (illustration panel hidden). Visual source of truth for the login page: the mockup in `docs/prototypes/web/`. | S |
 | FR-AUTH-09 | Session handling, CSRF protection, and password reset shall use Laravel/Breeze defaults. | M |
 
 **AC (module):** logging in as each seeded role lands on the correct dashboard; a student manually entering `/nurse/queue` is rejected; the CCS admin's student list returns only CCS students even when query parameters are tampered with; an inactive account is refused with a clear message.
@@ -217,7 +224,7 @@ Notation: each requirement has an ID, a MoSCoW priority — **M**ust (defense-cr
 | FR-STU-06 | Students may cancel their own `scheduled` appointments before the appointment date; cancellation is reachable from the dashboard Next Appointment card. | S |
 | FR-STU-07 | **My Records** shall list the student's clinic visits/clearances (Date, Service, Result badge, Reference No.) with a View action opening a record modal: left column = kiosk vitals (height, weight, BMI, temp, HR, BP) + case category badge if present; right column = the 9 questionnaire answers as Yes/No badges (Yes = flagged style). | M |
 | FR-STU-08 | The student shall **never** see the Fit/Unfit determination on the kiosk; results become visible in My Records only after nurse encoding. | M |
-| FR-STU-09 | **My ID & Profile** shall show the student's kiosk QR code (generated via `simplesoftwareio/simple-qrcode` from `qr_token`) with an Active badge, plus read-only profile fields, and an Edit Profile modal for: name, email, course, year, address, DOB, place of birth, civil status. Student number, college, and sex are not self-editable. | M |
+| FR-STU-09 | **My ID & Profile** shall show the student's kiosk QR code (generated via `simplesoftwareio/simple-qrcode` from `qr_token`) with an Active badge, plus read-only profile fields, and an Edit Profile modal for: name, email, course, year, **college** (students transfer colleges — self-editable), address, DOB, place of birth, civil status. Student number and sex are not self-editable. Changing **college** immediately re-scopes the student to the new College Admin (they leave the prior admin's student list and batch eligibility and appear under the new one); already-encoded `clearance_records` keep the college recorded at capture time (snapshot on `clinic_visits.college_id`, §6.2), so analytics history does not move. | M |
 | FR-STU-10 | If the student skipped QR linking at registration, the My ID screen shall offer the same in-browser capture flow used in Step 4: camera or uploaded ID photo decoded by `html5-qrcode`, `IDNo` extracted, IDNo↔`student_number` match verified, then bound as `qr_token`. | M |
 
 **AC:** booking a full day is impossible from the UI and rejected server-side if forced; the calendar never allows a Saturday/Sunday or yesterday; a fresh student sees an empty-state dashboard without errors; the QR rendered on My ID scans back to the same `qr_token` at the kiosk.
@@ -257,6 +264,7 @@ The kiosk is the route `/kiosk` rendered full-screen in Chromium kiosk mode on t
 | FR-KSK-01 | **Welcome screen:** pulsing QR target + "Tap to Scan Your ID" on the left, divider, "Lost ID? Log in with email" on the right. The page shall keep an invisible focused input so a USB QR scanner (keyboard-wedge) can type the `qr_token` + Enter at any time. | M |
 | FR-KSK-02 | **Email login screen:** email + password fields with an on-screen QWERTY virtual keyboard (4 rows incl. digits and `@ . _ -`, Delete/Space/Enter; Enter orange, Delete peach); typing routes to the focused field; password has an eye toggle; "← Cancel" returns to Welcome. | M |
 | FR-KSK-03 | **Identity Confirm:** large initials avatar, "Identity Verified ✓", greeting with first name, college/course/year/student number, "That's me — Continue" and "Not you?" (resets to Welcome). | M |
+| FR-KSK-03a | **Walk-in check (after Identity Confirm, before Privacy Consent):** the kiosk shall look up whether the identified student has a **non-cancelled MEDICAL appointment dated today** (dental is scheduling-only — Decision D-3 — and never counts). **If none exists**, a "No Scheduled Clearance Today" screen shall explain that no clearance is booked for today and offer **"Proceed as Walk-in"** (→ Privacy Consent) and an exit/cancel action (→ Welcome). **If a same-day medical appointment exists**, the flow proceeds to Privacy Consent as today (an optional brief "Appointment found ✓" confirmation may be shown). This screen is a UI gate only — it surfaces the appointment check earlier; the submit-time linkage in FR-KSK-12 / BR-10 (`appointment_id` = today's appointment else NULL) is **unchanged**. | S |
 | FR-KSK-04 | **Privacy Consent (per session):** RA 10173 text with "I Agree — Proceed" and "Decline" (Decline resets to Welcome and stores nothing). Agreement timestamps `clinic_visits.privacy_consent_at`. | M |
 | FR-KSK-05 | **Vitals sequence** of four steps with progress dots — Height (cm) → Weight (kg, with computed BMI panel showing value + status + "from X cm + Y kg") → Temperature (°C) → Blood Pressure (systolic/diastolic mmHg + Heart Rate bpm in a peach sub-panel). Each step has a 3-phase UI: ready (instructions) → scanning (animation) → captured (large value + unit + status badge), with Retry and Next actions. | M |
 | FR-KSK-06 | **Manual entry shall exist on every vital step as a first-class path** (Decision D-7): a "Enter manually" action opens a numeric on-screen pad; manual values pass the same validation ranges. The visit's `vital_signs.entry_method` records `sensor`, `manual`, or `mixed`. | M |
@@ -305,8 +313,8 @@ The kiosk is the route `/kiosk` rendered full-screen in Chromium kiosk mode on t
 | ID | Requirement | Priority |
 |---|---|---|
 | FR-ANL-01 | **Director Dashboard** shall show KPI cards plus two preview panels — Pending Batch Approvals (count + preview rows → Batch Approvals) and Flagged Anomalies (count + preview rows → Flagged Anomalies) — each with "View all →". | M |
-| FR-ANL-02 | **Analytics — Medical Cases by College:** a horizontal stacked bar chart (Chart.js), one row per college/unit (all 12 units), each bar segmented by the 8 medical-system categories, sorted by total case volume descending, with a total-cases headline (e.g. '235 total cases'). Subtitle: 'Total cases per college, broken down by medical system — sorted by volume.' Students only — Faculty and NASA excluded. Series colors follow the prototype legend. Source: encoded `clearance_records` with non-null `case_category`, grouped by `student_profiles.college_id` × `case_category`. | M |
-| FR-ANL-03 | **Summary of Medical Cases matrix:** 8 medical-system rows × 12 college-code columns + a TOTAL column and a totals row. Fixed column order: COE, CEA, CBS, CAS, CSSP, CCS, CHTM, CIT, LAW, GS, SHS, LHS. Subtitle: 'Rows = medical system · Columns = college · Faculty & NASA excluded.' Source: encoded `clearance_records` with non-null `case_category`, grouped by `student_profiles.college_id` × `case_category`; NULL-category records excluded. | M |
+| FR-ANL-02 | **Analytics — Medical Cases by College:** a horizontal stacked bar chart (Chart.js), one row per college/unit (all 12 units), each bar segmented by the 8 medical-system categories, sorted by total case volume descending, with a total-cases headline (e.g. '235 total cases'). Subtitle: 'Total cases per college, broken down by medical system — sorted by volume.' Students only — Faculty and NASA excluded. Series colors follow the prototype legend. Source: encoded `clearance_records` with non-null `case_category`, grouped by `clinic_visits.college_id` (the capture-time college snapshot — a later transfer does not re-attribute past cases, FR-STU-09) × `case_category`. | M |
+| FR-ANL-03 | **Summary of Medical Cases matrix:** 8 medical-system rows × 12 college-code columns + a TOTAL column and a totals row. Fixed column order: COE, CEA, CBS, CAS, CSSP, CCS, CHTM, CIT, LAW, GS, SHS, LHS. Subtitle: 'Rows = medical system · Columns = college · Faculty & NASA excluded.' Source: encoded `clearance_records` with non-null `case_category`, grouped by `clinic_visits.college_id` (capture-time college snapshot, FR-STU-09) × `case_category`; NULL-category records excluded. | M |
 | FR-ANL-04 | **By-Sex donut** (Chart.js): Male vs Female counts of encoded records, center total, legend with count + %. | M |
 | FR-ANL-05 | **Flagged Anomalies screen:** three stat cards (High Blood Pressure, Fever, Abnormal BMI counts) and a table (Student, College, Flag badge, Value, Category, View), sourced from visits where any of `is_bp_flagged / is_temp_flagged / is_bmi_flagged` is true. | M |
 | FR-ANL-06 | **Export:** an Export action on Analytics and Flagged Anomalies producing at minimum a CSV of the underlying rows (print-friendly view acceptable as fallback). | S |
@@ -391,7 +399,7 @@ The finalized ERD (rendered June 10, 2026 in the project workspace) is the schem
 | `appointments` | Solo + batch-generated bookings | **id**, reference_no UQ, student_id →users, service_type, scheduled_date, status (scheduled/checked_in/completed/cancelled), source (self/batch), batch_request_id →batch_requests NULL, created_by →users NULL |
 | `batch_requests` | College Admin cohort requests | **id**, reference_no UQ, college_id →colleges, requested_by →users, reason, reason_detail, service_type, **scheduled_date NULL (new)**, status (pending/approved/rejected), reviewed_by →users NULL, reviewed_at |
 | `batch_request_students` | Batch ↔ student pivot | **id**, batch_request_id →, student_id →users, appointment_id →appointments NULL (set on approval); UQ(batch_request_id, student_id) |
-| `clinic_visits` | One kiosk session | **id**, reference_no UQ, student_id →users, appointment_id →appointments NULL (=walk-in), login_method (qr/email), status (captured/encoded), privacy_consent_at, checked_in_at |
+| `clinic_visits` | One kiosk session | **id**, reference_no UQ, student_id →users, **college_id →colleges (new — capture-time snapshot for transfer-proof analytics, FR-STU-09)**, appointment_id →appointments NULL (=walk-in), login_method (qr/email), status (captured/encoded), privacy_consent_at, checked_in_at |
 | `vital_signs` | 1:1 vitals per visit | **id**, clinic_visit_id UQ →, height_cm, weight_kg, bmi, temperature_c, heart_rate_bpm, bp_systolic, bp_diastolic, is_temp_flagged, is_bp_flagged, is_bmi_flagged, **entry_method (new)** |
 | `screening_responses` | 1:1 questionnaire per visit | **id**, clinic_visit_id UQ →, vision, hearing, nose, skin, respiratory, heart, digestive, bones, nervous (booleans), is_pregnant, last_menstrual_period NULL |
 | `clearance_records` | 1:0..1 encoded result per visit | **id**, clinic_visit_id UQ →, encoded_by →users, result (Fit/Unfit), case_category NULL, purpose NULL, nurse_notes, physician_name (default Alipio), physician_license_no (default 60252), encoded_at, printed_at |
@@ -463,7 +471,7 @@ Icons: Lucide-style outline set (24px viewBox, stroke 2) — Home, Calendar, Fil
 | College Admin | Dashboard · New Batch Request (+ confirmation) · Batch Tracking |
 | Nurse | Live Queue · Encode Result (+ print preview iframe) · Enable Kiosk Mode |
 | Director | Dashboard · Batch Approvals · Analytics · Flagged Anomalies |
-| Kiosk (`/kiosk`) | Welcome · Email Login · Identity Confirm · Privacy Consent · Vitals ×4 · Questionnaire · Review · Complete |
+| Kiosk (`/kiosk`) | Welcome · Email Login · Identity Confirm · Walk-in Check (No Scheduled Clearance — FR-KSK-03a) · Privacy Consent · Vitals ×4 · Questionnaire · Review · Complete |
 
 The page-by-page behavioural spec in `HealthPass_Context.md` §7 (field lists, button states, empty/disabled rules, exact copy) is **incorporated by reference** and is binding for implementation.
 
@@ -619,6 +627,7 @@ Non-programmer team across all sprints: paper title/scope revision (R-6), test c
 | D-13 | **Live Queue is FIFO (oldest first)** — top row = next to serve ("NEXT" badge); new arrivals append at the bottom | Matches real clinic fairness (first come, first served); the prototype's emphasized row-1 styling maps cleanly to "next to serve" |
 | D-14 | **Registration (Step 4) and late-linking (My ID) use in-browser camera or photo upload** for QR capture, decoded client-side by `html5-qrcode`; only the extracted `IDNo` is POSTed and stored as `qr_token`. | Students register on personal phones/laptops — a USB scanner is not available there. Camera/upload is the only viable primary path on personal devices. |
 | D-15 | **Booking available on weekends (clinic open daily)** — past dates still unbookable; capacity rule unchanged | Scope change approved by team/adviser |
+| D-16 | **Kiosk surfaces a walk-in confirmation gate** (FR-KSK-03a) after Identity Confirm and before Privacy Consent, shown only when the student has no non-cancelled medical appointment dated today (dental excluded). Submit-time `appointment_id` linkage (FR-KSK-12 / BR-10) is unchanged — the check is moved earlier and given a UI gate. | Sets the student's expectation up front (booked clearance vs. walk-in) without altering how the visit links to an appointment; dental stays scheduling-only (D-3). |
 
 ---
 
