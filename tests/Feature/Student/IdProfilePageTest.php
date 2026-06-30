@@ -22,7 +22,8 @@ use Tests\TestCase;
  * confirmation leaves the email untouched.
  *
  * AC: the QR rendered on My ID scans back to the same qr_token at the kiosk;
- *     student number, college, and sex are not self-editable.
+ *     student number and sex are not self-editable. College IS editable
+ *     (students transfer, FR-STU-09 / D-17) and is validated against colleges.id.
  */
 class IdProfilePageTest extends TestCase
 {
@@ -32,7 +33,9 @@ class IdProfilePageTest extends TestCase
 
     private function college(): College
     {
-        return College::create(['code' => 'CCS', 'name' => 'College of Computing Studies']);
+        // Idempotent so it can be called both to seed the profile and to resolve
+        // the default college_id in validPayload() within the same test.
+        return College::firstOrCreate(['code' => 'CCS'], ['name' => 'College of Computing Studies']);
     }
 
     /**
@@ -76,6 +79,7 @@ class IdProfilePageTest extends TestCase
             'middle_name' => 'Reyes',
             'last_name' => 'Cruz',
             'email' => 'juan@example.com',
+            'college_id' => $this->college()->id,
             'course' => 'BS Computer Science',
             'year_level' => '4',
             'date_of_birth' => '2003-05-15',
@@ -183,16 +187,64 @@ class IdProfilePageTest extends TestCase
     {
         $student = $this->studentWithProfile('2023-12345');
 
+        // Valid request (college_id is the student's own, so it passes validation),
+        // but student_number and sex are forged. They must be dropped, not saved —
+        // proving they're locked regardless of what the POST contains.
         $this->actingAs($student)->patch(route('student.id-profile.update'), $this->validPayload([
             'student_number' => '9999-99999',
-            'college_id' => 999,
             'sex' => 'F',
-        ]));
+        ]))->assertSessionHasNoErrors();
 
         $this->assertDatabaseHas('student_profiles', [
             'user_id' => $student->id,
             'student_number' => '2023-12345',
             'sex' => 'M',
+        ]);
+    }
+
+    // ── FR-STU-09: college is editable on transfer ───────────────────────────────
+
+    public function test_update_changes_college_and_reflects_on_profile(): void
+    {
+        $student = $this->studentWithProfile('2023-12345');
+        $newCollege = College::create(['code' => 'CEA', 'name' => 'College of Engineering and Architecture']);
+
+        $response = $this->actingAs($student)->patch(
+            route('student.id-profile.update'),
+            $this->validPayload(['college_id' => $newCollege->id])
+        );
+
+        $response->assertRedirect(route('student.id-profile'));
+        $response->assertSessionHas('status');
+
+        // Live college re-scoped on the profile…
+        $this->assertDatabaseHas('student_profiles', [
+            'user_id' => $student->id,
+            'college_id' => $newCollege->id,
+        ]);
+
+        // …and shown on the My ID page.
+        $this->actingAs($student)->get(route('student.id-profile'))
+            ->assertOk()
+            ->assertSee('College of Engineering and Architecture');
+    }
+
+    public function test_update_rejects_invalid_college_id(): void
+    {
+        $student = $this->studentWithProfile('2023-12345');
+        $originalCollegeId = $student->studentProfile->college_id;
+
+        $response = $this->actingAs($student)->patch(
+            route('student.id-profile.update'),
+            $this->validPayload(['college_id' => 999]) // no such college
+        );
+
+        $response->assertSessionHasErrors('college_id');
+
+        // College left untouched — a forged id can't re-scope the student.
+        $this->assertDatabaseHas('student_profiles', [
+            'user_id' => $student->id,
+            'college_id' => $originalCollegeId,
         ]);
     }
 

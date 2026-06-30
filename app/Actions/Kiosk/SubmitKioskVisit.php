@@ -6,6 +6,7 @@ namespace App\Actions\Kiosk;
 
 use App\Models\Appointment;
 use App\Models\ClinicVisit;
+use App\Models\StudentProfile;
 use App\Services\ReferenceNumberService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -46,6 +47,9 @@ final class SubmitKioskVisit
             $visit = ClinicVisit::create([
                 'reference_no' => $this->references->generateVisitRef(),
                 'student_id' => $data['studentUserId'],
+                // Freeze the student's college NOW (FR-STU-09 snapshot, D-17): a
+                // later transfer must not re-attribute this visit's flags/cases.
+                'college_id' => $this->studentCollegeId((int) $data['studentUserId']),
                 'appointment_id' => $this->todaysAppointmentId((int) $data['studentUserId']), // null = walk-in (BR-10)
                 'login_method' => $data['loginMethod'],
                 'status' => 'captured', // until the nurse encodes (BR-11)
@@ -85,6 +89,15 @@ final class SubmitKioskVisit
 
             return $visit;
         });
+    }
+
+    /**
+     * The student's current college id — captured as the visit's frozen snapshot
+     * (FR-STU-09). Always present: every student profile carries a non-null college.
+     */
+    private function studentCollegeId(int $studentId): int
+    {
+        return (int) StudentProfile::where('user_id', $studentId)->value('college_id');
     }
 
     /**

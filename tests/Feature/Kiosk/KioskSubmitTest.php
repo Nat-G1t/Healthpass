@@ -188,6 +188,45 @@ class KioskSubmitTest extends TestCase
         $this->assertNull(ClinicVisit::first()->appointment_id);
     }
 
+    // ── College snapshot, transfer-proof (FR-STU-09 / D-17) ───────────────────
+
+    public function test_visit_snapshots_college_and_survives_a_transfer(): void
+    {
+        $ccs = College::firstOrCreate(['code' => 'CCS'], ['name' => 'College of Computing Studies']);
+        $cea = College::create(['code' => 'CEA', 'name' => 'College of Engineering and Architecture']);
+
+        $profile = StudentProfile::factory()->forCollege($ccs)->create();
+        $student = $profile->user;
+
+        // Visit 1 captured while the student is still in CCS.
+        $this->submit($student->id)->assertOk();
+        $firstVisit = ClinicVisit::latest('id')->first();
+        $this->assertSame($ccs->id, $firstVisit->college_id);
+
+        // The student transfers to CEA (their LIVE college changes)…
+        $profile->update(['college_id' => $cea->id]);
+
+        // …Visit 2 snapshots the NEW college.
+        $this->submit($student->id)->assertOk();
+        $secondVisit = ClinicVisit::latest('id')->first();
+        $this->assertSame($cea->id, $secondVisit->college_id);
+
+        // The OLD visit is untouched — a past case is never re-attributed.
+        $this->assertSame($ccs->id, $firstVisit->fresh()->college_id);
+
+        // Grouping by the snapshot (the FR-ANL-05/08 source) counts the old visit
+        // under CCS and the new one under CEA, even though the student's current
+        // college is now CEA for their profile and all future data.
+        $byCollege = ClinicVisit::query()
+            ->selectRaw('college_id, COUNT(*) as total')
+            ->groupBy('college_id')
+            ->pluck('total', 'college_id');
+
+        $this->assertSame(1, (int) $byCollege[$ccs->id]);
+        $this->assertSame(1, (int) $byCollege[$cea->id]);
+        $this->assertSame($cea->id, $profile->fresh()->college_id);
+    }
+
     // ── entry_method roll-up (FR-KSK-06) ──────────────────────────────────────
 
     public function test_entry_method_rolls_up_mixed(): void

@@ -6,6 +6,7 @@ namespace Tests\Feature\Student;
 
 use App\Models\ClearanceRecord;
 use App\Models\ClinicVisit;
+use App\Models\College;
 use App\Models\ScreeningResponse;
 use App\Models\User;
 use App\Models\VitalSigns;
@@ -43,6 +44,8 @@ class RecordsPageTest extends TestCase
         $visit = ClinicVisit::create([
             'reference_no' => $refNo,
             'student_id' => $student->id,
+            // Capture-time college snapshot (FR-STU-09) — required on every visit.
+            'college_id' => College::firstOrCreate(['code' => 'CCS'], ['name' => 'College of Computing Studies'])->id,
             'login_method' => 'qr',
             'status' => 'captured',
             'privacy_consent_at' => now(),

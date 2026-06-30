@@ -16,6 +16,7 @@ class ClinicVisit extends Model
     protected $fillable = [
         'reference_no',
         'student_id',
+        'college_id',
         'appointment_id',
         'login_method',
         'status',
@@ -37,6 +38,16 @@ class ClinicVisit extends Model
     public function student(): BelongsTo
     {
         return $this->belongsTo(User::class, 'student_id');
+    }
+
+    /**
+     * The student's college AT CAPTURE TIME (FR-STU-09 snapshot, D-17).
+     * Frozen on submit — not the student's current college, so analytics
+     * (FR-ANL-05/08) stay transfer-proof.
+     */
+    public function college(): BelongsTo
+    {
+        return $this->belongsTo(College::class);
     }
 
     /** The booked appointment this visit is linked to (null = walk-in). */

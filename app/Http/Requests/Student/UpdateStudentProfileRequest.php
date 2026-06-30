@@ -10,9 +10,10 @@ use Illuminate\Validation\Rule;
 /**
  * Validates the student's self-service profile edit (FR-STU-09).
  *
- * Only the self-editable fields are accepted here. Student number, college,
- * and sex are deliberately absent — they are display-only on the page and
- * must never be changed by the student.
+ * Only the self-editable fields are accepted here. College IS editable now —
+ * students transfer (FR-STU-09 / D-17) — and is validated against colleges.id.
+ * Student number and sex are deliberately absent — they are display-only on the
+ * page and must never be changed by the student.
  *
  * Rules mirror the registration Step 2 (StoreRegistrationInfoRequest) for the
  * shared fields so a profile edit can't bypass the constraints registration
@@ -37,6 +38,9 @@ class UpdateStudentProfileRequest extends FormRequest
                 'required', 'string', 'lowercase', 'email', 'max:255',
                 Rule::unique('users', 'email')->ignore($this->user()->id),
             ],
+            // Editable on transfer (FR-STU-09). Must be a real college — mirrors
+            // registration Step 2 so an edit can't set an invalid/forged id.
+            'college_id' => ['required', 'integer', 'exists:colleges,id'],
             'course' => ['required', 'string', 'max:120'],
             'year_level' => ['required', 'string', 'in:1,2,3,4,5'],
             'date_of_birth' => ['required', 'date', 'before:today', 'after:'.now()->subYears(100)->toDateString()],

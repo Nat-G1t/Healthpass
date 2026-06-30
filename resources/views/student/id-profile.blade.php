@@ -14,7 +14,7 @@
 
     // Open the Edit modal automatically if a profile-field validation failed
     // (link-id errors use the 'id_number' key and must not trigger this).
-    $editFields = ['first_name', 'middle_name', 'last_name', 'email', 'course',
+    $editFields = ['first_name', 'middle_name', 'last_name', 'email', 'college_id', 'course',
                    'year_level', 'date_of_birth', 'place_of_birth', 'civil_status', 'address'];
     $reopenEdit = $errors->hasAny($editFields);
 @endphp
@@ -267,9 +267,7 @@
                 <dd class="mt-1 font-mono text-sm font-medium text-hp-slate">{{ $profile->student_number }}</dd>
             </div>
             <div>
-                <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
-                    College <span class="font-normal normal-case text-hp-slate/30">· locked</span>
-                </dt>
+                <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">College</dt>
                 <dd class="mt-1 text-sm font-medium text-hp-slate">{{ $profile->college->name }}</dd>
             </div>
             <div>
@@ -323,7 +321,7 @@
                 <div>
                     <h3 class="text-sm font-semibold text-hp-slate">Edit Profile</h3>
                     <p class="mt-0.5 text-xs text-hp-slate/50">
-                        Student number, college, and sex can't be changed here.
+                        Student number and sex can't be changed here.
                     </p>
                 </div>
                 <button type="button" @click="editOpen = false"
@@ -356,6 +354,17 @@
                     <x-hp.input label="Course" name="course"
                                 :value="old('course', $profile->course)"
                                 :error="$errors->first('course')" required />
+
+                    {{-- College — editable on transfer (FR-STU-09). Past visits keep
+                         their capture-time snapshot, so analytics history stays put. --}}
+                    <x-hp.select label="College" name="college_id" :error="$errors->first('college_id')">
+                        @foreach ($colleges as $college)
+                            <option value="{{ $college->id }}"
+                                @selected((int) old('college_id', $profile->college_id) === $college->id)>
+                                {{ $college->code }} — {{ $college->name }}
+                            </option>
+                        @endforeach
+                    </x-hp.select>
 
                     <x-hp.select label="Year Level" name="year_level" :error="$errors->first('year_level')">
                         @foreach (['1' => '1st Year', '2' => '2nd Year', '3' => '3rd Year', '4' => '4th Year', '5' => '5th Year'] as $val => $text)

@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Student;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Student\UpdateStudentProfileRequest;
 use App\Mail\OtpVerificationMail;
+use App\Models\College;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -55,7 +56,10 @@ class ProfileController extends Controller
         // Surfaces the "email change awaiting verification" banner if one is pending.
         $pendingEmail = $this->pendingEmailChange($request->user());
 
-        return view('student.id-profile', compact('profile', 'studentNumberDigits', 'qrSvg', 'pendingEmail'));
+        // College dropdown options for the Edit modal (FR-STU-09 — editable on transfer).
+        $colleges = College::orderBy('name')->get(['id', 'code', 'name']);
+
+        return view('student.id-profile', compact('profile', 'studentNumberDigits', 'qrSvg', 'pendingEmail', 'colleges'));
     }
 
     /** PATCH /student/id-profile — update only the self-editable fields. */
@@ -73,6 +77,10 @@ class ProfileController extends Controller
                 'first_name' => $data['first_name'],
                 'middle_name' => $data['middle_name'] ?? null,
                 'last_name' => $data['last_name'],
+                // Live college: changing it re-scopes the student to the new
+                // College Admin automatically (admin lists filter on this column).
+                // Past visits keep their snapshot — see clinic_visits.college_id.
+                'college_id' => $data['college_id'],
                 'course' => $data['course'],
                 'year_level' => $data['year_level'],
                 'date_of_birth' => $data['date_of_birth'],
