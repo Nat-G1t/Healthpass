@@ -52,6 +52,11 @@ const SCAN_MS = 1200;
 // Max gap between taps of the disguised manual-entry gesture (see logoTap).
 const GESTURE_WINDOW_MS = 1500;
 
+// Discreet staff-exit gesture (FR-KSK-16): all five taps must land within this
+// window of the FIRST tap, so stray single taps never reveal the staff prompt.
+const EXIT_TAPS = 5;
+const EXIT_GESTURE_WINDOW_MS = 3000;
+
 /**
  * Per-step metadata for the vitals sequence (FR-KSK-05). Each step is pure
  * DATA — the Blade renders ANY step from this config, so the four steps are not
@@ -180,6 +185,12 @@ function freshState() {
         // Final-submit request sub-state (FR-KSK-11/12). Mirrors login/scan;
         // `reference` holds the server-minted HP-YYYY-#### shown on Complete.
         submit: { status: 'idle', error: '', reference: null }, // idle | sending | error
+
+        // Discreet staff-exit modal (FR-KSK-16). Only `open`/`status`/`error`
+        // live here — the prompt BORROWS the login fields + on-screen keyboard
+        // (`state.login`) for the nurse's email/password, since the two are
+        // never shown at once and share the exact same input shape.
+        exit: { open: false, status: 'idle', error: '' }, // idle | sending | error
     };
 }
 
@@ -198,6 +209,10 @@ export function kioskMachine() {
         // Tap bookkeeping for the disguised manual-entry gesture (see logoTap).
         _logoTaps: 0,
         _lastLogoTap: 0,
+
+        // Tap bookkeeping for the discreet staff-exit gesture (see exitTap).
+        _exitTaps: 0,
+        _exitFirstTap: 0,
 
         // Timers for the email keyboard's backspace long-press (see backspaceDown).
         _bsRepeat: null,
@@ -282,6 +297,52 @@ export function kioskMachine() {
             this._completeInterval = null;
         },
 
+        // ── Shared kiosk POST (CSRF self-heal) ───────────────────────────────
+        // Every kiosk POST (scan / login / submit / exit) goes through here so
+        // they share one behaviour: if the page's CSRF token has gone stale —
+        // the kiosk outlived its session after a server restart, a DB reset, or
+        // session expiry — the first POST returns 419. We then fetch a fresh
+        // token and retry ONCE, so the kiosk heals itself instead of failing
+        // every request until someone reloads the page.
+        async kioskPost(url, payload) {
+            const send = () => fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': this.$refs.root.dataset.csrf,
+                    Accept: 'application/json',
+                },
+                body: JSON.stringify(payload),
+            });
+
+            let response = await send();
+            if (response.status === 419) {
+                await this.refreshCsrf();
+                response = await send();
+            }
+
+            let data = {};
+            try {
+                data = await response.json();
+            } catch {
+                data = {}; // a non-JSON body (e.g. an error page) leaves data empty
+            }
+            return { response, data };
+        },
+
+        /** Pull a current CSRF token from the server and update the page's copy. */
+        async refreshCsrf() {
+            try {
+                const r = await fetch(this.$refs.root.dataset.tokenUrl, {
+                    headers: { Accept: 'application/json' },
+                });
+                const d = await r.json();
+                if (d.token) this.$refs.root.dataset.csrf = d.token;
+            } catch {
+                // Leave the old token in place; the retry will surface the error.
+            }
+        },
+
         // ── QR keyboard-wedge (FR-KSK-01) ────────────────────────────────────
         // The hidden input must stay focused so a USB scanner can type the
         // token + Enter at any time. We read the field's own value on Enter
@@ -299,16 +360,7 @@ export function kioskMachine() {
         async submitToken(token) {
             this.state.scan = { status: 'sending', error: '' };
             try {
-                const response = await fetch(this.$refs.root.dataset.scanUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': this.$refs.root.dataset.csrf,
-                        Accept: 'application/json',
-                    },
-                    body: JSON.stringify({ token }),
-                });
-                const data = await response.json();
+                const { response, data } = await this.kioskPost(this.$refs.root.dataset.scanUrl, { token });
                 // Valid token → straight to Identity Confirm (FR-KSK-03).
                 if (response.ok && data.ok && data.identity) {
                     this.state.scan = { status: 'idle', error: '' };
@@ -388,7 +440,10 @@ export function kioskMachine() {
             const login = this.state.login;
 
             if (key === 'enter') {
-                this.submitLogin();
+                // The same keyboard drives both the student email login and the
+                // staff-exit prompt (FR-KSK-16); route Enter to whichever is open.
+                if (this.state.exit.open) this.submitExit();
+                else this.submitLogin();
                 return;
             }
             if (key === 'shift') {
@@ -401,6 +456,7 @@ export function kioskMachine() {
             }
 
             login.error = ''; // typing clears any stale error
+            this.state.exit.error = ''; // …in either context
             const field = login.field;
 
             if (key === 'backspace') {
@@ -458,19 +514,10 @@ export function kioskMachine() {
             login.status = 'sending';
             login.error = '';
             try {
-                const response = await fetch(this.$refs.root.dataset.loginUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': this.$refs.root.dataset.csrf,
-                        Accept: 'application/json',
-                    },
-                    body: JSON.stringify({
-                        email: login.email.trim(),
-                        password: login.password,
-                    }),
+                const { response, data } = await this.kioskPost(this.$refs.root.dataset.loginUrl, {
+                    email: login.email.trim(),
+                    password: login.password,
                 });
-                const data = await response.json();
                 if (response.ok && data.ok && data.identity) {
                     this.arriveAtIdentity(data.identity);
                     return;
@@ -480,6 +527,88 @@ export function kioskMachine() {
             } catch {
                 login.status = 'error';
                 login.error = 'Network problem signing in. Please try again.';
+            }
+        },
+
+        // ── Shared keyboard helpers (email login + staff exit) ───────────────
+        // The on-screen keyboard's Enter key serves both flows; these expose the
+        // active flow's busy state so the key can disable + relabel correctly.
+        kbSending() {
+            return (this.state.exit.open ? this.state.exit.status : this.state.login.status) === 'sending';
+        },
+
+        kbEnterLabel() {
+            if (this.kbSending()) return this.state.exit.open ? 'Exiting…' : 'Signing in…';
+            return 'Enter ⏎';
+        },
+
+        // ── Discreet staff exit (FR-KSK-16) ──────────────────────────────────
+        // A student cannot navigate out of /kiosk; ending a shift requires a
+        // hidden corner gesture — five taps within ~3 s of the first — then a
+        // nurse's credentials. Stray taps reset the count, so it never opens by
+        // accident.
+        exitTap() {
+            const now = Date.now();
+            if (this._exitTaps === 0 || now - this._exitFirstTap > EXIT_GESTURE_WINDOW_MS) {
+                this._exitFirstTap = now;
+                this._exitTaps = 1;
+            } else {
+                this._exitTaps += 1;
+            }
+            if (this._exitTaps >= EXIT_TAPS) {
+                this._exitTaps = 0;
+                this.openExit();
+            }
+        },
+
+        /** Open the staff prompt with a clean credential field set (borrows login). */
+        openExit() {
+            this.state.login = {
+                email: '',
+                password: '',
+                field: 'email',
+                showPassword: false,
+                shift: false,
+                caps: false,
+                status: 'idle',
+                error: '',
+            };
+            this.state.exit = { open: true, status: 'idle', error: '' };
+        },
+
+        closeExit() {
+            this.state.exit.open = false;
+        },
+
+        /**
+         * Authenticate the nurse and hand off to the queue (FR-KSK-16). On success
+         * the server has started a real session, so a full navigation lands inside
+         * the (auth-gated) nurse queue rather than bouncing to the login page.
+         */
+        async submitExit() {
+            const login = this.state.login;
+            if (this.state.exit.status === 'sending') return;
+            if (login.email.trim() === '' || login.password === '') {
+                this.state.exit.error = 'Enter the nurse email and password.';
+                return;
+            }
+
+            this.state.exit.status = 'sending';
+            this.state.exit.error = '';
+            try {
+                const { response, data } = await this.kioskPost(this.$refs.root.dataset.exitUrl, {
+                    email: login.email.trim(),
+                    password: login.password,
+                });
+                if (response.ok && data.ok && data.redirect) {
+                    window.location.href = data.redirect; // leave kiosk mode → nurse queue
+                    return;
+                }
+                this.state.exit.status = 'error';
+                this.state.exit.error = data.message ?? 'Those credentials don\'t match a nurse account.';
+            } catch {
+                this.state.exit.status = 'error';
+                this.state.exit.error = 'Network problem. Please try again.';
             }
         },
 
@@ -1002,16 +1131,7 @@ export function kioskMachine() {
             if (this.state.submit.status === 'sending') return;
             this.state.submit = { status: 'sending', error: '' };
             try {
-                const response = await fetch(this.$refs.root.dataset.submitUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': this.$refs.root.dataset.csrf,
-                        Accept: 'application/json',
-                    },
-                    body: JSON.stringify(this.buildSubmission()),
-                });
-                const data = await response.json();
+                const { response, data } = await this.kioskPost(this.$refs.root.dataset.submitUrl, this.buildSubmission());
                 if (response.ok && data.ok) {
                     this.state.submit = { status: 'idle', error: '', reference: data.reference ?? null };
                     this.go('complete');

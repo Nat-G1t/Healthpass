@@ -127,6 +127,8 @@
         data-scan-url="{{ route('kiosk.scan') }}"
         data-login-url="{{ route('kiosk.login') }}"
         data-submit-url="{{ route('kiosk.submit') }}"
+        data-exit-url="{{ route('kiosk.exit') }}"
+        data-token-url="{{ route('kiosk.token') }}"
         data-csrf="{{ csrf_token() }}"
         {{-- Plausibility ranges (FR-KSK-08) + flag thresholds (BR-13) straight
              from config/healthpass.php, so client badges/checks match the server. --}}
@@ -169,6 +171,22 @@
                 @include('kiosk.screens.questionnaire')
                 @include('kiosk.screens.review')
                 @include('kiosk.screens.complete')
+
+                {{-- Discreet staff-exit hotspot (FR-KSK-16): an invisible corner
+                     target present on EVERY screen. Five taps within ~3 s open the
+                     nurse prompt — the only way out of /kiosk. Top-LEFT, away from
+                     the vitals top-right manual-entry logo so the two gestures never
+                     collide; the corner is empty on every screen but email login,
+                     where it only grazes the wide "← Cancel" hit area. --}}
+                <button
+                    type="button"
+                    @click="exitTap()"
+                    class="absolute left-0 top-0 z-30 h-12 w-12 opacity-0"
+                    aria-hidden="true"
+                    tabindex="-1"
+                ></button>
+
+                @include('kiosk.partials.staff-exit')
             </div>
         </div>
 

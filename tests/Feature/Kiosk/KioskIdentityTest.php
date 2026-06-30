@@ -137,4 +137,13 @@ class KioskIdentityTest extends TestCase
             'password' => 'password',
         ])->assertStatus(422)->assertJson(['ok' => false]);
     }
+
+    // ── CSRF self-heal token (long-lived kiosk page) ──────────────────────────
+
+    public function test_token_endpoint_returns_a_csrf_token(): void
+    {
+        $this->getJson(route('kiosk.token'))
+            ->assertOk()
+            ->assertJsonStructure(['token']);
+    }
 }

@@ -80,6 +80,10 @@ Route::middleware(['auth', 'role:director'])
 // not via a logged-in session. On the Pi this is opened full-screen.
 Route::prefix('kiosk')->name('kiosk.')->group(function () {
     Route::get('/', [KioskController::class, 'index'])->name('index');
+    // Fresh CSRF token for self-healing (see KioskController@token). A GET, so
+    // it needs no token itself; the kiosk calls it to recover from a stale token
+    // (page outlived its session) and retry, instead of dead-ending on a 419.
+    Route::get('/token', [KioskController::class, 'token'])->name('token');
     Route::post('/scan', [KioskController::class, 'scan'])
         ->middleware('throttle:30,1')
         ->name('scan');
@@ -94,6 +98,13 @@ Route::prefix('kiosk')->name('kiosk.')->group(function () {
     Route::post('/submit', [KioskController::class, 'submit'])
         ->middleware('throttle:20,1')
         ->name('submit');
+    // Discreet staff exit (FR-KSK-16): the 5-tap corner gesture opens a prompt
+    // for a nurse's credentials; a valid nurse is logged in and the kiosk hands
+    // off to the nurse queue. Same tight throttle as login — it is a credential
+    // check on a public terminal, so brute-force attempts are capped per IP.
+    Route::post('/exit', [KioskController::class, 'exit'])
+        ->middleware('throttle:10,1')
+        ->name('exit');
 });
 
 // ── Dev component showcase (local only) ──────────────────────────────────────

@@ -241,3 +241,76 @@ App\Models\StudentProfile::where('college_id', $collegeId)
   opens a confirm modal; on confirm the JS re-queries the nearest upcoming non-cancelled
   appointment via `fetch` and swaps the card content — no full page reload.
 - **No schema change. No new packages.**
+
+---
+
+## Kiosk staff exit (FR-KSK-16) — Day 27
+
+The kiosk is a locked-down public terminal: the Blade page (`kiosk/index.blade.php`)
+has **no app nav or sidebar**, the hidden QR wedge re-focuses itself on blur, and on
+the Pi, Chromium runs `--kiosk` (no URL bar, back button, or gestures). So a student
+has **no way to navigate out of `/kiosk`**. The dev screen-jumper is `@includeWhen(app()->isLocal())`,
+so it never ships to the Pi.
+
+The **only** exit is a discreet staff gesture:
+
+- **Gesture:** an invisible 40×40 hotspot in the **top-left corner**, present on every
+  screen (`index.blade.php`). **5 taps within ~3 s** of the first tap open the prompt
+  (`exitTap()` in `state-machine.js`); stray taps reset the count. Top-left is chosen so
+  it never collides with the vitals **top-right** triple-tap manual-entry logo (FR-KSK-06).
+- **Prompt:** a modal (`partials/staff-exit.blade.php`) reusing the login fields + the
+  shared on-screen keyboard (`partials/credential-keyboard.blade.php`, also used by the
+  email-login screen). It asks for a **nurse email + password**.
+- **Why email, not just a password:** the spec says "nurse password", but the redirect
+  target `/nurse/queue` is auth-gated — a bare password check that redirected would just
+  bounce to `/login`. So `POST /kiosk/exit` (`KioskController@exit`) **authenticates** the
+  nurse (`Auth::login` + `session()->regenerate()` against session fixation) and the page
+  navigates straight into the queue, already signed in. An email is needed to know *which*
+  nurse to log in.
+- **Nurse-only.** Students, college admins, the director, wrong passwords, inactive and
+  unknown accounts all get the same generic 422 (constant-time hash check, like the
+  student login) and the request stays a guest. Route is throttled `10,1` per IP.
+- **Tests:** `tests/Feature/Kiosk/KioskExitTest.php` (6 cases).
+
+### Day 27 end-to-end verification (W4 exit criterion)
+
+Ran the full flow three ways against the **seeded MySQL DB**, each inside a rolled-back
+transaction so the seed was left untouched (clinic_visits 8 → 8):
+
+| Path | Result |
+|---|---|
+| (a) booked student via QR (typed token) | scan → identity (Nathaniel Medina), submit → `HP-…`, **`appointment_id` linked to today's appt** |
+| (b) walk-in via email login | login → identity (Maria Reyes), submit → `login_method=email`, `appointment_id=NULL` (BR-10) |
+| (c) declined consent | Decline calls `reset()` client-side, **no server call** → nothing written; submit is the only writer |
+
+All submissions used `vitalMethods = ['manual','manual','manual','manual']`, persisting
+`entry_method=manual` — confirming **the kiosk is completable end-to-end on manual entry
+alone**. Server-side flag booleans (temp/BP/BMI) computed from `config/healthpass.php`.
+Backed by `php artisan test tests/Feature/Kiosk` — **22 passing**.
+
+**Gesture map (don't confuse the two):**
+
+| Gesture | Where | Action |
+|---|---|---|
+| **3 taps** on the logo | **vitals screen, top-RIGHT** | manual-entry numeric pad (FR-KSK-06) |
+| **5 taps** on the corner | **every screen, top-LEFT** (invisible 48px hotspot) | staff-exit prompt (FR-KSK-16) |
+
+### CSRF token mismatch (419) on kiosk POSTs — fixed
+
+**Symptom:** every kiosk POST (scan / login / submit / staff-exit) returned a 419
+"CSRF token mismatch", while the website login was fine.
+
+**Cause:** the kiosk page bakes a CSRF token at render time (`data-csrf`). The kiosk is a
+**long-lived page** — if it outlives its server session (a `php artisan serve` restart,
+`migrate:fresh --seed` which truncates the `sessions` table, session expiry, or logging
+into the website in the same browser, which regenerates the session), the baked token no
+longer matches the server's session token → 419 on every POST until the page is reloaded.
+The website "works" only because each visit loads a fresh page + token. Server-side CSRF
+was never broken (a fresh page POSTs fine).
+
+**Fix:** the kiosk now self-heals. All four POSTs go through one wrapper (`kioskPost()` in
+`state-machine.js`); on a 419 it GETs a fresh token from `GET /kiosk/token`
+(`KioskController@token`) — which re-establishes a session and returns the current token —
+updates `data-csrf`, and retries the request **once**. Verified live: stale token → 419 →
+`/kiosk/token` → retry → 200/422 (CSRF passes). If you still see a 419 after this, just
+reload `/kiosk` once to mint a fresh session.
