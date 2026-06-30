@@ -7,7 +7,15 @@
     <title>Sign In — HealthPass</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="flex min-h-full items-center justify-center bg-hp-bg p-6">
+<body class="min-h-full bg-hp-bg">
+
+{{-- Two-panel layout (FR-AUTH-08): login card left, illustration right, curved
+     divider between. Below md (768px) the right panel is hidden and the left
+     panel goes full-width, reverting to the original centered single-column. --}}
+<div class="flex min-h-screen">
+
+    {{-- Left panel — the existing login card column (internals unchanged) --}}
+    <div class="flex w-full items-center justify-center p-6 md:w-1/2">
 
 <div class="w-full max-w-[420px]">
 
@@ -91,6 +99,23 @@
     </p>
 
 </div>
+
+    </div>{{-- /left panel --}}
+
+    {{-- Right panel — decorative illustration (hidden on narrow screens).
+         object-contain + centered shows the whole illustration uncropped at any
+         resolution; the panel's off-white bg matches the image's own cream
+         backdrop so there's no visible box edge. --}}
+    <div class="hidden items-center justify-center bg-hp-bg p-10 md:flex md:w-1/2">
+        <img
+            src="{{ asset('images/login-illustration.png') }}"
+            alt=""
+            aria-hidden="true"
+            class="max-h-full max-w-full object-contain"
+        >
+    </div>{{-- /right panel --}}
+
+</div>{{-- /two-panel --}}
 
 </body>
 </html>

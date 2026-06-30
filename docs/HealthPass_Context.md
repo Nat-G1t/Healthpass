@@ -246,7 +246,7 @@ Home, Calendar, FileText, QrCode, Plus, List, Activity, Edit, BarChart, Alert, C
 #### Login (`/login`)
 **Two-panel layout** (visual source of truth: the login mockup in `docs/prototypes/web/`):
 - **Left panel — login card** (internals unchanged): 420px column on `#F6F2ED`; HPLogo lg + tagline "Medical Clearance — Pampanga State University"; fields Email Address + Password (eye toggle); "Register here" link → register page; RA 10173 footer note. POST to Laravel Breeze auth.
-- **Right panel — decorative illustration**, separated from the card by a **curved/organic divider**.
+- **Right panel — decorative illustration**, shown **whole and centered** (contained, never cropped) on an off-white panel matching the image's backdrop.
 - **Responsive collapse:** on narrow screens the illustration panel is hidden and the page falls back to the centered single-column card.
 
 #### Register (`/register`) — 4-step flow with top progress bar
@@ -414,14 +414,14 @@ Progress steps: Consent → Account Info → Email Verify → Link ID
 #### Analytics (`director-analytics`)
 - "Export Report" button (ghost sm, top-right, Download icon).
 - **Medical Cases by College** — horizontal stacked bar chart (Chart.js). One row per college/unit (all 12 units), each bar segmented by the 8 medical-system categories, sorted by total case volume descending. Total-cases headline (e.g. '235 total cases'). Subtitle: 'Total cases per college, broken down by medical system — sorted by volume.' Students only — Faculty and NASA excluded. Series colors follow the prototype legend. Source: encoded `clearance_records` with non-null `case_category`, grouped by `clinic_visits.college_id` (the capture-time college snapshot, so a later transfer does not re-attribute past cases) × `case_category`.
-- **Summary of Medical Cases matrix** (table): 8 medical-system rows × 12 college-code columns + TOTAL column and totals row. Fixed column order: COE, CEA, CBS, CAS, CSSP, CCS, CHTM, CIT, LAW, GS, SHS, LHS. Subtitle: 'Rows = medical system · Columns = college · Faculty & NASA excluded.' Total row at bottom in orange. Alternating row backgrounds. Source: encoded `clearance_records` with non-null `case_category`; NULL-category records excluded.
-- **Cases by Medical System** — horizontal bar chart (Chart.js). One bar per medical-system category (the 8 above), overall total per system across all units, sorted descending. Same source/scope as the matrix.
+- **Summary of Medical Cases matrix** (table): 8 medical-system rows × 12 college-code columns + TOTAL column and totals row. Fixed column order: COE, CEA, CBS, CAS, CSSP, CCS, CHTM, CIT, LAW, GS, SHS, LHS. Subtitle: 'Rows = medical system · Columns = college · Faculty & NASA excluded.' Total row at bottom in orange. Alternating row backgrounds. Source: encoded `clearance_records` with non-null `case_category`, grouped by `clinic_visits.college_id` (capture-time college snapshot, FR-STU-09) × `case_category`; NULL-category records excluded.
+- **Cases by Medical System** — horizontal bar chart (Chart.js). One bar per medical-system category (the 8 above), overall total per system across all units, sorted descending. Same source/scope as the matrix (capture-time `clinic_visits.college_id` snapshot).
 - **By-Sex donut** (Chart.js) — 160px, Male (orange) + Female (peach), centre shows total count. Legend below with count + %. The donut counts students by sex across all encoded clinic visits in scope (one count per student/visit), so its total intentionally exceeds the cases total — visits with no assigned case category are still counted as people screened.
 
 #### Flagged Anomalies (`director-flagged`)
 - **3 stat cards** (orange left border): High Blood Pressure count, Fever count, Abnormal BMI count.
-- **Table**: Student (600), College (muted), Flag (flagged badge), Value (orange 700), Category, View (link).
-- Source: clinic visits where `vital_signs.is_bp_flagged OR is_temp_flagged OR is_bmi_flagged` = true, joined to student name and clearance category.
+- **Table**: Student (600), College (muted — capture-time `clinic_visits.college_id` snapshot, not the student's current college), Flag (flagged badge), Value (orange 700), Category, View (link).
+- Source: clinic visits where `vital_signs.is_bp_flagged OR is_temp_flagged OR is_bmi_flagged` = true, joined to student name, the visit's snapshot college, and clearance category.
 - "Export" button (ghost sm, top-right).
 
 ---
@@ -663,7 +663,8 @@ created_at, updated_at
 ```
 colleges ────┬──< users (managed_college_id)          one college → many admin accounts
              ├──< student_profiles (college_id)        one college → many students
-             └──< batch_requests (college_id)
+             ├──< batch_requests (college_id)
+             └──< clinic_visits (college_id)            capture-time snapshot (FR-STU-09) — frozen, ≠ student's current college
 
 users ────────┬──| student_profiles (user_id)          one student user → one profile
               ├──< appointments (student_id)
