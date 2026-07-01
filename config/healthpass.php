@@ -40,6 +40,11 @@ return [
     'kiosk' => [
         'complete_reset_seconds' => 12,  // FR-KSK-13: auto-reset after successful submission
         'idle_timeout_seconds' => 90,  // FR-KSK-15: abandon reset on no interaction mid-flow
+        // FR-KSK-07 / FR-HW-05, §11.2: Web Serial sensor link. `serial_baud` must
+        // match the MCU firmware; `serial_timeout_ms` is how long a connected but
+        // silent sensor waits before the kiosk nudges toward manual entry.
+        'serial_baud' => 9600,
+        'serial_timeout_ms' => 10000,
     ],
 
 ];

@@ -66,7 +66,34 @@
                 </div>
 
                 <p class="max-w-sm text-xs text-hp-slate/80" x-text="vitalMeta(state.vitalStep).instruction"></p>
-                <p class="text-[0.65rem] text-hp-slate/40">Waiting for the sensor…</p>
+                <p class="text-[0.65rem] text-hp-slate/40" x-text="serial.status === 'connected' ? 'Waiting for the sensor…' : 'Ready for entry.'"></p>
+
+                {{-- Web Serial link (FR-KSK-07/FR-HW-05). On Chromium the first
+                     "Connect sensor" tap is the user gesture requestPort needs;
+                     once connected a quiet green pill confirms it and readings
+                     stream in automatically. Everything here is non-blocking —
+                     manual entry (the disguised corner triple-tap) always works,
+                     so the sensor is never a dead end. --}}
+                <template x-if="serial.supported && serial.status !== 'connected'">
+                    <button
+                        type="button"
+                        @click="connectSensors()"
+                        class="rounded-md bg-hp-peach/50 px-3 py-1 text-[0.65rem] font-semibold text-hp-orange transition hover:bg-hp-peach"
+                        x-text="serial.status === 'connecting' ? 'Connecting…' : '🔌 Connect sensor'"
+                    ></button>
+                </template>
+                <template x-if="serial.status === 'connected'">
+                    <span class="inline-flex items-center gap-1 text-[0.65rem] font-medium text-emerald-600">● Sensors connected</span>
+                </template>
+
+                {{-- Non-blocking serial degrade nudge (unsupported / quiet /
+                     unplugged / error) — see onSerialStatus(). --}}
+                <p
+                    x-show="serial.notice"
+                    x-cloak
+                    class="max-w-sm rounded-lg bg-hp-peach/40 px-3 py-1.5 text-[0.7rem] font-medium text-hp-orange"
+                    x-text="serial.notice"
+                ></p>
 
                 {{-- Graceful-degrade notice from the sensor path (FR-KSK-07). --}}
                 <p

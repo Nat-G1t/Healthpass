@@ -143,6 +143,8 @@
             'kiosk' => [
                 'completeResetSeconds' => config('healthpass.kiosk.complete_reset_seconds'),
                 'idleTimeoutSeconds' => config('healthpass.kiosk.idle_timeout_seconds'),
+                'serialBaud' => config('healthpass.kiosk.serial_baud'),
+                'serialTimeoutMs' => config('healthpass.kiosk.serial_timeout_ms'),
             ],
         ]) }}"
         {{-- Any touch/keypress mid-flow restarts the 90s idle countdown (FR-KSK-15). --}}

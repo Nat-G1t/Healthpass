@@ -295,6 +295,73 @@ Backed by `php artisan test tests/Feature/Kiosk` — **22 passing**.
 | **3 taps** on the logo | **vitals screen, top-RIGHT** | manual-entry numeric pad (FR-KSK-06) |
 | **5 taps** on the corner | **every screen, top-LEFT** (invisible 48px hotspot) | staff-exit prompt (FR-KSK-16) |
 
+## Kiosk Web Serial sensors (FR-KSK-07 / FR-HW-05) — Week 5
+
+The sensor path is its own module — `resources/js/kiosk/serial.js` — kept free of
+Alpine so the parsing/I/O is easy to read and test. The state machine
+(`state-machine.js`) owns the callbacks and decides what a reading means; the
+module just opens the port, buffers bytes into lines, parses them, and calls back.
+
+**Browser support:** Chromium **only**, and only in a **secure context**. On the Pi
+that is `http://localhost`, which counts as secure (decision **D-9**) — this is why
+the app runs *on* the Pi. Any other browser has no `navigator.serial`; the kiosk
+detects that (`serial.supported === false`) and silently falls back to manual entry.
+Loopback dev URLs (`127.0.0.1`) are also treated as secure, so Web Serial works in
+local dev on Chrome/Edge too.
+
+**Serial contract (§11.2):** one newline-terminated ASCII line, e.g.
+
+```
+H:163;W:64;T:37.9;BP:145/92;HR:78
+```
+
+`parseReadingLine()` translates the wire keys into the internal sensor letters the
+`VITALS` config uses: `H W T` pass through, `HR` → `R` (heart rate), and `BP:145/92`
+splits into `S:145` (systolic) + `D:92` (diastolic). Partial lines are valid (only
+the keys present are consumed), unknown keys are ignored (forward compatibility), and
+any malformed token/line is dropped silently — a bad line never crashes the step.
+
+**Routing to the current step:** the MCU may stream the *whole* line every cadence
+tick. `onSerialReading()` filters each parsed line down to the **current** vital
+step's fields before handing it to the existing `receiveReading()` path, so a full
+line fills only the step the student is on (FR-KSK-05) — not all four at once. It
+only acts while the step is still `ready`, so a captured/mid-scan reading is never
+silently overwritten.
+
+**Connecting:** `requestPort()` needs a user gesture, so the vitals *ready* phase
+shows a **"🔌 Connect sensor"** button (Chromium only) — the tap is the gesture.
+Once a port is granted the browser remembers it for the origin, so on later loads
+`autoConnect()` reopens it via `getPorts()` with **no** gesture — that is how the
+unattended kiosk comes back after a reboot (FR-HW-05).
+
+**Disconnect / reconnect (FR-HW-05):** cable jiggle or MCU reset fires the
+`navigator.serial` `disconnect` event → a non-blocking "reconnecting…" notice, no
+page reload. When the same port returns, the `connect` event auto-reopens it.
+
+**Degradation (FR-KSK-07 — never a dead end):** no Web Serial API, a dismissed port
+picker, a 10 s read timeout (connected but silent), a read error — each surfaces a
+short non-blocking notice while **manual entry stays available** (the disguised
+corner triple-tap, FR-KSK-06). Manual entry needs no sensor at all.
+
+**Config (single source of truth):** `config/healthpass.php → kiosk.serial_baud`
+(9600, must match MCU firmware) and `kiosk.serial_timeout_ms` (10000). Injected into
+the page via `index.blade.php`'s `data-config`, read once by `setupSerial()`.
+
+**Dev testing without hardware:** the **⚡ Simulate reading** button (local only) is
+untouched — it injects a plausible reading for the current step through the exact
+same `receiveReading()` path the real sensor uses. To exercise the parser directly:
+
+```js
+// in the browser console on /kiosk
+import('/resources/js/kiosk/serial.js').then(m => console.log(
+    m.parseReadingLine('H:163;W:64;T:37.9;BP:145/92;HR:78'))); // {H:163,W:64,T:37.9,S:145,D:92,R:78}
+```
+
+To test against a real MCU on Windows dev, wire the Arduino/ESP32 over USB, run
+`npm run dev` + `php artisan serve`, open `/kiosk` in Chrome, reach a vital step, tap
+**Connect sensor**, and pick the COM port. (`vendor:product` filters can be added to
+`requestPort()` later to skip the picker's noise.)
+
 ### CSRF token mismatch (419) on kiosk POSTs — fixed
 
 **Symptom:** every kiosk POST (scan / login / submit / staff-exit) returned a 419

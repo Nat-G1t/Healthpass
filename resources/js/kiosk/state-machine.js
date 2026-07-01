@@ -1,3 +1,5 @@
+import { createSerialReader } from './serial';
+
 /**
  * Kiosk state machine (Module KSK).
  *
@@ -207,6 +209,13 @@ export function kioskMachine() {
         // (FR-KSK-10) — the cards are data-driven, not nine copies of markup.
         systemList: SYSTEMS,
 
+        // Web Serial UI status (FR-KSK-07). Lives on the COMPONENT, not in
+        // `state`, because the physical sensor connection outlives one student:
+        // a reset-to-Welcome must not drop a working port. `status` mirrors the
+        // serial module's lifecycle; `notice` is a non-blocking degrade nudge.
+        serial: { supported: false, status: 'idle', notice: '' },
+        _serial: null, // the createSerialReader() instance (I/O lives here)
+
         // Tap bookkeeping for the disguised manual-entry gesture (see logoTap).
         _logoTaps: 0,
         _lastLogoTap: 0,
@@ -235,7 +244,68 @@ export function kioskMachine() {
                 if (screen === 'complete') this.startCompleteCountdown();
                 else this.clearCompleteCountdown();
             });
+            this.setupSerial();
             this.focusWedge();
+        },
+
+        // ── Web Serial sensor path (FR-KSK-07, FR-HW-05) ─────────────────────
+        // Build the serial reader and wire its callbacks. The reader is pure
+        // I/O + parsing (serial.js); THIS component decides what a reading means
+        // and how a status shows in the UI. On load we try a silent reconnect to
+        // an already-granted port so the unattended kiosk recovers by itself
+        // after a reboot (FR-HW-05); if none is granted yet, the student/staff
+        // tap "Connect sensor" (the gesture requestPort needs) on the vitals step.
+        setupSerial() {
+            this._serial = createSerialReader({
+                baudRate: this.config.kiosk?.serialBaud ?? 9600,
+                readTimeoutMs: this.config.kiosk?.serialTimeoutMs ?? 10000,
+                onReading: (reading) => this.onSerialReading(reading),
+                onStatus: (status) => this.onSerialStatus(status),
+            });
+            this.serial.supported = this._serial.isSupported();
+            if (this.serial.supported) this._serial.autoConnect();
+        },
+
+        /** Connect button on the vitals step — the tap is the user gesture. */
+        connectSensors() {
+            this._serial?.connect();
+        },
+
+        /**
+         * A parsed line arrived. Route ONLY the current step's fields into the
+         * existing sensor path (receiveReading), so a full combined line fills
+         * the step the student is on — not all four at once (FR-KSK-05). We only
+         * act while a vital step is still 'ready'; a captured or mid-scan step is
+         * left alone, so a finished reading can't be silently overwritten.
+         */
+        onSerialReading(reading) {
+            if (this.state.screen !== 'vitals') return;
+            if (this.stepPhase() !== 'ready') return;
+            const meta = this.vitalMeta(this.state.vitalStep);
+            if (!meta) return;
+            const forStep = {};
+            for (const f of meta.fields) {
+                if (reading[f.sensorKey] != null) forStep[f.sensorKey] = reading[f.sensorKey];
+            }
+            if (Object.keys(forStep).length === 0) return; // nothing for this step yet
+            this.receiveReading(forStep);
+        },
+
+        /**
+         * Reflect a serial lifecycle change in the UI. Every message is a
+         * NON-BLOCKING nudge — manual entry is always available, so the sensor is
+         * never a dead end (FR-KSK-07). 'disconnected' is reassuring because the
+         * module auto-reopens the same port when it returns (FR-HW-05).
+         */
+        onSerialStatus(status) {
+            this.serial.status = status;
+            const notices = {
+                unsupported: 'Sensors need Chromium. You can enter each vital manually.',
+                timeout: 'The sensor is quiet. Wait a moment, or enter it manually.',
+                disconnected: 'Sensor unplugged — reconnecting… Manual entry still works.',
+                error: 'Sensor problem. You can enter each vital manually.',
+            };
+            this.serial.notice = notices[status] ?? '';
         },
 
         // ── Navigation ───────────────────────────────────────────────────────
