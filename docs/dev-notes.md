@@ -349,13 +349,17 @@ the page via `index.blade.php`'s `data-config`, read once by `setupSerial()`.
 
 **Dev testing without hardware:** the **⚡ Simulate reading** button (local only) is
 untouched — it injects a plausible reading for the current step through the exact
-same `receiveReading()` path the real sensor uses. To exercise the parser directly:
+same `receiveReading()` path the real sensor uses. To exercise the parser directly,
+`kiosk.js` exposes it on `window` under `npm run dev` only (stripped from prod):
 
 ```js
-// in the browser console on /kiosk
-import('/resources/js/kiosk/serial.js').then(m => console.log(
-    m.parseReadingLine('H:163;W:64;T:37.9;BP:145/92;HR:78'))); // {H:163,W:64,T:37.9,S:145,D:92,R:78}
+// in the browser console on /kiosk (dev server running)
+parseReadingLine('H:163;W:64;T:37.9;BP:145/92;HR:78');
+// → {H:163, W:64, T:37.9, S:145, D:92, R:78}
 ```
+
+(Don't `import('/resources/js/kiosk/serial.js')` — that path 404s because Laravel
+serves the page while Vite serves the JS bundle from its own dev-server origin.)
 
 To test against a real MCU on Windows dev, wire the Arduino/ESP32 over USB, run
 `npm run dev` + `php artisan serve`, open `/kiosk` in Chrome, reach a vital step, tap
