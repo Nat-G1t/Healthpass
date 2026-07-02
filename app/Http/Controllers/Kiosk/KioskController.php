@@ -66,9 +66,11 @@ final class KioskController extends Controller
             'token' => ['required', 'string', 'max:2048'],
         ]);
 
+        $token = $this->normalizeQrToken($validated['token']);
+
         // Direct match on the stored qr_token. eager-load college for the payload.
         $profile = StudentProfile::with('college')
-            ->where('qr_token', $validated['token'])
+            ->where('qr_token', $token)
             ->first();
 
         if ($profile === null) {
@@ -82,6 +84,32 @@ final class KioskController extends Controller
             'ok' => true,
             'identity' => $this->identityPayload($profile, 'qr'),
         ]);
+    }
+
+    /**
+     * Normalize a scanned string into a lookup token (FR-KSK-01).
+     *
+     * Two QR shapes must both work. The physical student ID encodes a
+     * MULTI-LINE payload whose token sits on an "IDNo:" line, e.g.
+     *   Name: Juan Santos
+     *   IDNo: 2021060001
+     *   Course: BSCS
+     * A keyboard-wedge scanner types that payload one Enter-terminated line at
+     * a time, so each POST here is a single line; when we see the "IDNo:" line
+     * we use its value. The simple backup QR encodes a single bare token with
+     * no "IDNo:" line, so we fall back to the whole trimmed string. Doing this
+     * server-side keeps it authoritative and testable — the client just sends
+     * whatever the wedge typed.
+     */
+    private function normalizeQrToken(string $raw): string
+    {
+        foreach (preg_split('/\r\n|\r|\n/', $raw) as $line) {
+            if (preg_match('/^\s*IDNo\s*:\s*(.+?)\s*$/i', $line, $matches) === 1) {
+                return $matches[1];
+            }
+        }
+
+        return trim($raw);
     }
 
     /**

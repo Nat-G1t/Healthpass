@@ -416,15 +416,43 @@ export function kioskMachine() {
 
         // ── QR keyboard-wedge (FR-KSK-01) ────────────────────────────────────
         // The hidden input must stay focused so a USB scanner can type the
-        // token + Enter at any time. We read the field's own value on Enter
-        // rather than tracking keystrokes by hand.
+        // token + Enter — but ONLY on Welcome. We read the field's own value on
+        // Enter rather than tracking keystrokes by hand.
+
+        /**
+         * Whether the QR wedge should currently own keyboard focus. It listens
+         * ONLY on Welcome, and never while the on-screen keyboard is up (email
+         * login or the staff-exit prompt). Otherwise a scanner — or a stray
+         * physical keyboard — would type into the hidden input and its Enter
+         * would fire a lookup right over the virtual keyboard the student is
+         * actually using.
+         */
+        wedgeHot() {
+            return this.state.screen === 'welcome' && !this.state.exit.open;
+        },
+
+        /**
+         * (Re)assert wedge focus. Called on load, whenever Welcome is (re)shown,
+         * and on the wedge's own blur — so the scanner stays hot on Welcome. On
+         * every other screen it does the opposite and BLURS the wedge, so the
+         * hidden input can never steal input from the virtual keyboard.
+         */
         focusWedge() {
-            this.$nextTick(() => this.$refs.wedge?.focus());
+            this.$nextTick(() => {
+                const wedge = this.$refs.wedge;
+                if (!wedge) return;
+                if (this.wedgeHot()) wedge.focus();
+                else wedge.blur();
+            });
         },
 
         onWedgeEnter(event) {
-            const token = event.target.value.trim();
+            const raw = event.target.value;
             event.target.value = '';
+            // Ignore anything typed while the wedge isn't hot (off Welcome, or
+            // with the on-screen keyboard up) — that input isn't ours to act on.
+            if (!this.wedgeHot()) return;
+            const token = raw.trim(); // server extracts the IDNo line if present
             if (token) this.submitToken(token);
         },
 
@@ -438,19 +466,22 @@ export function kioskMachine() {
                     this.arriveAtIdentity(data.identity);
                     return;
                 }
-                // Invalid → inline error, stay on Welcome, scanner stays hot.
-                this.state.scan = {
-                    status: 'error',
-                    error: data.message ?? 'Could not read that ID. Please try again.',
-                };
-                this.focusWedge();
+                this.showScanError(data.message ?? 'Could not read that ID. Please try again.');
             } catch {
-                this.state.scan = {
-                    status: 'error',
-                    error: 'Network problem reading the ID. Please try again.',
-                };
-                this.focusWedge();
+                this.showScanError('Network problem reading the ID. Please try again.');
             }
+        },
+
+        /**
+         * Surface a scan failure — but only while still on Welcome. A multi-line
+         * ID arrives as several wedge submits (one per line), firing one lookup
+         * per line; once the IDNo line succeeds and we navigate to Identity, the
+         * earlier lines' late failures must not clobber the screen or yank focus.
+         */
+        showScanError(message) {
+            if (this.state.screen !== 'welcome') return;
+            this.state.scan = { status: 'error', error: message };
+            this.focusWedge();
         },
 
         // ── Email login (FR-KSK-02) ──────────────────────────────────────────
@@ -645,10 +676,16 @@ export function kioskMachine() {
                 error: '',
             };
             this.state.exit = { open: true, status: 'idle', error: '' };
+            // If the prompt opened over Welcome, drop wedge focus so the nurse's
+            // typing goes to the on-screen keyboard, not the hidden scanner input.
+            this.focusWedge();
         },
 
         closeExit() {
             this.state.exit.open = false;
+            // Back on Welcome the scanner should be hot again; elsewhere this is
+            // a no-op (focusWedge blurs when the wedge isn't hot).
+            this.focusWedge();
         },
 
         /**

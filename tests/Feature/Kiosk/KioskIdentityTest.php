@@ -77,6 +77,43 @@ class KioskIdentityTest extends TestCase
             ->assertJson(['ok' => false]);
     }
 
+    public function test_multiline_id_payload_resolves_via_the_idno_line(): void
+    {
+        // The physical ID's QR is a multi-line payload; the token lives on the
+        // "IDNo:" line. Extraction must pick that line, not the whole blob.
+        $this->student();
+
+        $payload = "Name: Juan Santos\r\nIDNo: KIOSK-TEST-TOKEN-123\r\nCourse: BSCS";
+
+        $this->postJson(route('kiosk.scan'), ['token' => $payload])
+            ->assertOk()
+            ->assertJson([
+                'ok' => true,
+                'identity' => ['firstName' => 'Juan', 'loginMethod' => 'qr'],
+            ]);
+    }
+
+    public function test_idno_line_is_case_insensitive_and_space_tolerant(): void
+    {
+        // Scanners vary in spacing/casing around the label; be forgiving.
+        $this->student();
+
+        $this->postJson(route('kiosk.scan'), ['token' => "idno :   KIOSK-TEST-TOKEN-123  "])
+            ->assertOk()
+            ->assertJson(['ok' => true, 'identity' => ['loginMethod' => 'qr']]);
+    }
+
+    public function test_single_line_backup_token_still_matches_whole_string(): void
+    {
+        // The simple backup QR is a bare token with no "IDNo:" line — the whole
+        // (trimmed) string is the token.
+        $this->student();
+
+        $this->postJson(route('kiosk.scan'), ['token' => '  KIOSK-TEST-TOKEN-123  '])
+            ->assertOk()
+            ->assertJson(['ok' => true, 'identity' => ['loginMethod' => 'qr']]);
+    }
+
     // ── Email login (FR-KSK-02 → FR-KSK-03) ───────────────────────────────────
 
     public function test_student_email_login_returns_identity(): void
