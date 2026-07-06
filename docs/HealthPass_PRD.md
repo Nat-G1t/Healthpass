@@ -259,7 +259,7 @@ Notation: each requirement has an ID, a MoSCoW priority — **M**ust (defense-cr
 
 ### 4.6 Module KSK — Kiosk (800×480, touch-first)
 
-The kiosk is the route `/kiosk` rendered full-screen in Chromium kiosk mode on the Raspberry Pi at `http://localhost` (Web Serial secure-context requirement, §11.3). Dark `#1c1917` letterbox around a `#F6F2ED` 800×480 panel, scaled to fit.
+The kiosk is the route `/kiosk` rendered full-screen in Chromium kiosk mode on the Raspberry Pi at `http://localhost` (Web Serial secure-context requirement, §11.3). Dark `#1c1917` letterbox around a `#F6F2ED` 800×480 panel, scaled to fit. *(Display presentation superseded by D-18: the panel now fills the viewport with `--k-zoom` scaling; 800×480 remains the design canvas and hardware target.)*
 
 | ID | Requirement | Priority |
 |---|---|---|
@@ -279,7 +279,7 @@ The kiosk is the route `/kiosk` rendered full-screen in Chromium kiosk mode on t
 | FR-KSK-13 | **Complete screen:** success check, "Submitted! … proceed to the nurse's station", and a countdown pill auto-resetting the kiosk to Welcome after **12 seconds** (or instantly via a Done tap). All session state is cleared on reset. | M |
 | FR-KSK-14 | The kiosk shall never display Fit/Unfit, case categories, or any clinical interpretation beyond the per-vital status badge (e.g., "Slightly Elevated"). | M |
 | FR-KSK-15 | An idle timeout (no interaction for 90 s mid-flow) shall discard the session and reset to Welcome, to protect privacy on an abandoned kiosk. | S |
-| FR-KSK-16 | A discreet staff exit (e.g., 5 taps on the logo corner + nurse password) shall close kiosk mode; students cannot navigate out of `/kiosk` otherwise. | S |
+| FR-KSK-16 | A discreet staff exit (e.g., 5 taps on the logo corner + nurse password) shall close kiosk mode; students cannot navigate out of `/kiosk` otherwise. *(Implemented per D-19 as full email + password nurse authentication, landing in the authenticated nurse queue — not a bare password prompt.)* | S |
 
 **AC:** scanning a valid QR (including a multi-line physical-ID payload — the IDNo is extracted before the lookup) lands on Identity in < 2 s; an invalid or unrecognized token shows a brief inline error and refocuses the hidden input; declining consent stores zero rows; pulling the MCU's USB cable mid-flow still allows finishing via manual entry; a submitted visit with no appointment shows as walk-in in the queue; after the 12 s countdown the next student sees a clean Welcome with no residue of the previous session.
 
@@ -435,7 +435,7 @@ Student health data never leaves the server (no third-party APIs). Access is lea
 | NFR-1 | Functional suitability | The clearance workflow produces a correct, printable result per student matching the official PamSU form | SM-3, SM-7 |
 | NFR-2 | Performance efficiency | Kiosk step transitions feel immediate (< 300 ms UI response); queue reflects submissions within one poll cycle | SM-2; manual timing |
 | NFR-3 | Compatibility | Kiosk: Chromium kiosk mode on Raspberry Pi OS. Web app: current Chrome/Edge/Firefox on desktop. **Web Serial is Chromium-only and only promised on the kiosk.** | Browser matrix smoke test |
-| NFR-4 | Interaction capability | Kiosk is touch-first at 800×480: ≥ 48 px touch targets, on-screen keyboards for all text/number input, no hover-dependent UI | UAT with non-team users |
+| NFR-4 | Interaction capability | Kiosk is touch-first at 800×480: ≥ 48 px touch targets, on-screen keyboards for all text/number input, no hover-dependent UI *(display presentation per D-18: responsive fill + `--k-zoom`; 800×480 stays the design/hardware target)* | UAT with non-team users |
 | NFR-5 | Reliability | Captured visits survive crashes/restarts until encoded; kiosk auto-resets between students; sensor failure never blocks a session (manual fallback) | SM-4; pull-the-plug tests |
 | NFR-6 | Security | RA 10173 consent at registration and per kiosk session; RBAC middleware; bcrypt password hashing; server-side college scoping; CSRF protection; Web Serial confined to localhost; no public exposure of health data | SM-5; negative-path test suite |
 | NFR-7 | Maintainability | One Laravel codebase; shared Blade components (HPButton, HPCard, HPBadge, HPInput, HPSelect, HPTextarea, HPLogo, SidebarLayout); thresholds and capacity centralized in `config/healthpass.php`; Git feature-branch + PR workflow | Code review checklist |
@@ -479,7 +479,7 @@ The page-by-page behavioural spec in `HealthPass_Context.md` §7 (field lists, b
 
 ### 8.4 Kiosk-specific UX rules
 
-800×480 fixed canvas scaled to the display, dark letterbox; 3-phase vital capture (ready → scanning → captured) with progress dots; virtual QWERTY + numeric pads for all input; large hit areas; "Not you?" and "Decline" always escape to Welcome; 12 s completion auto-reset; 90 s idle reset (FR-KSK-15); no browser chrome, no navigation out of the flow.
+800×480 fixed canvas scaled to the display, dark letterbox; 3-phase vital capture (ready → scanning → captured) with progress dots; virtual QWERTY + numeric pads for all input; large hit areas; "Not you?" and "Decline" always escape to Welcome; 12 s completion auto-reset; 90 s idle reset (FR-KSK-15); no browser chrome, no navigation out of the flow. *(Display presentation superseded by D-18: responsive fill + `--k-zoom`; 800×480 stays the design canvas and hardware target.)*
 
 ---
 ## 9. Technical Architecture
@@ -631,6 +631,8 @@ Non-programmer team across all sprints: paper title/scope revision (R-6), test c
 | D-15 | **Booking available on weekends (clinic open daily)** — past dates still unbookable; capacity rule unchanged | Scope change approved by team/adviser |
 | D-16 | **Kiosk surfaces a walk-in confirmation gate** (FR-KSK-03a) after Identity Confirm and before Privacy Consent, shown only when the student has **no non-cancelled appointment dated today at all — medical *or* dental**. Submit-time `appointment_id` linkage (FR-KSK-12 / BR-10) stays **medical-only** and unchanged. | Sets the student's expectation up front (anything booked today vs. nothing) without altering how the visit links to an appointment. A dental booking suppresses the "no clearance" notice but does not link at submit — dental stays scheduling-only (D-3), so a dental-only student records as a walk-in. |
 | D-17 | **Student college is self-editable; current `college_id` drives all forward-looking behavior, a per-visit snapshot freezes history.** Changing a student's college re-scopes them live: future kiosk visits and College-Admin student lists/batch eligibility follow the current `student_profiles.college_id`, so admin reassignment is automatic (no manual move). Historical analytics stay frozen because each `clinic_visits` row snapshots `college_id` at submit (FR-KSK-12); FR-ANL-02/03/05/08 read that snapshot, so a transfer never re-attributes past cases or flags. | One editable field serves both "where the student is now" and "where they were screened" without a separate transfer table or history log. |
+| D-18 | **Kiosk display = responsive fill + `--k-zoom` scaling, superseding the fixed 800×480 letterbox.** The `.kiosk-panel` fills the viewport (`inset: 0`, no dark bars on any screen) and a single `--k-zoom` CSS var (default `1.3`) scales every rem-based size for 7″ readability. The **800×480 prototype canvas remains the design reference** (design system, §4.6, §8.4, NFR-4) and the **hardware still renders at 800×480**, so layout fidelity is preserved — only the letterbox-with-bars presentation is replaced. | Real hardware showed black bars and small type at a true fixed letterbox; fill + one zoom var reads 1:1 on the 800×480 target while degrading gracefully on any dev/preview viewport, with no per-breakpoint layout work. |
+| D-19 | **FR-KSK-16 staff exit is implemented as full email + password nurse authentication**, not a bare password prompt. The discreet exit gesture opens a nurse login; on success the redirect lands directly in the **authenticated nurse queue** (not merely back to a public page). | A real authentication establishes the nurse session the queue requires, so exit + resume-work is one step; a bare shared password would neither identify the nurse nor satisfy the queue's auth guard. |
 
 ---
 

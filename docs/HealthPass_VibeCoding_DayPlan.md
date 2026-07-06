@@ -938,6 +938,8 @@ Acceptance: with two browser windows on the queue, a visit inserted via tinker a
 BOTH within one cycle. Demonstrate this and tell me the tinker one-liner you used.
 ```
 
+**Amendment:** the queue-polling JSON endpoint must live **inside the `role:nurse` route group** — it exposes student names, colleges, vitals, and flags, so it is nurse-only like the queue view itself. Do not register it as a public/loose route.
+
 **Session 2:** buffer.
 
 **✅ Verify:** Dalawang windows + kiosk submit sa third → parehong queue nag-update ≤5s nang hindi nagre-refresh. SM-2 evidence — i-screenshot/video para sa paper.
@@ -1063,6 +1065,8 @@ Feature tests: missing result blocked; double-encode safe; linked appointment be
 completed; walk-in encodes fine; result then visible in the student's My Records
 (FR-STU-08 / BR-18).
 ```
+
+**Amendment:** `physician_name` and `physician_license_no` must be read from **`config/healthpass.php`** (add the keys there), **not** hardcoded as controller defaults. The clinic's signing physician changes without a code edit; the `"REYNALDO S. ALIPIO, MD"` / `"60252"` values above are the config *defaults*, not literals to bake into the transaction.
 
 **Session 2:** buffer.
 
@@ -1493,9 +1497,13 @@ healthpass-cases-YYYYMMDD.csv. The exports MUST share the same queries/scopes as
 on-screen views — one source of truth.
 ```
 
+**Amendment (security):** two non-negotiables on the exports —
+1. **CSV formula-injection escaping:** any cell whose value starts with `=`, `+`, `-`, or `@` (student names, notes, category text, etc.) must be neutralized (prefix with `'` or wrap so Excel/Sheets treats it as text) so an opened export can't execute a formula.
+2. **Role-gated:** the download routes stay behind the same role middleware as the Analytics / Flagged Anomalies screens (Director/Nurse as applicable) — never a public or loosely-guarded route.
+
 **Session 2:** buffer / bank it.
 
-**✅ Verify:** Buksan ang CSV sa Excel — readable, walang sirang characters; row counts match the screens.
+**✅ Verify:** Buksan ang CSV sa Excel — readable, walang sirang characters; row counts match the screens. A cell beginning with `=`/`+`/`-`/`@` opens as literal text, not a formula; the download route rejects a wrong-role / logged-out request.
 
 ---
 
@@ -1518,9 +1526,11 @@ meaningfully with zero manual setup.
 Document the exact "reset for demo" command sequence in docs/dev-notes.md.
 ```
 
+**Amendment (safety):** `DemoSeeder` must **abort immediately when `APP_ENV=production`** (guard at the top of `run()` — bail with a clear message, seed nothing). It fabricates ~120 students and a semester of visits; running it against a live deployment would pollute real data. Demo seeding is a dev/presentation-only operation.
+
 **Session 2:** buffer.
 
-**✅ Verify:** Run the reset sequence → click through ALL screens as all 4 roles — lahat may makabuluhang laman; analytics mukhang totoo.
+**✅ Verify:** Run the reset sequence → click through ALL screens as all 4 roles — lahat may makabuluhang laman; analytics mukhang totoo. Confirm that invoking the seeder with `APP_ENV=production` aborts and writes nothing.
 
 ---
 
@@ -1594,6 +1604,8 @@ docs/qa/security-sweep.md with each attempt → result. Fix only genuine holes w
 smallest possible change; FLAG any risky fix to me before applying it.
 ```
 
+**Amendment (already-fixed baseline):** the **kiosk forged-payload denial already exists** — identity is bound server-side to the session, so a submit carrying another student's id / missing consent / out-of-range vitals is rejected at the boundary (Jul 6 security-audit fix). This sweep should **confirm** that denial holds, not discover it as a new hole; if any forged submit succeeds, that's a regression to log and fix, not expected behavior.
+
 **✅ Verify:** security-sweep.md kumpleto; lahat ng attempts denied; risky fixes (kung meron) na-review mo bago in-apply.
 
 ---
@@ -1653,6 +1665,18 @@ any Windows-only steps clearly.
 **Protocol:** Fresh deploy sa Pi gamit ang docs/deployment-pi.md, verbatim — bawat hakbang na hindi gumana, ayusin ang DOC (at ang script kung kailangan, BUGFIX template). End state: Pi boots → Chromium kiosk auto-opens → buong flow gumagana → staff laptop umaabot sa queue over LAN.
 
 **✅ Verify:** Power-cycle ang Pi → bumabalik sa working kiosk nang walang manual na hakbang.
+
+---
+
+### Internet deployment (if required for completion) `[unscheduled]`
+
+**Ano'ng mangyayari:** The plan above targets the Pi-on-`localhost` deployment (D-9). If the adviser/panel requires the web app reachable over the internet, this is the extra shape — **not currently scheduled**; slot it in only if called for.
+
+- **Host + TLS:** a VPS with a real **domain** and **Let's Encrypt** certificate (HTTPS). Point the web app at `https://<domain>`.
+- **Real SMTP for OTPs:** swap the local/log mailer for a real SMTP provider so registration OTPs (D-8) actually deliver to students off-LAN.
+- **Config:** build the production `.env` from **`scripts/internet/.env.internet.example`** (APP_URL/APP_ENV=production, DB, mailer, session/cookie-secure flags) — never commit the real `.env`.
+- **Kiosk repointed:** the Pi's Chromium kiosk targets **`https://<domain>/kiosk`** instead of `http://localhost`. HTTPS is a secure context, so **Web Serial still works** off-localhost. ⚠️ **Chromium serial permission grants are PER-ORIGIN** — the grant Baldo set up for `http://localhost` does **not** carry to `https://<domain>`, so **Baldo's §7 serial-permission policy work must be redone for the new origin** (re-grant / re-provision the port on the Pi against the new URL).
+- **Open decision:** PRD **open decision #4 (hosting target)** is unresolved and needs the **adviser's call** — this whole block is an **unscheduled scope decision, ~1–2 days**. Flag it early; do not assume it into the timeline.
 
 ---
 
