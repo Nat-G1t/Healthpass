@@ -12,25 +12,38 @@ use App\Http\Controllers\Auth\VerifyEmailController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function () {
+    // NOTE on throttle prefixes: for a guest the rate-limit key is sha1(domain|ip)
+    // with NO path component, so several `throttle:x,y` routes on one IP would share
+    // ONE counter — the tightest cap (resend=3) would then trip on traffic from the
+    // other steps. The 3rd throttle arg is a bucket prefix; a distinct prefix per
+    // endpoint gives each its own independent counter (the audit's intent).
+
     // ── Registration wizard (FR-REG-01..08) ─────────────────────────────────
     // Step 1: Consent
     Route::get('register', [RegistrationWizardController::class, 'step1'])
         ->name('register');
     Route::post('register/consent', [RegistrationWizardController::class, 'storeConsent'])
+        ->middleware('throttle:15,1,reg-consent')
         ->name('register.consent');
 
     // Step 2: Personal Information
     Route::get('register/info', [RegistrationWizardController::class, 'step2'])
         ->name('register.info');
     Route::post('register/info', [RegistrationWizardController::class, 'storeInfo'])
+        ->middleware('throttle:15,1,reg-info')
         ->name('register.info.store');
 
     // Step 3: Email Verify (FR-REG-04 / FR-REG-05 / Decision D-8)
     Route::get('register/verify', [RegistrationWizardController::class, 'step3'])
         ->name('register.verify');
+    // throttle:10,1 caps guesses across codes (the per-code 5-attempt cap still
+    // applies inside verifyOtp); resend is throttle:3,5 — it sends real email, so
+    // this is the mail-bomb chokepoint (3 per 5 minutes).
     Route::post('register/verify', [RegistrationWizardController::class, 'verifyOtp'])
+        ->middleware('throttle:10,1,reg-verify')
         ->name('register.verify.submit');
     Route::post('register/verify/resend', [RegistrationWizardController::class, 'resendOtp'])
+        ->middleware('throttle:3,5,reg-resend')
         ->name('register.verify.resend');
 
     // Legacy Breeze route — removed; RegistrationWizardController handles registration.
@@ -45,6 +58,7 @@ Route::middleware('guest')->group(function () {
         ->name('password.request');
 
     Route::post('forgot-password', [PasswordResetLinkController::class, 'store'])
+        ->middleware('throttle:5,1,forgot-pw')
         ->name('password.email');
 
     Route::get('reset-password/{token}', [NewPasswordController::class, 'create'])

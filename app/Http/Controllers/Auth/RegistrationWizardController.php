@@ -17,6 +17,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
@@ -80,8 +81,14 @@ class RegistrationWizardController extends Controller
         $data = $request->validated();
         unset($data['password_confirmation']); // don't stage the confirmation copy
 
+        // Hash the password before it enters the session store. SESSION_DRIVER=database
+        // means staged data sits at rest in the sessions table until Step 3 OTP; staging
+        // a bcrypt hash instead of plaintext keeps the raw password out of that table.
+        // The User model's 'hashed' cast is a no-op on an already-bcrypt value (it detects
+        // the hash and skips re-hashing), so User::create() in Step 3 does not double-hash.
+        $data['password'] = Hash::make($data['password']);
+
         // Stage validated data server-side (FR-REG-08 — no user row yet).
-        // The User model's 'hashed' cast will bcrypt password on creation.
         $request->session()->put('reg.info', $data);
 
         return redirect()->route('register.verify');
@@ -168,7 +175,7 @@ class RegistrationWizardController extends Controller
                 'role' => 'student',
                 'name' => trim($info['first_name'].' '.$info['last_name']),
                 'email' => $info['email'],
-                'password' => $info['password'], // 'hashed' cast bcrypts on assignment
+                'password' => $info['password'], // pre-hashed at staging; 'hashed' cast is a no-op on a bcrypt value
                 'status' => 'active',
                 'email_verified_at' => now(),
             ]);
