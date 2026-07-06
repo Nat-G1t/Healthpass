@@ -76,6 +76,11 @@ Do not silently reconcile conflicts.
   `vitals` is a single screen with an internal `state.vitalStep` (1–4).
 - The kiosk route is **public** (no Laravel auth) — identity is established
   inside the flow via QR scan / email login.
+- **Kiosk endpoints are network-restricted** (loopback or authenticated
+  nurse — `KioskAccess` middleware) but auth-less for the person at the
+  terminal. Therefore **NEVER trust client-supplied identity or derived
+  values on kiosk endpoints**: student identity binds server-side in the
+  session at scan/login, and BMI/flags are always recomputed server-side.
 - **Display sizing: responsive fill + zoom** (supersedes the original fixed
   800×480 letterbox for real hardware). The panel fills the viewport
   (`.kiosk-panel { inset: 0 }`) so there are no black bars on any screen;
@@ -84,6 +89,16 @@ Do not silently reconcile conflicts.
   screen — tune it in `kiosk/index.blade.php`. **PRD divergence flagged:**
   the design-system "800×480 fixed" line refers to the design canvas; the
   hardware still renders at 800×480, so layout fidelity is preserved.
+
+## Deployment shapes
+
+- **Defense = Pi-local.** The app runs on the Pi; Chromium opens the kiosk
+  at `http://localhost/kiosk` (D-9) — see `docs/deployment-pi.md`.
+- **Internet = single hosted app over HTTPS.** The kiosk points at
+  `https://<domain>/kiosk` (HTTPS is a secure context, so Web Serial works;
+  serial permission grants are per-origin).
+- **Never key HTTPS-forcing logic on `APP_ENV`** — the Pi is
+  `APP_ENV=production` over plain `http://localhost` by design.
 
 ## Run / dev commands
 
@@ -94,6 +109,10 @@ npm run dev                       # terminal 2
 
 - Always use `127.0.0.1`, never `localhost`, in local URLs and config
 - MySQL via XAMPP must be running before artisan commands that touch DB
+- **Testing:** the suite runs on **SQLite in-memory** (`phpunit.xml`) while
+  dev/prod use MySQL. Keep all query-builder raw SQL portable — no
+  MySQL-only functions (e.g. `DAY()`/`MONTH()`) in `selectRaw`/`havingRaw`.
+  Any query that must use raw SQL needs a feature test so SQLite catches drift.
 
 ## Conventions
 
