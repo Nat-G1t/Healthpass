@@ -385,3 +385,43 @@ was never broken (a fresh page POSTs fine).
 updates `data-csrf`, and retries the request **once**. Verified live: stale token → 419 →
 `/kiosk/token` → retry → 200/422 (CSRF passes). If you still see a 419 after this, just
 reload `/kiosk` once to mint a fresh session.
+
+---
+
+## Pi deployment notes (gotchas hit during real Pi bring-up)
+
+Companion to `docs/deployment-pi.md` — the things that bit us on the actual
+Raspberry Pi 4 (Pi OS Bookworm 64-bit, Wayland/labwc) that the guide now bakes in.
+
+- **Run artisan as `www-data` on the Pi.** Every artisan command in the §6
+  update cycle (`migrate --force`, `config:cache`, `route:cache`, `view:cache`,
+  …) must run as `sudo -u www-data php artisan …`. `storage/` and
+  `bootstrap/cache/` are owned by `www-data`; running artisan as your login user
+  writes root/pi-owned cache and log files that php-fpm (running as `www-data`)
+  then can't read, and the app 500s. (This does not apply to local Windows dev —
+  only the Pi, where php-fpm serves as `www-data`.)
+
+- **nginx symlink — no trailing slash.** Enable the site with
+  `ln -sf …/sites-available/healthpass …/sites-enabled/healthpass`. A **trailing
+  slash** on the source (`…/sites-available/healthpass/ …`) creates a **broken
+  directory symlink**; `sudo nginx -t` then fails with a misleading
+  "No such file or directory". Link the file, not a directory.
+
+- **Port 80 already in use.** If `sudo systemctl restart nginx` fails to bind,
+  another service is holding port 80. Find it with `sudo ss -tlnp | grep :80`
+  and disable the conflicting service, then restart nginx.
+
+- **CRLF line endings on shell scripts.** A `.sh` checked out with Windows CRLF
+  fails on the Pi with a misleading "No such file or directory" (it's the `\r`
+  in the shebang, not a missing file). On-Pi one-off fix:
+  `sed -i 's/\r$//' scripts/pi/*.sh`. **The repo is already protected against
+  this** — root `.gitattributes` has `* text=auto eol=lf` and the committed
+  script blobs are LF (verified), so a *fresh* clone is clean; the `sed` is only
+  needed for an older checkout made before that rule, or a file hand-copied from
+  Windows.
+
+- **Slow kiosk appearance after boot is expected.** The systemd `ExecStartPre`
+  curl loop (deployment-pi.md §4) deliberately waits for nginx/php-fpm/MariaDB to
+  answer `http://localhost/kiosk` before launching Chromium, so the terminal
+  never opens on a connection-refused page. A few seconds of black/desktop before
+  Chromium appears is the loop doing its job, not a hang.

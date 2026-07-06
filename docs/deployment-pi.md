@@ -207,23 +207,51 @@ curl -I http://localhost/kiosk        # expect HTTP/1.1 200 OK
 ## 4. Chromium kiosk autostart
 
 Launcher script: `scripts/pi/kiosk-chromium.sh` — opens Chromium full-screen on
-`http://localhost/kiosk`, disables screen blanking, and suppresses the
-crash-restore / info bars. Copy it somewhere stable and make it executable:
+`http://localhost/kiosk`, disables screen blanking (X11 only; see below), and
+suppresses the crash-restore / info bars. Copy it somewhere stable and make it
+executable:
 
 ```bash
 sudo cp /var/www/healthpass/scripts/pi/kiosk-chromium.sh /usr/local/bin/healthpass-kiosk
 sudo chmod +x /usr/local/bin/healthpass-kiosk
 ```
 
-Then choose **one** autostart mechanism:
+> **Keyring prompt (why `--password-store=basic`).** With desktop autologin the
+> GNOME keyring is left **locked**, so Chromium pops an "unlock keyring" dialog
+> on launch — fatal for an unattended kiosk. The launcher passes
+> `--password-store=basic` to make Chromium use a plaintext store instead of the
+> keyring, so no dialog appears. (The kiosk stores no real secrets; the only
+> per-origin state we care about is the Web Serial grant, §7.)
 
-### Option A — systemd user service (works with the LXDE/Wayland desktop)
+**Enable desktop autologin first.** On newer Bookworm builds `sudo raspi-config`
+→ *System Options* → *Boot / Auto Login* shows only **B1** (console) and **B2**
+(desktop) — there is no separately labelled "Desktop Autologin" item; **B2 is
+the desktop-autologin choice.** You can also verify or set it directly in
+`/etc/lightdm/lightdm.conf` under `[Seat:*]`:
 
-The Pi still needs a graphical session (a display server) for Chromium. Enable
-desktop autologin first with `sudo raspi-config` → *System Options* →
-*Boot / Auto Login* → *Desktop Autologin*.
+```ini
+[Seat:*]
+autologin-user=pi            # replace with your login user
+```
 
-Create `~/.config/systemd/user/healthpass-kiosk.service`:
+Then choose **one** autostart mechanism. On **Bookworm/Wayland (labwc)** — the
+current default Pi OS desktop — use **Option A**. Option B is **legacy / X11
+only** (classic LXDE desktop).
+
+### Option A — systemd user service + labwc autostart (Bookworm / Wayland)
+
+This is the **reboot-verified** configuration for Pi OS Bookworm's default
+Wayland (labwc) session.
+
+> **Why not `WantedBy=graphical-session.target`?** On labwc that target is
+> **never activated**, so a service wired to it just stays loaded/inactive after
+> boot and Chromium never launches. Instead the service is left **disabled** and
+> started explicitly from the labwc autostart file (below), after importing the
+> Wayland environment into the user systemd manager.
+
+**1. Create `~/.config/systemd/user/healthpass-kiosk.service`** — note there is
+**no `[Install]` section** (the service is intentionally *not* enabled; it is
+started on demand):
 
 ```ini
 [Unit]
@@ -232,24 +260,44 @@ After=graphical-session.target
 PartOf=graphical-session.target
 
 [Service]
+# labwc runs a Wayland compositor on wayland-0; Chromium needs to find it.
+Environment=WAYLAND_DISPLAY=wayland-0
 ExecStartPre=/bin/sh -c 'until curl -sf http://localhost/kiosk >/dev/null; do sleep 2; done'
 ExecStart=/usr/local/bin/healthpass-kiosk
 Restart=always
 RestartSec=3
-
-[Install]
-WantedBy=graphical-session.target
 ```
 
 ```bash
-systemctl --user daemon-reload
-systemctl --user enable --now healthpass-kiosk
+systemctl --user daemon-reload      # no 'enable' — Option B's file starts it
 ```
 
 The `ExecStartPre` loop waits until the app answers before launching Chromium,
-so the kiosk never opens on a connection-refused page during boot.
+so the kiosk never opens on a connection-refused page during boot. (Expect a
+short delay after boot while this loop waits for nginx/php-fpm/MariaDB.)
 
-### Option B — LXDE autostart (simplest on the classic Pi desktop)
+**2. Create `~/.config/labwc/autostart`** — this is a **file, not a directory**
+(create it if missing). It hands the Wayland environment to the user systemd
+manager, then starts the service:
+
+```sh
+systemctl --user import-environment WAYLAND_DISPLAY XDG_RUNTIME_DIR
+systemctl --user start healthpass-kiosk &
+```
+
+> The `import-environment` line is **mandatory** — without it the user systemd
+> manager has no `WAYLAND_DISPLAY`/`XDG_RUNTIME_DIR`, and Chromium cannot find
+> the Wayland compositor (it exits immediately, and `Restart=always` then loops).
+
+**3. Screen blanking** on Wayland is **not** handled by `xset` (X11 only — the
+`xset` block in the launcher is a harmless no-op under Wayland). Disable blanking
+via `sudo raspi-config` → *Display Options* → *Screen Blanking* → *No*.
+
+### Option B — LXDE autostart (**legacy / X11 only**)
+
+> **Applies only to the classic X11 LXDE desktop, not Bookworm/Wayland (labwc).**
+> The `xset` lines below are X11-only and do nothing under Wayland; on Wayland
+> use raspi-config → Display Options → Screen Blanking (see Option A step 3).
 
 Add to `~/.config/lxsession/LXDE-pi/autostart` (create the file if missing):
 
@@ -316,8 +364,13 @@ cd /var/www/healthpass
 git pull --ff-only
 composer install --no-dev --optimize-autoloader
 npm ci && npm run build
-php artisan migrate --force
-php artisan config:cache && php artisan route:cache && php artisan view:cache
+# Run artisan as www-data — storage/ and bootstrap/cache/ are owned by www-data,
+# so running as your login user would write root/pi-owned cache/log files that
+# php-fpm (www-data) then can't read. See docs/dev-notes.md → Pi deployment notes.
+sudo -u www-data php artisan migrate --force
+sudo -u www-data php artisan config:cache
+sudo -u www-data php artisan route:cache
+sudo -u www-data php artisan view:cache
 sudo systemctl restart nginx php8.2-fpm     # or: healthpass-serve
 ```
 
@@ -349,6 +402,27 @@ Things for Baldo to test and document here once we have the hardware:
 - [ ] Final decision + exact flags/policy, so the kiosk build is reproducible.
 
 Fill this section with the tested, working configuration.
+
+---
+
+## 8. Post-deployment verification checklist (PENDING — not yet done)
+
+> These checks confirm the Pi behaves the same behind nginx/php-fpm as it does
+> under `php artisan serve`/SQLite tests. **They have NOT been run yet** — do not
+> assume they pass. Tick them off against the actual Pi deployment.
+
+- [ ] **KioskAccess middleware behind nginx/php-fpm.** Re-run all four cases on
+      the Pi (not just the test suite) — this depends on nginx passing the real
+      `REMOTE_ADDR` to PHP via fastcgi:
+  - [ ] loopback (`http://localhost/kiosk`, `127.0.0.1`) → **200**
+  - [ ] LAN anonymous (`http://<pi-ip>/kiosk`) → **403**
+  - [ ] nurse-authenticated over LAN → **200**
+  - [ ] `HEALTHPASS_KIOSK_RESTRICT=false` allows LAN → **200**
+- [ ] **Secure context / Web Serial.** In Chromium DevTools console at
+      `http://localhost/kiosk`, confirm `navigator.serial` is **defined**
+      (secure-context check, FR-KSK-07 / FR-HW-05).
+- [ ] **Web Serial permission persistence (§7).** Placeholder for Baldo after
+      hardware testing (Days 31–32) — see §7.
 
 ---
 

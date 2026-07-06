@@ -20,6 +20,9 @@ fi
 # --kiosk: borderless full screen, no exit chrome.
 # --incognito + fresh profile dir: no restore-tabs / "didn't shut down" bubble.
 # --disable-* flags: suppress the crash-restore bar and info bars on the Pi.
+# --password-store=basic: desktop autologin leaves the GNOME keyring locked, which
+#   makes Chromium pop an "unlock keyring" dialog on launch (fatal on an unattended
+#   kiosk). Force a plaintext store so no dialog appears. See docs/deployment-pi.md §4.
 exec "$CHROME_BIN" \
   --kiosk \
   --incognito \
@@ -27,6 +30,7 @@ exec "$CHROME_BIN" \
   --disable-infobars \
   --disable-session-crashed-bubble \
   --disable-features=TranslateUI \
+  --password-store=basic \
   --check-for-update-interval=31536000 \
   --user-data-dir="$HOME/.config/healthpass-kiosk" \
   "$KIOSK_URL"
