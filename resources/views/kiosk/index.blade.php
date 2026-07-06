@@ -127,6 +127,7 @@
         data-scan-url="{{ route('kiosk.scan') }}"
         data-login-url="{{ route('kiosk.login') }}"
         data-submit-url="{{ route('kiosk.submit') }}"
+        data-reset-url="{{ route('kiosk.reset') }}"
         data-exit-url="{{ route('kiosk.exit') }}"
         data-token-url="{{ route('kiosk.token') }}"
         data-csrf="{{ csrf_token() }}"

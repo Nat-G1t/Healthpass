@@ -63,9 +63,18 @@ class KioskSubmitTest extends TestCase
         return array_replace_recursive($base, $overrides);
     }
 
+    /**
+     * Submit as $studentId. Identity is now taken from the SERVER session (set
+     * at scan/login), never the body, so we seed the kiosk.* session keys the
+     * way scan() would — the payload's studentUserId is along for the ride but
+     * ignored by the endpoint.
+     */
     private function submit(int $studentId, array $overrides = [])
     {
-        return $this->postJson(route('kiosk.submit'), $this->payload($studentId, $overrides));
+        return $this->withSession([
+            'kiosk.student_id' => $studentId,
+            'kiosk.login_method' => 'qr',
+        ])->postJson(route('kiosk.submit'), $this->payload($studentId, $overrides));
     }
 
     // ── Three linked rows in one transaction ──────────────────────────────────
@@ -107,6 +116,91 @@ class KioskSubmitTest extends TestCase
         $this->assertSame(0, ClinicVisit::count());
         $this->assertSame(0, VitalSigns::count());
         $this->assertSame(0, ScreeningResponse::count());
+    }
+
+    // ── Identity is server-side, never trusted from the body (security) ───────
+
+    /**
+     * The endpoint attributes the visit to the SESSION student, not whatever id
+     * the body carries. Forging a different studentUserId must have no effect —
+     * this is the whole point of binding identity server-side.
+     */
+    public function test_forged_student_id_in_body_is_ignored(): void
+    {
+        $sessionStudent = $this->student();
+        $victim = $this->student();
+
+        // Session says sessionStudent; the body tries to pin it on the victim.
+        $this->withSession([
+            'kiosk.student_id' => $sessionStudent->id,
+            'kiosk.login_method' => 'qr',
+        ])->postJson(route('kiosk.submit'), $this->payload($victim->id))
+            ->assertOk();
+
+        $this->assertSame(1, ClinicVisit::count());
+        $this->assertSame($sessionStudent->id, ClinicVisit::first()->student_id);
+    }
+
+    /**
+     * No established kiosk identity (never scanned/logged in, or the session
+     * expired) → 422 and nothing written, even with an otherwise-valid payload.
+     */
+    public function test_submit_without_kiosk_identity_is_rejected(): void
+    {
+        $student = $this->student();
+
+        $this->postJson(route('kiosk.submit'), $this->payload($student->id))
+            ->assertStatus(422)
+            ->assertJson(['ok' => false]);
+
+        $this->assertSame(0, ClinicVisit::count());
+    }
+
+    /**
+     * End-to-end wiring: a real QR scan binds identity to the session, and a
+     * follow-up submit (same session) persists THAT student — no studentUserId
+     * needed in the body at all.
+     */
+    public function test_scan_establishes_identity_then_submit_persists_it(): void
+    {
+        $college = College::firstOrCreate(['code' => 'CCS'], ['name' => 'College of Computing Studies']);
+        $profile = StudentProfile::factory()->forCollege($college)->create(['qr_token' => 'INTEGRATION-TOKEN']);
+        $student = $profile->user;
+
+        $this->postJson(route('kiosk.scan'), ['token' => 'INTEGRATION-TOKEN'])
+            ->assertOk()
+            ->assertSessionHas('kiosk.student_id', $student->id)
+            ->assertSessionHas('kiosk.login_method', 'qr');
+
+        // No studentUserId/loginMethod needed — identity comes from the session.
+        $body = $this->payload($student->id);
+        unset($body['studentUserId'], $body['loginMethod']);
+        $this->postJson(route('kiosk.submit'), $body)->assertOk();
+
+        $visit = ClinicVisit::first();
+        $this->assertSame($student->id, $visit->student_id);
+        $this->assertSame('qr', $visit->login_method);
+    }
+
+    /**
+     * Identity is single-use: submit forgets the kiosk.* keys on success, so a
+     * replayed POST in the same session cannot mint a second visit.
+     */
+    public function test_identity_is_forgotten_after_a_successful_submit(): void
+    {
+        $college = College::firstOrCreate(['code' => 'CCS'], ['name' => 'College of Computing Studies']);
+        $profile = StudentProfile::factory()->forCollege($college)->create(['qr_token' => 'REPLAY-TOKEN']);
+        $student = $profile->user;
+
+        $this->postJson(route('kiosk.scan'), ['token' => 'REPLAY-TOKEN'])->assertOk();
+        $this->postJson(route('kiosk.submit'), $this->payload($student->id))->assertOk();
+
+        // Same session, identity now cleared → the replay is refused.
+        $this->postJson(route('kiosk.submit'), $this->payload($student->id))
+            ->assertStatus(422)
+            ->assertJson(['ok' => false]);
+
+        $this->assertSame(1, ClinicVisit::count());
     }
 
     // ── Flag booleans at boundary values (§7.4, D-10) ─────────────────────────

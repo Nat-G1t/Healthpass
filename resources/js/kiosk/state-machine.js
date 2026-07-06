@@ -323,8 +323,25 @@ export function kioskMachine() {
         reset() {
             this.clearIdle();
             this.clearCompleteCountdown();
+            // Drop the server-side kiosk identity too. This is the single choke
+            // point for every abandon/finish path ("Not you?", consent Decline,
+            // the 90s idle reset, Complete's Done + auto-reset), so clearing it
+            // here covers them all (submit() already forgets on success).
+            this.forgetKioskIdentity();
             this.state = freshState();
             this.focusWedge();
+        },
+
+        /**
+         * Best-effort: tell the server to forget the bound kiosk identity
+         * (kiosk.* session keys). Fire-and-forget so it never blocks the UI —
+         * a failed clear is self-healed by the next scan/login overwriting the
+         * keys, and by submit()'s own server-side forget on success.
+         */
+        forgetKioskIdentity() {
+            const url = this.$refs.root.dataset.resetUrl;
+            if (!url) return;
+            this.kioskPost(url, {}).catch(() => {});
         },
 
         // ── Session lifecycle timers (FR-KSK-13/15) ──────────────────────────

@@ -38,6 +38,14 @@ return [
 
     // FR-KSK-13, FR-KSK-15: Kiosk session lifecycle timings.
     'kiosk' => [
+        // Security (audit fix): restrict who can reach the /kiosk route group by
+        // NETWORK. The page stays auth-less for the person AT the terminal, but only
+        // the Pi's own loopback (127.0.0.1/::1) or an authenticated active nurse may
+        // reach it (keeps FR-NRS-06 "Enable Kiosk Mode" working from staff machines).
+        // Set false (env HEALTHPASS_KIOSK_RESTRICT=false) to allow LAN access for
+        // local dev/testing. Secure by default. See App\Http\Middleware\KioskAccess.
+        'restrict_access' => env('HEALTHPASS_KIOSK_RESTRICT', true),
+
         'complete_reset_seconds' => 12,  // FR-KSK-13: auto-reset after successful submission
         'idle_timeout_seconds' => 90,  // FR-KSK-15: abandon reset on no interaction mid-flow
         // FR-KSK-07 / FR-HW-05, §11.2: Web Serial sensor link. `serial_baud` must

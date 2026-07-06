@@ -23,7 +23,6 @@ Route::get('/', function () {
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
 // ── Student (FR-AUTH-03) ─────────────────────────────────────────────────────
@@ -43,8 +42,14 @@ Route::middleware(['auth', 'role:student'])
         Route::patch('/id-profile', [StudentProfileController::class, 'update'])->name('id-profile.update');
         Route::post('/id-profile/link-id', [StudentProfileController::class, 'linkId'])->name('id-profile.link-id');
         Route::get('/id-profile/verify-email', [StudentProfileController::class, 'showEmailVerification'])->name('id-profile.verify-email');
-        Route::post('/id-profile/verify-email', [StudentProfileController::class, 'verifyEmail'])->name('id-profile.verify-email.submit');
-        Route::post('/id-profile/verify-email/resend', [StudentProfileController::class, 'resendEmailOtp'])->name('id-profile.verify-email.resend');
+        // throttle:10,1 caps OTP guesses (per-code 5-attempt cap still applies inside
+        // verifyEmail); resend is throttle:3,5 — it sends real email to the new address,
+        // so this is the mail-bomb chokepoint (3 per 5 minutes). The 3rd arg is a bucket
+        // prefix: for an authed user the rate-limit key is sha1(user id) with no path, so
+        // without distinct prefixes submit + resend would share one counter and the tight
+        // resend cap would trip on the user's own verify attempts.
+        Route::post('/id-profile/verify-email', [StudentProfileController::class, 'verifyEmail'])->middleware('throttle:10,1,idp-verify')->name('id-profile.verify-email.submit');
+        Route::post('/id-profile/verify-email/resend', [StudentProfileController::class, 'resendEmailOtp'])->middleware('throttle:3,5,idp-resend')->name('id-profile.verify-email.resend');
         Route::post('/id-profile/verify-email/cancel', [StudentProfileController::class, 'cancelEmailChange'])->name('id-profile.verify-email.cancel');
     });
 
@@ -78,7 +83,13 @@ Route::middleware(['auth', 'role:director'])
 // ── Kiosk (Module KSK, FR-KSK-01..16) — PUBLIC clinic terminal ───────────────
 // No auth: identity is established inside the flow (QR scan / email login),
 // not via a logged-in session. On the Pi this is opened full-screen.
-Route::prefix('kiosk')->name('kiosk.')->group(function () {
+//
+// Auth-less for the person AT the terminal, but the NETWORK is restricted by the
+// `kiosk.access` middleware (security audit fix): only the Pi's own loopback or an
+// authenticated active nurse may reach these endpoints — everyone else gets 403.
+// This stops /kiosk/scan being used from the LAN/internet as a PII oracle against
+// guessable QR tokens. Toggle off with HEALTHPASS_KIOSK_RESTRICT=false for LAN dev.
+Route::prefix('kiosk')->name('kiosk.')->middleware('kiosk.access')->group(function () {
     Route::get('/', [KioskController::class, 'index'])->name('index');
     // Fresh CSRF token for self-healing (see KioskController@token). A GET, so
     // it needs no token itself; the kiosk calls it to recover from a stale token
@@ -98,6 +109,12 @@ Route::prefix('kiosk')->name('kiosk.')->group(function () {
     Route::post('/submit', [KioskController::class, 'submit'])
         ->middleware('throttle:20,1')
         ->name('submit');
+    // Forget the server-side kiosk identity (kiosk.* session keys). The Alpine
+    // reset() calls this on every abandon/finish path so a bound student never
+    // lingers into the next session. Same throttle as scan — it is unauthenticated.
+    Route::post('/reset', [KioskController::class, 'reset'])
+        ->middleware('throttle:30,1')
+        ->name('reset');
     // Discreet staff exit (FR-KSK-16): the 5-tap corner gesture opens a prompt
     // for a nurse's credentials; a valid nurse is logged in and the kiosk hands
     // off to the nurse queue. Same tight throttle as login — it is a credential

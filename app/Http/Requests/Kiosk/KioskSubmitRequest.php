@@ -40,13 +40,11 @@ final class KioskSubmitRequest extends FormRequest
         $bounds = config('healthpass.validation');
 
         $rules = [
-            // Must resolve to an ACTIVE STUDENT — the same gate as kiosk login,
-            // re-checked here so a tampered payload can't attach to staff/inactive.
-            'studentUserId' => [
-                'required', 'integer',
-                Rule::exists('users', 'id')->where('role', 'student')->where('status', 'active'),
-            ],
-            'loginMethod' => ['required', Rule::in(['qr', 'email'])],
+            // NOTE: studentUserId + loginMethod are intentionally NOT validated
+            // here. Identity is bound to the server session at scan/login and
+            // read from there in KioskController@submit — never from the request
+            // body — so a tampered payload cannot attach a visit to another
+            // student. The active-student re-check lives there too.
             'privacyConsentAt' => ['required', 'date'], // consent must be present (FR-KSK-04)
 
             // Provenance of each captured step; the roll-up to sensor/manual/mixed

@@ -80,6 +80,14 @@ final class KioskController extends Controller
             ], 422);
         }
 
+        // Bind identity to the SERVER session (see submit() for why). The kiosk
+        // stays public — this is NOT a Laravel login, just a kiosk-scoped key
+        // the submit endpoint trusts instead of the (spoofable) request body.
+        $request->session()->put([
+            'kiosk.student_id' => $profile->user_id,
+            'kiosk.login_method' => 'qr',
+        ]);
+
         return response()->json([
             'ok' => true,
             'identity' => $this->identityPayload($profile, 'qr'),
@@ -153,6 +161,15 @@ final class KioskController extends Controller
             return $invalid;
         }
 
+        // Bind identity to the SERVER session (see submit()). Same kiosk-scoped
+        // key the QR path sets — the two flows converge here so submit trusts
+        // the session, never the request body, regardless of how the student
+        // signed in.
+        $request->session()->put([
+            'kiosk.student_id' => $user->studentProfile->user_id,
+            'kiosk.login_method' => 'email',
+        ]);
+
         return response()->json([
             'ok' => true,
             'identity' => $this->identityPayload($user->studentProfile, 'email'),
@@ -162,20 +179,69 @@ final class KioskController extends Controller
     /**
      * Final submit (FR-KSK-12): persist the whole kiosk session.
      *
-     * The Form Request has already re-validated everything server-side (ranges,
-     * completeness, consent, active-student gate). The Action then writes the
-     * clinic_visits + vital_signs + screening_responses rows in one transaction
-     * and computes the authoritative flag booleans (§7.4). We return the minted
-     * HP-YYYY-#### reference so the Complete screen can show it (FR-KSK-13).
+     * SECURITY: the student's identity is taken from the SERVER session (set by
+     * scan()/login()), NEVER from the request body. Otherwise anyone who can
+     * reach this public endpoint could forge a clinic visit for any active
+     * student by posting their id. The body's studentUserId/loginMethod (if
+     * present) are ignored; the Form Request no longer validates them.
+     *
+     * The Form Request has already re-validated the payload server-side (ranges,
+     * completeness, consent). The Action then writes the clinic_visits +
+     * vital_signs + screening_responses rows in one transaction and computes the
+     * authoritative flag booleans (§7.4). We return the minted HP-YYYY-####
+     * reference so the Complete screen can show it (FR-KSK-13).
      */
     public function submit(KioskSubmitRequest $request, SubmitKioskVisit $action): JsonResponse
     {
-        $visit = $action->handle($request->validated());
+        $studentId = $request->session()->get('kiosk.student_id');
+        $loginMethod = $request->session()->get('kiosk.login_method');
+
+        // No established kiosk identity (never scanned/logged in, or the session
+        // expired), or the bound id no longer resolves to an active student
+        // (e.g. deactivated mid-session). Re-check against the SESSION value.
+        $hasIdentity = $studentId !== null && $loginMethod !== null
+            && User::where('id', $studentId)
+                ->where('role', 'student')
+                ->where('status', 'active')
+                ->exists();
+
+        if (! $hasIdentity) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Session expired — please start again.',
+            ], 422);
+        }
+
+        $visit = $action->handle([
+            ...$request->validated(),
+            'studentUserId' => (int) $studentId,
+            'loginMethod' => $loginMethod,
+        ]);
+
+        // Identity is single-use: forget it so a replayed POST cannot mint a
+        // second visit without a fresh scan/login (the kiosk browser session is
+        // shared across every student on the Pi).
+        $request->session()->forget(['kiosk.student_id', 'kiosk.login_method']);
 
         return response()->json([
             'ok' => true,
             'reference' => $visit->reference_no,
         ]);
+    }
+
+    /**
+     * Forget the kiosk identity (FR-KSK-13/15 support).
+     *
+     * Called by the Alpine state machine's reset() on every abandon/finish path
+     * ("Not you?", consent Decline, the 90s idle reset, and the Complete
+     * screen's reset) so a student's bound identity never lingers into the next
+     * session. Submit already forgets on success; this covers everything else.
+     */
+    public function reset(Request $request): JsonResponse
+    {
+        $request->session()->forget(['kiosk.student_id', 'kiosk.login_method']);
+
+        return response()->json(['ok' => true]);
     }
 
     /**
@@ -235,8 +301,9 @@ final class KioskController extends Controller
      * Shape the student identity sent to the front-end (FR-KSK-03).
      *
      * Only display-safe fields leave the server — the kiosk never needs the
-     * full profile. `studentUserId` + `loginMethod` are carried so a later
-     * week can stamp the clinic_visits row (login_method) at submit.
+     * full profile. `studentUserId` + `loginMethod` are echoed for the client's
+     * own display/state; they are NOT trusted at submit, which reads identity
+     * from the server session instead (see submit()).
      *
      * `hasAppointmentToday` is computed HERE, server-side, so the Walk-in
      * Check (FR-KSK-03a) can never be spoofed by client state: the front-end
