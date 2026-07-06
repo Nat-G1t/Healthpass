@@ -131,6 +131,33 @@ class BookAppointmentTest extends TestCase
         ]);
     }
 
+    /**
+     * FR-STU-03 / BR-02 — a date filled to capacity is reported by the availability
+     * endpoint. This is the first test to exercise fullDaysForMonth(); it guards the
+     * portable (non-MySQL) query so the SQLite suite can't regress to "no such
+     * function: DAY".
+     */
+    public function test_full_day_appears_in_availability_json(): void
+    {
+        config(['healthpass.daily_capacity' => 2]);
+
+        $date = $this->futureDate(5);
+        $carbon = \Illuminate\Support\Carbon::parse($date);
+
+        Appointment::factory()->count(2)->create([
+            'scheduled_date' => $date,
+            'status' => 'scheduled',
+        ]);
+
+        $this->actingAs($this->student())
+            ->getJson(route('student.appointments.availability', [
+                'year' => $carbon->year,
+                'month' => $carbon->month,
+            ]))
+            ->assertOk()
+            ->assertJsonPath('full_days', fn ($days) => in_array($carbon->day, $days, true));
+    }
+
     // ── 4. Duplicate rejection (FR-STU-05 / BR-04) ───────────────────────────
 
     public function test_duplicate_active_appointment_for_same_service_and_date_is_rejected(): void

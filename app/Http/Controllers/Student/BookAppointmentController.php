@@ -11,6 +11,7 @@ use App\Services\ReferenceNumberService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
@@ -110,6 +111,10 @@ class BookAppointmentController extends Controller
      * Day numbers (1–31) where non-cancelled appointment count >= daily_capacity.
      * Implements FR-STU-03 / BR-02.
      *
+     * Groups on the full scheduled_date (not DAY(...)) so the query stays portable —
+     * MySQL in dev, SQLite in the test suite. The day-of-month is derived in PHP.
+     * whereYear/whereMonth are compiled per-driver by Laravel, so they're safe here.
+     *
      * @return int[]
      */
     private function fullDaysForMonth(int $year, int $month): array
@@ -120,11 +125,11 @@ class BookAppointmentController extends Controller
             ->whereYear('scheduled_date', $year)
             ->whereMonth('scheduled_date', $month)
             ->where('status', '!=', 'cancelled')
-            ->selectRaw('DAY(scheduled_date) as day, COUNT(*) as cnt')
-            ->groupByRaw('DAY(scheduled_date)')
-            ->havingRaw('cnt >= ?', [$capacity])
-            ->pluck('day')
-            ->map(fn ($d) => (int) $d)
+            ->select('scheduled_date', DB::raw('COUNT(*) as cnt'))
+            ->groupBy('scheduled_date')
+            ->having('cnt', '>=', $capacity)
+            ->pluck('scheduled_date')
+            ->map(fn ($date) => Carbon::parse($date)->day)
             ->values()
             ->all();
     }
