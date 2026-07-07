@@ -38,6 +38,9 @@ Route::middleware(['auth', 'role:student'])
         Route::get('/appointments/{appointment}/confirmed', [BookAppointmentController::class, 'confirmed'])->name('appointments.confirmed');
         Route::delete('/appointments/{appointment}', [BookAppointmentController::class, 'cancel'])->name('appointments.cancel');
         Route::get('/records', StudentRecordsController::class)->name('records');
+        // Kiosk Tutorial (FR-STU-11): static walkthrough, no data to prepare —
+        // Route::view renders the Blade view directly, no controller needed.
+        Route::view('/tutorial', 'student.tutorial')->name('tutorial');
         Route::get('/id-profile', [StudentProfileController::class, 'show'])->name('id-profile');
         Route::patch('/id-profile', [StudentProfileController::class, 'update'])->name('id-profile.update');
         Route::post('/id-profile/link-id', [StudentProfileController::class, 'linkId'])->name('id-profile.link-id');

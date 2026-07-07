@@ -78,9 +78,15 @@ class BookAppointmentController extends Controller
     {
         abort_if($appointment->student_id !== $request->user()->id, 403);
 
+        // FR-STU-11: on the student's first-ever booking (their total appointment
+        // count — any status — is exactly this one), the view shows a one-time
+        // modal recommending the kiosk tutorial. Computed server-side.
+        $isFirstBooking = Appointment::where('student_id', $request->user()->id)->count() === 1;
+
         return view('student.book-confirmed', [
             'appointment' => $appointment,
             'clinicHours' => config('healthpass.clinic_hours'),
+            'isFirstBooking' => $isFirstBooking,
         ]);
     }
 
