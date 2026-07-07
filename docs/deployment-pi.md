@@ -315,6 +315,42 @@ The `@` prefix tells LXDE to relaunch the command if it crashes.
 > During development you can also press F11 for `--fullscreen`, as in yesterday's
 > test — but `--kiosk` is what you want unattended (no exit chrome).
 
+### Dev mode — desktop shortcut instead of autostart
+
+While the Pi doubles as a dev machine, boot-to-kiosk gets in the way (you land
+in Chromium every boot and the service relaunches it on close). Switch to an
+on-demand desktop launcher:
+
+**1. Disable autostart.** Comment out the start line in
+`~/.config/labwc/autostart` — keep the `import-environment` line, it's harmless
+and needed again when you re-enable for the defense:
+
+```sh
+systemctl --user import-environment WAYLAND_DISPLAY XDG_RUNTIME_DIR
+# systemctl --user start healthpass-kiosk &
+```
+
+That's the only switch: the service has no `[Install]` section and was never
+enabled, so this line is the sole thing that starts it at boot.
+
+**2. Install the desktop shortcut** (`scripts/pi/healthpass-kiosk.desktop`):
+
+```bash
+cp /var/www/healthpass/scripts/pi/healthpass-kiosk.desktop ~/Desktop/
+chmod +x ~/Desktop/healthpass-kiosk.desktop
+```
+
+On first double-click PCManFM asks *Execute / Open / Cancel* — choose
+**Execute**. To stop the prompt: File Manager → *Edit* → *Preferences* →
+*General* → tick *"Don't ask options on launch executable file"*.
+
+The shortcut runs the launcher script directly (not the systemd service), so
+there is no `Restart=always`: **Alt+F4 closes the kiosk** and returns to the
+desktop — no restart loop during development.
+
+**Re-enable for the defense:** uncomment the line from step 1. The desktop
+shortcut can stay; it's inert unless clicked.
+
 ---
 
 ## 5. Staff access over the campus LAN
@@ -434,6 +470,7 @@ Fill this section with the tested, working configuration.
 | Clone + configure | `bash scripts/pi/setup-app.sh` |
 | Pi env template | `scripts/pi/pi.env.example` |
 | Kiosk launcher | `scripts/pi/kiosk-chromium.sh` |
+| Dev-mode desktop shortcut | `scripts/pi/healthpass-kiosk.desktop` (§4 dev mode) |
 | Kiosk URL (on Pi) | `http://localhost/kiosk` |
 | Staff URL (LAN) | `http://<pi-ip>/` |
 | Local health check | `curl -I http://localhost/kiosk` |

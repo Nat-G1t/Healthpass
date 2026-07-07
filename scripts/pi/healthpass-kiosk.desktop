@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=HealthPass Kiosk
+Comment=Launch Chromium full-screen on http://localhost/kiosk
+Exec=/usr/local/bin/healthpass-kiosk
+Icon=chromium
+Terminal=false
