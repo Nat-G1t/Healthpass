@@ -450,24 +450,52 @@ Fill this section with the tested, working configuration.
 
 ---
 
-## 8. Post-deployment verification checklist (PENDING — not yet done)
+## 8. Post-deployment verification checklist (verified 2026-07-07)
 
 > These checks confirm the Pi behaves the same behind nginx/php-fpm as it does
-> under `php artisan serve`/SQLite tests. **They have NOT been run yet** — do not
-> assume they pass. Tick them off against the actual Pi deployment.
+> under `php artisan serve`/SQLite tests. Run on the actual Pi deployment
+> **2026-07-07** — all software-side checks passed. The only open items are the
+> hardware-dependent ones (real sensor + Web Serial grant), deferred to the
+> next joint day with Baldo.
 
-- [ ] **KioskAccess middleware behind nginx/php-fpm.** Re-run all four cases on
-      the Pi (not just the test suite) — this depends on nginx passing the real
-      `REMOTE_ADDR` to PHP via fastcgi:
-  - [ ] loopback (`http://localhost/kiosk`, `127.0.0.1`) → **200**
-  - [ ] LAN anonymous (`http://<pi-ip>/kiosk`) → **403**
-  - [ ] nurse-authenticated over LAN → **200**
-  - [ ] `HEALTHPASS_KIOSK_RESTRICT=false` allows LAN → **200**
-- [ ] **Secure context / Web Serial.** In Chromium DevTools console at
-      `http://localhost/kiosk`, confirm `navigator.serial` is **defined**
+- [x] **App answers on port 80** — `curl -I http://localhost/kiosk` → 200;
+      nginx/php-fpm/MariaDB all active after boot.
+- [x] **Compiled assets served** (no Vite dev) — kiosk renders fully styled
+      from `public/build`.
+- [x] **Database seeded** — demo staff login works on the web app.
+- [x] **KioskAccess middleware behind nginx/php-fpm.** All four cases re-run on
+      the Pi (not just the test suite) — nginx passes the real `REMOTE_ADDR`
+      to PHP via fastcgi:
+  - [x] loopback (`http://localhost/kiosk`, `127.0.0.1`) → **200**
+  - [x] LAN anonymous (`http://<pi-ip>/kiosk`) → **403**
+  - [x] nurse-authenticated over LAN → **200**
+  - [x] `HEALTHPASS_KIOSK_RESTRICT=false` allows LAN → **200**
+        (reverted to restricted + config re-cached; LAN anonymous is 403 again)
+- [x] **Secure context / Web Serial.** `navigator.serial` is **defined** in
+      Chromium DevTools at `http://localhost/kiosk`
       (secure-context check, FR-KSK-07 / FR-HW-05).
-- [ ] **Web Serial permission persistence (§7).** Placeholder for Baldo after
-      hardware testing (Days 31–32) — see §7.
+- [x] **Staff LAN access** — `http://<pi-ip>/` reachable and logs in from
+      another device on the campus Wi-Fi.
+- [x] **Full kiosk session, manual path** — QR/email login → 4 vital steps →
+      questionnaire → submit; visit appears in the nurse queue and
+      `vital_signs.entry_method = manual`.
+- [x] **Reboot resilience** — after `sudo reboot`, services come back and
+      `curl -I http://localhost/kiosk` → 200 with no manual intervention.
+- [x] **Screen blanking off + kiosk idle reset** — screen stays on
+      (raspi-config, Wayland) and the kiosk returns to Welcome after the 90s
+      idle timeout.
+
+### Deferred to next joint day with Baldo (hardware not on hand 2026-07-07)
+
+- [ ] **Sensor end-to-end on the Pi** — one kiosk session with at least one
+      vital filled by the real sensor; confirm `entry_method` records
+      `sensor`/`mixed` accordingly. (Day 32 exit goal; Day 33 hardening runs
+      simulator-driven in the meantime, per the Day 34 fallback.)
+- [ ] **Web Serial permission persistence (§7)** — Baldo to test and document
+      after hardware testing; see §7.
+- [ ] **Re-confirm Day 33 adversarial cases on real hardware** — especially
+      physical USB removal mid-BP-reading (real disconnect timing can differ
+      from a simulated disconnect).
 
 ---
 
