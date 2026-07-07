@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Auth\PasswordChangeController;
 use App\Http\Controllers\Kiosk\KioskController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Student\BookAppointmentController;
@@ -23,6 +24,28 @@ Route::get('/', function () {
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+
+    // ── Change Password — OTP-confirmed, all four roles ──────────────────────
+    // Submitting stages the new hash + emails a code; nothing changes until the
+    // code is verified. Throttle prefixes: authed users key rate limits by user
+    // id with no path, so each endpoint needs its own bucket (see routes/auth.php).
+    Route::get('/password/change', [PasswordChangeController::class, 'show'])
+        ->name('password.change');
+    // Sends real email — backstop throttle on top of the 60s resend cooldown
+    // enforced inside the controller.
+    Route::post('/password/change', [PasswordChangeController::class, 'store'])
+        ->middleware('throttle:10,1,pwc-store')
+        ->name('password.change.store');
+    Route::get('/password/change/verify', [PasswordChangeController::class, 'showVerify'])
+        ->name('password.change.verify');
+    Route::post('/password/change/verify', [PasswordChangeController::class, 'verify'])
+        ->middleware('throttle:10,1,pwc-verify')
+        ->name('password.change.verify.submit');
+    Route::post('/password/change/verify/resend', [PasswordChangeController::class, 'resend'])
+        ->middleware('throttle:3,5,pwc-resend')
+        ->name('password.change.verify.resend');
+    Route::post('/password/change/cancel', [PasswordChangeController::class, 'cancel'])
+        ->name('password.change.cancel');
 });
 
 // ── Student (FR-AUTH-03) ─────────────────────────────────────────────────────

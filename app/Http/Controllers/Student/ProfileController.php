@@ -9,6 +9,7 @@ use App\Http\Requests\Student\UpdateStudentProfileRequest;
 use App\Mail\OtpVerificationMail;
 use App\Models\College;
 use App\Models\User;
+use App\Support\Otp;
 use Carbon\Carbon;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
@@ -122,7 +123,11 @@ class ProfileController extends Controller
             return redirect()->route('student.id-profile');
         }
 
-        return view('student.verify-email', ['email' => $newEmail]);
+        return view('student.verify-email', [
+            'email' => $newEmail,
+            // Server-computed so a page refresh never resets the countdown.
+            'resendRemaining' => Otp::resendRemainingSeconds(Cache::get($this->emailOtpKey($request->user()))),
+        ]);
     }
 
     /** POST /student/id-profile/verify-email — confirm the code, then apply the email. */
@@ -201,6 +206,13 @@ class ProfileController extends Controller
 
         if ($newEmail === null) {
             return redirect()->route('student.id-profile');
+        }
+
+        // Server-side resend cooldown — the disabled button is UX only.
+        $remaining = Otp::resendRemainingSeconds(Cache::get($this->emailOtpKey($user)));
+
+        if ($remaining > 0) {
+            return back()->withErrors(['otp' => "Please wait {$remaining} second(s) before requesting a new code."]);
         }
 
         $this->issueEmailOtp($user, $user->studentProfile->first_name, $newEmail);
@@ -283,6 +295,7 @@ class ProfileController extends Controller
             'hash' => hash('sha256', $otp),
             'attempts' => 0,
             'expires_at' => $expiresAt->toIso8601String(),
+            'resend_available_at' => now()->addSeconds(Otp::RESEND_COOLDOWN_SECONDS)->toIso8601String(),
             'new_email' => $newEmail,
         ], $expiresAt);
 

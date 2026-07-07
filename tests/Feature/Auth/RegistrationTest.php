@@ -2,8 +2,10 @@
 
 namespace Tests\Feature\Auth;
 
+use App\Mail\OtpVerificationMail;
 use App\Models\College;
 use App\Models\User;
+use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
@@ -118,5 +120,48 @@ class RegistrationTest extends TestCase
         // …the 4th is rate-limited. (reg-resend has its own bucket, so the earlier
         // consent/info hits don't count against this cap.)
         $this->post(route('register.verify.resend'))->assertStatus(429);
+    }
+
+    // ── Resend cooldown (Part C — 60s, server-enforced) ────────────────────────
+
+    /**
+     * The registration OTP entry is keyed by SESSION ID, which the array driver
+     * regenerates on every request (see the note on the test above). To exercise
+     * the cooldown over HTTP we switch this test to the database session driver
+     * and carry the session cookie manually so the id — and therefore the OTP
+     * cache key — stays stable across requests.
+     */
+    public function test_registration_resend_respects_the_60s_cooldown(): void
+    {
+        config(['session.driver' => 'database']);
+        // Bypass cookie encryption both ways so the raw session id read from
+        // the first response can be replayed on later requests.
+        $this->withoutMiddleware(EncryptCookies::class);
+        $this->disableCookieEncryption();
+        Mail::fake();
+
+        // First request mints the session; every later request re-sends its cookie.
+        $response = $this->post(route('register.consent'), ['consent' => '1']);
+        $sessionId = $response->getCookie(config('session.cookie'), decrypt: false)->getValue();
+        $this->withCookie(config('session.cookie'), $sessionId);
+
+        $this->post(route('register.info.store'), $this->infoPayload())
+            ->assertRedirect(route('register.verify'));
+
+        // Step 3 GET issues the first OTP (and starts the cooldown).
+        $this->get(route('register.verify'))->assertOk();
+        $this->assertCount(1, Mail::sent(OtpVerificationMail::class));
+
+        // Early resend → rejected server-side, nothing re-sent.
+        $this->post(route('register.verify.resend'))->assertSessionHasErrors('otp');
+        $this->assertCount(1, Mail::sent(OtpVerificationMail::class));
+
+        // After the cooldown elapses the resend goes through.
+        $this->travel(61)->seconds();
+
+        $this->post(route('register.verify.resend'))
+            ->assertRedirect(route('register.verify'))
+            ->assertSessionHas('status');
+        $this->assertCount(2, Mail::sent(OtpVerificationMail::class));
     }
 }

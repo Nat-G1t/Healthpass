@@ -21,7 +21,7 @@
 
                         <p style="margin:0 0 8px;">Hi {{ $firstName }},</p>
                         <p style="margin:0 0 24px;color:#6B7280;">
-                            Use the code below to verify your email address. It expires in
+                            Use the code below to {{ $purpose }}. It expires in
                             <strong>10 minutes</strong>.
                         </p>
 
@@ -36,7 +36,7 @@
                         </div>
 
                         <p style="margin:0 0 8px;font-size:13px;color:#6B7280;">
-                            Enter this code in the HealthPass registration page to continue.
+                            Enter this code in HealthPass to continue.
                         </p>
                         <p style="margin:0;font-size:12px;color:#9CA3AF;">
                             If you did not request this, you can safely ignore this email.

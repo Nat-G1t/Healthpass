@@ -4,9 +4,7 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\ConfirmablePasswordController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Http\Controllers\Auth\EmailVerificationPromptController;
-use App\Http\Controllers\Auth\NewPasswordController;
-use App\Http\Controllers\Auth\PasswordController;
-use App\Http\Controllers\Auth\PasswordResetLinkController;
+use App\Http\Controllers\Auth\PasswordResetOtpController;
 use App\Http\Controllers\Auth\RegistrationWizardController;
 use App\Http\Controllers\Auth\VerifyEmailController;
 use Illuminate\Support\Facades\Route;
@@ -54,18 +52,30 @@ Route::middleware('guest')->group(function () {
 
     Route::post('login', [AuthenticatedSessionController::class, 'store']);
 
-    Route::get('forgot-password', [PasswordResetLinkController::class, 'create'])
+    // ── Forgot password — OTP flow (replaces Breeze's emailed reset link) ───
+    // Route name password.request is kept so the login page link keeps working.
+    Route::get('forgot-password', [PasswordResetOtpController::class, 'showEmailForm'])
         ->name('password.request');
-
-    Route::post('forgot-password', [PasswordResetLinkController::class, 'store'])
+    // Sends real email — mail-bomb chokepoint, plus the 60s resend cooldown
+    // enforced inside the controller.
+    Route::post('forgot-password', [PasswordResetOtpController::class, 'sendOtp'])
         ->middleware('throttle:5,1,forgot-pw')
         ->name('password.email');
-
-    Route::get('reset-password/{token}', [NewPasswordController::class, 'create'])
-        ->name('password.reset');
-
-    Route::post('reset-password', [NewPasswordController::class, 'store'])
-        ->name('password.store');
+    Route::get('forgot-password/verify', [PasswordResetOtpController::class, 'showVerify'])
+        ->name('password.reset.verify');
+    // throttle:10,1 caps guesses across codes (the per-code 5-attempt cap still
+    // applies inside verifyOtp).
+    Route::post('forgot-password/verify', [PasswordResetOtpController::class, 'verifyOtp'])
+        ->middleware('throttle:10,1,fp-verify')
+        ->name('password.reset.verify.submit');
+    Route::post('forgot-password/verify/resend', [PasswordResetOtpController::class, 'resendOtp'])
+        ->middleware('throttle:3,5,fp-resend')
+        ->name('password.reset.verify.resend');
+    Route::get('forgot-password/new', [PasswordResetOtpController::class, 'showNewPassword'])
+        ->name('password.reset.new');
+    Route::post('forgot-password/new', [PasswordResetOtpController::class, 'updatePassword'])
+        ->middleware('throttle:10,1,fp-new')
+        ->name('password.reset.update');
 });
 
 Route::middleware('auth')->group(function () {
@@ -93,7 +103,8 @@ Route::middleware('auth')->group(function () {
 
     Route::post('confirm-password', [ConfirmablePasswordController::class, 'store']);
 
-    Route::put('password', [PasswordController::class, 'update'])->name('password.update');
+    // Breeze's direct PUT /password was removed: it changed the password with
+    // no OTP confirmation, bypassing the Change Password flow in routes/web.php.
 
     Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])
         ->name('logout');
