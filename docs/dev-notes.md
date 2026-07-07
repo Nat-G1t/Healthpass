@@ -425,3 +425,39 @@ Raspberry Pi 4 (Pi OS Bookworm 64-bit, Wayland/labwc) that the guide now bakes i
   answer `http://localhost/kiosk` before launching Chromium, so the terminal
   never opens on a connection-refused page. A few seconds of black/desktop before
   Chromium appears is the loop doing its job, not a hang.
+
+---
+
+## Kiosk failure modes (defense Q&A)
+
+Hardening pass over the serial + kiosk path (Jul 2026). Every mode below is
+covered by an automated test — JS via `npm run test:js` (Node's built-in
+runner, zero packages: `tests/js/serial-parser.test.js` +
+`tests/js/kiosk-state-machine.test.js`) and PHP via
+`php artisan test --filter=KioskSubmitTest`. Use this table when the panel asks
+"what happens if…".
+
+| # | Failure mode | What the kiosk does | Where |
+|---|---|---|---|
+| 1 | **Garbage bytes / binary noise on the wire** | `parseReadingLine()` skips every malformed token; a wholly malformed line parses to `{}` and the reader drops it and keeps listening. Nothing throws, the step stays usable. | `serial.js` parser |
+| 2 | **Half line (chunk torn mid-value, e.g. `H:16` of `H:163`)** | Bytes are buffered until a newline completes the line (`drainLines()`), so a truncated number is **never parsed early**. The torn halves reassemble across chunks. If a dropped newline welds two tokens (`H:16H:163`), the welded value isn't numeric → token skipped, no fake reading. | `serial.js` reader |
+| 3 | **Unknown keys (`SPO2:98`)** | Ignored; known keys on the same line still parse. Future firmware can add keys without breaking deployed kiosks. | `serial.js` parser |
+| 4 | **Absurd-but-parseable values (`T:99`, `H:999`)** | The parser hands them through *by design* — range policy lives in one place, not two. The state machine then fails them against `config/healthpass.php` ranges: the step falls back to **ready** with a "try again or enter it manually" nudge. Never captured, never a crash. | `captureStepFromSensor()` |
+| 5 | **Absurd values that somehow reach the server** (bypassed client) | `KioskSubmitRequest` re-validates every vital against the same config bounds → **422, zero rows written** (the write is one transaction). Non-numeric garbage, SQL-ish strings, and nested arrays also 422 — never a 500. | Form Request + `SubmitKioskVisit` |
+| 6 | **Half a BP pair (`BP:145/`)** | The pair is dropped whole — a lone systolic is meaningless. Likewise an incomplete BP *group* (systolic+diastolic but no heart rate) is rejected at capture: all of a step's fields must arrive together. | parser + `captureStepFromSensor()` |
+| 7 | **Sensor unplugged mid-step** | `disconnect` event → non-blocking notice ("Sensor unplugged — reconnecting… Manual entry still works."). No modal, no dead end: the disguised corner triple-tap still opens the numeric pad, same validation ranges, provenance recorded as `manual`. When the same port returns, it auto-reopens silently (FR-HW-05). | `serial.js` events + `onSerialStatus()` |
+| 8 | **Sensor connected but silent ≥ 10 s** | Watchdog fires a `timeout` status → "The sensor is quiet. Wait a moment, or enter it manually." Re-armed by every good line, so a healthy stream never trips it. | `serial.js` watchdog |
+| 9 | **Slow measurement vs the 90 s idle reset** | Any serial line arriving while the current step is still **uncaptured** now pings the idle timer (`onSerialReading()` → `bumpIdle()`), so a slow BP cuff can't be idle-reset mid-measurement while the hub streams other keys. Once the step is **captured**, lines stop counting — an abandoned session still resets and wipes the student's data (FR-KSK-15). Off the vitals screen, serial traffic never touches the timer. | `onSerialReading()` |
+| 10 | **Totally silent abandon** (no taps, no serial) | The 90 s idle reset fires as before: wholesale `freshState()` replacement + server-side identity forget. Residual: a student parked on an *uncaptured* vitals step while the hub streams indefinitely won't idle-reset (indistinguishable from a slow measurement) — acceptable because no vitals are on screen yet and the next student's scan overwrites the session identity anyway. | `bumpIdle()` / `reset()` |
+| 11 | **Mixed sensor + manual session** | Each step records its own provenance; the client sends the list and the **server** rolls it up: all-sensor → `sensor`, all-manual → `manual`, any mix → `mixed` (`vital_signs.entry_method`, FR-KSK-06). Values outside `sensor|manual` are rejected (422), not coerced. | `SubmitKioskVisit::entryMethod()` |
+
+**Test entry points**
+
+```
+npm run test:js                              # parser + state machine (26 tests)
+php artisan test --filter=KioskSubmitTest    # server-side re-validation (17 tests)
+```
+
+Note for Baldo: `state-machine.js` now imports `./serial.js` **with the
+extension** — Node's test runner needs it (Vite doesn't care). Keep the
+extension on any new kiosk-module imports so the JS tests keep running.

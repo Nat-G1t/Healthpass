@@ -1,4 +1,6 @@
-import { createSerialReader } from './serial';
+// Explicit .js extension so the module also resolves under Node's test runner
+// (`npm run test:js`), which — unlike Vite — does not guess extensions.
+import { createSerialReader } from './serial.js';
 
 /**
  * Kiosk state machine (Module KSK).
@@ -280,6 +282,14 @@ export function kioskMachine() {
          */
         onSerialReading(reading) {
             if (this.state.screen !== 'vitals') return;
+            if (this.stepPhase() === 'captured') return;
+            // Any line while the current step is still being measured counts as
+            // interaction: a slow reading (the BP cuff inflating while the hub
+            // streams other keys) must not let the 90s idle reset fire
+            // mid-measurement (FR-KSK-15). Captured steps stop counting — see
+            // the guard above — so an abandoned session still resets even if
+            // the hub keeps streaming.
+            this.bumpIdle();
             if (this.stepPhase() !== 'ready') return;
             const meta = this.vitalMeta(this.state.vitalStep);
             if (!meta) return;

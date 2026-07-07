@@ -344,10 +344,68 @@ class KioskSubmitTest extends TestCase
 
     public function test_entry_method_rolls_up_mixed(): void
     {
+        // All-sensor → 'sensor'.
+        $this->submit($this->student()->id, ['vitalMethods' => ['sensor', 'sensor', 'sensor', 'sensor']]);
+        $this->assertSame('sensor', VitalSigns::latest('id')->first()->entry_method);
+
+        // Any mix of the two → 'mixed'.
         $this->submit($this->student()->id, ['vitalMethods' => ['sensor', 'manual', 'sensor', 'sensor']]);
         $this->assertSame('mixed', VitalSigns::latest('id')->first()->entry_method);
 
+        // All-manual → 'manual'.
         $this->submit($this->student()->id, ['vitalMethods' => ['manual', 'manual', 'manual', 'manual']]);
         $this->assertSame('manual', VitalSigns::latest('id')->first()->entry_method);
+    }
+
+    /** Provenance values outside sensor/manual are rejected, not coerced. */
+    public function test_unknown_vital_method_value_is_rejected(): void
+    {
+        $this->submit($this->student()->id, ['vitalMethods' => ['sensor', 'spoofed']])
+            ->assertStatus(422);
+
+        $this->assertSame(0, VitalSigns::count());
+    }
+
+    // ── Adversarial vitals payloads (FR-KSK-08 hardening) ─────────────────────
+    // The kiosk endpoint is public; a bypassed client (or a mis-parsed sensor
+    // value the front-end somehow let through) must fail range validation with
+    // a 422 — never crash, never silently persist.
+
+    /** Absurd-but-parseable sensor values (H:999-style) fail the range check. */
+    public function test_absurd_vital_values_are_rejected_and_persist_nothing(): void
+    {
+        $absurd = [
+            ['vitals' => ['height' => 999]],
+            ['vitals' => ['weight' => 999]],
+            ['vitals' => ['temperature' => 99]],
+            ['vitals' => ['systolic' => 999, 'diastolic' => 999]],
+            ['vitals' => ['heartRate' => 999]],
+            ['vitals' => ['temperature' => -40]],
+        ];
+
+        foreach ($absurd as $overrides) {
+            $this->submit($this->student()->id, $overrides)->assertStatus(422);
+        }
+
+        $this->assertSame(0, ClinicVisit::count());
+        $this->assertSame(0, VitalSigns::count());
+    }
+
+    /** Non-numeric garbage in a vitals field is a 422, never a 500. */
+    public function test_garbage_vital_values_are_rejected_and_persist_nothing(): void
+    {
+        $garbage = [
+            ['vitals' => ['height' => 'abc']],
+            ['vitals' => ['temperature' => '36.8; DROP TABLE vital_signs']],
+            ['vitals' => ['systolic' => '118/76']],
+            ['vitals' => ['heartRate' => ['nested' => 'array']]],
+        ];
+
+        foreach ($garbage as $overrides) {
+            $this->submit($this->student()->id, $overrides)->assertStatus(422);
+        }
+
+        $this->assertSame(0, ClinicVisit::count());
+        $this->assertSame(0, VitalSigns::count());
     }
 }

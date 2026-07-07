@@ -87,6 +87,26 @@ export function parseReadingLine(line) {
 }
 
 /**
+ * Split buffered serial text into completed lines + the unfinished remainder.
+ *
+ * Serial data arrives in arbitrary chunks — a line can be torn anywhere, so a
+ * half line ("H:16" of "H:163") must NEVER be parsed early: it would read as a
+ * valid-but-wrong number. Only text up to a newline is a line; the rest stays
+ * buffered until the next chunk completes it. Tolerates CRLF. Pure function
+ * (no I/O) so the reassembly rule is unit-testable on its own.
+ */
+export function drainLines(buffer) {
+    const lines = [];
+    let rest = buffer;
+    let nl;
+    while ((nl = rest.indexOf('\n')) >= 0) {
+        lines.push(rest.slice(0, nl).replace(/\r$/, ''));
+        rest = rest.slice(nl + 1);
+    }
+    return { lines, rest };
+}
+
+/**
  * Build a serial reader bound to a set of callbacks.
  *
  *   onReading(reading)        — a non-empty parsed line { H: 163, … }
@@ -135,11 +155,9 @@ export function createSerialReader({
 
     // Accumulate decoded text and emit one reading per completed line.
     function handleChunk(text) {
-        buffer += text;
-        let nl;
-        while ((nl = buffer.indexOf('\n')) >= 0) {
-            const line = buffer.slice(0, nl).replace(/\r$/, ''); // tolerate CRLF
-            buffer = buffer.slice(nl + 1);
+        const { lines, rest } = drainLines(buffer + text);
+        buffer = rest;
+        for (const line of lines) {
             const reading = parseReadingLine(line);
             if (Object.keys(reading).length === 0) continue; // malformed → drop
             armWatchdog(); // a good line proves the sensor is alive
