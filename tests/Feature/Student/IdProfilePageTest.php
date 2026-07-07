@@ -375,6 +375,44 @@ class IdProfilePageTest extends TestCase
             ->assertRedirect(route('student.id-profile'));
     }
 
+    // ── Resend cooldown (Part C — 60s, server-enforced) ──────────────────────────
+
+    public function test_early_resend_is_rejected_during_the_cooldown(): void
+    {
+        Mail::fake();
+        $student = $this->studentWithProfile('2023-12345');
+
+        $this->actingAs($student)->patch(
+            route('student.id-profile.update'),
+            $this->validPayload(['email' => 'new@example.com'])
+        );
+
+        // Within 60s of the first send — rejected server-side, nothing re-sent.
+        $this->actingAs($student)->post(route('student.id-profile.verify-email.resend'))
+            ->assertSessionHasErrors('otp');
+
+        $this->assertCount(1, Mail::sent(OtpVerificationMail::class));
+    }
+
+    public function test_resend_is_allowed_after_the_cooldown_elapses(): void
+    {
+        Mail::fake();
+        $student = $this->studentWithProfile('2023-12345');
+
+        $this->actingAs($student)->patch(
+            route('student.id-profile.update'),
+            $this->validPayload(['email' => 'new@example.com'])
+        );
+
+        $this->travel(61)->seconds();
+
+        $this->actingAs($student)->post(route('student.id-profile.verify-email.resend'))
+            ->assertRedirect(route('student.id-profile.verify-email'))
+            ->assertSessionHas('status');
+
+        $this->assertCount(2, Mail::sent(OtpVerificationMail::class));
+    }
+
     // ── FR-STU-10: late linking ──────────────────────────────────────────────────
 
     public function test_link_id_with_matching_digits_binds_qr_token(): void

@@ -10,6 +10,7 @@ use App\Mail\OtpVerificationMail;
 use App\Models\College;
 use App\Models\StudentProfile;
 use App\Models\User;
+use App\Support\Otp;
 use Carbon\Carbon;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
@@ -110,7 +111,11 @@ class RegistrationWizardController extends Controller
             $this->issueOtp($request, $info['email'], $info['first_name']);
         }
 
-        return view('auth.register.step3', ['email' => $info['email']]);
+        return view('auth.register.step3', [
+            'email' => $info['email'],
+            // Server-computed so a page refresh never resets the countdown.
+            'resendRemaining' => Otp::resendRemainingSeconds(Cache::get($this->otpCacheKey($request))),
+        ]);
     }
 
     /** POST /register/verify — validate the submitted 6-digit code. */
@@ -225,6 +230,13 @@ class RegistrationWizardController extends Controller
         /** @var array<string,mixed> $info */
         $info = $request->session()->get('reg.info');
 
+        // Server-side resend cooldown — the disabled button is UX only.
+        $remaining = Otp::resendRemainingSeconds(Cache::get($this->otpCacheKey($request)));
+
+        if ($remaining > 0) {
+            return back()->withErrors(['otp' => "Please wait {$remaining} second(s) before requesting a new code."]);
+        }
+
         Cache::forget($this->otpCacheKey($request));
         $this->issueOtp($request, $info['email'], $info['first_name']);
 
@@ -313,6 +325,7 @@ class RegistrationWizardController extends Controller
             'hash' => hash('sha256', $otp),
             'attempts' => 0,
             'expires_at' => $expiresAt->toIso8601String(),
+            'resend_available_at' => now()->addSeconds(Otp::RESEND_COOLDOWN_SECONDS)->toIso8601String(),
         ], $expiresAt);
 
         Mail::to($email)->send(new OtpVerificationMail($otp, $firstName));

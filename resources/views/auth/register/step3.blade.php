@@ -99,17 +99,11 @@
 
     </form>
 
-    {{-- Resend --}}
-    <div class="mt-[20px] text-center text-[12px] text-hp-slate/50">
-        Didn't receive a code?
-        <form method="POST" action="{{ route('register.verify.resend') }}" class="inline">
-            @csrf
-            <button type="submit"
-                    class="ml-1 font-semibold text-hp-orange underline-offset-2 hover:underline">
-                Resend
-            </button>
-        </form>
-    </div>
+    {{-- Resend (60s cooldown, server-enforced; countdown survives refresh) --}}
+    <x-otp.resend-button
+        :action="route('register.verify.resend')"
+        :remaining="$resendRemaining"
+    />
 
     {{-- Dev: where to find the OTP --}}
     @if (app()->isLocal())
