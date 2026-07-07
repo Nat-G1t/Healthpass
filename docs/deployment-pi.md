@@ -84,14 +84,23 @@ bash scripts/pi/setup-app.sh            # clones into /var/www/healthpass
 The script:
 
 1. Clones `https://github.com/Nat-G1t/Healthpass.git`.
-2. `composer install --no-dev --optimize-autoloader`.
+2. `composer install` — **with dev packages**: the seeders' model factories
+   need `fakerphp/faker`, which is a `require-dev` package. Dev packages are
+   pruned again in step 7.
 3. `npm ci && npm run build` — **builds assets once. The Pi never runs
    `npm run dev` (Vite dev server).** Production serves the compiled files in
    `public/build`.
 4. Copies `scripts/pi/pi.env.example` → `.env`, then `php artisan key:generate`.
 5. `php artisan migrate --force`.
-6. `php artisan config:cache && route:cache && view:cache`.
-7. Fixes `storage/` + `bootstrap/cache/` ownership to `www-data`.
+6. `php artisan db:seed --force` — **required**: creates the colleges plus all
+   demo staff/student accounts (see `docs/dev-notes.md` for the login list;
+   every password is `password`). Skipping this leaves an empty database where
+   every web and kiosk login fails; running it under `--no-dev` crashes with
+   `Call to a member function randomElement() on null` (no Faker).
+7. `composer install --no-dev --optimize-autoloader` — prunes dev packages
+   now that seeding is done.
+8. `php artisan config:cache && route:cache && view:cache`.
+9. Fixes `storage/` + `bootstrap/cache/` ownership to `www-data`.
 
 **Edit `.env` before/after** to set the real `DB_PASSWORD`. Template highlights
 (full file in `scripts/pi/pi.env.example`):

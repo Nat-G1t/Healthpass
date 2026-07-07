@@ -23,8 +23,16 @@ fi
 
 cd "$APP_DIR"
 
-echo "==> Installing PHP dependencies (production, no dev)"
-composer install --no-dev --optimize-autoloader
+# On a RE-RUN, a previous run's final chown left storage/ + bootstrap/cache/
+# owned by www-data, so composer's package:discover (run as $USER) can't write
+# there. Take ownership back for the duration of the script; the last step
+# hands it to www-data again.
+sudo chown -R "$USER":"$USER" storage bootstrap/cache
+
+echo "==> Installing PHP dependencies (WITH dev packages — seeding needs Faker)"
+# The seeders use model factories, which need fakerphp/faker (a require-dev
+# package). Dev packages are pruned again right after seeding below.
+composer install
 
 echo "==> Installing Node dependencies and BUILDING assets"
 # The Pi builds assets once. It must NOT run 'npm run dev' (Vite dev server) —
@@ -43,6 +51,14 @@ php artisan key:generate
 echo "==> Running migrations"
 # --force because APP_ENV=production would otherwise prompt for confirmation.
 php artisan migrate --force
+
+echo "==> Seeding demo data (colleges, staff, students)"
+# Without this the database is empty — no accounts exist, so every web/kiosk
+# login fails. Seeded logins are listed in docs/dev-notes.md (password: password).
+php artisan db:seed --force
+
+echo "==> Pruning dev packages for production"
+composer install --no-dev --optimize-autoloader
 
 echo "==> Caching config/routes/views for production"
 php artisan config:cache
