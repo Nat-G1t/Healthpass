@@ -285,14 +285,14 @@
         </div>
 
         {{-- Actions --}}
-        <div class="flex items-center gap-[10px]">
+        <div class="flex flex-wrap items-center justify-between gap-[10px]">
             <a href="{{ route('register') }}"
-               class="inline-flex items-center justify-center rounded-full px-8 py-[13px] text-[15px]
+               class="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-full px-8 py-[13px] text-[15px]
                       font-semibold bg-transparent text-hp-slate border-[1.5px] border-hp-slate/30
                       transition-colors hover:bg-hp-slate/5">
                 ← Back
             </a>
-            <x-hp.button type="submit" variant="primary" size="lg" class="ml-auto">
+            <x-hp.button type="submit" variant="primary" size="lg" class="shrink-0 whitespace-nowrap">
                 Continue →
             </x-hp.button>
         </div>
