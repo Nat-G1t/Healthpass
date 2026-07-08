@@ -146,13 +146,13 @@
                         x-model="devInput"
                         placeholder="e.g. 2023-12345 or 202312345"
                         @keydown.enter.prevent="submitDev()"
-                        class="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-hp-slate
+                        class="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-hp-slate
                                focus:outline-none focus:border-hp-orange focus:ring-2 focus:ring-hp-orange/30"
                     >
                     <button
                         type="button"
                         @click="submitDev()"
-                        class="rounded-lg bg-slate-600 px-4 py-2 text-sm font-semibold text-white
+                        class="shrink-0 rounded-lg bg-slate-600 px-4 py-2 text-sm font-semibold text-white
                                hover:bg-slate-700 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-400/40"
                     >
                         Submit

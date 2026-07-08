@@ -2,7 +2,32 @@
 
     <h2 class="mb-[18px] text-[15px] font-bold text-hp-slate">Step 2 — Personal Information</h2>
 
-    <form method="POST" action="{{ route('register.info.store') }}" novalidate>
+    {{-- Client-side gate: keep "Continue" disabled until every required field is
+         filled, so an incomplete submit can't bounce the whole page back. The
+         password confirmation is intentionally excluded — the form never inspects
+         it as you type, so there's no impression the site is scanning your
+         password. The server (StoreRegistrationInfoRequest) still validates
+         everything, including the confirmation, on submit. --}}
+    <form
+        method="POST"
+        action="{{ route('register.info.store') }}"
+        novalidate
+        x-data="{
+            ready: false,
+            validate() {
+                for (const el of this.$el.querySelectorAll('[required]')) {
+                    if (el.name === 'password_confirmation') continue; // never inspect the confirm field
+                    if (! el.value.trim()) { this.ready = false; return; }
+                }
+                // Sex is required but rendered as a radio group (no `required` attribute).
+                if (! this.$el.querySelector('input[name=sex]:checked')) { this.ready = false; return; }
+                this.ready = true;
+            },
+        }"
+        x-init="validate()"
+        @input="validate()"
+        @change="validate()"
+    >
         @csrf
 
         {{-- ── Personal Details ────────────────────────────────────────────── --}}
@@ -11,7 +36,7 @@
         </p>
 
         {{-- First Name / Middle Name / Last Name --}}
-        <div class="mb-4 grid grid-cols-3 gap-4">
+        <div class="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
             <x-hp.input
                 label="First Name"
                 id="first_name"
@@ -113,8 +138,8 @@
         </div>
 
         {{-- Course / Year Level --}}
-        <div class="mb-4 grid grid-cols-3 gap-4">
-            <div class="col-span-2">
+        <div class="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div class="sm:col-span-2">
                 <x-hp.input
                     label="Course"
                     id="course"
@@ -262,7 +287,7 @@
         </div>
 
         {{-- Password / Confirm Password --}}
-        <div class="mb-6 grid grid-cols-2 gap-4">
+        <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <x-hp.input
                 label="Password"
                 id="password"
@@ -284,15 +309,17 @@
             />
         </div>
 
-        {{-- Actions --}}
-        <div class="flex items-center gap-[10px]">
+        {{-- Actions — side by side like desktop; scales down to fit narrow phones,
+             back to full lg size at sm+ (media-query classes override the base size). --}}
+        <div class="flex items-center justify-between gap-2 sm:gap-[10px]">
             <a href="{{ route('register') }}"
-               class="inline-flex items-center justify-center rounded-full px-8 py-[13px] text-[15px]
+               class="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-full
+                      px-4 py-1.5 text-xs sm:px-8 sm:py-[13px] sm:text-[15px]
                       font-semibold bg-transparent text-hp-slate border-[1.5px] border-hp-slate/30
                       transition-colors hover:bg-hp-slate/5">
                 ← Back
             </a>
-            <x-hp.button type="submit" variant="primary" size="lg" class="ml-auto">
+            <x-hp.button type="submit" variant="primary" size="sm" x-bind:disabled="!ready" class="shrink-0 whitespace-nowrap sm:px-8 sm:py-[13px] sm:text-[15px]">
                 Continue →
             </x-hp.button>
         </div>
