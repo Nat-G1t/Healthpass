@@ -51,6 +51,19 @@ class StoreAppointmentRequest extends FormRequest
             $date = $this->input('date');
             $service = $this->input('service');
 
+            // BR-20: same-day closing cutoff. Once the local clock reaches closing_hour,
+            // TODAY is no longer bookable (the clinic is closing). now() and today() both
+            // resolve in the app timezone (Asia/Manila), so this compares apples to apples.
+            $closingHour = (int) config('healthpass.closing_hour');
+            if ($date === today()->toDateString() && now()->hour >= $closingHour) {
+                $validator->errors()->add(
+                    'date',
+                    'The clinic is closed for today. Please book for the next day onwards.'
+                );
+
+                return;
+            }
+
             // BR-02: capacity re-check at write time (prevents race-condition over-bookings).
             $capacity = (int) config('healthpass.daily_capacity');
             $booked = Appointment::whereDate('scheduled_date', $date)

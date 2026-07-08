@@ -17,6 +17,12 @@ return [
     // self-booking is allowed. Remove an integer to block that weekday clinic-wide.
     'booking_days' => [0, 1, 2, 3, 4, 5, 6],
 
+    // BR-20 (pending adviser sign-off): same-day booking cutoff. Once the local clock
+    // (Asia/Manila) reaches this hour, TODAY can no longer be self-booked — the clinic is
+    // closing. Integer hour, 24h, matches clinic_hours.close ('17:00') above; keep the two
+    // in sync. Consumed server-side by StoreAppointmentRequest and the availability endpoint.
+    'closing_hour' => 17,
+
     // §7.4, D-10: Rule-based flag thresholds — screening signals, not diagnoses.
     // All flag logic (kiosk badges, nurse queue, Director anomalies) reads ONLY from here. (NFR-7, BR-13)
     'thresholds' => [

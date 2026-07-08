@@ -26,6 +26,7 @@ class BookAppointmentController extends Controller
             'year' => $year,
             'month' => $month,
             'fullDays' => $this->fullDaysForMonth($year, $month),
+            'cutoffDays' => $this->cutoffDaysForMonth($year, $month),
             'bookingDays' => config('healthpass.booking_days'),
         ]);
     }
@@ -39,7 +40,10 @@ class BookAppointmentController extends Controller
         $year = max(now()->year, min((int) $request->query('year', now()->year), now()->year + 2));
         $month = max(1, min((int) $request->query('month', now()->month), 12));
 
-        return response()->json(['full_days' => $this->fullDaysForMonth($year, $month)]);
+        return response()->json([
+            'full_days' => $this->fullDaysForMonth($year, $month),
+            'cutoff_days' => $this->cutoffDaysForMonth($year, $month),
+        ]);
     }
 
     /**
@@ -132,5 +136,29 @@ class BookAppointmentController extends Controller
             ->map(fn ($date) => Carbon::parse($date)->day)
             ->values()
             ->all();
+    }
+
+    /**
+     * Day numbers unavailable because of the same-day closing cutoff (BR-20).
+     *
+     * Returns today's day-of-month only when the given month is the current month AND
+     * the local clock has reached closing_hour — i.e. at most one entry, and only for
+     * the current month. The cutoff is decided here (server-side), never trusted from
+     * the browser clock; the calendar just greys out whatever this returns.
+     *
+     * @return int[]
+     */
+    private function cutoffDaysForMonth(int $year, int $month): array
+    {
+        $today = today();
+        $closingHour = (int) config('healthpass.closing_hour');
+
+        $isCurrentMonth = $year === $today->year && $month === $today->month;
+
+        if ($isCurrentMonth && now()->hour >= $closingHour) {
+            return [$today->day];
+        }
+
+        return [];
     }
 }
