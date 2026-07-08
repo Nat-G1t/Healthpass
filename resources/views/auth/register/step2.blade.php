@@ -284,15 +284,17 @@
             />
         </div>
 
-        {{-- Actions --}}
-        <div class="flex flex-col items-center gap-[10px] sm:flex-row sm:justify-between">
+        {{-- Actions — side by side like desktop; scales down to fit narrow phones,
+             back to full lg size at sm+ (media-query classes override the base size). --}}
+        <div class="flex items-center justify-between gap-2 sm:gap-[10px]">
             <a href="{{ route('register') }}"
-               class="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-full px-8 py-[13px] text-[15px]
+               class="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-full
+                      px-4 py-1.5 text-xs sm:px-8 sm:py-[13px] sm:text-[15px]
                       font-semibold bg-transparent text-hp-slate border-[1.5px] border-hp-slate/30
                       transition-colors hover:bg-hp-slate/5">
                 ← Back
             </a>
-            <x-hp.button type="submit" variant="primary" size="lg" class="shrink-0 whitespace-nowrap">
+            <x-hp.button type="submit" variant="primary" size="sm" class="shrink-0 whitespace-nowrap sm:px-8 sm:py-[13px] sm:text-[15px]">
                 Continue →
             </x-hp.button>
         </div>
