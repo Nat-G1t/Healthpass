@@ -307,5 +307,8 @@
 
 </div>
 
+{{-- Page-specific scripts (e.g. the nurse Live Queue poller) push into here. --}}
+@stack('scripts')
+
 </body>
 </html>

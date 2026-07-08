@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -30,6 +31,30 @@ class ClinicVisit extends Model
             'privacy_consent_at' => 'datetime',
             'checked_in_at' => 'datetime',
         ];
+    }
+
+    // ── Queries ──────────────────────────────────────────────────────────────
+
+    /**
+     * FR-NRS-01/02 — the Live Queue query, shared by the page (initial render)
+     * and the JSON feed (polling) so the two can NEVER disagree on order.
+     *
+     * Captured visits, oldest first (FCFS): the top row is the longest-waiting
+     * student. `id` breaks ties for two visits checked in the same second.
+     *
+     * Index note: the `(status, created_at)` composite index (§6.4) serves the
+     * `status = 'captured'` filter via its leading column. The FCFS sort key is
+     * `checked_in_at` (per FR-NRS-01), not `created_at`, so the index's second
+     * column doesn't cover the ORDER BY — but the queue is only unencoded
+     * visits (a handful of rows), so the sort over that tiny set is free.
+     */
+    public function scopeLiveQueue(Builder $query): Builder
+    {
+        return $query
+            ->where('status', 'captured')
+            ->with(['student:id,name', 'college:id,name', 'vitalSigns'])
+            ->orderBy('checked_in_at')
+            ->orderBy('id');
     }
 
     // ── Relationships ────────────────────────────────────────────────────────

@@ -95,7 +95,10 @@ Route::middleware(['auth', 'role:nurse'])
     ->prefix('nurse')
     ->name('nurse.')
     ->group(function () {
-        Route::get('/queue', NurseQueueController::class)->name('queue');
+        Route::get('/queue', [NurseQueueController::class, 'index'])->name('queue');
+        // JSON feed for the 4 s Live Queue poll (FR-NRS-02). Nurse-only, same
+        // guard as the page — it exposes the same captured-visit rows.
+        Route::get('/queue/feed', [NurseQueueController::class, 'feed'])->name('queue.feed');
     });
 
 // ── Director (FR-AUTH-03) ────────────────────────────────────────────────────
