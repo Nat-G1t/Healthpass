@@ -20,12 +20,14 @@ function bookCalendar() {
         currentYear:     {{ $year }},
         currentMonth:    {{ $month }},
         fullDays:        @json($fullDays),
+        cutoffDays:      @json($cutoffDays),
         bookingDays:     @json($bookingDays),
         loading:         false,
 
         bookingUrl:   @json(route('student.appointments.store')),
         confirmModal: false,
         errorModal:   false,
+        cutoffModal:  false,
         errorMessage: '',
         submitting:   false,
 
@@ -76,12 +78,15 @@ function bookCalendar() {
                 const isPast       = date < today;
                 const isBlockedDay = !this.bookingDays.includes(dow);
                 const isFull       = this.fullDays.includes(d);
-                const isDisabled   = isPast || isBlockedDay || isFull;
+                // Same-day closing cutoff (BR-20). cutoffDays is decided server-side
+                // (never from this browser clock) — today only, and only after closing.
+                const isCutoff     = this.cutoffDays.includes(d);
+                const isDisabled   = isPast || isBlockedDay || isFull || isCutoff;
                 const mm           = String(this.currentMonth).padStart(2, '0');
                 const dd           = String(d).padStart(2, '0');
                 const dateStr      = `${this.currentYear}-${mm}-${dd}`;
                 const isToday      = date.getTime() === today.getTime();
-                cells.push({ blank: false, d, isDisabled, isFull, isPast, isToday, dateStr, key: dateStr });
+                cells.push({ blank: false, d, isDisabled, isFull, isCutoff, isPast, isToday, dateStr, key: dateStr });
             }
             const trailingCount = (6 - new Date(this.currentYear, this.currentMonth - 1, daysInMonth).getDay()) % 7;
             for (let i = 0; i < trailingCount; i++) {
@@ -154,11 +159,19 @@ function bookCalendar() {
                 const data = await response.json();
 
                 if (response.status === 422) {
-                    this.errorMessage = data.errors?.date?.[0]
+                    const message = data.errors?.date?.[0]
                         ?? data.errors?.service?.[0]
                         ?? data.message
                         ?? 'Booking could not be completed.';
-                    this.errorModal = true;
+
+                    // The same-day closing cutoff (BR-20) gets its own, friendlier modal
+                    // that points the student at the next day; everything else is generic.
+                    if (message.includes('clinic is closed for today')) {
+                        this.cutoffModal = true;
+                    } else {
+                        this.errorMessage = message;
+                        this.errorModal   = true;
+                    }
                     return;
                 }
 
@@ -330,8 +343,12 @@ function bookCalendar() {
                         <button
                             x-show="!cell.blank"
                             type="button"
-                            :disabled="cell.isDisabled"
-                            @click="!cell.isDisabled && (selectedDate = cell.dateStr)"
+                            {{-- Cutoff days stay clickable so the tap can explain WHY today is
+                                 closed; every other disabled day is a hard no-op. --}}
+                            :disabled="cell.isDisabled && !cell.isCutoff"
+                            @click="cell.isCutoff
+                                        ? (cutoffModal = true)
+                                        : (!cell.isDisabled && (selectedDate = cell.dateStr))"
                             class="relative flex h-10 w-10 flex-col items-center justify-center rounded-full
                                    text-[13px] transition-colors focus:outline-none"
                             :class="{
@@ -341,8 +358,10 @@ function bookCalendar() {
                                     !cell.blank && cell.isToday && !cell.isDisabled && selectedDate !== cell.dateStr,
                                 'bg-hp-bg text-hp-slate/40 cursor-default':
                                     !cell.blank && cell.isFull,
+                                'text-hp-slate/25 cursor-pointer':
+                                    !cell.blank && cell.isCutoff,
                                 'text-hp-slate/25 cursor-not-allowed':
-                                    !cell.blank && cell.isDisabled && !cell.isFull,
+                                    !cell.blank && cell.isDisabled && !cell.isFull && !cell.isCutoff,
                                 'text-hp-slate hover:bg-hp-peach/50 hover:text-hp-orange cursor-pointer':
                                     !cell.blank && !cell.isDisabled && selectedDate !== cell.dateStr,
                             }">
@@ -478,6 +497,41 @@ function bookCalendar() {
                     class="w-full rounded-full bg-hp-orange py-2.5 text-sm font-semibold
                            text-white transition-colors hover:bg-orange-500">
                 Choose another date
+            </button>
+        </div>
+
+    </div>
+</div>
+
+{{-- ── Clinic-closed-for-today (BR-20 closing cutoff) modal ─────────────────── --}}
+<div x-show="cutoffModal" x-cloak
+     class="fixed inset-0 z-50 flex items-center justify-center p-4"
+     style="background-color: rgba(75,85,99,0.45);">
+    <div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl"
+         @click.outside="cutoffModal = false">
+
+        <div class="mb-3 flex items-center gap-3">
+            <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-hp-peach">
+                <svg class="h-4 w-4 text-hp-orange" fill="none" viewBox="0 0 24 24"
+                     stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            </div>
+            <h3 class="text-base font-semibold text-hp-slate">Clinic Closed for Today</h3>
+        </div>
+
+        <p class="text-sm text-hp-slate/70">
+            The clinic has closed for today (hours: 7:00 AM – 5:00 PM). Same-day booking is
+            no longer available — please schedule for the next day onwards.
+        </p>
+
+        <div class="mt-5">
+            <button type="button"
+                    @click="cutoffModal = false; selectedDate = null"
+                    class="w-full rounded-full bg-hp-orange py-2.5 text-sm font-semibold
+                           text-white transition-colors hover:bg-orange-500">
+                Pick another date
             </button>
         </div>
 

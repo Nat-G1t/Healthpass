@@ -7,6 +7,7 @@ namespace Tests\Feature\Student;
 use App\Models\Appointment;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 /**
@@ -67,6 +68,10 @@ class BookAppointmentTest extends TestCase
 
     public function test_today_is_bookable(): void
     {
+        // Pin to the morning so this stays green regardless of the wall clock —
+        // same-day booking is only blocked from the closing cutoff onward (BR-20).
+        Carbon::setTestNow(Carbon::parse('2026-07-08 09:00', 'Asia/Manila'));
+
         $student = $this->student();
 
         $this->actingAs($student)
@@ -77,6 +82,83 @@ class BookAppointmentTest extends TestCase
             ->assertRedirect();
 
         $this->assertDatabaseCount('appointments', 1);
+    }
+
+    // ── 2b. Same-day closing cutoff (BR-20) ───────────────────────────────────
+
+    public function test_today_is_bookable_one_minute_before_cutoff(): void
+    {
+        // 16:59 — clinic still open, same-day booking allowed.
+        Carbon::setTestNow(Carbon::parse('2026-07-08 16:59', 'Asia/Manila'));
+
+        $this->actingAs($this->student())
+            ->post(route('student.appointments.store'), [
+                'service' => 'medical',
+                'date' => today()->toDateString(),
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseCount('appointments', 1);
+    }
+
+    public function test_today_is_rejected_at_closing_cutoff(): void
+    {
+        // 17:00 exactly — clinic closed for today; same-day booking rejected.
+        Carbon::setTestNow(Carbon::parse('2026-07-08 17:00', 'Asia/Manila'));
+
+        $this->actingAs($this->student())
+            ->post(route('student.appointments.store'), [
+                'service' => 'medical',
+                'date' => today()->toDateString(),
+            ])
+            ->assertSessionHasErrors([
+                'date' => 'The clinic is closed for today. Please book for the next day onwards.',
+            ]);
+
+        $this->assertDatabaseCount('appointments', 0);
+    }
+
+    public function test_tomorrow_is_bookable_after_cutoff(): void
+    {
+        // 18:00 — past today's cutoff, but booking for the NEXT day is fine.
+        Carbon::setTestNow(Carbon::parse('2026-07-08 18:00', 'Asia/Manila'));
+
+        $this->actingAs($this->student())
+            ->post(route('student.appointments.store'), [
+                'service' => 'medical',
+                'date' => today()->addDay()->toDateString(),
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseCount('appointments', 1);
+    }
+
+    public function test_availability_excludes_today_after_cutoff(): void
+    {
+        // After the cutoff, today's day-of-month is reported as unavailable so the
+        // calendar greys it out — computed server-side, never from the browser clock.
+        Carbon::setTestNow(Carbon::parse('2026-07-08 18:00', 'Asia/Manila'));
+
+        $this->actingAs($this->student())
+            ->getJson(route('student.appointments.availability', [
+                'year' => 2026,
+                'month' => 7,
+            ]))
+            ->assertOk()
+            ->assertJsonPath('cutoff_days', fn ($days) => in_array(8, $days, true));
+    }
+
+    public function test_availability_includes_today_before_cutoff(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-08 09:00', 'Asia/Manila'));
+
+        $this->actingAs($this->student())
+            ->getJson(route('student.appointments.availability', [
+                'year' => 2026,
+                'month' => 7,
+            ]))
+            ->assertOk()
+            ->assertJsonPath('cutoff_days', fn ($days) => ! in_array(8, $days, true));
     }
 
     // ── 3. Full-day rejection at write time (BR-02) ───────────────────────────
