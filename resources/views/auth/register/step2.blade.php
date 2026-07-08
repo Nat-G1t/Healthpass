@@ -2,7 +2,32 @@
 
     <h2 class="mb-[18px] text-[15px] font-bold text-hp-slate">Step 2 — Personal Information</h2>
 
-    <form method="POST" action="{{ route('register.info.store') }}" novalidate>
+    {{-- Client-side gate: keep "Continue" disabled until every required field is
+         filled, so an incomplete submit can't bounce the whole page back. The
+         password confirmation is intentionally excluded — the form never inspects
+         it as you type, so there's no impression the site is scanning your
+         password. The server (StoreRegistrationInfoRequest) still validates
+         everything, including the confirmation, on submit. --}}
+    <form
+        method="POST"
+        action="{{ route('register.info.store') }}"
+        novalidate
+        x-data="{
+            ready: false,
+            validate() {
+                for (const el of this.$el.querySelectorAll('[required]')) {
+                    if (el.name === 'password_confirmation') continue; // never inspect the confirm field
+                    if (! el.value.trim()) { this.ready = false; return; }
+                }
+                // Sex is required but rendered as a radio group (no `required` attribute).
+                if (! this.$el.querySelector('input[name=sex]:checked')) { this.ready = false; return; }
+                this.ready = true;
+            },
+        }"
+        x-init="validate()"
+        @input="validate()"
+        @change="validate()"
+    >
         @csrf
 
         {{-- ── Personal Details ────────────────────────────────────────────── --}}
@@ -294,7 +319,7 @@
                       transition-colors hover:bg-hp-slate/5">
                 ← Back
             </a>
-            <x-hp.button type="submit" variant="primary" size="sm" class="shrink-0 whitespace-nowrap sm:px-8 sm:py-[13px] sm:text-[15px]">
+            <x-hp.button type="submit" variant="primary" size="sm" x-bind:disabled="!ready" class="shrink-0 whitespace-nowrap sm:px-8 sm:py-[13px] sm:text-[15px]">
                 Continue →
             </x-hp.button>
         </div>
