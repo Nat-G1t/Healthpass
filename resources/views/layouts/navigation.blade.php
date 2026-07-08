@@ -39,15 +39,13 @@
                         </x-dropdown-link>
 
                         <!-- Authentication -->
-                        <form method="POST" action="{{ route('logout') }}">
-                            @csrf
-
-                            <x-dropdown-link :href="route('logout')"
-                                    onclick="event.preventDefault();
-                                                this.closest('form').submit();">
-                                {{ __('Log Out') }}
-                            </x-dropdown-link>
-                        </form>
+                        <x-logout-confirm>
+                            <x-slot:trigger>
+                                <x-dropdown-link href="#" @click.prevent="open = true">
+                                    {{ __('Log Out') }}
+                                </x-dropdown-link>
+                            </x-slot:trigger>
+                        </x-logout-confirm>
                     </x-slot>
                 </x-dropdown>
             </div>
@@ -85,15 +83,13 @@
                 </x-responsive-nav-link>
 
                 <!-- Authentication -->
-                <form method="POST" action="{{ route('logout') }}">
-                    @csrf
-
-                    <x-responsive-nav-link :href="route('logout')"
-                            onclick="event.preventDefault();
-                                        this.closest('form').submit();">
-                        {{ __('Log Out') }}
-                    </x-responsive-nav-link>
-                </form>
+                <x-logout-confirm>
+                    <x-slot:trigger>
+                        <x-responsive-nav-link href="#" @click.prevent="open = true">
+                            {{ __('Log Out') }}
+                        </x-responsive-nav-link>
+                    </x-slot:trigger>
+                </x-logout-confirm>
             </div>
         </div>
     </div>

@@ -20,12 +20,12 @@
             </div>
         </form>
 
-        <form method="POST" action="{{ route('logout') }}">
-            @csrf
-
-            <button type="submit" class="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                {{ __('Log Out') }}
-            </button>
-        </form>
+        <x-logout-confirm>
+            <x-slot:trigger>
+                <button type="button" @click="open = true" class="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                    {{ __('Log Out') }}
+                </button>
+            </x-slot:trigger>
+        </x-logout-confirm>
     </div>
 </x-guest-layout>
