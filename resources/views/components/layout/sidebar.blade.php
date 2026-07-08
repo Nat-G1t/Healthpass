@@ -239,20 +239,22 @@
                     <p class="truncate text-sm font-semibold text-hp-slate leading-tight">{{ $user?->name }}</p>
                     <p class="text-[11px] text-hp-slate/50 leading-tight">{{ $roleLabel }}</p>
                 </div>
-                {{-- Logout --}}
-                <form method="POST" action="{{ route('logout') }}">
-                    @csrf
-                    <button type="submit" title="Log out"
-                            class="text-hp-slate/40 hover:text-hp-slate transition-colors">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                             stroke="currentColor" stroke-width="2"
-                             stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
-                            <polyline points="16 17 21 12 16 7"/>
-                            <line x1="21" y1="12" x2="9" y2="12"/>
-                        </svg>
-                    </button>
-                </form>
+                {{-- Logout — opens a confirmation modal before submitting --}}
+                <x-logout-confirm>
+                    <x-slot:trigger>
+                        <button type="button" title="Log out"
+                                @click="open = true"
+                                class="text-hp-slate/40 hover:text-hp-slate transition-colors">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                 stroke="currentColor" stroke-width="2"
+                                 stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
+                                <polyline points="16 17 21 12 16 7"/>
+                                <line x1="21" y1="12" x2="9" y2="12"/>
+                            </svg>
+                        </button>
+                    </x-slot:trigger>
+                </x-logout-confirm>
             </div>
         </div>
     </aside>
