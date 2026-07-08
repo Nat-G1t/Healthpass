@@ -11,7 +11,7 @@
         </p>
 
         {{-- First Name / Middle Name / Last Name --}}
-        <div class="mb-4 grid grid-cols-3 gap-4">
+        <div class="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
             <x-hp.input
                 label="First Name"
                 id="first_name"
@@ -113,8 +113,8 @@
         </div>
 
         {{-- Course / Year Level --}}
-        <div class="mb-4 grid grid-cols-3 gap-4">
-            <div class="col-span-2">
+        <div class="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div class="sm:col-span-2">
                 <x-hp.input
                     label="Course"
                     id="course"
@@ -262,7 +262,7 @@
         </div>
 
         {{-- Password / Confirm Password --}}
-        <div class="mb-6 grid grid-cols-2 gap-4">
+        <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <x-hp.input
                 label="Password"
                 id="password"
@@ -285,7 +285,7 @@
         </div>
 
         {{-- Actions --}}
-        <div class="flex flex-wrap items-center justify-between gap-[10px]">
+        <div class="flex flex-col items-center gap-[10px] sm:flex-row sm:justify-between">
             <a href="{{ route('register') }}"
                class="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-full px-8 py-[13px] text-[15px]
                       font-semibold bg-transparent text-hp-slate border-[1.5px] border-hp-slate/30
