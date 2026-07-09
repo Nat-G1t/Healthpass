@@ -82,6 +82,9 @@ class QueueController extends Controller
                 'is_bmi_flagged' => (bool) $vs->is_bmi_flagged,
             ] : null,
             'time_human' => $capturedAt?->diffForHumans(),
+            // Where the row's "Encode Result" link points (FR-NRS-03) — built
+            // server-side so the JS poller never guesses the route shape.
+            'encode_url' => route('nurse.visits.encode', $visit),
         ];
     }
 

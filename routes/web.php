@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Auth\PasswordChangeController;
 use App\Http\Controllers\Kiosk\KioskController;
+use App\Http\Controllers\Nurse\EncodeController as NurseEncodeController;
 use App\Http\Controllers\Nurse\QueueController as NurseQueueController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Student\BookAppointmentController;
@@ -99,6 +100,10 @@ Route::middleware(['auth', 'role:nurse'])
         // JSON feed for the 4 s Live Queue poll (FR-NRS-02). Nurse-only, same
         // guard as the page — it exposes the same captured-visit rows.
         Route::get('/queue/feed', [NurseQueueController::class, 'feed'])->name('queue.feed');
+        // Encode Result / "Doctor's Assessment" (FR-NRS-03). {visit} is
+        // route-model-bound to ClinicVisit by the controller's type-hint —
+        // Laravel looks the id up and 404s unknown ids before our code runs.
+        Route::get('/visits/{visit}/encode', [NurseEncodeController::class, 'show'])->name('visits.encode');
     });
 
 // ── Director (FR-AUTH-03) ────────────────────────────────────────────────────

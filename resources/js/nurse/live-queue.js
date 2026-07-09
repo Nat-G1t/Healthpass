@@ -19,7 +19,7 @@ const POLL_MS = 4000;
 const BTN_BASE =
     'inline-flex items-center justify-center gap-2 rounded-full font-semibold ' +
     'transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 ' +
-    'focus-visible:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-1.5 text-xs';
+    'focus-visible:ring-offset-1 px-4 py-1.5 text-xs';
 const BTN_PRIMARY = 'bg-hp-orange text-white hover:bg-orange-500 focus-visible:ring-hp-orange';
 const BTN_GHOST =
     'bg-transparent text-hp-slate border-[1.5px] border-hp-slate/30 hover:bg-hp-slate/8 focus-visible:ring-hp-slate';
@@ -90,10 +90,12 @@ function buildRow(visit) {
         `<td class="py-4 pr-6 whitespace-nowrap">${flagsHtml(visit.vitals)}</td>` +
         // Time
         `<td class="py-4 pr-6 text-sm text-hp-slate/50 whitespace-nowrap" data-cell="time">${esc(visit.time_human ?? '—')}</td>` +
-        // Action — both buttons, CSS shows the right one per data-next
+        // Action — both links, CSS shows the right one per data-next.
+        // encode_url comes from the feed (QueueController::toRow), so the JS
+        // never has to guess the route shape.
         '<td class="py-4 pr-4 text-right whitespace-nowrap">' +
-        `<span class="queue-btn-next"><button type="button" class="${BTN_BASE} ${BTN_PRIMARY}">Encode Result</button></span>` +
-        `<span class="queue-btn-rest"><button type="button" class="${BTN_BASE} ${BTN_GHOST}">Encode Result</button></span>` +
+        `<span class="queue-btn-next"><a href="${esc(visit.encode_url)}" class="${BTN_BASE} ${BTN_PRIMARY}">Encode Result</a></span>` +
+        `<span class="queue-btn-rest"><a href="${esc(visit.encode_url)}" class="${BTN_BASE} ${BTN_GHOST}">Encode Result</a></span>` +
         '</td>';
     return row;
 }
