@@ -104,6 +104,9 @@ Route::middleware(['auth', 'role:nurse'])
         // route-model-bound to ClinicVisit by the controller's type-hint —
         // Laravel looks the id up and 404s unknown ids before our code runs.
         Route::get('/visits/{visit}/encode', [NurseEncodeController::class, 'show'])->name('visits.encode');
+        // Save & Close (FR-NRS-04): creates the clearance record and flips the
+        // visit to encoded — one-time, guarded in the controller + DB unique.
+        Route::post('/visits/{visit}/encode', [NurseEncodeController::class, 'store'])->name('visits.encode.store');
     });
 
 // ── Director (FR-AUTH-03) ────────────────────────────────────────────────────

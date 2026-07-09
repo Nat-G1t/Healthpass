@@ -64,6 +64,14 @@
     </p>
 </div>
 
+{{-- Re-submit flash (FR-NRS-04) — a Save on an already-encoded visit lands
+     here with a friendly note instead of a second record. --}}
+@if (session('status'))
+    <div class="mb-5 rounded-xl border border-hp-peach bg-hp-peach/30 px-4 py-3 text-sm text-hp-slate">
+        {{ session('status') }}
+    </div>
+@endif
+
 {{-- Read-only notice — encoding is one-time (BR-11 / FR-NRS-04). --}}
 @if ($readOnly)
     <div class="mb-5 rounded-xl border border-hp-peach bg-hp-peach/30 px-4 py-3 text-sm text-hp-slate">
@@ -191,9 +199,11 @@
             Result is required; category and purpose are optional (BR-16).
         </p>
 
-        {{-- No action yet — Save & Close POSTs in FR-NRS-04. Buttons are
-             type="button" so nothing can submit accidentally today. --}}
-        <form class="mt-5 space-y-5">
+        {{-- Save & Close POSTs the assessment (FR-NRS-04). Fields re-populate
+             from old() after a validation failure, falling back to the saved
+             record in read-only mode. --}}
+        <form method="POST" action="{{ route('nurse.visits.encode.store', $visit) }}" class="mt-5 space-y-5">
+            @csrf
 
             {{-- Result — Fit / Unfit, the one required field (BR-16).
                  Radios are visually-hidden (.sr-only) siblings of the styled
@@ -206,7 +216,7 @@
                 <div class="mt-1.5 grid grid-cols-2 gap-3">
                     <label class="{{ $readOnly ? 'cursor-not-allowed' : 'cursor-pointer' }}">
                         <input type="radio" name="result" value="Fit" class="peer sr-only" required
-                               @checked($record?->result === 'Fit') @disabled($readOnly)>
+                               @checked(old('result', $record?->result) === 'Fit') @disabled($readOnly)>
                         <span class="flex items-center justify-center rounded-xl border-2 border-hp-slate/20
                                      py-3 text-base font-bold text-hp-slate/50 transition-colors
                                      peer-checked:border-emerald-500 peer-checked:bg-emerald-500 peer-checked:text-white
@@ -216,7 +226,7 @@
                     </label>
                     <label class="{{ $readOnly ? 'cursor-not-allowed' : 'cursor-pointer' }}">
                         <input type="radio" name="result" value="Unfit" class="peer sr-only"
-                               @checked($record?->result === 'Unfit') @disabled($readOnly)>
+                               @checked(old('result', $record?->result) === 'Unfit') @disabled($readOnly)>
                         <span class="flex items-center justify-center rounded-xl border-2 border-hp-slate/20
                                      py-3 text-base font-bold text-hp-slate/50 transition-colors
                                      peer-checked:border-hp-orange peer-checked:bg-hp-orange peer-checked:text-white
@@ -233,28 +243,28 @@
             <x-hp.select label="Medical Case Category" name="case_category" :disabled="$readOnly">
                 <option value="">— Optional —</option>
                 @foreach (\App\Models\ClearanceRecord::CASE_CATEGORIES as $category)
-                    <option value="{{ $category }}" @selected($record?->case_category === $category)>{{ $category }}</option>
+                    <option value="{{ $category }}" @selected(old('case_category', $record?->case_category) === $category)>{{ $category }}</option>
                 @endforeach
             </x-hp.select>
 
             <x-hp.select label="Purpose" name="purpose" :disabled="$readOnly">
                 <option value="">— Optional —</option>
                 @foreach (\App\Models\ClearanceRecord::PURPOSES as $purpose)
-                    <option value="{{ $purpose }}" @selected($record?->purpose === $purpose)>{{ $purpose }}</option>
+                    <option value="{{ $purpose }}" @selected(old('purpose', $record?->purpose) === $purpose)>{{ $purpose }}</option>
                 @endforeach
             </x-hp.select>
 
             <x-hp.textarea label="Nurse Notes" name="nurse_notes" rows="4" :disabled="$readOnly"
-                           placeholder="Observations, advice given, follow-ups…">{{ $record?->nurse_notes }}</x-hp.textarea>
+                           placeholder="Observations, advice given, follow-ups…">{{ old('nurse_notes', $record?->nurse_notes) }}</x-hp.textarea>
 
             <div class="flex flex-col gap-2.5 pt-1">
                 @if ($readOnly)
                     {{-- Stub — FR-NRS-05 wires this to the print view + re-stamps printed_at. --}}
                     <x-hp.button type="button" variant="soft" class="w-full">Reprint</x-hp.button>
                 @else
-                    {{-- Stubs — FR-NRS-05 (print preview) and FR-NRS-04 (save) wire these. --}}
+                    {{-- Stub — FR-NRS-05 wires print preview. type="button" so it can't submit. --}}
                     <x-hp.button type="button" variant="ghost" class="w-full">Preview &amp; Print</x-hp.button>
-                    <x-hp.button type="button" variant="primary" class="w-full">Save &amp; Close</x-hp.button>
+                    <x-hp.button type="submit" variant="primary" class="w-full">Save &amp; Close</x-hp.button>
                 @endif
             </div>
         </form>
