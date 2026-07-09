@@ -5,7 +5,10 @@
 
     $user = Auth::user();
 
-    // Nav items per role: [label, route-name, icon-path]
+    // Nav items per role: [label, route-name, icon-path, opensNewTab?]
+    // The optional 4th element (default false) renders the link with
+    // target="_blank" — used for "Enable Kiosk Mode", which hands the clinic
+    // terminal off to the full-screen kiosk in a separate window (FR-NRS-06).
     $navItems = match ($user?->role) {
         'student' => [
             ['Dashboard',        'student.dashboard',    'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6'],
@@ -21,8 +24,7 @@
         ],
         'nurse' => [
             ['Live Queue',        'nurse.queue',  'M4 6h16M4 10h16M4 14h16M4 18h16'],
-            ['Encode Result',     'nurse.queue',  'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'],
-            ['Enable Kiosk Mode', 'nurse.queue',  'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2h-2'],
+            ['Enable Kiosk Mode', 'kiosk.index',  'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2h-2', true],
         ],
         'director' => [
             ['Dashboard',          'director.dashboard', 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6'],
@@ -206,12 +208,16 @@
 
         {{-- Nav --}}
         <nav class="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
-            @foreach ($navItems as [$label, $routeName, $iconPath])
+            @foreach ($navItems as $item)
                 @php
-                    $isActive = request()->routeIs($routeName);
+                    [$label, $routeName, $iconPath] = $item;
+                    $opensNewTab = $item[3] ?? false;
+                    // A new-tab link is never "active" — it leaves the app shell.
+                    $isActive = ! $opensNewTab && request()->routeIs($routeName);
                 @endphp
                 <a
                     href="{{ route($routeName) }}"
+                    @if ($opensNewTab) target="_blank" rel="noopener" @endif
                     class="hp-nav-link flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors duration-100
                            {{ $isActive
                                ? 'bg-hp-peach text-hp-orange font-semibold'
@@ -300,6 +306,9 @@
     </div>
 
 </div>
+
+{{-- Page-specific scripts (e.g. the nurse Live Queue poller) push into here. --}}
+@stack('scripts')
 
 </body>
 </html>

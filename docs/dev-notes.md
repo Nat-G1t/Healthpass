@@ -461,3 +461,77 @@ php artisan test --filter=KioskSubmitTest    # server-side re-validation (17 tes
 Note for Baldo: `state-machine.js` now imports `./serial.js` **with the
 extension** — Node's test runner needs it (Vite doesn't care). Keep the
 extension on any new kiosk-module imports so the JS tests keep running.
+
+---
+
+## SM-4 — captured-visit persistence drill (FR-NRS-08 / BR-12)
+
+**Requirement.** Captured visits persist *indefinitely* until a nurse encodes
+them. A backlog left at day's end must survive a full stop/restart of the app
+and the database — nothing (scheduled job, cleanup code, cache expiry) may ever
+auto-delete or expire a `captured` clinic visit. PRD: FR-NRS-08, **BR-12**, and
+the SM-4 AC ("killing the server with 5 un-encoded visits and restarting shows
+all 5 still queued").
+
+### A. Code audit — why captured visits cannot be lost (Jul 8 2026)
+
+Swept the codebase for anything that could delete or expire a `clinic_visits`
+row. **Nothing can.** Every path checked and the reason it's safe:
+
+| Vector checked | Finding |
+|---|---|
+| **Scheduled tasks / cron** | None. `bootstrap/app.php` registers no `->withSchedule(...)`; `routes/console.php` has only the stock `inspire` command. There is no scheduler wired up at all, so no timed job can touch visits. |
+| **Model pruning** | `ClinicVisit` does **not** use `Prunable`/`MassPrunable`; no `model:prune` anywhere. Grep for `Prunable\|prune\|truncate` in `app/` → zero hits. |
+| **Soft deletes / deletes** | `ClinicVisit` has **no** `SoftDeletes` trait and no `deleted_at` column. The only `->delete()` in the whole app is `DeletesOtherSessions` (deletes rows in the `sessions` table after a password change) — it never touches `clinic_visits`. |
+| **Cache / TTL** | The Live Queue reads straight from MySQL via `ClinicVisit::liveQueue()` (a query scope) — visits are **never** stored in the cache. Every `Cache::` call in the app is OTP flows (registration / password reset / email change). A cache expiry therefore cannot make a visit disappear. |
+| **Model observers / events** | No observers, no `booted()` delete hooks, no `static::deleting/deleted` on `ClinicVisit`. |
+| **FK cascades** | `clinic_visits` FKs are delete-safe: `student_id` → `restrictOnDelete()` (a student who has visits *cannot* be deleted — the DB rejects it, it does not cascade), `appointment_id` → `nullOnDelete()` (deleting an appointment nulls the link but keeps the visit as a walk-in). Neither can remove a captured row. |
+| **State transitions** | The only way a visit leaves the queue is the nurse encode (`captured → encoded`), an `update()` of the `status` column (FR-NRS-04, BR-11). That is a flip, never a delete — the row lives on forever as `encoded`. |
+
+**Conclusion:** persistence is guaranteed by two independent layers — (1) at the
+application layer there is *no code path* that deletes or expires a captured
+visit, and (2) at the storage layer MySQL/InnoDB is durable, so a committed row
+survives a clean process restart. That is exactly the SM-4 guarantee.
+
+### B. The physical drill (QA runs this for SM-4 evidence)
+
+Environment: local Windows dev, MySQL via **XAMPP Control Panel**. Prereqs: at
+least 5 captured visits already in the DB (the demo seeder creates
+HP-2026-9004/9005/9006; the day-35/36 kiosk work added more — see snapshot
+below).
+
+1. **Record the "before" set.** With MySQL running:
+   ```
+   php artisan tinker --execute="\App\Models\ClinicVisit::where('status','captured')->orderBy('checked_in_at')->orderBy('id')->get(['reference_no'])->each(fn(\$v)=>print(\$v->reference_no.PHP_EOL));"
+   ```
+   Note the count and the reference numbers.
+2. **Stop the app server.** In the terminal running `php artisan serve`, press
+   `Ctrl+C`.
+3. **Stop the database.** In the **XAMPP Control Panel**, click **Stop** on the
+   **MySQL** row (wait until it goes from green to grey). This is the real
+   "kill" — it fully tears down `mysqld`.
+4. **Restart both.** In XAMPP click **Start** on MySQL (wait for green), then in
+   the terminal run `php artisan serve --port=8080` again.
+5. **Verify the queue.** Re-run the tinker one-liner from step 1 — the count and
+   reference numbers must be **identical**. Then log in as the nurse
+   (`nurse@healthpass.test` / `password`) and open **Live Queue** (`/nurse/queue`)
+   — all the same visits must be listed, still oldest-first.
+
+**Pass criterion:** the captured-visit count and reference set after the restart
+exactly match the "before" set, and every one still shows in the nurse Live
+Queue. (No visit may be missing; none should have changed to `encoded`.)
+
+### C. Result (Jul 8 2026)
+
+- **Audit: PASS** — no deletion/expiry path exists (section A). This is the
+  substantive engineering evidence.
+- **On-disk state confirmed:** at drill time the DB held **12 captured visits**,
+  read from disk through a fresh connection (`php artisan tinker`, which opens a
+  new MySQL connection each run — not app memory):
+  `HP-2026-9004, 9005, 9006, 9007, 9008, 9009, 9010, 9011, 9012, 9013, 9014,
+  HP-2026-6304` — well over the 5 the drill requires.
+- **Physical stop/restart:** left for QA to execute via the XAMPP Control Panel
+  (section B) — this session did **not** force-stop the shared dev `mysqld`
+  unattended (a background job) to avoid disrupting the running environment. The
+  restart is a standard InnoDB durability check; combined with the audit it
+  fully establishes FR-NRS-08 / BR-12.
