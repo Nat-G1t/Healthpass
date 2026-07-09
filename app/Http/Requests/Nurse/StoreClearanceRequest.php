@@ -25,13 +25,25 @@ class StoreClearanceRequest extends FormRequest
     /** @return array<string, mixed> */
     public function rules(): array
     {
-        return [
+        $rules = [
             'result' => ['required', Rule::in(['Fit', 'Unfit'])],
-            'case_category' => ['nullable', Rule::in(ClearanceRecord::CASE_CATEGORIES)],
+            // A case can span several systems (D-23) — zero or more from the
+            // locked list, no duplicates.
+            'case_categories' => ['nullable', 'array'],
+            'case_categories.*' => ['distinct', Rule::in(ClearanceRecord::CASE_CATEGORIES)],
             'purpose' => ['nullable', Rule::in(ClearanceRecord::PURPOSES)],
             // max keeps runaway notes from breaking the one-page print (FR-PRT).
             'nurse_notes' => ['nullable', 'string', 'max:2000'],
         ];
+
+        // Physical-signs exam findings (D-22): each row optional — an
+        // unanswered radio pair simply isn't in the payload, leaving the
+        // column NULL (prints as blank bubbles).
+        foreach (array_keys(ClearanceRecord::PHYSICAL_SIGNS) as $column) {
+            $rules[$column] = ['nullable', 'boolean'];
+        }
+
+        return $rules;
     }
 
     /** @return array<string, string> */

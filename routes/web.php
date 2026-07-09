@@ -3,6 +3,7 @@
 use App\Http\Controllers\Auth\PasswordChangeController;
 use App\Http\Controllers\Kiosk\KioskController;
 use App\Http\Controllers\Nurse\EncodeController as NurseEncodeController;
+use App\Http\Controllers\Nurse\PrintClearanceController as NursePrintClearanceController;
 use App\Http\Controllers\Nurse\QueueController as NurseQueueController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Student\BookAppointmentController;
@@ -107,6 +108,10 @@ Route::middleware(['auth', 'role:nurse'])
         // Save & Close (FR-NRS-04): creates the clearance record and flips the
         // visit to encoded — one-time, guarded in the controller + DB unique.
         Route::post('/visits/{visit}/encode', [NurseEncodeController::class, 'store'])->name('visits.encode.store');
+        // Printable Medical Clearance (Module PRT, FR-PRT-01..04) — the official
+        // DHVSU form as a standalone document. Encoded visits only; FR-NRS-05
+        // later loads this in an iframe on the encode screen for Preview & Print.
+        Route::get('/visits/{visit}/print', NursePrintClearanceController::class)->name('visits.print');
     });
 
 // ── Director (FR-AUTH-03) ────────────────────────────────────────────────────

@@ -29,6 +29,27 @@
 
     $capturedAt = $visit->checked_in_at ?? $visit->created_at;
 
+    // Kiosk YES answers pre-check the matching physical-sign row (D-22): a
+    // self-reported issue is what the physician will look at first — the
+    // nurse confirms or corrects after the exam. NO answers do NOT pre-fill
+    // (an unexamined row must stay blank on the printed form). Column →
+    // questionnaire key; GUT and BREAST have no kiosk counterpart, and
+    // vision/hearing exist to help the nurse pick the "Eyes, Ears, Nose &
+    // Throat Disorders" case category (D-23), not to pre-fill a row.
+    $kioskPrefill = [
+        'ps_skin'         => 'skin',
+        'ps_abdomen_git'  => 'digestive',
+        'ps_heent'        => 'nose',
+        'ps_chest_lungs'  => 'respiratory',
+        'ps_extremities'  => 'bones',
+        'ps_heart_cvs'    => 'heart',
+        'ps_neurological' => 'nervous',
+    ];
+
+    // Saved categories for the multi-select (D-23), old() first after a
+    // validation bounce, then the saved child rows in read-only mode.
+    $savedCategories = old('case_categories', $record?->categoryNames() ?? []);
+
     // The 9 body systems, column → label. Mirrors SYSTEMS in
     // resources/js/kiosk/state-machine.js — keep the two lists in step.
     $systems = [
@@ -240,12 +261,28 @@
                 @enderror
             </div>
 
-            <x-hp.select label="Medical Case Category" name="case_category" :disabled="$readOnly">
-                <option value="">— Optional —</option>
-                @foreach (\App\Models\ClearanceRecord::CASE_CATEGORIES as $category)
-                    <option value="{{ $category }}" @selected(old('case_category', $record?->case_category) === $category)>{{ $category }}</option>
-                @endforeach
-            </x-hp.select>
+            {{-- Medical Case Categories — multi-select (D-23): a case can span
+                 several systems; each checked category counts once in the
+                 Director's cases-per-category analytics. The kiosk's
+                 vision/hearing answers (left column) are decision support for
+                 the "Eyes, Ears, Nose & Throat Disorders" pick. --}}
+            <div>
+                <span class="text-sm font-semibold text-hp-slate">Medical Case Categories</span>
+                <p class="mt-0.5 text-xs text-hp-slate/50">Optional — tick every system the case involves.</p>
+                <div class="mt-1.5 space-y-1">
+                    @foreach (\App\Models\ClearanceRecord::CASE_CATEGORIES as $category)
+                        <label class="flex items-center gap-2 {{ $readOnly ? 'cursor-not-allowed' : 'cursor-pointer' }}">
+                            <input type="checkbox" name="case_categories[]" value="{{ $category }}"
+                                   class="accent-hp-orange"
+                                   @checked(in_array($category, $savedCategories, true)) @disabled($readOnly)>
+                            <span class="text-sm text-hp-slate/70">{{ $category }}</span>
+                        </label>
+                    @endforeach
+                </div>
+                @error('case_categories.*')
+                    <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+                @enderror
+            </div>
 
             <x-hp.select label="Purpose" name="purpose" :disabled="$readOnly">
                 <option value="">— Optional —</option>
@@ -253,6 +290,48 @@
                     <option value="{{ $purpose }}" @selected(old('purpose', $record?->purpose) === $purpose)>{{ $purpose }}</option>
                 @endforeach
             </x-hp.select>
+
+            {{-- Physical Signs Disorder of (D-22): the physician examines the
+                 student at the clinic; the nurse records the findings here.
+                 Each row is optional — unanswered rows print as blank bubbles
+                 on the official form (FR-PRT-02). --}}
+            <div>
+                <span class="text-sm font-semibold text-hp-slate">Physical Signs Disorder of</span>
+                <p class="mt-0.5 text-xs text-hp-slate/50">
+                    Physician's exam findings — leave a row unanswered to keep it blank on the printed form.
+                </p>
+                <div class="mt-1.5 divide-y divide-hp-slate/10">
+                    @foreach (\App\Models\ClearanceRecord::PHYSICAL_SIGNS as $column => $label)
+                        @php
+                            // old() posts back '1'/'0' strings; the saved record
+                            // gives booleans — normalize both to '1'/'0'/null.
+                            $saved = old($column, is_null($record?->{$column}) ? null : (string) (int) $record->{$column});
+
+                            // Fresh form only: pre-check YES where the student
+                            // answered YES at the kiosk (D-22, see $kioskPrefill).
+                            if ($saved === null && ! $readOnly) {
+                                $kioskKey = $kioskPrefill[$column] ?? null;
+                                $saved = ($kioskKey && $sr?->{$kioskKey}) ? '1' : null;
+                            }
+                        @endphp
+                        <div class="flex items-center justify-between gap-3 py-1.5">
+                            <span class="text-sm text-hp-slate/70">{{ $label }}</span>
+                            <span class="flex items-center gap-3 text-sm text-hp-slate/70">
+                                <label class="flex items-center gap-1 {{ $readOnly ? 'cursor-not-allowed' : 'cursor-pointer' }}">
+                                    <input type="radio" name="{{ $column }}" value="1" class="accent-hp-orange"
+                                           @checked($saved === '1') @disabled($readOnly)>
+                                    Yes
+                                </label>
+                                <label class="flex items-center gap-1 {{ $readOnly ? 'cursor-not-allowed' : 'cursor-pointer' }}">
+                                    <input type="radio" name="{{ $column }}" value="0" class="accent-hp-orange"
+                                           @checked($saved === '0') @disabled($readOnly)>
+                                    No
+                                </label>
+                            </span>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
 
             <x-hp.textarea label="Nurse Notes" name="nurse_notes" rows="4" :disabled="$readOnly"
                            placeholder="Observations, advice given, follow-ups…">{{ old('nurse_notes', $record?->nurse_notes) }}</x-hp.textarea>

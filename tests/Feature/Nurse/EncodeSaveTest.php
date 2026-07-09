@@ -160,17 +160,58 @@ class EncodeSaveTest extends TestCase
         $this->assertDatabaseCount('clearance_records', 0);
     }
 
-    public function test_case_category_and_purpose_must_come_from_the_locked_lists(): void
+    public function test_case_categories_and_purpose_must_come_from_the_locked_lists(): void
     {
         $visit = $this->makeVisit();
 
         $this->save($this->nurse(), $visit, [
             'result' => 'Fit',
-            'case_category' => 'Made-up System',
+            'case_categories' => ['Made-up System'],
             'purpose' => 'Vacation',
-        ])->assertSessionHasErrors(['case_category', 'purpose']);
+        ])->assertSessionHasErrors(['case_categories.0', 'purpose']);
 
         $this->assertDatabaseCount('clearance_records', 0);
+    }
+
+    public function test_duplicate_case_categories_are_blocked(): void
+    {
+        $visit = $this->makeVisit();
+
+        $this->save($this->nurse(), $visit, [
+            'result' => 'Fit',
+            'case_categories' => ['Respiratory System', 'Respiratory System'],
+        ])->assertSessionHasErrors('case_categories.0');
+
+        $this->assertDatabaseCount('clearance_records', 0);
+    }
+
+    public function test_invalid_physical_sign_value_is_blocked(): void
+    {
+        $visit = $this->makeVisit();
+
+        $this->save($this->nurse(), $visit, ['result' => 'Fit', 'ps_skin' => '2'])
+            ->assertSessionHasErrors('ps_skin');
+
+        $this->assertDatabaseCount('clearance_records', 0);
+    }
+
+    public function test_physical_signs_findings_persist_on_save(): void
+    {
+        $nurse = $this->nurse();
+        $visit = $this->makeVisit();
+
+        // D-22: the nurse records the physician's exam findings; answered
+        // rows persist, unanswered rows stay NULL (print as blank bubbles).
+        $this->save($nurse, $visit, [
+            'result' => 'Fit',
+            'ps_skin' => '0',
+            'ps_chest_lungs' => '1',
+        ])->assertRedirect(route('nurse.queue'));
+
+        $record = ClearanceRecord::firstWhere('clinic_visit_id', $visit->id);
+        $this->assertFalse($record->ps_skin);
+        $this->assertTrue($record->ps_chest_lungs);
+        $this->assertNull($record->ps_gut);
     }
 
     // ── 3. The happy path (FR-NRS-04) ─────────────────────────────────────────
@@ -185,16 +226,16 @@ class EncodeSaveTest extends TestCase
             ->assertSessionHas('status');
 
         $this->assertSame('encoded', $visit->fresh()->status);
-        // Category/purpose optional (BR-16); physician block pre-filled (§7.5).
+        // Categories/purpose optional (BR-16); physician block pre-filled (§7.5).
         $this->assertDatabaseHas('clearance_records', [
             'clinic_visit_id' => $visit->id,
             'encoded_by' => $nurse->id,
             'result' => 'Fit',
-            'case_category' => null,
             'purpose' => null,
             'physician_name' => 'REYNALDO S. ALIPIO, MD',
             'physician_license_no' => '60252',
         ]);
+        $this->assertDatabaseCount('clearance_case_categories', 0);
         $this->assertNotNull($visit->fresh()->clearanceRecord->encoded_at);
     }
 
@@ -203,9 +244,11 @@ class EncodeSaveTest extends TestCase
         $nurse = $this->nurse();
         $visit = $this->makeVisit();
 
+        // A case can span several systems (D-23) — each persists as its own
+        // child row so the Director's analytics can count per category.
         $this->save($nurse, $visit, [
             'result' => 'Unfit',
-            'case_category' => 'Respiratory System',
+            'case_categories' => ['Respiratory System', 'Cardiovascular System'],
             'purpose' => 'On-the-job Training',
             'nurse_notes' => 'Advised rest and follow-up in one week.',
         ])->assertRedirect(route('nurse.queue'));
@@ -213,10 +256,15 @@ class EncodeSaveTest extends TestCase
         $this->assertDatabaseHas('clearance_records', [
             'clinic_visit_id' => $visit->id,
             'result' => 'Unfit',
-            'case_category' => 'Respiratory System',
             'purpose' => 'On-the-job Training',
             'nurse_notes' => 'Advised rest and follow-up in one week.',
         ]);
+
+        $record = ClearanceRecord::firstWhere('clinic_visit_id', $visit->id);
+        $this->assertEqualsCanonicalizing(
+            ['Respiratory System', 'Cardiovascular System'],
+            $record->categoryNames()
+        );
     }
 
     public function test_encoded_visit_vanishes_from_the_queue_feed(): void

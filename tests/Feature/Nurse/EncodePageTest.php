@@ -109,11 +109,12 @@ class EncodePageTest extends TestCase
             'clinic_visit_id' => $visit->id,
             'encoded_by' => $nurse->id,
             'result' => 'Fit',
-            'case_category' => 'Respiratory System',
             'purpose' => 'On-the-job Training',
             'nurse_notes' => 'Advised rest and hydration.',
             'encoded_at' => now(),
         ], $overrides));
+
+        $record->caseCategories()->create(['case_category' => 'Respiratory System']);
 
         $visit->update(['status' => 'encoded']);
 
@@ -166,7 +167,7 @@ class EncodePageTest extends TestCase
             // Form controls + buttons (stubs today)
             ->assertSee('Fit')
             ->assertSee('Unfit')
-            ->assertSee('Medical Case Category')
+            ->assertSee('Medical Case Categories')
             ->assertSee('Purpose')
             ->assertSee('Nurse Notes')
             ->assertSee('Preview & Print')
@@ -236,7 +237,89 @@ class EncodePageTest extends TestCase
         }
     }
 
+    public function test_kiosk_yes_answer_prechecks_the_matching_physical_sign(): void
+    {
+        // Student self-reported a skin issue at the kiosk (D-22): the SKIN
+        // row opens pre-checked YES for the nurse to confirm or correct.
+        $visit = $this->makeVisit('Prefilled Student', [], ['skin' => true]);
+
+        $html = $this->actingAs($this->nurse())
+            ->get(route('nurse.visits.encode', $visit))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertMatchesRegularExpression('~name="ps_skin" value="1"[^>]*checked~', $html);
+    }
+
+    public function test_kiosk_no_answer_does_not_prefill_the_physical_sign(): void
+    {
+        // skin=false at the kiosk → the SKIN row stays fully unanswered
+        // (neither YES nor NO pre-checked) — only a YES pre-fills (D-22).
+        $visit = $this->makeVisit();
+
+        $html = $this->actingAs($this->nurse())
+            ->get(route('nurse.visits.encode', $visit))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertDoesNotMatchRegularExpression('~name="ps_skin" value="1"[^>]*checked~', $html);
+        $this->assertDoesNotMatchRegularExpression('~name="ps_skin" value="0"[^>]*checked~', $html);
+    }
+
+    public function test_physical_signs_fieldset_shows_all_nine_exam_rows(): void
+    {
+        $visit = $this->makeVisit();
+
+        $response = $this->actingAs($this->nurse())
+            ->get(route('nurse.visits.encode', $visit))
+            ->assertOk()
+            ->assertSee('Physical Signs Disorder of');
+
+        // D-22: the nurse records the physician's exam findings per system.
+        foreach (ClearanceRecord::PHYSICAL_SIGNS as $label) {
+            $response->assertSee($label);
+        }
+    }
+
     // ── 3. Encoded visit — read-only + Reprint ────────────────────────────────
+
+    public function test_encoded_visit_shows_saved_physical_signs(): void
+    {
+        $nurse = $this->nurse();
+        // Kiosk says respiratory issue, but the nurse saved NOTHING for
+        // chest/lungs — read-only must show the record, never the prefill.
+        $visit = $this->makeVisit('Examined Student', [], ['respiratory' => true]);
+        $this->encode($visit, $nurse, ['ps_skin' => true, 'ps_heent' => false]);
+
+        $html = $this->actingAs($nurse)
+            ->get(route('nurse.visits.encode', $visit))
+            ->assertOk()
+            ->getContent();
+
+        // Saved YES/NO answers come back checked (and disabled — read-only).
+        $this->assertMatchesRegularExpression('~name="ps_skin" value="1"[^>]*checked~', $html);
+        $this->assertMatchesRegularExpression('~name="ps_heent" value="0"[^>]*checked~', $html);
+        // ps_chest_lungs was left NULL → no kiosk prefill in read-only mode.
+        $this->assertDoesNotMatchRegularExpression('~name="ps_chest_lungs" value="1"[^>]*checked~', $html);
+    }
+
+    public function test_encoded_visit_shows_all_saved_case_categories_checked(): void
+    {
+        $nurse = $this->nurse();
+        $visit = $this->makeVisit('Multi Category Student');
+        $record = $this->encode($visit, $nurse);
+        // A case can span several systems (D-23).
+        $record->caseCategories()->create(['case_category' => 'Cardiovascular System']);
+
+        $html = $this->actingAs($nurse)
+            ->get(route('nurse.visits.encode', $visit))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertMatchesRegularExpression('~value="Respiratory System"[^>]*checked~', $html);
+        $this->assertMatchesRegularExpression('~value="Cardiovascular System"[^>]*checked~', $html);
+        $this->assertDoesNotMatchRegularExpression('~value="Urinary System"[^>]*checked~', $html);
+    }
 
     public function test_encoded_visit_renders_read_only_with_reprint(): void
     {

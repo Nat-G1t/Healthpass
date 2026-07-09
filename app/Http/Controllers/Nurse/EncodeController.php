@@ -42,6 +42,7 @@ class EncodeController extends Controller
             'vitalSigns',
             'screeningResponse',
             'clearanceRecord.encoder',
+            'clearanceRecord.caseCategories',
         ]);
 
         return view('nurse.encode', [
@@ -75,15 +76,25 @@ class EncodeController extends Controller
 
         try {
             DB::transaction(function () use ($request, $visit): void {
+                // case_categories is a 0..n child list (D-23), not a column —
+                // pull it out before the record create.
+                $validated = $request->validated();
+                $categories = $validated['case_categories'] ?? [];
+                unset($validated['case_categories']);
+
                 // physician_name / physician_license_no are intentionally NOT
                 // set here — the column defaults (§7.5: REYNALDO S. ALIPIO, MD
                 // / 60252) fill them, keeping the migration the single source.
-                ClearanceRecord::create([
-                    ...$request->validated(),
+                $record = ClearanceRecord::create([
+                    ...$validated,
                     'clinic_visit_id' => $visit->id,
                     'encoded_by' => $request->user()->id,
                     'encoded_at' => now(),
                 ]);
+
+                $record->caseCategories()->createMany(
+                    array_map(fn (string $category) => ['case_category' => $category], $categories)
+                );
 
                 $visit->update(['status' => 'encoded']);
 

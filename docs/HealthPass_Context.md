@@ -72,7 +72,7 @@ Only **students** self-register. `nurse`, `college_admin`, and `director` accoun
 | Approve / reject batch requests (all colleges) | | | | ✓ |
 | Use the kiosk (vitals + screening) | ✓ | | | |
 | View the live nurse queue | | | ✓ | |
-| Encode Fit/Unfit + case category + purpose | | | ✓ | |
+| Encode Fit/Unfit + case categories + purpose | | | ✓ | |
 | Preview / print clearance form | | | ✓ | |
 | View own clearance records | ✓ | | | |
 | View analytics + flagged anomalies | | | | ✓ |
@@ -129,7 +129,7 @@ Nurse sees visit in Live Queue
          └── Opens Encode Result screen
                     │ (views vitals with flags, questionnaire answers)
                     │
-                    └── Sets Fit/Unfit + case category + purpose + notes
+                    └── Sets Fit/Unfit + case categories (0..n) + purpose + notes
                     │
                     └── Preview & Print clearance form (official PamSU form)
                     │
@@ -174,7 +174,7 @@ Flags appear in the nurse queue's "Flags" column and the Director's Flagged Anom
 - Only the **Nurse** encodes (4 roles total — no Doctor login).
 - The encode form is titled "Doctor's Assessment" in the UI but is nurse-operated.
 - `result` = Fit or Unfit (required to save).
-- Case category and purpose are optional (can save without them).
+- Case categories (0..n, D-23) and purpose are optional (can save without them).
 - The printed form carries the **pre-printed physician signature: REYNALDO S. ALIPIO, MD, License No. 60252**.
 - **Respiratory Rate** is intentionally blank on the print form — it is not a captured vital.
 
@@ -295,7 +295,7 @@ Progress steps: Consent → Account Info → Email Verify → Link ID
 #### My Records (`student-records`)
 - Table: Date, Service, Result (Fit/Unfit badge), Reference No., View.
 - "View" opens a **Record modal** (fixed overlay, max-width 700px):
-  - Left column: "Kiosk Vital Signs" (height, weight, BMI, temp, HR, BP key-value list) + Medical Case Category badge if present.
+  - Left column: "Kiosk Vital Signs" (height, weight, BMI, temp, HR, BP key-value list) + one Medical Case Category chip per assigned category (0..n, D-23).
   - Right column: 9-item questionnaire (Yes/No badges — Yes = flagged variant).
 
 #### My ID & Profile (`student-profile`)
@@ -354,8 +354,9 @@ Progress steps: Consent → Account Info → Email Verify → Link ID
     - Questionnaire answers card (Yes/No badges; Yes = flagged variant).
   - **Right column** — "Doctor's Assessment" card:
     - **Fit / Unfit** selector (two cards; selected = peach bg + orange border).
-    - **Medical Case Category** dropdown: Alimentary System, Respiratory System, Musculo-Skeletal System, Integumentary System, Urinary System, Metabolic Endocrine System, Cardiovascular System, Eyes, Ears, Nose & Throat Disorders.
+    - **Medical Case Categories** multi-select checkboxes (D-23 — a case can span several systems; each persists as a `clearance_case_categories` row): Alimentary System, Respiratory System, Musculo-Skeletal System, Integumentary System, Urinary System, Metabolic Endocrine System, Cardiovascular System, Eyes, Ears, Nose & Throat Disorders. The kiosk's **vision/hearing answers are decision support** for the "Eyes, Ears, Nose & Throat Disorders" pick — they have no physical-sign row of their own.
     - **Purpose / Cleared For** dropdown: Off Campus Procedure, On-the-job Training, Field Trip/Educational Tour, Sports Activities.
+    - **Physical Signs Disorder of** (D-22): nine Yes/No rows — SKIN, ABDOMEN (GIT), HEENT, GUT, CHEST/LUNGS, EXTREMITIES, HEART/CVS, NEUROLOGICAL, BREAST. The physician examines the student at the clinic; the nurse records the findings. Each row optional — an unanswered row prints as blank bubbles on the form. Stored in `clearance_records.ps_*`. **Kiosk pre-fill:** a row whose questionnaire counterpart was answered YES opens pre-checked YES (skin→SKIN, digestive→ABDOMEN (GIT), nose→HEENT, respiratory→CHEST/LUNGS, bones→EXTREMITIES, heart→HEART/CVS, nervous→NEUROLOGICAL) for the nurse to confirm or correct; a kiosk NO never pre-fills.
     - **Nurse Notes** textarea (optional).
     - "Preview & Print Medical Clearance" button (ghost style, full width, Download icon).
     - "← Back" (ghost) + "Save & Close Appointment" (primary, flex-2) — Save disabled until Fit/Unfit chosen.
@@ -365,32 +366,27 @@ Progress steps: Consent → Account Info → Email Verify → Link ID
 #### Print Medical Clearance (modal)
 - Fixed overlay (z-index 2000), modal 92% wide / 92vh.
 - Modal header: "Medical Clearance — Document Preview" + "Kiosk data pre-filled. Review before printing." + Close + Print buttons.
-- Body: `<iframe>` renders the **official PamSU form** as an HTML document, pre-filled from student + vitals + questionnaire + result + purpose + notes.
+- Body: `<iframe>` renders the **official PamSU form** as an HTML document, pre-filled from student + vitals + the nurse-encoded assessment (result, purpose, notes, physical-signs exam findings) + the questionnaire's pregnancy/LMP answer (D-22).
 
 **Official form details (DHVSU-QSP-OSS-004-FO002-R03):**
 - Header: "Republic of the Philippines / PAMPANGA STATE UNIVERSITY / (former Don Honorio Ventura State University) / Office of Student Welfare and Formation / Health Services Unit / MEDICAL CLEARANCE"
 - Font: Times New Roman, 11.5px, black on white, print margins 12–16mm.
 - Student fields: Surname / First Name / Middle Name (3-column underlines), Course/Year/Section, Address, Age, Sex (radio), Civil Status (radio), Date of Birth, Place of Birth.
 - Vitals grid (3 columns): Height, Heart Rate, Temperature, Weight, Blood Pressure, Respiratory Rate (**left blank — not captured**).
-- Physical signs table: YES/NO radio columns for SKIN, ABDOMEN(GIT), HEENT, GUT, CHEST/LUNGS (left col) + EXTREMITIES, HEART/CVS, NEUROLOGICAL, BREAST (right col).
-- Remarks / notes line.
-- Pregnancy question (YES/NO radio + LMP line).
+- Physical signs table: YES/NO radio columns for SKIN, ABDOMEN(GIT), HEENT, GUT, CHEST/LUNGS (left col) + EXTREMITIES, HEART/CVS, NEUROLOGICAL, BREAST (right col) — shaded from the nurse-encoded exam findings (`clearance_records.ps_*`, D-22); unanswered rows print blank.
+- Remarks / notes line — nurse notes only; case details are the physician's hand-written annotation (D-22).
+- Pregnancy question (YES/NO radio + LMP line) — pre-filled from the kiosk questionnaire (`screening_responses`).
 - Fitness declaration: "He/She is physically/mentally ☐ FIT ☐ UNFIT to undergo in:" + purpose radio options.
 - Pre-printed physician: **REYNALDO S. ALIPIO, MD · University Physician · License No. 60252**
 - Date line + form code bottom-right.
 - Print via `window.print()`.
 
-**Questionnaire → form body system mapping:**
-
-| Questionnaire key | Form label |
-|---|---|
-| skin | * SKIN |
-| digestive | * ABDOMEN (GIT) |
-| nose | * HEENT |
-| respiratory | * CHEST/LUNGS |
-| bones | * EXTREMITIES |
-| heart | * HEART/CVS |
-| nervous | * NEUROLOGICAL |
+**Physical-signs source (D-22, supersedes the earlier questionnaire → form mapping):**
+the form's nine Physical Signs rows shade from the nurse-encoded exam findings
+(`clearance_records.ps_*` — the physician examines, the nurse records), never
+from the kiosk questionnaire. The questionnaire's self-reported 9 systems are
+reference on the encode screen only; its pregnancy/LMP answer is the one
+questionnaire item that prints.
 
 ---
 
@@ -413,10 +409,10 @@ Progress steps: Consent → Account Info → Email Verify → Link ID
 
 #### Analytics (`director-analytics`)
 - "Export Report" button (ghost sm, top-right, Download icon).
-- **Medical Cases by College** — horizontal stacked bar chart (Chart.js). One row per college/unit (all 12 units), each bar segmented by the 8 medical-system categories, sorted by total case volume descending. Total-cases headline (e.g. '235 total cases'). Subtitle: 'Total cases per college, broken down by medical system — sorted by volume.' Students only — Faculty and NASA excluded. Series colors follow the prototype legend. Source: encoded `clearance_records` with non-null `case_category`, grouped by `clinic_visits.college_id` (the capture-time college snapshot, so a later transfer does not re-attribute past cases) × `case_category`.
-- **Summary of Medical Cases matrix** (table): 8 medical-system rows × 12 college-code columns + TOTAL column and totals row. Fixed column order: COE, CEA, CBS, CAS, CSSP, CCS, CHTM, CIT, LAW, GS, SHS, LHS. Subtitle: 'Rows = medical system · Columns = college · Faculty & NASA excluded.' Total row at bottom in orange. Alternating row backgrounds. Source: encoded `clearance_records` with non-null `case_category`, grouped by `clinic_visits.college_id` (capture-time college snapshot, FR-STU-09) × `case_category`; NULL-category records excluded.
+- **Medical Cases by College** — horizontal stacked bar chart (Chart.js). One row per college/unit (all 12 units), each bar segmented by the 8 medical-system categories, sorted by total case volume descending. Total-cases headline (e.g. '235 total cases'). Subtitle: 'Total cases per college, broken down by medical system — sorted by volume.' Students only — Faculty and NASA excluded. Series colors follow the prototype legend. Source: `clearance_case_categories` joined through encoded `clearance_records` (one count per record × category — a multi-category case counts once in each of its systems, D-23), grouped by `clinic_visits.college_id` (the capture-time college snapshot, so a later transfer does not re-attribute past cases) × `case_category`.
+- **Summary of Medical Cases matrix** (table): 8 medical-system rows × 12 college-code columns + TOTAL column and totals row. Fixed column order: COE, CEA, CBS, CAS, CSSP, CCS, CHTM, CIT, LAW, GS, SHS, LHS. Subtitle: 'Rows = medical system · Columns = college · Faculty & NASA excluded.' Total row at bottom in orange. Alternating row backgrounds. Source: `clearance_case_categories` joined through encoded `clearance_records` (one count per record × category, D-23), grouped by `clinic_visits.college_id` (capture-time college snapshot, FR-STU-09) × `case_category`; records with no categories contribute nothing.
 - **Cases by Medical System** — horizontal bar chart (Chart.js). One bar per medical-system category (the 8 above), overall total per system across all units, sorted descending. Same source/scope as the matrix (capture-time `clinic_visits.college_id` snapshot).
-- **By-Sex donut** (Chart.js) — 160px, Male (orange) + Female (peach), centre shows total count. Legend below with count + %. The donut counts students by sex across all encoded clinic visits in scope (one count per student/visit), so its total intentionally exceeds the cases total — visits with no assigned case category are still counted as people screened.
+- **By-Sex donut** (Chart.js) — 160px, Male (orange) + Female (peach), centre shows total count. Legend below with count + %. The donut counts students by sex across all encoded clinic visits in scope (one count per student/visit), so its total intentionally differs from the cases total — visits with no assigned case categories are still counted as people screened, and a multi-category case counts once per system in the cases charts (D-23).
 
 #### Flagged Anomalies (`director-flagged`)
 - **3 stat cards** (orange left border): High Blood Pressure count, Fever count, Abnormal BMI count.
@@ -505,7 +501,10 @@ Each vital screen has:
 
 ---
 
-## 8. Database schema (10 tables)
+## 8. Database schema (11 tables)
+
+> Originally locked at 10 tables; `clearance_case_categories` was added as
+> table #11 on July 9, 2026 (D-23 — multi-category cases).
 
 ### `colleges`
 ```sql
@@ -646,13 +645,38 @@ id                    bigint PK
 clinic_visit_id       bigint UNIQUE FK → clinic_visits.id
 encoded_by            bigint FK → users.id  -- the nurse
 result                enum('Fit','Unfit')
-case_category         enum('Alimentary System','Respiratory System','Musculo-Skeletal System','Integumentary System','Urinary System','Metabolic Endocrine System','Cardiovascular System','Eyes, Ears, Nose & Throat Disorders') NULL
+-- case_category moved to the clearance_case_categories child table (D-23):
+-- a case can span several medical systems
 purpose               enum('Off Campus Procedure','On-the-job Training','Field Trip/Educational Tour','Sports Activities') NULL
 nurse_notes           text NULL
+-- "Physical Signs Disorder of" exam findings (D-22): physician examines,
+-- nurse records on the encode screen; NULL = not examined (prints blank)
+ps_skin               boolean NULL
+ps_abdomen_git        boolean NULL
+ps_heent              boolean NULL
+ps_gut                boolean NULL
+ps_chest_lungs        boolean NULL
+ps_extremities        boolean NULL
+ps_heart_cvs          boolean NULL
+ps_neurological       boolean NULL
+ps_breast             boolean NULL
 physician_name        varchar(120) DEFAULT 'REYNALDO S. ALIPIO, MD'
 physician_license_no  varchar(20)  DEFAULT '60252'
 encoded_at            timestamp NULL
 printed_at            timestamp NULL
+created_at, updated_at
+```
+
+### `clearance_case_categories` (table #11 — D-23)
+```sql
+-- One row per medical-system category on a clearance; a case can span
+-- several systems. Child table (not JSON) so cases-per-category analytics
+-- stay portable JOIN + GROUP BY SQL. Valid values = the locked 8-category
+-- list (ClearanceRecord::CASE_CATEGORIES); validation is the gate.
+id                    bigint PK
+clearance_record_id   bigint FK → clearance_records.id (cascade on delete)
+case_category         varchar(60)
+UNIQUE (clearance_record_id, case_category)
 created_at, updated_at
 ```
 
@@ -680,6 +704,8 @@ appointments ──|── clinic_visits (appointment_id, nullable)
 clinic_visits ──|| vital_signs          (1:1)
               ──|| screening_responses  (1:1)
               ──|  clearance_records    (1:0..1)
+
+clearance_records ──< clearance_case_categories   (0..n categories per case, D-23)
 ```
 
 ---
