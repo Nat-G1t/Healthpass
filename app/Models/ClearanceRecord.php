@@ -44,6 +44,14 @@ class ClearanceRecord extends Model
     ];
 
     /**
+     * The official form's fifth purpose line, "Others, Specify: ___" — the
+     * nurse picks it and types the event into `purpose_other`. Kept out of
+     * PURPOSES so the four locked values stay a clean list for loops and
+     * future analytics.
+     */
+    public const PURPOSE_OTHERS = 'Others';
+
+    /**
      * The official form's "Physical Signs Disorder of" rows, column → label
      * (FR-NRS-03 / D-22). The physician examines the student; the nurse
      * records YES/NO per system on the encode screen. NULL = not examined —
@@ -80,6 +88,7 @@ class ClearanceRecord extends Model
         'encoded_by',
         'result',
         'purpose',
+        'purpose_other',
         'nurse_notes',
         'ps_skin',
         'ps_abdomen_git',

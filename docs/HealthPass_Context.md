@@ -355,8 +355,8 @@ Progress steps: Consent → Account Info → Email Verify → Link ID
   - **Right column** — "Doctor's Assessment" card:
     - **Fit / Unfit** selector (two cards; selected = peach bg + orange border).
     - **Medical Case Categories** multi-select checkboxes (D-23 — a case can span several systems; each persists as a `clearance_case_categories` row): Alimentary System, Respiratory System, Musculo-Skeletal System, Integumentary System, Urinary System, Metabolic Endocrine System, Cardiovascular System, Eyes, Ears, Nose & Throat Disorders. The kiosk's **vision/hearing answers are decision support** for the "Eyes, Ears, Nose & Throat Disorders" pick — they have no physical-sign row of their own.
-    - **Purpose / Cleared For** dropdown: Off Campus Procedure, On-the-job Training, Field Trip/Educational Tour, Sports Activities.
-    - **Physical Signs Disorder of** (D-22): nine Yes/No rows — SKIN, ABDOMEN (GIT), HEENT, GUT, CHEST/LUNGS, EXTREMITIES, HEART/CVS, NEUROLOGICAL, BREAST. The physician examines the student at the clinic; the nurse records the findings. Each row optional — an unanswered row prints as blank bubbles on the form. Stored in `clearance_records.ps_*`. **Kiosk pre-fill:** a row whose questionnaire counterpart was answered YES opens pre-checked YES (skin→SKIN, digestive→ABDOMEN (GIT), nose→HEENT, respiratory→CHEST/LUNGS, bones→EXTREMITIES, heart→HEART/CVS, nervous→NEUROLOGICAL) for the nurse to confirm or correct; a kiosk NO never pre-fills.
+    - **Purpose / Cleared For** dropdown: Off Campus Procedure, On-the-job Training, Field Trip/Educational Tour, Sports Activities, **Others, Specify…** — picking Others reveals a required text input for the exact event (max 120 chars, stored in `clearance_records.purpose_other`, D-24).
+    - **Physical Signs Disorder of** (D-22): nine Yes/No rows — SKIN, ABDOMEN (GIT), HEENT, GUT, CHEST/LUNGS, EXTREMITIES, HEART/CVS, NEUROLOGICAL, BREAST. The physician examines the student at the clinic; the nurse records the findings. Each row optional — an unanswered row prints as blank bubbles on the form. Stored in `clearance_records.ps_*`. **Kiosk pre-fill:** a row whose questionnaire counterpart was answered YES opens pre-checked YES (skin→SKIN, digestive→ABDOMEN (GIT), nose→HEENT, respiratory→CHEST/LUNGS, bones→EXTREMITIES, heart→HEART/CVS, nervous→NEUROLOGICAL) for the nurse to confirm or correct — **YES and NO alike** (D-25); rows without a kiosk counterpart (GUT, BREAST) open unanswered and print as blank bubbles.
     - **Nurse Notes** textarea (optional).
     - "Preview & Print Medical Clearance" button (ghost style, full width, Download icon).
     - "← Back" (ghost) + "Save & Close Appointment" (primary, flex-2) — Save disabled until Fit/Unfit chosen.
@@ -376,7 +376,7 @@ Progress steps: Consent → Account Info → Email Verify → Link ID
 - Physical signs table: YES/NO radio columns for SKIN, ABDOMEN(GIT), HEENT, GUT, CHEST/LUNGS (left col) + EXTREMITIES, HEART/CVS, NEUROLOGICAL, BREAST (right col) — shaded from the nurse-encoded exam findings (`clearance_records.ps_*`, D-22); unanswered rows print blank.
 - Remarks / notes line — nurse notes only; case details are the physician's hand-written annotation (D-22).
 - Pregnancy question (YES/NO radio + LMP line) — pre-filled from the kiosk questionnaire (`screening_responses`).
-- Fitness declaration: "He/She is physically/mentally ☐ FIT ☐ UNFIT to undergo in:" + purpose radio options.
+- Fitness declaration: "He/She is physically/mentally ☐ FIT ☐ UNFIT to undergo in:" + purpose bubbles incl. "Others, Specify: ___" — an Others purpose shades that bubble and prints the specified event on the line, clipped to fit (D-24). The college is NOT printed anywhere on the form (D-25).
 - Pre-printed physician: **REYNALDO S. ALIPIO, MD · University Physician · License No. 60252**
 - Date line + form code bottom-right.
 - Print via `window.print()`.
@@ -647,7 +647,8 @@ encoded_by            bigint FK → users.id  -- the nurse
 result                enum('Fit','Unfit')
 -- case_category moved to the clearance_case_categories child table (D-23):
 -- a case can span several medical systems
-purpose               enum('Off Campus Procedure','On-the-job Training','Field Trip/Educational Tour','Sports Activities') NULL
+purpose               varchar(50) NULL  -- four locked values or 'Others'; Rule::in validation is the gate (D-24)
+purpose_other         varchar(120) NULL -- the Others specify-event text; required when purpose='Others' (D-24)
 nurse_notes           text NULL
 -- "Physical Signs Disorder of" exam findings (D-22): physician examines,
 -- nurse records on the encode screen; NULL = not examined (prints blank)

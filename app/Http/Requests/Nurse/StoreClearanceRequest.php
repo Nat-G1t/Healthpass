@@ -22,6 +22,19 @@ class StoreClearanceRequest extends FormRequest
         return true;
     }
 
+    /**
+     * prepareForValidation runs before the rules: a Form Request hook for
+     * normalizing input. Here it drops a stray specify-text unless the
+     * purpose actually is Others — e.g. the nurse typed one, then switched
+     * back to a listed purpose before saving.
+     */
+    protected function prepareForValidation(): void
+    {
+        if ($this->input('purpose') !== ClearanceRecord::PURPOSE_OTHERS) {
+            $this->merge(['purpose_other' => null]);
+        }
+    }
+
     /** @return array<string, mixed> */
     public function rules(): array
     {
@@ -31,7 +44,10 @@ class StoreClearanceRequest extends FormRequest
             // locked list, no duplicates.
             'case_categories' => ['nullable', 'array'],
             'case_categories.*' => ['distinct', Rule::in(ClearanceRecord::CASE_CATEGORIES)],
-            'purpose' => ['nullable', Rule::in(ClearanceRecord::PURPOSES)],
+            // The four locked purposes plus the form's "Others, Specify" line;
+            // picking Others requires the specify text.
+            'purpose' => ['nullable', Rule::in([...ClearanceRecord::PURPOSES, ClearanceRecord::PURPOSE_OTHERS])],
+            'purpose_other' => ['nullable', 'required_if:purpose,'.ClearanceRecord::PURPOSE_OTHERS, 'string', 'max:120'],
             // max keeps runaway notes from breaking the one-page print (FR-PRT).
             'nurse_notes' => ['nullable', 'string', 'max:2000'],
             // Set to 1 by the encode screen once Preview & Print has fired, so
@@ -56,6 +72,7 @@ class StoreClearanceRequest extends FormRequest
         return [
             'result.required' => 'Select Fit or Unfit before saving.',
             'result.in' => 'Result must be Fit or Unfit.',
+            'purpose_other.required_if' => 'Specify the event for an "Others" purpose.',
         ];
     }
 }

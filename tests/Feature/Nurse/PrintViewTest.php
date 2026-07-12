@@ -181,7 +181,9 @@ class PrintViewTest extends TestCase
             ->assertSeeInOrder(['Cruz', 'SURNAME', 'Ana', 'FIRST NAME', 'Reyes', 'MIDDLE NAME'])
             ->assertSee('Bachelor of Science in Information Technology')
             ->assertSee('3rd Year')
-            ->assertSee('College of Computing Studies')
+            // College is NOT printed (D-25): the official form has no college
+            // box, and it no longer rides the Course, Year & Section value.
+            ->assertDontSee('College of Computing Studies')
             ->assertSee('Bacolor, Pampanga')
             ->assertSee('May 10, 2004')
             ->assertSee('San Fernando')
@@ -330,5 +332,26 @@ class PrintViewTest extends TestCase
         }
         $response->assertSee('Others, Specify');
         $response->assertDontSee('Case Category:');
+    }
+
+    public function test_others_purpose_shades_its_bubble_and_prints_the_specified_event(): void
+    {
+        $nurse = $this->nurse();
+        $visit = $this->makeVisit();
+        $this->encode($visit, $nurse, [
+            'purpose' => ClearanceRecord::PURPOSE_OTHERS,
+            'purpose_other' => 'Regional quiz bee at PSU Lubao',
+        ]);
+
+        $html = $this->actingAs($nurse)
+            ->get(route('nurse.visits.print', $visit))
+            ->assertOk()
+            ->assertSee('Regional quiz bee at PSU Lubao')
+            ->getContent();
+
+        $this->assertMatchesRegularExpression(
+            '~<span class="bb">●</span> Others, Specify:~u',
+            $html
+        );
     }
 }

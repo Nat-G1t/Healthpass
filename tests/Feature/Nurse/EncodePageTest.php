@@ -251,10 +251,11 @@ class EncodePageTest extends TestCase
         $this->assertMatchesRegularExpression('~name="ps_skin" value="1"[^>]*checked~', $html);
     }
 
-    public function test_kiosk_no_answer_does_not_prefill_the_physical_sign(): void
+    public function test_kiosk_no_answer_prechecks_no_on_the_matching_physical_sign(): void
     {
-        // skin=false at the kiosk → the SKIN row stays fully unanswered
-        // (neither YES nor NO pre-checked) — only a YES pre-fills (D-22).
+        // skin=false at the kiosk → the SKIN row opens pre-checked NO
+        // (D-22 as amended by D-25: the student's answer, YES or NO,
+        // pre-fills for the nurse to confirm or correct).
         $visit = $this->makeVisit();
 
         $html = $this->actingAs($this->nurse())
@@ -262,8 +263,25 @@ class EncodePageTest extends TestCase
             ->assertOk()
             ->getContent();
 
+        $this->assertMatchesRegularExpression('~name="ps_skin" value="0"[^>]*checked~', $html);
         $this->assertDoesNotMatchRegularExpression('~name="ps_skin" value="1"[^>]*checked~', $html);
-        $this->assertDoesNotMatchRegularExpression('~name="ps_skin" value="0"[^>]*checked~', $html);
+    }
+
+    public function test_physical_signs_without_a_kiosk_counterpart_stay_unanswered(): void
+    {
+        // GUT and BREAST have no questionnaire counterpart — they must open
+        // fully blank (unanswered rows print as blank bubbles, D-22).
+        $visit = $this->makeVisit();
+
+        $html = $this->actingAs($this->nurse())
+            ->get(route('nurse.visits.encode', $visit))
+            ->assertOk()
+            ->getContent();
+
+        foreach (['ps_gut', 'ps_breast'] as $column) {
+            $this->assertDoesNotMatchRegularExpression('~name="'.$column.'" value="1"[^>]*checked~', $html);
+            $this->assertDoesNotMatchRegularExpression('~name="'.$column.'" value="0"[^>]*checked~', $html);
+        }
     }
 
     public function test_physical_signs_fieldset_shows_all_nine_exam_rows(): void

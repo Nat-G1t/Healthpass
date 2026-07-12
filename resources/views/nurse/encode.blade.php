@@ -29,11 +29,11 @@
 
     $capturedAt = $visit->checked_in_at ?? $visit->created_at;
 
-    // Kiosk YES answers pre-check the matching physical-sign row (D-22): a
-    // self-reported issue is what the physician will look at first — the
-    // nurse confirms or corrects after the exam. NO answers do NOT pre-fill
-    // (an unexamined row must stay blank on the printed form). Column →
-    // questionnaire key; GUT and BREAST have no kiosk counterpart, and
+    // Kiosk answers pre-check the matching physical-sign row (D-22 as
+    // amended by D-25): YES *and* NO both pre-fill — the student already
+    // answered, so the row opens on their answer for the nurse to confirm
+    // or correct after the exam. Column → questionnaire key; GUT and BREAST
+    // have no kiosk counterpart (they stay unanswered → blank bubbles), and
     // vision/hearing exist to help the nurse pick the "Eyes, Ears, Nose &
     // Throat Disorders" case category (D-23), not to pre-fill a row.
     $kioskPrefill = [
@@ -284,12 +284,31 @@
                 @enderror
             </div>
 
-            <x-hp.select label="Purpose" name="purpose" :disabled="$readOnly">
-                <option value="">— Optional —</option>
-                @foreach (\App\Models\ClearanceRecord::PURPOSES as $purpose)
-                    <option value="{{ $purpose }}" @selected(old('purpose', $record?->purpose) === $purpose)>{{ $purpose }}</option>
-                @endforeach
-            </x-hp.select>
+            {{-- Purpose — the four locked values plus the form's "Others,
+                 Specify" line. Alpine mirrors the select into `purpose` so the
+                 specify input only shows (and only submits meaningfully) when
+                 Others is picked; the Form Request drops stray text otherwise. --}}
+            @php $savedPurpose = old('purpose', $record?->purpose); @endphp
+            <div x-data="{ purpose: @js($savedPurpose ?? '') }" class="space-y-2">
+                <x-hp.select label="Purpose" name="purpose" x-model="purpose" :disabled="$readOnly">
+                    <option value="">— Optional —</option>
+                    @foreach (\App\Models\ClearanceRecord::PURPOSES as $purpose)
+                        <option value="{{ $purpose }}" @selected($savedPurpose === $purpose)>{{ $purpose }}</option>
+                    @endforeach
+                    <option value="{{ \App\Models\ClearanceRecord::PURPOSE_OTHERS }}"
+                            @selected($savedPurpose === \App\Models\ClearanceRecord::PURPOSE_OTHERS)>
+                        Others, Specify…
+                    </option>
+                </x-hp.select>
+                <div x-show="purpose === @js(\App\Models\ClearanceRecord::PURPOSE_OTHERS)" x-cloak>
+                    <x-hp.input name="purpose_other" maxlength="120" :disabled="$readOnly"
+                                placeholder="Specify the event, e.g. Regional quiz bee at PSU Lubao"
+                                value="{{ old('purpose_other', $record?->purpose_other) }}" />
+                    @error('purpose_other')
+                        <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+                    @enderror
+                </div>
+            </div>
 
             {{-- Physical Signs Disorder of (D-22): the physician examines the
                  student at the clinic; the nurse records the findings here.
@@ -307,11 +326,14 @@
                             // gives booleans — normalize both to '1'/'0'/null.
                             $saved = old($column, is_null($record?->{$column}) ? null : (string) (int) $record->{$column});
 
-                            // Fresh form only: pre-check YES where the student
-                            // answered YES at the kiosk (D-22, see $kioskPrefill).
+                            // Fresh form only: pre-check the row with the
+                            // student's kiosk answer — YES or NO (D-22/D-25,
+                            // see $kioskPrefill). Unmapped rows stay blank.
                             if ($saved === null && ! $readOnly) {
                                 $kioskKey = $kioskPrefill[$column] ?? null;
-                                $saved = ($kioskKey && $sr?->{$kioskKey}) ? '1' : null;
+                                if ($kioskKey && $sr) {
+                                    $saved = $sr->{$kioskKey} ? '1' : '0';
+                                }
                             }
                         @endphp
                         <div class="flex items-center justify-between gap-3 py-1.5">

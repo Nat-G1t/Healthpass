@@ -17,9 +17,9 @@
        - Case Category — the physician hand-writes case details under
          REMARKS, judging the shaded YES physical signs (D-22)
 
-     Scan divergences, flagged: the official form has no box for college or
-     BMI, but FR-PRT-02 requires them — college rides the course value, BMI
-     is a third vitals-grid row.
+     Scan divergence, flagged: the official form has no BMI box, but
+     FR-PRT-02 requires it — BMI is a third vitals-grid row. (College is NOT
+     printed — D-25 removed the earlier rides-the-course-value divergence.)
 ──────────────────────────────────────────────────────────────────────────────── --}}
 @php
     $profile = $visit->student?->studentProfile;
@@ -60,10 +60,11 @@
         margin: 0 auto;
         padding: 0.35in 0.25in;
     }
-    /* A4 default; picking Letter in the print dialog overrides the paper and
-       the fluid layout reflows — the content is sized to fit BOTH heights
-       (Letter is the shorter page, so it is the binding constraint). */
-    @page { size: A4 portrait; margin: 10mm 14mm; }
+    /* Letter default (the clinic's stock); picking A4 in the print dialog
+       overrides the paper and the fluid layout reflows — the content is
+       sized to fit BOTH heights (Letter is the shorter page, so it is the
+       binding constraint either way). */
+    @page { size: letter portrait; margin: 10mm 14mm; }
     @media print {
         html, body { height: auto; }
         body { padding: 0; max-width: none; }
@@ -229,12 +230,13 @@
         </span>
     </div>
 
-    {{-- College rides the course value — the official form has no college box
-         (FR-PRT-02 vs. scan). No Student No. anywhere: the form has no such
-         field (D-22). Degree names are long — smaller type keeps one line. --}}
+    {{-- Course + year only — the official form has no college box and the
+         college is NOT printed (D-25 dropped the old rides-the-course-value
+         divergence). No Student No. anywhere: the form has no such field
+         (D-22). Degree names are long — smaller type keeps one line. --}}
     <div class="row">
         <span class="lbl">Course, Year &amp; Section:</span>
-        <span class="line" style="width: 64%; font-size: 8.5pt;">{{ $profile->course ?? '' }}, {{ $profile->year_level ?? '' }} — {{ $visit->college->name ?? '' }}</span>
+        <span class="line" style="width: 64%; font-size: 8.5pt;">{{ $profile->course ?? '' }}, {{ $profile->year_level ?? '' }}</span>
     </div>
 
     <div class="row">
@@ -350,7 +352,11 @@
         @foreach (\App\Models\ClearanceRecord::PURPOSES as $purpose)
             <li><span class="bb">{{ $record->purpose === $purpose ? '●' : '' }}</span> {{ $purpose }}</li>
         @endforeach
-        <li><span class="bb"></span> Others, Specify: <span class="line" style="width: 120px;"></span></li>
+        @php $isOthers = $record->purpose === \App\Models\ClearanceRecord::PURPOSE_OTHERS; @endphp
+        {{-- nowrap + hidden: a long specified event clips on the line instead
+             of wrapping and growing the one-page layout (FR-PRT-05). --}}
+        <li><span class="bb">{{ $isOthers ? '●' : '' }}</span> Others, Specify:
+            <span class="line" style="max-width: 180px; font-size: 8.5pt; white-space: nowrap; overflow: hidden; vertical-align: bottom; min-width: 120px;">{{ $isOthers ? $record->purpose_other : '' }}</span></li>
     </ul>
 
     {{-- ── Physician block — pre-printed identity, blank line for wet signing

@@ -367,4 +367,54 @@ class EncodeSaveTest extends TestCase
             ->assertSeeText('Fit')
             ->assertDontSeeText('Pending');
     }
+
+    // ── 7. "Others, Specify" purpose ──────────────────────────────────────────
+
+    public function test_others_purpose_saves_with_its_specify_text(): void
+    {
+        $visit = $this->makeVisit();
+
+        $this->save($this->nurse(), $visit, [
+            'result' => 'Fit',
+            'purpose' => ClearanceRecord::PURPOSE_OTHERS,
+            'purpose_other' => 'Regional quiz bee at PSU Lubao',
+        ])->assertRedirect(route('nurse.queue'));
+
+        $this->assertDatabaseHas('clearance_records', [
+            'clinic_visit_id' => $visit->id,
+            'purpose' => 'Others',
+            'purpose_other' => 'Regional quiz bee at PSU Lubao',
+        ]);
+    }
+
+    public function test_others_purpose_without_specify_text_is_blocked(): void
+    {
+        $visit = $this->makeVisit();
+
+        $this->save($this->nurse(), $visit, [
+            'result' => 'Fit',
+            'purpose' => ClearanceRecord::PURPOSE_OTHERS,
+        ])->assertSessionHasErrors('purpose_other');
+
+        $this->assertDatabaseCount('clearance_records', 0);
+    }
+
+    public function test_stray_specify_text_is_dropped_for_a_listed_purpose(): void
+    {
+        // The nurse typed a specify text, then switched back to a listed
+        // purpose — prepareForValidation clears the leftover.
+        $visit = $this->makeVisit();
+
+        $this->save($this->nurse(), $visit, [
+            'result' => 'Fit',
+            'purpose' => 'Sports Activities',
+            'purpose_other' => 'leftover text',
+        ])->assertRedirect(route('nurse.queue'));
+
+        $this->assertDatabaseHas('clearance_records', [
+            'clinic_visit_id' => $visit->id,
+            'purpose' => 'Sports Activities',
+            'purpose_other' => null,
+        ]);
+    }
 }
