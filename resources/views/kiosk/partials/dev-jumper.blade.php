@@ -1,6 +1,6 @@
-{{-- Dev-only screen jumper (local env only). Lives outside the scaled panel so
-     it is never letterboxed. Lets us reach placeholder screens during the week
-     before their real entry paths exist. --}}
+{{-- Dev-only screen jumper (local env only). Fixed to the bottom edge, outside
+     the panel's layout flow. Lets us jump straight to any screen while
+     iterating (sized in px, so it ignores --k-zoom on purpose). --}}
 <div class="kiosk-devbar">
     <span class="self-center pr-1 text-[10px] font-semibold uppercase tracking-wider text-white/50">dev</span>
     <button type="button" @click="go('welcome')">welcome</button>

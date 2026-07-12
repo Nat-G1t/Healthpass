@@ -7,8 +7,7 @@
 
     // Nav items per role: [label, route-name, icon-path, opensNewTab?]
     // The optional 4th element (default false) renders the link with
-    // target="_blank" — used for "Enable Kiosk Mode", which hands the clinic
-    // terminal off to the full-screen kiosk in a separate window (FR-NRS-06).
+    // target="_blank" (used for links that leave the app shell).
     $navItems = match ($user?->role) {
         'student' => [
             ['Dashboard',        'student.dashboard',    'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6'],
@@ -23,8 +22,10 @@
             ['Batch Tracking',     'admin.dashboard', 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2'],
         ],
         'nurse' => [
-            ['Live Queue',        'nurse.queue',  'M4 6h16M4 10h16M4 14h16M4 18h16'],
-            ['Enable Kiosk Mode', 'kiosk.index',  'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2h-2', true],
+            ['Live Queue',        'nurse.queue',         'M4 6h16M4 10h16M4 14h16M4 18h16'],
+            // FR-NRS-06 (D-27): device-enrollment page, not a raw kiosk link — the
+            // terminal is trusted by an enrolled DEVICE token, not by being open.
+            ['Enable Kiosk Mode', 'nurse.kiosk-devices', 'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2h-2'],
         ],
         'director' => [
             ['Dashboard',          'director.dashboard', 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6'],
@@ -111,22 +112,14 @@
             /* Hide the name/role block in the footer. */
             html.sidebar-collapsed .hp-user-meta { display: none; }
 
-            /* Collapsed nav item: icon STACKED ABOVE a tiny label.
-               The label font is small and wraps inside the 72px rail so long
-               labels (e.g. "Book Appointment") never spill over the pill. */
+            /* Collapsed nav item: ICON ONLY, centered in the rail.
+               The label is hidden entirely (not shrunk) so the collapsed
+               rail is a clean icon strip with no stray lettering. */
             html.sidebar-collapsed .hp-nav-link {
-                flex-direction: column;
-                gap: 4px;
-                padding: 8px 6px;
-                text-align: center;
+                justify-content: center;
+                padding: 10px 6px;
             }
-            html.sidebar-collapsed .hp-nav-label {
-                font-size: 9px;
-                line-height: 1.15;
-                width: 100%;
-                overflow-wrap: anywhere;
-                word-break: break-word;
-            }
+            html.sidebar-collapsed .hp-nav-label { display: none; }
 
             /* Collapsed footer: initials circle above the logout icon. */
             html.sidebar-collapsed .hp-user-row {
@@ -137,6 +130,7 @@
     </style>
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @include('partials.favicon')
 </head>
 <body class="h-full">
 

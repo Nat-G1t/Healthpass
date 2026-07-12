@@ -39,6 +39,7 @@ class EncodeController extends Controller
         $visit->load([
             'student.studentProfile',
             'college',           // capture-time snapshot (FR-STU-09/D-17), NOT the profile's current college
+            'appointment',       // D-28: its purpose (if any) supersedes the encode dropdown
             'vitalSigns',
             'screeningResponse',
             'clearanceRecord.encoder',
@@ -81,6 +82,19 @@ class EncodeController extends Controller
                 $validated = $request->validated();
                 $categories = $validated['case_categories'] ?? [];
                 unset($validated['case_categories'], $validated['printed']);
+
+                // D-28 purpose carry-through: when the visit came from a booked
+                // appointment whose student chose a purpose at booking, that
+                // choice is authoritative — the encode screen hid its own purpose
+                // input, so copy the student's purpose onto the clearance record
+                // (the print view reads $record->purpose unchanged). Walk-ins and
+                // purposeless appointments fall through to the nurse-entered
+                // purpose already in $validated.
+                $appointment = $visit->appointment;
+                if ($appointment && filled($appointment->purpose)) {
+                    $validated['purpose'] = $appointment->purpose;
+                    $validated['purpose_other'] = $appointment->purpose_other;
+                }
 
                 // physician_name / physician_license_no are intentionally NOT
                 // set here — the column defaults (§7.5: REYNALDO S. ALIPIO, MD

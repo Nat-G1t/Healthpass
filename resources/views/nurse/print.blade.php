@@ -183,6 +183,7 @@
 
     .form-code { margin-top: 10px; font-size: 9pt; }
 </style>
+    @include('partials.favicon')
 </head>
 {{-- data-hp-print-doc: the encode screen's print script only fires
      window.print() when the iframe holds THIS document (FR-NRS-05). --}}

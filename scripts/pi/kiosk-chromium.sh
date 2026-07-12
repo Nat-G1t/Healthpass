@@ -5,6 +5,13 @@
 # Uses http://localhost so Web Serial (navigator.serial) has a secure context.
 set -euo pipefail
 
+# If the kiosk is NETWORK-restricted (HEALTHPASS_KIOSK_ALLOW_LOOPBACK=false, the
+# hosted shape) this Pi must present a DEVICE TOKEN. Because --incognito wipes
+# cookies each launch, bake a one-time provisioning token into the URL — enroll
+# the device on the nurse "Kiosk Devices" page and copy its URL here, e.g.
+#   KIOSK_URL="http://localhost/kiosk?device_token=XXXXXXXX"
+# KioskAccess validates it, drops the cookie, and redirects to the clean URL.
+# On the Pi-local defense shape (allow_loopback=true) the plain URL is enough.
 KIOSK_URL="${KIOSK_URL:-http://localhost/kiosk}"
 
 # Chromium is 'chromium-browser' on Pi OS, 'chromium' on some builds.

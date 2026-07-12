@@ -81,14 +81,15 @@ Do not silently reconcile conflicts.
   terminal. Therefore **NEVER trust client-supplied identity or derived
   values on kiosk endpoints**: student identity binds server-side in the
   session at scan/login, and BMI/flags are always recomputed server-side.
-- **Display sizing: responsive fill + zoom** (supersedes the original fixed
-  800×480 letterbox for real hardware). The panel fills the viewport
-  (`.kiosk-panel { inset: 0 }`) so there are no black bars on any screen;
-  on the actual 800×480 target it maps 1:1. A single `--k-zoom` CSS var
-  (default `1.3`) scales every rem-based size for readability on the 7″
-  screen — tune it in `kiosk/index.blade.php`. **PRD divergence flagged:**
-  the design-system "800×480 fixed" line refers to the design canvas; the
-  hardware still renders at 800×480, so layout fidelity is preserved.
+- **Display sizing: responsive fill + zoom, portrait target 1080×1920**
+  (D-26 — supersedes both the original fixed 800×480 letterbox and the 7″
+  landscape target; the hardware is now a 15.6″ 1080p panel used in
+  portrait). The panel fills the viewport (`.kiosk-panel { inset: 0 }`)
+  so there are no black bars on any screen; on the 1080×1920 target it
+  maps 1:1. A single `--k-zoom` CSS var (default `2`, vitals `2.25`)
+  scales every rem-based size for standing-distance readability — tune
+  it in `kiosk/index.blade.php`. Screens stack vertically (single
+  column); the old side-by-side layouts were landscape-only.
 
 ## Deployment shapes
 
@@ -130,7 +131,9 @@ npm run dev                       # terminal 2
 
 - Palette: white `#FFFFFF`, off-white `#F6F2ED`, peach `#FFCAA0`,
   orange `#FF8C2A` (primary), slate `#4B5563` (text)
-- Font: Poppins. Kiosk viewport: **800×480px** fixed.
+- Font: Poppins. Kiosk viewport: **1080×1920px portrait** (15.6″ panel,
+  D-26; the original 800×480 prototype canvas is superseded — layouts
+  restack vertically, don't copy its side-by-side compositions).
 - The Claude Design HTML prototypes (web app + kiosk) are the visual
   source of truth — match them, don't improvise layouts.
 

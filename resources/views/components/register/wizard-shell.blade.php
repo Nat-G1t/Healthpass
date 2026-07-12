@@ -17,6 +17,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Register — HealthPass</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @include('partials.favicon')
 </head>
 <body class="flex min-h-full flex-col items-center bg-hp-bg p-6">
 

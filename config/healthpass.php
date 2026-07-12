@@ -46,11 +46,25 @@ return [
     'kiosk' => [
         // Security (audit fix): restrict who can reach the /kiosk route group by
         // NETWORK. The page stays auth-less for the person AT the terminal, but only
-        // the Pi's own loopback (127.0.0.1/::1) or an authenticated active nurse may
-        // reach it (keeps FR-NRS-06 "Enable Kiosk Mode" working from staff machines).
-        // Set false (env HEALTHPASS_KIOSK_RESTRICT=false) to allow LAN access for
-        // local dev/testing. Secure by default. See App\Http\Middleware\KioskAccess.
+        // an enrolled kiosk DEVICE (D-27), an authenticated active nurse, or (when
+        // allow_loopback below is on) the Pi's own loopback may reach it. Everyone
+        // else gets a friendly branded 403. Set false (env HEALTHPASS_KIOSK_RESTRICT
+        // =false) to drop the gate entirely for LAN dev/testing. Secure by default.
+        // See App\Http\Middleware\KioskAccess.
         'restrict_access' => env('HEALTHPASS_KIOSK_RESTRICT', true),
+
+        // Whether a loopback (127.0.0.1/::1) request counts as authorized. TRUE for
+        // the Pi-local defense shape (Chromium hits http://localhost/kiosk); the
+        // hosted internet deploy sets it FALSE. NEVER key this on APP_ENV — the Pi
+        // is APP_ENV=production over plain http://localhost by design.
+        //
+        // Why a switch and not "always trust loopback": behind a MISCONFIGURED
+        // reverse proxy, $request->ip() can report 127.0.0.1 for every internet
+        // visitor (if trusted proxies aren't set correctly), which would open the
+        // kiosk to the whole world. The hosted deploy closes that door with false
+        // and relies on device tokens + nurse auth instead. (Also configure
+        // trusted proxies to the real proxy IPs — never '*' — see docs.)
+        'allow_loopback' => env('HEALTHPASS_KIOSK_ALLOW_LOOPBACK', true),
 
         'complete_reset_seconds' => 12,  // FR-KSK-13: auto-reset after successful submission
         'idle_timeout_seconds' => 90,  // FR-KSK-15: abandon reset on no interaction mid-flow

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Nurse;
 
+use App\Models\Appointment;
 use App\Models\ClearanceRecord;
 use App\Models\ClinicVisit;
 use App\Models\College;
@@ -297,6 +298,38 @@ class EncodePageTest extends TestCase
         foreach (ClearanceRecord::PHYSICAL_SIGNS as $label) {
             $response->assertSee($label);
         }
+    }
+
+    // ── 2b. Purpose carried from booking (D-28) ───────────────────────────────
+
+    public function test_purpose_input_is_hidden_when_the_appointment_carries_a_purpose(): void
+    {
+        // The student chose the purpose at booking — encode shows a read-only
+        // echo, not the dropdown, and does not let the nurse re-pick it.
+        $visit = $this->makeVisit();
+        $appointment = Appointment::factory()->withPurpose('Sports Activities')->create();
+        $visit->update(['appointment_id' => $appointment->id]);
+
+        $this->actingAs($this->nurse())
+            ->get(route('nurse.visits.encode', $visit))
+            ->assertOk()
+            ->assertSee('Chosen by the student at booking')
+            ->assertSee('Sports Activities')
+            // The editable dropdown's placeholder option is gone.
+            ->assertDontSee('— Optional —');
+    }
+
+    public function test_walk_in_visit_still_shows_the_purpose_dropdown(): void
+    {
+        // No appointment (or a purposeless one) → the nurse-entered dropdown
+        // stays exactly as before.
+        $visit = $this->makeVisit();
+
+        $this->actingAs($this->nurse())
+            ->get(route('nurse.visits.encode', $visit))
+            ->assertOk()
+            ->assertSee('— Optional —')
+            ->assertDontSee('Chosen by the student at booking');
     }
 
     // ── 3. Encoded visit — read-only + Reprint ────────────────────────────────

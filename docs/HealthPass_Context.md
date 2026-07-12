@@ -174,7 +174,7 @@ Flags appear in the nurse queue's "Flags" column and the Director's Flagged Anom
 - Only the **Nurse** encodes (4 roles total — no Doctor login).
 - The encode form is titled "Doctor's Assessment" in the UI but is nurse-operated.
 - `result` = Fit or Unfit (required to save).
-- Case categories (0..n, D-23) and purpose are optional (can save without them).
+- Case categories (0..n, D-23) and purpose are optional (can save without them). Purpose is **nurse-entered only when the visit's appointment carries no student-supplied purpose** (walk-in / batch / pre-D-28); when the student chose a purpose at booking, encode hides its purpose input and carries that choice onto the clearance record (D-28).
 - The printed form carries the **pre-printed physician signature: REYNALDO S. ALIPIO, MD, License No. 60252**.
 - **Respiratory Rate** is intentionally blank on the print form — it is not a captured vital.
 
@@ -234,7 +234,7 @@ Home, Calendar, FileText, QrCode, Plus, List, Activity, Edit, BarChart, Alert, C
 |---|---|
 | Student | Dashboard · Book Appointment · My Records · My ID |
 | College Admin | Dashboard · New Batch Request · Batch Tracking |
-| Nurse | Live Queue · Encode Result · Enable Kiosk Mode (opens kiosk in new tab) |
+| Nurse | Live Queue · Encode Result · Enable Kiosk Mode (Kiosk Devices: enroll/revoke trusted terminals, D-27) |
 | Clinic Director | Dashboard · Batch Approvals · Analytics · Flagged Anomalies |
 
 ---
@@ -284,8 +284,9 @@ Progress steps: Consent → Account Info → Email Verify → Link ID
 #### Book Appointment (`student-book`)
 - **Service picker**: two selectable cards (Medical Clearance 🏥 / Dental Check 🦷). Selected card gets orange border + peach background.
 - **Month calendar**: 7-column grid. Past dates disabled (greyed/transparent). Full days greyed with "FULL" micro-label. Selected day orange fill + white text. Available days: white with slate-14 border.
+- **Purpose of Medical Clearance** (third card, **Medical only** — hidden for Dental, which is scheduling-only): the same locked dropdown as nurse encode (Off Campus Procedure, On-the-job Training, Field Trip/Educational Tour, Sports Activities, **Others, Specify…** → required free-text event, max 120 chars). Shared `<x-hp.purpose-fieldset>` Blade component with encode. Stored on the appointment (`purpose`/`purpose_other`) and carried through to encode + the printed form (D-28).
 - **Clinic hours note**: "7:00 AM – 5:00 PM · Daily · Campus Clinic, Main Building".
-- "Confirm Booking" disabled until a service and date are both selected. On click, a confirmation modal opens ("Book {Service} on {date}?" → Yes, book it / Cancel) before the record is created. A same-service-same-date duplicate (BR-04 / FR-STU-05) is surfaced as an in-page modal with a "Choose another date" action — no page reload, selected service and date preserved.
+- "Confirm Booking" disabled until a service and date are both selected (and, for Medical, a purpose — Others also needs its specify text; validated server-side, D-28). On click, a confirmation modal opens ("Book {Service} on {date}?" → Yes, book it / Cancel) before the record is created. A same-service-same-date duplicate (BR-04 / FR-STU-05) is surfaced as an in-page modal with a "Choose another date" action — no page reload, selected service and date preserved.
 
 #### Booking Confirmed (`student-book-confirm`)
 - Centered success: orange circle with check icon.
@@ -344,7 +345,7 @@ Progress steps: Consent → Account Info → Email Verify → Link ID
 - **Queue table** (full-width card, no outer padding): Student (avatar initials + name; first row tagged "NEXT" badge + highlighted peach-35 row — the longest-waiting student), College, **Vitals Summary** (all values inline, flagged values bold orange), **Flags** (flagged-variant badges for temp/bp/bmi, or "—"), Time (waiting since), Action ("Encode Result" button — primary for row 1, ghost for others).
 - Queue = clinic visits with status `captured`, ordered by `checked_in_at` asc (oldest first = top row — **first come, first served**). The top row is the next student to serve; new kiosk submissions append at the bottom.
 - Refresh by **polling** (every 3–5 seconds via `setInterval` + `fetch`) — meets SM-2 (queue reflects a submission within ≤ 5 s).
-- Sidebar "Enable Kiosk Mode" opens the kiosk page in a new browser tab.
+- Sidebar "Enable Kiosk Mode" opens the nurse **Kiosk Devices** page (D-27): enroll the current browser/terminal as a trusted kiosk device, list enrolled devices, and revoke each. Reaching `/kiosk` requires a device-enrolled token **OR** an active nurse **OR** config-allowed loopback; everyone else sees a friendly branded restricted-access page (see the KioskAccess middleware).
 
 #### Encode Result (`nurse-encode`)
 - **Two-column layout** (1fr + 1fr):
@@ -355,7 +356,7 @@ Progress steps: Consent → Account Info → Email Verify → Link ID
   - **Right column** — "Doctor's Assessment" card:
     - **Fit / Unfit** selector (two cards; selected = peach bg + orange border).
     - **Medical Case Categories** multi-select checkboxes (D-23 — a case can span several systems; each persists as a `clearance_case_categories` row): Alimentary System, Respiratory System, Musculo-Skeletal System, Integumentary System, Urinary System, Metabolic Endocrine System, Cardiovascular System, Eyes, Ears, Nose & Throat Disorders. The kiosk's **vision/hearing answers are decision support** for the "Eyes, Ears, Nose & Throat Disorders" pick — they have no physical-sign row of their own.
-    - **Purpose / Cleared For** dropdown: Off Campus Procedure, On-the-job Training, Field Trip/Educational Tour, Sports Activities, **Others, Specify…** — picking Others reveals a required text input for the exact event (max 120 chars, stored in `clearance_records.purpose_other`, D-24).
+    - **Purpose / Cleared For** dropdown: Off Campus Procedure, On-the-job Training, Field Trip/Educational Tour, Sports Activities, **Others, Specify…** — picking Others reveals a required text input for the exact event (max 120 chars, stored in `clearance_records.purpose_other`, D-24). **Shown only when the visit's appointment carries no student-supplied purpose** (walk-in / batch / pre-D-28). When the student chose the purpose at booking (D-28), this input is replaced by a read-only echo of their choice and the value is copied onto the clearance record on Save. Shares the `<x-hp.purpose-fieldset>` component with the student booking page.
     - **Physical Signs Disorder of** (D-22): nine Yes/No rows — SKIN, ABDOMEN (GIT), HEENT, GUT, CHEST/LUNGS, EXTREMITIES, HEART/CVS, NEUROLOGICAL, BREAST. The physician examines the student at the clinic; the nurse records the findings. Each row optional — an unanswered row prints as blank bubbles on the form. Stored in `clearance_records.ps_*`. **Kiosk pre-fill:** a row whose questionnaire counterpart was answered YES opens pre-checked YES (skin→SKIN, digestive→ABDOMEN (GIT), nose→HEENT, respiratory→CHEST/LUNGS, bones→EXTREMITIES, heart→HEART/CVS, nervous→NEUROLOGICAL) for the nurse to confirm or correct — **YES and NO alike** (D-25); rows without a kiosk counterpart (GUT, BREAST) open unanswered and print as blank bubbles.
     - **Nurse Notes** textarea (optional).
     - "Preview & Print Medical Clearance" button (ghost style, full width, Download icon).
@@ -422,7 +423,7 @@ questionnaire item that prints.
 
 ---
 
-### KIOSK (separate Blade route — 800×480, scaled to fit window, dark `#1c1917` letterbox)
+### KIOSK (separate Blade route — 1080×1920 portrait, panel fills the viewport with `--k-zoom` scaling; D-26 supersedes the original 800×480 letterbox)
 
 The kiosk is a **touch-first fullscreen app**. It auto-resets to Welcome 12 seconds after a student submits. In production the simulated sensor readings are replaced by **Web Serial** reads from the microcontroller, and **every vital step also offers first-class manual entry** (an "Enter manually" action opening a numeric on-screen pad; same validation ranges; provenance recorded in `vital_signs.entry_method` — Decision D-7 / FR-KSK-06). The kiosk runs at `localhost` on the Pi so Web Serial has a secure context.
 
@@ -436,7 +437,7 @@ Identity → Walk-in check (skip if any appt — medical or dental — is booked
 ```
 
 #### Screen 1 — Welcome
-- Dark letterbox, `#F6F2ED` inner panel.
+- `#F6F2ED` panel fills the screen (no letterbox — D-18/D-26).
 - Left: pulsing orange QR target SVG + "Tap to Scan Your ID" (xl button).
 - Vertical divider with "or".
 - Right: "Welcome to HealthPass" heading, tagline, "Lost ID? Log in with email" (ghost sm).
@@ -555,6 +556,8 @@ id                    bigint PK
 reference_no          varchar(20) UNIQUE    -- APT-YYYY-####
 student_id            bigint FK → users.id
 service_type          enum('medical','dental')
+purpose               varchar(50) NULL  -- student-chosen clearance purpose at self-booking: four locked values or 'Others'; Rule::in validation is the gate; NULL for dental/batch/pre-D-28 (D-28)
+purpose_other         varchar(120) NULL -- the Others specify-event text; required when purpose='Others' (D-28)
 scheduled_date        date
 status                enum('scheduled','checked_in','completed','cancelled') DEFAULT 'scheduled'
 source                enum('self','batch')  -- how the appointment was created
@@ -718,7 +721,7 @@ clearance_records ──< clearance_case_categories   (0..n categories per case,
 | Functional suitability | Clearance workflow produces a correct, printable result per student matching the official PamSU form |
 | Performance efficiency | Kiosk feels immediate; nurse queue refreshes via polling |
 | Compatibility | Kiosk: Chromium kiosk mode on Pi; web app: standard desktop browsers |
-| Interaction capability | Kiosk is touch-first at 800×480 with large targets and on-screen keyboard |
+| Interaction capability | Kiosk is touch-first at 1080×1920 portrait (D-26) with large targets and on-screen keyboard |
 | Reliability | Captured visits are never lost if encoding is delayed; kiosk auto-resets between students |
 | Security | RA 10173 compliance (consent capture), RBAC, hashed passwords, least-privilege, Web Serial on `localhost` |
 | Maintainability | One Laravel codebase with shared Blade components; Git feature-branch workflow |

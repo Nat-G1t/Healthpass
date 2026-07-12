@@ -12,18 +12,19 @@
 
     <style>
         /* ── Responsive fill: the panel fills the whole display — no letterbox.
-              On the 800×480 target it maps 1:1; on other screens the flexbox
-              content reflows to fit (no bars, no distortion). ──────────────── */
+              On the 1080×1920 portrait target it maps 1:1; on other screens the
+              flexbox content reflows to fit (no bars, no distortion). ────────── */
         :root {
-            /* Global readability zoom for the 7" screen. Every rem-based size
-               (fonts, spacing, the QR target) scales with this, so tune the
-               whole UI bigger/smaller from this one place. */
-            --k-zoom: 1.3;
-            /* The vitals screen runs 30% larger for legibility of the readings
-               on the 7″ panel — applied ONLY while that screen is active (class
-               toggled by Alpine), so every other screen keeps the 1.3 baseline.
-               The 800×480 panel is pixel-based, so only rem content scales. */
-            --k-zoom-vitals: 1.69;
+            /* Global readability zoom for the 15.6" portrait kiosk screen
+               (1080×1920, used standing up). Every rem-based size (fonts,
+               spacing, tap targets, the QR target) scales with this, so tune
+               the whole UI bigger/smaller from this one place. */
+            --k-zoom: 2;
+            /* The vitals screen runs slightly larger still so the captured
+               readings are legible at arm's length — applied ONLY while that
+               screen is active (class toggled by Alpine), so every other
+               screen keeps the baseline. */
+            --k-zoom-vitals: 2.25;
         }
         html {
             font-size: calc(100% * var(--k-zoom));
@@ -117,6 +118,7 @@
         }
         .kiosk-devbar button:hover { background: var(--hp-orange); }
     </style>
+    @include('partials.favicon')
 </head>
 <body class="font-sans antialiased">
     <div
@@ -180,12 +182,14 @@
                      target present on EVERY screen. Five taps within ~3 s open the
                      nurse prompt — the only way out of /kiosk. Top-LEFT, away from
                      the vitals top-right manual-entry logo so the two gestures never
-                     collide; the corner is empty on every screen but email login,
-                     where it only grazes the wide "← Cancel" hit area. --}}
+                     collide. Sized generously (~5 rem square, scaled by --k-zoom)
+                     for the 15.6″ portrait panel so a nurse can hit it reliably
+                     without looking; the corner stays empty on every screen (the
+                     email-login content is vertically centred, far below it). --}}
                 <button
                     type="button"
                     @click="exitTap()"
-                    class="absolute left-0 top-0 z-30 h-12 w-12 opacity-0"
+                    class="absolute left-0 top-0 z-30 h-20 w-20 opacity-0"
                     aria-hidden="true"
                     tabindex="-1"
                 ></button>
