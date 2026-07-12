@@ -60,8 +60,17 @@
         margin: 0 auto;
         padding: 0.35in 0.25in;
     }
+    /* A4 default; picking Letter in the print dialog overrides the paper and
+       the fluid layout reflows — the content is sized to fit BOTH heights
+       (Letter is the shorter page, so it is the binding constraint). */
     @page { size: A4 portrait; margin: 10mm 14mm; }
-    @media print { body { padding: 0; max-width: none; } }
+    @media print {
+        html, body { height: auto; }
+        body { padding: 0; max-width: none; }
+        /* One page exactly (FR-PRT-05): nothing in this document may split
+           or spill — a stray overflow becomes a clipped line, never page 2. */
+        body { page-break-after: avoid; }
+    }
 
     b, strong, .lbl { font-weight: bold; }
 
@@ -95,7 +104,7 @@
     .lh-logos { display: flex; align-items: center; gap: 10px; }
     .lh-logos img.seal { height: 62px; }
     .lh-logos img.bagong { height: 70px; }
-    .office { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+    .office { display: flex; align-items: center; gap: 10px; margin-top: 5px; }
     .office img { height: 54px; }
     .office .office-name { font-size: 12.5pt; line-height: 1.25; }
     .header-rule { border-bottom: 1px solid #1a1a1a; margin-top: 6px; }
@@ -104,7 +113,7 @@
     /* ── Title ── */
     .form-title {
         text-align: center;
-        margin: 26px 0 22px;
+        margin: 12px 0 10px;
         font-size: 14pt;
         font-weight: bold;
         letter-spacing: 0.35em;
@@ -113,7 +122,7 @@
     }
 
     /* ── Identity rows ── */
-    .row { display: flex; align-items: flex-end; gap: 6px; margin-top: 13px; }
+    .row { display: flex; align-items: flex-end; gap: 6px; margin-top: 8px; }
     .grow { flex: 1; }
     .name-cell { display: inline-block; text-align: center; }
     .name-cell .sub {
@@ -126,30 +135,42 @@
     .name-cell .line { display: block; }
 
     /* ── Vitals grid ── */
-    .vitals { width: 92%; margin: 16px auto 0; border-collapse: collapse; }
-    .vitals td { padding: 4px 0; width: 33.3%; }
+    .vitals { width: 92%; margin: 12px auto 0; border-collapse: collapse; }
+    .vitals td { padding: 2px 0; width: 33.3%; }
 
     /* ── Physical signs ── */
-    .signs-heading { font-style: italic; font-weight: bold; margin-top: 16px; }
+    .signs-heading { font-style: italic; font-weight: bold; margin-top: 12px; }
     .signs { width: 88%; margin: 6px auto 0; border-collapse: collapse; }
     .signs td, .signs th { padding: 1px 4px; font-size: 10pt; text-align: left; }
     .signs th { text-align: center; font-weight: bold; }
     .signs td.bubbles { text-align: center; width: 44px; }
     .signs td.spacer { width: 28px; }
-    .if-yes { font-style: italic; margin-top: 10px; }
+    .if-yes { font-style: italic; margin-top: 6px; }
     .if-yes b { font-style: italic; }
 
-    /* ── Remarks: nurse notes over the form's two ruled lines ── */
-    .remarks-lines { flex: 1; }
-    .remarks-lines .ruled { border-bottom: 1px solid #1a1a1a; min-height: 1.35em; padding: 0 0.3em; }
-    .remarks-lines .ruled + .ruled { margin-top: 4px; }
+    /* ── Remarks: nurse notes over the form's two ruled lines. A FIXED
+       two-line box (FR-PRT-05: long notes must never grow the page): the two
+       rules are absolutely-positioned strips, the text overlays them on the
+       same line rhythm, auto-shrunk by the script at the bottom and then
+       clipped by overflow:hidden. Heights in px, not em, so the box cannot
+       move when the text shrinks. ── */
+    .remarks-lines { flex: 1; position: relative; height: 42px; }
+    .remarks-lines .ruled { position: absolute; left: 0; right: 0; height: 21px; border-bottom: 1px solid #1a1a1a; }
+    .remarks-lines .ruled + .ruled { top: 21px; }
+    .remarks-text {
+        position: absolute;
+        inset: 0;
+        line-height: 21px;
+        padding: 0 0.3em;
+        overflow: hidden;
+    }
 
     /* ── Fitness + purpose ── */
     .purposes { margin: 4px 0 0 52%; list-style: none; }
     .purposes li { margin-top: 2px; }
 
     /* ── Physician block (FR-PRT-04 / BR-17) ── */
-    .physician { margin: 30px 0 0 34px; display: inline-block; text-align: center; }
+    .physician { margin: 14px 0 0 34px; display: inline-block; text-align: center; }
     .physician .sig-space { height: 34px; }        /* blank line for wet signing */
     .physician .name {
         font-weight: bold;
@@ -157,12 +178,14 @@
         padding: 0 8px;
     }
     .physician .title { font-size: 10pt; margin-top: 2px; }
-    .print-date { margin: 16px 0 0 34px; }
+    .print-date { margin: 10px 0 0 34px; }
 
-    .form-code { margin-top: 26px; font-size: 9pt; }
+    .form-code { margin-top: 10px; font-size: 9pt; }
 </style>
 </head>
-<body>
+{{-- data-hp-print-doc: the encode screen's print script only fires
+     window.print() when the iframe holds THIS document (FR-NRS-05). --}}
+<body data-hp-print-doc>
 
     {{-- ── Letterhead ─────────────────────────────────────────────────────── --}}
     <div class="letterhead">
@@ -297,17 +320,18 @@
     {{-- ── Remarks — nurse notes only; case details are the physician's manual
          annotation against the shaded YES physical signs (D-22) ─────────────── --}}
     {{-- flex-start: the label belongs on the FIRST ruled line, as on the scan --}}
-    <div class="row" style="margin-top: 10px; align-items: flex-start;">
+    <div class="row" style="margin-top: 6px; align-items: flex-start;">
         <span class="lbl">REMARKS:</span>
         <div class="remarks-lines">
-            <div class="ruled">{{ $record->nurse_notes ?? '' }}</div>
-            <div class="ruled">&nbsp;</div>
+            <div class="ruled"></div>
+            <div class="ruled"></div>
+            <div class="remarks-text" id="remarks-text">{{ $record->nurse_notes ?? '' }}</div>
         </div>
     </div>
 
     {{-- Pregnancy — already answered at the kiosk (FR-KSK-10), so it prints
          shaded; the LMP date fills only on a YES (D-22). --}}
-    <div class="row" style="margin-top: 16px;">
+    <div class="row" style="margin-top: 10px;">
         <span>Are you Pregnant</span>
         <span class="bb">{{ $sr?->is_pregnant === true ? '●' : '' }}</span> <b>YES</b>
         <span class="bb" style="margin-left: 6px;">{{ $sr?->is_pregnant === false ? '●' : '' }}</span> <b>NO</b>
@@ -316,7 +340,7 @@
     </div>
 
     {{-- ── The encoded Result + Purpose (FR-PRT-02, BR-16 optional purpose) ──── --}}
-    <div class="row" style="margin-top: 18px;">
+    <div class="row" style="margin-top: 10px;">
         <span>He/She is physically / mentally</span>
         <span class="bb">{{ $record->result === 'Fit' ? '●' : '' }}</span> <b>FIT</b>
         <span class="bb" style="margin-left: 6px;">{{ $record->result === 'Unfit' ? '●' : '' }}</span> <b>UNFIT</b>
@@ -345,5 +369,18 @@
 
     <p class="form-code">DHVSU-QSP-OSS-004-FO002-R03</p>
 
+    <script>
+        // FR-PRT-05 — long nurse notes must not push the form to page 2: the
+        // remarks box is fixed at two ruled lines; shrink the type until the
+        // text fits (floor 7pt), then overflow:hidden clips the rest. The
+        // line-height stays fixed so the text keeps sitting on the rules.
+        (function () {
+            var el = document.getElementById('remarks-text');
+            if (!el) return;
+            for (var size = 10; size >= 7 && el.scrollHeight > el.clientHeight; size -= 0.5) {
+                el.style.fontSize = size + 'pt';
+            }
+        })();
+    </script>
 </body>
 </html>

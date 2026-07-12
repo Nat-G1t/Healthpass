@@ -64,6 +64,17 @@ class ClearanceRecord extends Model
         'ps_breast' => 'BREAST',
     ];
 
+    /**
+     * Physician block defaults (FR-PRT-04 / §7.5). The DB column defaults in
+     * the clearance_records migration remain the source for SAVED records;
+     * these constants exist for the print PREVIEW, which renders a transient
+     * (never-saved) record that no DB default can fill. Keep in step with
+     * the migration.
+     */
+    public const PHYSICIAN_NAME = 'REYNALDO S. ALIPIO, MD';
+
+    public const PHYSICIAN_LICENSE_NO = '60252';
+
     protected $fillable = [
         'clinic_visit_id',
         'encoded_by',

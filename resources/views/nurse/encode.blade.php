@@ -7,8 +7,8 @@
 
      Left column: everything the nurse assesses FROM (identity, vitals,
      questionnaire) — all server-frozen capture-time values. Right column:
-     the assessment form itself. Save & Close / Preview & Print / Reprint are
-     stubs today — wired in FR-NRS-04/05.
+     the assessment form itself. Save & Close encodes (FR-NRS-04); Preview &
+     Print / Reprint post the form into a hidden print iframe (FR-NRS-05).
 ──────────────────────────────────────────────────────────────────────────────── --}}
 
 @php
@@ -338,11 +338,32 @@
 
             <div class="flex flex-col gap-2.5 pt-1">
                 @if ($readOnly)
-                    {{-- Stub — FR-NRS-05 wires this to the print view + re-stamps printed_at. --}}
-                    <x-hp.button type="button" variant="soft" class="w-full">Reprint</x-hp.button>
+                    {{-- Reprint (FR-NRS-05): formaction re-routes this submit to
+                         the reprint endpoint, which re-stamps printed_at and
+                         returns the official form INTO the hidden iframe below
+                         (formtarget); the script then prints the iframe. --}}
+                    <x-hp.button type="submit" variant="soft" class="w-full"
+                                 data-print-trigger
+                                 formaction="{{ route('nurse.visits.print.reprint', $visit) }}"
+                                 formtarget="hp-print-frame">
+                        Reprint
+                    </x-hp.button>
                 @else
-                    {{-- Stub — FR-NRS-05 wires print preview. type="button" so it can't submit. --}}
-                    <x-hp.button type="button" variant="ghost" class="w-full">Preview &amp; Print</x-hp.button>
+                    {{-- Flipped to 1 once Preview & Print fires, so Save & Close
+                         can stamp printed_at (FR-NRS-05) — the clearance row
+                         doesn't exist yet at pre-save print time. --}}
+                    <input type="hidden" name="printed" id="hp-printed-flag" value="{{ old('printed', '0') }}">
+
+                    {{-- Preview & Print (FR-NRS-05): posts the CURRENT (unsaved)
+                         assessment to the preview route, targeted at the hidden
+                         iframe — Chrome's print dialog is the preview. The
+                         required Result radio gates this submit too. --}}
+                    <x-hp.button type="submit" variant="ghost" class="w-full"
+                                 data-print-trigger
+                                 formaction="{{ route('nurse.visits.print.preview', $visit) }}"
+                                 formtarget="hp-print-frame">
+                        Preview &amp; Print
+                    </x-hp.button>
                     <x-hp.button type="submit" variant="primary" class="w-full">Save &amp; Close</x-hp.button>
                 @endif
             </div>
@@ -350,5 +371,42 @@
     </x-hp.card>
 
 </div>
+
+{{-- Hidden print frame (FR-NRS-05): both print buttons post the official form
+     in here. 0×0 instead of display:none — Chrome won't reliably print an
+     unrendered frame. --}}
+<iframe name="hp-print-frame" id="hp-print-frame" title="Clearance print preview"
+        style="position: fixed; right: 0; bottom: 0; width: 0; height: 0; border: 0;"></iframe>
+
+@push('scripts')
+<script>
+    // FR-NRS-05 — when the official form finishes loading in the hidden
+    // iframe, print the iframe's window (NOT this page). `armed` skips the
+    // iframe's initial about:blank load; the data-hp-print-doc marker makes
+    // sure we only ever print the clearance form — never, say, a validation
+    // redirect that landed this page back inside the iframe.
+    (function () {
+        const frame = document.getElementById('hp-print-frame');
+        const printedFlag = document.getElementById('hp-printed-flag');
+        let armed = false;
+
+        document.querySelectorAll('[data-print-trigger]').forEach((btn) => {
+            btn.addEventListener('click', () => { armed = true; });
+        });
+
+        frame.addEventListener('load', () => {
+            if (!armed) return;
+            armed = false;
+
+            const doc = frame.contentDocument;
+            if (!doc || !doc.body || !doc.body.hasAttribute('data-hp-print-doc')) return;
+
+            if (printedFlag) printedFlag.value = '1';
+            frame.contentWindow.focus();
+            frame.contentWindow.print();
+        });
+    })();
+</script>
+@endpush
 
 </x-layout.sidebar>

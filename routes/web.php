@@ -108,10 +108,16 @@ Route::middleware(['auth', 'role:nurse'])
         // Save & Close (FR-NRS-04): creates the clearance record and flips the
         // visit to encoded — one-time, guarded in the controller + DB unique.
         Route::post('/visits/{visit}/encode', [NurseEncodeController::class, 'store'])->name('visits.encode.store');
-        // Printable Medical Clearance (Module PRT, FR-PRT-01..04) — the official
-        // DHVSU form as a standalone document. Encoded visits only; FR-NRS-05
-        // later loads this in an iframe on the encode screen for Preview & Print.
-        Route::get('/visits/{visit}/print', NursePrintClearanceController::class)->name('visits.print');
+        // Printable Medical Clearance (Module PRT, FR-PRT-01..05 / FR-NRS-05) —
+        // the official DHVSU form as a standalone document.
+        //  GET  print         — plain view of an encoded visit's form, no side effects
+        //  POST print-preview — captured visit: the encode form posts its unsaved
+        //                       fields into the hidden print iframe (pre-save preview)
+        //  POST print         — encoded visit: Reprint — re-stamps printed_at and
+        //                       returns the form for the iframe to print
+        Route::get('/visits/{visit}/print', [NursePrintClearanceController::class, 'show'])->name('visits.print');
+        Route::post('/visits/{visit}/print-preview', [NursePrintClearanceController::class, 'preview'])->name('visits.print.preview');
+        Route::post('/visits/{visit}/print', [NursePrintClearanceController::class, 'reprint'])->name('visits.print.reprint');
     });
 
 // ── Director (FR-AUTH-03) ────────────────────────────────────────────────────

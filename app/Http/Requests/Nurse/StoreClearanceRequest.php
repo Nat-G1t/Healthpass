@@ -34,6 +34,10 @@ class StoreClearanceRequest extends FormRequest
             'purpose' => ['nullable', Rule::in(ClearanceRecord::PURPOSES)],
             // max keeps runaway notes from breaking the one-page print (FR-PRT).
             'nurse_notes' => ['nullable', 'string', 'max:2000'],
+            // Set to 1 by the encode screen once Preview & Print has fired, so
+            // Save & Close can stamp printed_at (FR-NRS-05) — the record row
+            // doesn't exist yet at pre-save print time.
+            'printed' => ['nullable', 'boolean'],
         ];
 
         // Physical-signs exam findings (D-22): each row optional — an

@@ -76,11 +76,11 @@ class EncodeController extends Controller
 
         try {
             DB::transaction(function () use ($request, $visit): void {
-                // case_categories is a 0..n child list (D-23), not a column —
-                // pull it out before the record create.
+                // case_categories is a 0..n child list (D-23) and printed a
+                // flag, not columns — pull both out before the record create.
                 $validated = $request->validated();
                 $categories = $validated['case_categories'] ?? [];
-                unset($validated['case_categories']);
+                unset($validated['case_categories'], $validated['printed']);
 
                 // physician_name / physician_license_no are intentionally NOT
                 // set here — the column defaults (§7.5: REYNALDO S. ALIPIO, MD
@@ -90,6 +90,10 @@ class EncodeController extends Controller
                     'clinic_visit_id' => $visit->id,
                     'encoded_by' => $request->user()->id,
                     'encoded_at' => now(),
+                    // FR-NRS-05: the pre-save Preview & Print happened before
+                    // this row existed — the screen flags it and the stamp
+                    // lands here. Reprints re-stamp via the print controller.
+                    'printed_at' => $request->boolean('printed') ? now() : null,
                 ]);
 
                 $record->caseCategories()->createMany(
