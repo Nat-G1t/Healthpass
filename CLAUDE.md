@@ -12,7 +12,7 @@ Before any significant feature work, read the relevant section of:
 
 - `docs/HealthPass_PRD.md` — single source of truth: requirements (FR-IDs),
   business rules, data dictionary, decisions log, release plan
-- `docs/HealthPass_Context.md` — system spec; its 10-table schema is canonical
+- `docs/HealthPass_Context.md` — system spec; its 11-table schema is canonical
 - `docs/HealthPass_Project_Plan.md` — 12-week sprint plan
 
 If a request conflicts with the PRD, **stop and say so** before coding.
@@ -153,10 +153,11 @@ npm run dev                       # terminal 2
 
 ## Database
 
-10 tables, canonical in `HealthPass_Context.md` / PRD data dictionary:
+11 tables, canonical in `HealthPass_Context.md` / PRD data dictionary:
 `colleges`, `users`, `student_profiles`, `appointments`, `batch_requests`,
 `batch_request_students`, `clinic_visits`, `vital_signs`,
-`screening_responses`, `clearance_records`.
+`screening_responses`, `clearance_records`, `clearance_case_categories`
+(#11, added by D-23 — multi-category cases).
 Do not add tables or columns without checking the PRD and flagging the
 schema change explicitly.
 

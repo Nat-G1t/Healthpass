@@ -93,11 +93,20 @@
         {{ $capturedAt?->diffForHumans() ?? '—' }}
     </td>
 
-    {{-- Encode Result — stub until the encode flow lands (FR-NRS-03).
-         Primary on the top row, ghost on the rest (FR-NRS-01). --}}
+    {{-- Encode Result — opens the Doctor's Assessment screen (FR-NRS-03).
+         Primary on the top row, ghost on the rest (FR-NRS-01). Anchors styled
+         with the x-hp.button classes (a real <a> so middle-click/new-tab work);
+         live-queue.js copies these class strings verbatim — keep in step. --}}
+    @php
+        $btnBase = 'inline-flex items-center justify-center gap-2 rounded-full font-semibold
+                    transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2
+                    focus-visible:ring-offset-1 px-4 py-1.5 text-xs';
+    @endphp
     <td class="py-4 pr-4 text-right whitespace-nowrap">
-        <span class="queue-btn-next"><x-hp.button type="button" size="sm" variant="primary">Encode Result</x-hp.button></span>
-        <span class="queue-btn-rest"><x-hp.button type="button" size="sm" variant="ghost">Encode Result</x-hp.button></span>
+        <span class="queue-btn-next"><a href="{{ route('nurse.visits.encode', $visit) }}"
+            class="{{ $btnBase }} bg-hp-orange text-white hover:bg-orange-500 focus-visible:ring-hp-orange">Encode Result</a></span>
+        <span class="queue-btn-rest"><a href="{{ route('nurse.visits.encode', $visit) }}"
+            class="{{ $btnBase }} bg-transparent text-hp-slate border-[1.5px] border-hp-slate/30 hover:bg-hp-slate/8 focus-visible:ring-hp-slate">Encode Result</a></span>
     </td>
 
 </tr>

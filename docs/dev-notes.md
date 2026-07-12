@@ -535,3 +535,29 @@ Queue. (No visit may be missing; none should have changed to `encoded`.)
   unattended (a background job) to avoid disrupting the running environment. The
   restart is a standard InnoDB durability check; combined with the audit it
   fully establishes FR-NRS-08 / BR-12.
+## Printing the Medical Clearance (FR-PRT-05 / FR-NRS-05) — Day 45
+
+The print template (`resources/views/nurse/print.blade.php`) is sized to fit
+**exactly one page on Letter and A4** — verified with headless Chrome
+print-to-PDF page counts, including a worst-case 2000-character nurse note
+(the REMARKS box is a fixed two-line area: long notes auto-shrink to 7pt,
+then clip — they can never push the form to page 2).
+
+### Standardized Chrome print-dialog settings (for the clinic)
+
+| Setting | Value |
+|---|---|
+| Paper size | **Letter** (the template default; A4 also fits if stock changes) |
+| Scale | **100** (Custom → 100; never "Fit to printable area") |
+| Margins | **Default** — the template's `@page` margins govern (10mm top/bottom, 14mm sides) |
+| Headers and footers | **OFF** — otherwise Chrome stamps URL/date onto the official form |
+| Background graphics | Either — bubbles and rules are text glyphs and borders, they always print |
+| Pages per sheet | 1 |
+
+Print flow (FR-NRS-05): **Preview & Print** on the encode screen posts the
+current (unsaved) assessment into a hidden iframe (`POST print-preview`,
+renders a transient record — no DB writes) and fires `window.print()` on the
+iframe; Save & Close then stamps `printed_at` via the hidden `printed` flag.
+**Reprint** on the read-only screen posts to `POST print`, which re-stamps
+`printed_at` on every print. The plain `GET /nurse/visits/{id}/print` is a
+side-effect-free view of an encoded visit's form.

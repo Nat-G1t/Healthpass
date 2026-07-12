@@ -49,6 +49,13 @@
     </div>
 </div>
 
+{{-- Save & Close success flash (FR-NRS-04) — one-shot, gone on the next load. --}}
+@if (session('status'))
+    <div class="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+        {{ session('status') }}
+    </div>
+@endif
+
 <x-hp.card>
 
     {{-- ── Empty state — the queue is clear ─────────────────────────────────────

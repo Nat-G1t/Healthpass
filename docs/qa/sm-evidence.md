@@ -43,13 +43,15 @@ update within one cycle (matches the module AC). Record each measured delay.
 ## SM-3 — Printed form matches the official DHVSU form
 
 **How to measure.** Encode a visit and use **Preview & Print** to produce a
-physical printout (or a print-to-PDF at 100% scale, A4/Letter as the clinic
-stocks). Lay it **side by side** with a blank official form
+physical printout (or a print-to-PDF at 100% scale; paper **Letter** — the
+template default; A4 also fits one page). Lay it **side by side** with a blank official form
 **DHVSU-QSP-OSS-004-FO002-R03**. With clinic staff present, check field by
 field: issuing office header, all identity fields, vitals block, the **blank
 respiratory-rate line** (must be empty, FR-PRT-03), the pre-printed physician
 block (REYNALDO S. ALIPIO, MD — License No. 60252) with a blank signature line,
-result, case category/purpose, and date. It passes only when clinic staff
+result, purpose (incl. the "Others, Specify" line printing the typed event
+when used — D-24; case category is NOT printed, D-22), and date. The college
+is not printed anywhere (D-25). It passes only when clinic staff
 **sign off** that labels, ordering, and the physician block match, and long
 nurse notes don't break the one-page layout. Keep the signed comparison as the
 evidence artifact.

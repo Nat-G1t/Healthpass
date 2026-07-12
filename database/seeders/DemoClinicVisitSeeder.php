@@ -90,7 +90,6 @@ class DemoClinicVisitSeeder extends Seeder
             'clinic_visit_id' => $v1->id,
             'encoded_by' => $nurse->id,
             'result' => 'Fit',
-            'case_category' => null,
             'physician_name' => 'REYNALDO S. ALIPIO, MD',
             'physician_license_no' => '60252',
             'encoded_at' => Carbon::parse('2026-01-10 10:30:00'),
@@ -132,14 +131,18 @@ class DemoClinicVisitSeeder extends Seeder
             'nervous' => false,
             'is_pregnant' => false,
         ]);
+        // Multi-category case (D-23): the questionnaire flagged both
+        // respiratory and heart — the encoded case spans both systems.
         ClearanceRecord::create([
             'clinic_visit_id' => $v2->id,
             'encoded_by' => $nurse->id,
             'result' => 'Unfit',
-            'case_category' => 'Cardiovascular System',
             'physician_name' => 'REYNALDO S. ALIPIO, MD',
             'physician_license_no' => '60252',
             'encoded_at' => Carbon::parse('2026-03-05 10:45:00'),
+        ])->caseCategories()->createMany([
+            ['case_category' => 'Cardiovascular System'],
+            ['case_category' => 'Respiratory System'],
         ]);
 
         // ── Encoded visit 3 — Maria Reyes, Fit, Alimentary System category ────
@@ -182,11 +185,10 @@ class DemoClinicVisitSeeder extends Seeder
             'clinic_visit_id' => $v3->id,
             'encoded_by' => $nurse->id,
             'result' => 'Fit',
-            'case_category' => 'Alimentary System',
             'physician_name' => 'REYNALDO S. ALIPIO, MD',
             'physician_license_no' => '60252',
             'encoded_at' => Carbon::parse('2026-02-03 12:15:00'),
-        ]);
+        ])->caseCategories()->create(['case_category' => 'Alimentary System']);
 
         // ── Captured visit 4 — Juan Santos, Pending, normal vitals ────────────
         $v4 = ClinicVisit::create([

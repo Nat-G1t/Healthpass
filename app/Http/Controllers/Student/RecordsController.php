@@ -27,7 +27,7 @@ class RecordsController extends Controller
                 'appointment:id,service_type',
                 'vitalSigns',
                 'screeningResponse',
-                'clearanceRecord',
+                'clearanceRecord.caseCategories',  // 0..n per clearance (D-23)
             ])
             ->latest()
             ->get();
