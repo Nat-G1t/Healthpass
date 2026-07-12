@@ -3,6 +3,7 @@
 use App\Http\Controllers\Auth\PasswordChangeController;
 use App\Http\Controllers\Kiosk\KioskController;
 use App\Http\Controllers\Nurse\EncodeController as NurseEncodeController;
+use App\Http\Controllers\Nurse\KioskDeviceController as NurseKioskDeviceController;
 use App\Http\Controllers\Nurse\PrintClearanceController as NursePrintClearanceController;
 use App\Http\Controllers\Nurse\QueueController as NurseQueueController;
 use App\Http\Controllers\ProfileController;
@@ -118,6 +119,13 @@ Route::middleware(['auth', 'role:nurse'])
         Route::get('/visits/{visit}/print', [NursePrintClearanceController::class, 'show'])->name('visits.print');
         Route::post('/visits/{visit}/print-preview', [NursePrintClearanceController::class, 'preview'])->name('visits.print.preview');
         Route::post('/visits/{visit}/print', [NursePrintClearanceController::class, 'reprint'])->name('visits.print.reprint');
+
+        // Enable Kiosk Mode (FR-NRS-06, D-27): enroll/list/revoke trusted kiosk
+        // DEVICES so a clinic terminal can open /kiosk without anyone signing in
+        // at the screen. See App\Http\Middleware\KioskAccess.
+        Route::get('/kiosk-devices', [NurseKioskDeviceController::class, 'index'])->name('kiosk-devices');
+        Route::post('/kiosk-devices', [NurseKioskDeviceController::class, 'store'])->name('kiosk-devices.store');
+        Route::delete('/kiosk-devices/{device}', [NurseKioskDeviceController::class, 'destroy'])->name('kiosk-devices.destroy');
     });
 
 // ── Director (FR-AUTH-03) ────────────────────────────────────────────────────
@@ -144,32 +152,37 @@ Route::prefix('kiosk')->name('kiosk.')->middleware('kiosk.access')->group(functi
     // it needs no token itself; the kiosk calls it to recover from a stale token
     // (page outlived its session) and retry, instead of dead-ending on a 419.
     Route::get('/token', [KioskController::class, 'token'])->name('token');
+    // Throttle prefixes (3rd arg): for an UNAUTHENTICATED request the inline
+    // throttle keys its counter on sha1(domain|ip) with NO path — so without a
+    // distinct prefix every kiosk POST from one IP (the Pi) would share ONE
+    // counter, and mashing /scan could lock out the nurse's /exit. A per-endpoint
+    // prefix gives each its own bucket. (D — security upgrade.)
     Route::post('/scan', [KioskController::class, 'scan'])
-        ->middleware('throttle:30,1')
+        ->middleware('throttle:30,1,kiosk-scan')
         ->name('scan');
     // Email fallback login (FR-KSK-02). Tighter throttle than scan — this is a
     // credential check, so we cap brute-force attempts per kiosk IP.
     Route::post('/login', [KioskController::class, 'login'])
-        ->middleware('throttle:10,1')
+        ->middleware('throttle:10,1,kiosk-login')
         ->name('login');
     // Final submit (FR-KSK-12): re-validates server-side and writes the
     // clinic_visits + vital_signs + screening_responses trio in one transaction,
     // returning the minted HP-YYYY-#### for the Complete screen.
     Route::post('/submit', [KioskController::class, 'submit'])
-        ->middleware('throttle:20,1')
+        ->middleware('throttle:20,1,kiosk-submit')
         ->name('submit');
     // Forget the server-side kiosk identity (kiosk.* session keys). The Alpine
     // reset() calls this on every abandon/finish path so a bound student never
     // lingers into the next session. Same throttle as scan — it is unauthenticated.
     Route::post('/reset', [KioskController::class, 'reset'])
-        ->middleware('throttle:30,1')
+        ->middleware('throttle:30,1,kiosk-reset')
         ->name('reset');
     // Discreet staff exit (FR-KSK-16): the 5-tap corner gesture opens a prompt
     // for a nurse's credentials; a valid nurse is logged in and the kiosk hands
     // off to the nurse queue. Same tight throttle as login — it is a credential
     // check on a public terminal, so brute-force attempts are capped per IP.
     Route::post('/exit', [KioskController::class, 'exit'])
-        ->middleware('throttle:10,1')
+        ->middleware('throttle:10,1,kiosk-exit')
         ->name('exit');
 });
 

@@ -490,11 +490,12 @@ Fill this section with the tested, working configuration.
 - [x] **Compiled assets served** (no Vite dev) — kiosk renders fully styled
       from `public/build`.
 - [x] **Database seeded** — demo staff login works on the web app.
-- [x] **KioskAccess middleware behind nginx/php-fpm.** All four cases re-run on
-      the Pi (not just the test suite) — nginx passes the real `REMOTE_ADDR`
-      to PHP via fastcgi:
+- [x] **KioskAccess middleware behind nginx/php-fpm.** The gate now admits
+      **device-enrolled OR active nurse OR config-allowed loopback** (D-27, §9);
+      everyone else gets the branded restricted page. Re-run on the Pi (not just
+      the test suite) — nginx passes the real `REMOTE_ADDR` to PHP via fastcgi:
   - [x] loopback (`http://localhost/kiosk`, `127.0.0.1`) → **200**
-  - [x] LAN anonymous (`http://<pi-ip>/kiosk`) → **403**
+  - [x] LAN anonymous (`http://<pi-ip>/kiosk`) → **403** (branded page)
   - [x] nurse-authenticated over LAN → **200**
   - [x] `HEALTHPASS_KIOSK_RESTRICT=false` allows LAN → **200**
         (reverted to restricted + config re-cached; LAN anonymous is 403 again)
@@ -526,6 +527,69 @@ Fill this section with the tested, working configuration.
 
 ---
 
+## 9. Kiosk device authorization & the hosted shape (D-27)
+
+`KioskAccess` gates `/kiosk`. A request is admitted when **one** holds:
+
+1. it carries a valid, un-revoked **device token** (a nurse enrolled this
+   browser via *Enable Kiosk Mode → Kiosk Devices*),
+2. it is an authenticated **active nurse**, or
+3. it comes from **loopback** *and* `HEALTHPASS_KIOSK_ALLOW_LOOPBACK=true`.
+
+Everyone else (a logged-in student/admin/director, or a guest) gets a friendly
+branded 403 page — not a bare stub or a login redirect.
+
+### Two ways to provision a device token
+
+The token is a long random string; the server stores only its **SHA-256 hash**.
+The browser presents the plaintext on every `/kiosk` request. Two paths:
+
+- **Persistent-profile cookie (simplest for the Pi-local shape).** On the
+  terminal, sign in as a nurse, open **Kiosk Devices**, name the device, and
+  click **Enable Kiosk Mode on this device**. That drops a long-lived HttpOnly
+  cookie on the browser. This survives reboots **only if the browser keeps its
+  profile** — i.e. the launcher must **not** run `--incognito` (which wipes
+  cookies every launch). Drop `--incognito` from `kiosk-chromium.sh` if you rely
+  on the cookie.
+
+- **`KIOSK_URL` query token (works with the incognito launcher).** Keep
+  `--incognito`, and bake the one-time provisioning URL shown after enrollment
+  into the launcher's `KIOSK_URL`:
+
+  ```bash
+  KIOSK_URL="http://localhost/kiosk?device_token=XXXXXXXX"
+  ```
+
+  On launch, `KioskAccess` validates the token, sets the cookie, and redirects
+  to the clean `/kiosk` URL (the token never lingers in the address bar). Because
+  the token is provisioned fresh from env each start, incognito wiping the cookie
+  afterward is harmless.
+
+> On the **Pi-local defense shape** `allow_loopback` stays **true**, so
+> `http://localhost/kiosk` needs no device token at all — enrollment is only
+> required when you turn loopback off (below).
+
+### Hosted internet shape — turn loopback off + set trusted proxies
+
+The single hosted app over HTTPS points Chromium at `https://<domain>/kiosk`
+(HTTPS is a secure context, so Web Serial works; serial grants are per-origin).
+For that shape:
+
+- Set **`HEALTHPASS_KIOSK_ALLOW_LOOPBACK=false`**. Reason: behind a
+  **misconfigured** reverse proxy, `$request->ip()` can report `127.0.0.1` for
+  **every** internet visitor — which would otherwise open the kiosk to the whole
+  world. With loopback off, the kiosk is reachable only by an enrolled device
+  token or an authenticated nurse. **Never key this on `APP_ENV`** — the Pi is
+  `APP_ENV=production` over plain `http://localhost` by design.
+
+- Configure Laravel's **trusted proxies to the actual proxy IPs only — never
+  `*`** (Laravel 12: `bootstrap/app.php` → `$middleware->trustProxies(at: […])`).
+  A wildcard trusts any client's `X-Forwarded-For`, letting a visitor spoof their
+  IP (e.g. claim `127.0.0.1`). Pin the real load-balancer/proxy addresses so
+  client IPs resolve correctly and `X-Forwarded-For` can't be forged.
+
+---
+
 ## Quick reference
 
 | What | Command / path |
@@ -538,4 +602,5 @@ Fill this section with the tested, working configuration.
 | Kiosk URL (on Pi) | `http://localhost/kiosk` |
 | Display rotation (portrait) | `wlr-randr --output <name> --transform 90` (§4, Baldo to finalize) |
 | Staff URL (LAN) | `http://<pi-ip>/` |
+| Enroll a kiosk device | Nurse nav → **Enable Kiosk Mode** → *Kiosk Devices* (§9) |
 | Local health check | `curl -I http://localhost/kiosk` |

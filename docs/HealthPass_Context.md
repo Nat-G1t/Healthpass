@@ -234,7 +234,7 @@ Home, Calendar, FileText, QrCode, Plus, List, Activity, Edit, BarChart, Alert, C
 |---|---|
 | Student | Dashboard · Book Appointment · My Records · My ID |
 | College Admin | Dashboard · New Batch Request · Batch Tracking |
-| Nurse | Live Queue · Encode Result · Enable Kiosk Mode (opens kiosk in new tab) |
+| Nurse | Live Queue · Encode Result · Enable Kiosk Mode (Kiosk Devices: enroll/revoke trusted terminals, D-27) |
 | Clinic Director | Dashboard · Batch Approvals · Analytics · Flagged Anomalies |
 
 ---
@@ -344,7 +344,7 @@ Progress steps: Consent → Account Info → Email Verify → Link ID
 - **Queue table** (full-width card, no outer padding): Student (avatar initials + name; first row tagged "NEXT" badge + highlighted peach-35 row — the longest-waiting student), College, **Vitals Summary** (all values inline, flagged values bold orange), **Flags** (flagged-variant badges for temp/bp/bmi, or "—"), Time (waiting since), Action ("Encode Result" button — primary for row 1, ghost for others).
 - Queue = clinic visits with status `captured`, ordered by `checked_in_at` asc (oldest first = top row — **first come, first served**). The top row is the next student to serve; new kiosk submissions append at the bottom.
 - Refresh by **polling** (every 3–5 seconds via `setInterval` + `fetch`) — meets SM-2 (queue reflects a submission within ≤ 5 s).
-- Sidebar "Enable Kiosk Mode" opens the kiosk page in a new browser tab.
+- Sidebar "Enable Kiosk Mode" opens the nurse **Kiosk Devices** page (D-27): enroll the current browser/terminal as a trusted kiosk device, list enrolled devices, and revoke each. Reaching `/kiosk` requires a device-enrolled token **OR** an active nurse **OR** config-allowed loopback; everyone else sees a friendly branded restricted-access page (see the KioskAccess middleware).
 
 #### Encode Result (`nurse-encode`)
 - **Two-column layout** (1fr + 1fr):
