@@ -19,6 +19,7 @@
     <link href="https://fonts.bunny.net/css?family=poppins:400,500,600,700&display=swap" rel="stylesheet" />
 
     @vite(['resources/css/app.css'])
+    @include('partials.favicon')
 </head>
 <body class="h-full bg-hp-bg" style="font-family: 'Poppins', sans-serif;">
     <div class="min-h-full flex flex-col items-center justify-center px-6 py-12">

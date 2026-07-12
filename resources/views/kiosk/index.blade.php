@@ -118,6 +118,7 @@
         }
         .kiosk-devbar button:hover { background: var(--hp-orange); }
     </style>
+    @include('partials.favicon')
 </head>
 <body class="font-sans antialiased">
     <div
