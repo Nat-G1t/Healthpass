@@ -17,6 +17,11 @@ function bookCalendar() {
     return {
         selectedService: null,
         selectedDate:    null,
+        // D-28: purpose of the medical clearance, chosen here so the printed
+        // form auto-populates. Empty for dental (server nulls it anyway).
+        purpose:         '',
+        purposeOther:    '',
+        purposeOthers:   @js(\App\Models\ClearanceRecord::PURPOSE_OTHERS),
         currentYear:     {{ $year }},
         currentMonth:    {{ $month }},
         fullDays:        @json($fullDays),
@@ -39,6 +44,29 @@ function bookCalendar() {
 
         get serviceLabel() {
             return this.selectedService === 'medical' ? 'Medical Clearance' : 'Dental Check';
+        },
+
+        /**
+         * D-28: purpose is only required for a medical clearance. Dental needs
+         * none; picking "Others" needs the specify text. Mirrors the server's
+         * StoreAppointmentRequest rules — the server stays the real gate.
+         */
+        get purposeReady() {
+            if (this.selectedService !== 'medical') return true;
+            if (!this.purpose) return false;
+            return this.purpose !== this.purposeOthers || this.purposeOther.trim() !== '';
+        },
+
+        /** All three steps satisfied and not mid-submit — enables Confirm Booking. */
+        get canBook() {
+            return !!this.selectedService && !!this.selectedDate && this.purposeReady && !this.submitting;
+        },
+
+        /** Human-readable purpose for the confirm modal (Others shows the event). */
+        get purposeSummary() {
+            return this.purpose === this.purposeOthers
+                ? `Others — ${this.purposeOther}`
+                : this.purpose;
         },
 
         /** Human-readable date for modal copy — parsed as local time to avoid TZ shift. */
@@ -125,7 +153,7 @@ function bookCalendar() {
 
         /** Step 2: open the confirm-before-book modal. */
         openConfirmModal() {
-            if (!this.selectedService || !this.selectedDate || this.submitting) return;
+            if (!this.canBook) return;
             this.confirmModal = true;
         },
 
@@ -142,9 +170,13 @@ function bookCalendar() {
             try {
                 const token = document.querySelector('meta[name="csrf-token"]').content;
                 const body  = new URLSearchParams({
-                    _token:  token,
-                    service: this.selectedService,
-                    date:    this.selectedDate,
+                    _token:        token,
+                    service:       this.selectedService,
+                    date:          this.selectedDate,
+                    // Sent for every booking; the server drops purpose for dental
+                    // and clears purpose_other unless "Others" was chosen (D-28).
+                    purpose:       this.purpose,
+                    purpose_other: this.purposeOther,
                 });
 
                 const response = await fetch(this.bookingUrl, {
@@ -161,6 +193,8 @@ function bookCalendar() {
                 if (response.status === 422) {
                     const message = data.errors?.date?.[0]
                         ?? data.errors?.service?.[0]
+                        ?? data.errors?.purpose?.[0]
+                        ?? data.errors?.purpose_other?.[0]
                         ?? data.message
                         ?? 'Booking could not be completed.';
 
@@ -396,12 +430,27 @@ function bookCalendar() {
         </div>
     </x-hp.card>
 
+    {{-- ── Step 3: Purpose of Medical Clearance (D-28) ──────────────────────────
+         A medical clearance prints an official form that names its purpose, so
+         the student chooses it here (shared <x-hp.purpose-fieldset>, same
+         dropdown as nurse encode). Dental is scheduling-only — no clearance form
+         — so this card is hidden for dental and until a service is picked.
+         bookCalendar() supplies the `purpose`/`purposeOther` the fieldset binds. --}}
+    <div x-show="selectedService === 'medical'" x-cloak>
+        <x-hp.card class="mb-6">
+            <p class="mb-4 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+                Step 3 — Purpose of Medical Clearance
+            </p>
+            <x-hp.purpose-fieldset placeholderOption="— Select a purpose —" />
+        </x-hp.card>
+    </div>
+
     {{-- ── Confirm Booking button ───────────────────────────────────────────── --}}
     <button type="button"
         @click="openConfirmModal()"
-        :disabled="!selectedService || !selectedDate || submitting"
+        :disabled="!canBook"
         class="w-full rounded-full py-3.5 text-sm font-semibold text-white transition-all focus:outline-none"
-        :class="(!selectedService || !selectedDate || submitting)
+        :class="!canBook
             ? 'cursor-not-allowed bg-hp-slate/20 text-hp-slate/40'
             : 'cursor-pointer bg-hp-orange shadow-sm hover:bg-orange-500'">
         <span x-show="!submitting">Confirm Booking</span>
@@ -416,9 +465,10 @@ function bookCalendar() {
         </span>
     </button>
 
-    <p x-show="!selectedService || !selectedDate" x-cloak
+    <p x-show="!canBook && !submitting" x-cloak
        class="mt-2 text-center text-xs text-hp-slate/40">
-        Select a service and a date to continue
+        <span x-show="selectedService === 'medical'">Select a service, its purpose, and a date to continue</span>
+        <span x-show="selectedService !== 'medical'">Select a service and a date to continue</span>
     </p>
 
 </form>
@@ -446,6 +496,11 @@ function bookCalendar() {
             <span class="font-semibold text-hp-slate" x-text="serviceLabel"></span>
             on
             <span class="font-semibold text-hp-slate" x-text="formattedDate"></span>?
+        </p>
+        {{-- Purpose is a required dimension of a medical booking (D-28) — echo it
+             back so the student confirms the exact choice before committing. --}}
+        <p x-show="selectedService === 'medical'" x-cloak class="mt-1 text-sm text-hp-slate/70">
+            Purpose: <span class="font-semibold text-hp-slate" x-text="purposeSummary"></span>
         </p>
         <p class="mt-1 text-xs text-hp-slate/50">Clinic hours: 7:00 AM – 5:00 PM</p>
 

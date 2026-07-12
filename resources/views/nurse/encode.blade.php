@@ -285,30 +285,39 @@
             </div>
 
             {{-- Purpose — the four locked values plus the form's "Others,
-                 Specify" line. Alpine mirrors the select into `purpose` so the
-                 specify input only shows (and only submits meaningfully) when
-                 Others is picked; the Form Request drops stray text otherwise. --}}
-            @php $savedPurpose = old('purpose', $record?->purpose); @endphp
-            <div x-data="{ purpose: @js($savedPurpose ?? '') }" class="space-y-2">
-                <x-hp.select label="Purpose" name="purpose" x-model="purpose" :disabled="$readOnly">
-                    <option value="">— Optional —</option>
-                    @foreach (\App\Models\ClearanceRecord::PURPOSES as $purpose)
-                        <option value="{{ $purpose }}" @selected($savedPurpose === $purpose)>{{ $purpose }}</option>
-                    @endforeach
-                    <option value="{{ \App\Models\ClearanceRecord::PURPOSE_OTHERS }}"
-                            @selected($savedPurpose === \App\Models\ClearanceRecord::PURPOSE_OTHERS)>
-                        Others, Specify…
-                    </option>
-                </x-hp.select>
-                <div x-show="purpose === @js(\App\Models\ClearanceRecord::PURPOSE_OTHERS)" x-cloak>
-                    <x-hp.input name="purpose_other" maxlength="120" :disabled="$readOnly"
-                                placeholder="Specify the event, e.g. Regional quiz bee at PSU Lubao"
-                                value="{{ old('purpose_other', $record?->purpose_other) }}" />
-                    @error('purpose_other')
-                        <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
-                    @enderror
+                 Specify" line, extracted into <x-hp.purpose-fieldset> (shared
+                 with student booking). The enclosing x-data seeds `purpose` and
+                 `purposeOther`; the component x-models both.
+
+                 D-28 fallback: this input only shows when the visit's
+                 appointment carries NO student-supplied purpose (walk-in, batch,
+                 or pre-D-28 booking). When the student already chose a purpose at
+                 booking, $purposeFromBooking is true → the whole fieldset is
+                 hidden and EncodeController copies the student's choice onto the
+                 clearance record on save (print populates unchanged). --}}
+            @php
+                $savedPurpose = old('purpose', $record?->purpose);
+                // A booked appointment's student-supplied purpose supersedes the
+                // nurse dropdown. Null on walk-ins and purposeless appointments.
+                $bookingPurpose = $visit->appointment?->purpose;
+                $purposeFromBooking = filled($bookingPurpose);
+            @endphp
+            @if ($purposeFromBooking)
+                {{-- Read-only echo of the student's choice — no input to encode. --}}
+                <div class="space-y-1">
+                    <span class="text-sm font-semibold text-hp-slate">Purpose</span>
+                    <p class="text-sm text-hp-slate/80">
+                        {{ $bookingPurpose === \App\Models\ClearanceRecord::PURPOSE_OTHERS
+                            ? $visit->appointment->purpose_other
+                            : $bookingPurpose }}
+                    </p>
+                    <p class="text-xs text-hp-slate/45">Chosen by the student at booking — carried to the printed form.</p>
                 </div>
-            </div>
+            @else
+                <div x-data="{ purpose: @js($savedPurpose ?? ''), purposeOther: @js(old('purpose_other', $record?->purpose_other) ?? '') }">
+                    <x-hp.purpose-fieldset :disabled="$readOnly" />
+                </div>
+            @endif
 
             {{-- Physical Signs Disorder of (D-22): the physician examines the
                  student at the clinic; the nurse records the findings here.

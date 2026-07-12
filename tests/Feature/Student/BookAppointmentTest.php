@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Student;
 
 use App\Models\Appointment;
+use App\Models\ClearanceRecord;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -35,6 +36,22 @@ class BookAppointmentTest extends TestCase
         return now()->addDays($daysAhead)->toDateString();
     }
 
+    /**
+     * A valid medical-clearance booking payload. D-28 made purpose required for
+     * medical bookings, so every medical POST must carry one — override any key.
+     *
+     * @param  array<string, mixed>  $overrides
+     * @return array<string, mixed>
+     */
+    private function medicalBooking(array $overrides = []): array
+    {
+        return array_merge([
+            'service' => 'medical',
+            'date' => $this->futureDate(),
+            'purpose' => 'Sports Activities',
+        ], $overrides);
+    }
+
     // ── 1. Guard: unauthenticated / wrong role ────────────────────────────────
 
     public function test_guest_is_redirected_from_booking_page(): void
@@ -57,10 +74,9 @@ class BookAppointmentTest extends TestCase
         $student = $this->student();
 
         $this->actingAs($student)
-            ->post(route('student.appointments.store'), [
-                'service' => 'medical',
+            ->post(route('student.appointments.store'), $this->medicalBooking([
                 'date' => now()->subDay()->toDateString(),
-            ])
+            ]))
             ->assertSessionHasErrors('date');
 
         $this->assertDatabaseCount('appointments', 0);
@@ -75,10 +91,9 @@ class BookAppointmentTest extends TestCase
         $student = $this->student();
 
         $this->actingAs($student)
-            ->post(route('student.appointments.store'), [
-                'service' => 'medical',
+            ->post(route('student.appointments.store'), $this->medicalBooking([
                 'date' => today()->toDateString(),
-            ])
+            ]))
             ->assertRedirect();
 
         $this->assertDatabaseCount('appointments', 1);
@@ -92,10 +107,9 @@ class BookAppointmentTest extends TestCase
         Carbon::setTestNow(Carbon::parse('2026-07-08 16:59', 'Asia/Manila'));
 
         $this->actingAs($this->student())
-            ->post(route('student.appointments.store'), [
-                'service' => 'medical',
+            ->post(route('student.appointments.store'), $this->medicalBooking([
                 'date' => today()->toDateString(),
-            ])
+            ]))
             ->assertRedirect();
 
         $this->assertDatabaseCount('appointments', 1);
@@ -107,10 +121,9 @@ class BookAppointmentTest extends TestCase
         Carbon::setTestNow(Carbon::parse('2026-07-08 17:00', 'Asia/Manila'));
 
         $this->actingAs($this->student())
-            ->post(route('student.appointments.store'), [
-                'service' => 'medical',
+            ->post(route('student.appointments.store'), $this->medicalBooking([
                 'date' => today()->toDateString(),
-            ])
+            ]))
             ->assertSessionHasErrors([
                 'date' => 'The clinic is closed for today. Please book for the next day onwards.',
             ]);
@@ -124,10 +137,9 @@ class BookAppointmentTest extends TestCase
         Carbon::setTestNow(Carbon::parse('2026-07-08 18:00', 'Asia/Manila'));
 
         $this->actingAs($this->student())
-            ->post(route('student.appointments.store'), [
-                'service' => 'medical',
+            ->post(route('student.appointments.store'), $this->medicalBooking([
                 'date' => today()->addDay()->toDateString(),
-            ])
+            ]))
             ->assertRedirect();
 
         $this->assertDatabaseCount('appointments', 1);
@@ -177,10 +189,7 @@ class BookAppointmentTest extends TestCase
         ]);
 
         $this->actingAs($student)
-            ->post(route('student.appointments.store'), [
-                'service' => 'medical',
-                'date' => $date,
-            ])
+            ->post(route('student.appointments.store'), $this->medicalBooking(['date' => $date]))
             ->assertSessionHasErrors('date');
 
         // Confirm the student's appointment was NOT created
@@ -201,10 +210,7 @@ class BookAppointmentTest extends TestCase
         Appointment::factory()->cancelled()->create(['scheduled_date' => $date]);
 
         $this->actingAs($student)
-            ->post(route('student.appointments.store'), [
-                'service' => 'medical',
-                'date' => $date,
-            ])
+            ->post(route('student.appointments.store'), $this->medicalBooking(['date' => $date]))
             ->assertRedirect(); // Not a validation error
 
         $this->assertDatabaseHas('appointments', [
@@ -256,10 +262,7 @@ class BookAppointmentTest extends TestCase
         ]);
 
         $this->actingAs($student)
-            ->post(route('student.appointments.store'), [
-                'service' => 'medical',
-                'date' => $date,
-            ])
+            ->post(route('student.appointments.store'), $this->medicalBooking(['date' => $date]))
             ->assertSessionHasErrors('date');
 
         // Still only one appointment
@@ -301,10 +304,7 @@ class BookAppointmentTest extends TestCase
         ]);
 
         $this->actingAs($student)
-            ->post(route('student.appointments.store'), [
-                'service' => 'medical',
-                'date' => $date,
-            ])
+            ->post(route('student.appointments.store'), $this->medicalBooking(['date' => $date]))
             ->assertRedirect();
 
         $this->assertDatabaseHas('appointments', [
@@ -321,10 +321,7 @@ class BookAppointmentTest extends TestCase
         $student = $this->student();
 
         $this->actingAs($student)
-            ->post(route('student.appointments.store'), [
-                'service' => 'medical',
-                'date' => $this->futureDate(),
-            ]);
+            ->post(route('student.appointments.store'), $this->medicalBooking());
 
         $appointment = Appointment::where('student_id', $student->id)->firstOrFail();
 
@@ -343,10 +340,7 @@ class BookAppointmentTest extends TestCase
         $student = $this->student();
 
         $response = $this->actingAs($student)
-            ->post(route('student.appointments.store'), [
-                'service' => 'medical',
-                'date' => $this->futureDate(),
-            ]);
+            ->post(route('student.appointments.store'), $this->medicalBooking());
 
         $appointment = Appointment::where('student_id', $student->id)->firstOrFail();
 
@@ -493,10 +487,7 @@ class BookAppointmentTest extends TestCase
         ]);
 
         $response = $this->actingAs($student)
-            ->postJson(route('student.appointments.store'), [
-                'service' => 'medical',
-                'date' => $date,
-            ]);
+            ->postJson(route('student.appointments.store'), $this->medicalBooking(['date' => $date]));
 
         $response->assertStatus(422);
         $response->assertJsonValidationErrors('date');
@@ -510,10 +501,7 @@ class BookAppointmentTest extends TestCase
         $student = $this->student();
 
         $response = $this->actingAs($student)
-            ->postJson(route('student.appointments.store'), [
-                'service' => 'medical',
-                'date' => $this->futureDate(),
-            ]);
+            ->postJson(route('student.appointments.store'), $this->medicalBooking());
 
         $response->assertOk();
         $response->assertJsonStructure(['redirect']);
@@ -573,5 +561,181 @@ class BookAppointmentTest extends TestCase
         $this->actingAs($student)
             ->get(route('student.dashboard'))
             ->assertViewHas('nextAppointment', null);
+    }
+
+    // ── 9. Purpose of Medical Clearance (D-28) ────────────────────────────────
+
+    public function test_booking_page_renders_the_purpose_card(): void
+    {
+        // Renders book.blade incl. the shared <x-hp.purpose-fieldset> component —
+        // guards against a Blade compile error the POST tests wouldn't catch.
+        $this->actingAs($this->student())
+            ->get(route('student.appointments'))
+            ->assertOk()
+            ->assertSee('Purpose of Medical Clearance')
+            ->assertSee('Off Campus Procedure')
+            ->assertSee('Others, Specify');
+    }
+
+    public function test_medical_booking_requires_a_purpose(): void
+    {
+        $student = $this->student();
+
+        $this->actingAs($student)
+            ->post(route('student.appointments.store'), [
+                'service' => 'medical',
+                'date' => $this->futureDate(),
+                // no purpose
+            ])
+            ->assertSessionHasErrors('purpose');
+
+        $this->assertDatabaseCount('appointments', 0);
+    }
+
+    public function test_medical_booking_missing_purpose_returns_422_json(): void
+    {
+        $this->actingAs($this->student())
+            ->postJson(route('student.appointments.store'), [
+                'service' => 'medical',
+                'date' => $this->futureDate(),
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('purpose');
+
+        $this->assertDatabaseCount('appointments', 0);
+    }
+
+    public function test_medical_booking_persists_the_chosen_purpose(): void
+    {
+        $student = $this->student();
+
+        $this->actingAs($student)
+            ->post(route('student.appointments.store'), $this->medicalBooking([
+                'purpose' => 'Field Trip/Educational Tour',
+            ]))
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('appointments', [
+            'student_id' => $student->id,
+            'service_type' => 'medical',
+            'purpose' => 'Field Trip/Educational Tour',
+            'purpose_other' => null,
+        ]);
+    }
+
+    public function test_medical_booking_rejects_a_purpose_outside_the_locked_list(): void
+    {
+        $this->actingAs($this->student())
+            ->post(route('student.appointments.store'), $this->medicalBooking([
+                'purpose' => 'Vacation',
+            ]))
+            ->assertSessionHasErrors('purpose');
+
+        $this->assertDatabaseCount('appointments', 0);
+    }
+
+    public function test_others_purpose_requires_specify_text(): void
+    {
+        $this->actingAs($this->student())
+            ->post(route('student.appointments.store'), $this->medicalBooking([
+                'purpose' => ClearanceRecord::PURPOSE_OTHERS,
+                // no purpose_other
+            ]))
+            ->assertSessionHasErrors('purpose_other');
+
+        $this->assertDatabaseCount('appointments', 0);
+    }
+
+    public function test_others_purpose_persists_with_its_specify_text(): void
+    {
+        $student = $this->student();
+
+        $this->actingAs($student)
+            ->post(route('student.appointments.store'), $this->medicalBooking([
+                'purpose' => ClearanceRecord::PURPOSE_OTHERS,
+                'purpose_other' => 'Regional quiz bee at PSU Lubao',
+            ]))
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('appointments', [
+            'student_id' => $student->id,
+            'purpose' => 'Others',
+            'purpose_other' => 'Regional quiz bee at PSU Lubao',
+        ]);
+    }
+
+    public function test_stray_specify_text_is_dropped_for_a_listed_purpose(): void
+    {
+        // The student typed a specify text, then switched back to a listed
+        // purpose — prepareForValidation clears the leftover server-side.
+        $student = $this->student();
+
+        $this->actingAs($student)
+            ->post(route('student.appointments.store'), $this->medicalBooking([
+                'purpose' => 'Sports Activities',
+                'purpose_other' => 'leftover text',
+            ]))
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('appointments', [
+            'student_id' => $student->id,
+            'purpose' => 'Sports Activities',
+            'purpose_other' => null,
+        ]);
+    }
+
+    public function test_purpose_other_over_120_chars_is_rejected(): void
+    {
+        $this->actingAs($this->student())
+            ->post(route('student.appointments.store'), $this->medicalBooking([
+                'purpose' => ClearanceRecord::PURPOSE_OTHERS,
+                'purpose_other' => str_repeat('a', 121),
+            ]))
+            ->assertSessionHasErrors('purpose_other');
+
+        $this->assertDatabaseCount('appointments', 0);
+    }
+
+    public function test_dental_booking_does_not_require_a_purpose(): void
+    {
+        // Dental is scheduling-only — no clearance form — so purpose is exempt.
+        $student = $this->student();
+
+        $this->actingAs($student)
+            ->post(route('student.appointments.store'), [
+                'service' => 'dental',
+                'date' => $this->futureDate(),
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('appointments', [
+            'student_id' => $student->id,
+            'service_type' => 'dental',
+            'purpose' => null,
+            'purpose_other' => null,
+        ]);
+    }
+
+    public function test_dental_booking_ignores_any_supplied_purpose(): void
+    {
+        // A crafted request can't smuggle a purpose onto a dental booking —
+        // prepareForValidation nulls it server-side.
+        $student = $this->student();
+
+        $this->actingAs($student)
+            ->post(route('student.appointments.store'), [
+                'service' => 'dental',
+                'date' => $this->futureDate(),
+                'purpose' => 'Sports Activities',
+                'purpose_other' => 'sneaky',
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('appointments', [
+            'student_id' => $student->id,
+            'service_type' => 'dental',
+            'purpose' => null,
+            'purpose_other' => null,
+        ]);
     }
 }

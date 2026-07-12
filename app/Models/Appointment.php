@@ -17,6 +17,8 @@ class Appointment extends Model
         'reference_no',
         'student_id',
         'service_type',
+        'purpose',
+        'purpose_other',
         'scheduled_date',
         'status',
         'source',

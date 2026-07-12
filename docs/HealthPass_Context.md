@@ -174,7 +174,7 @@ Flags appear in the nurse queue's "Flags" column and the Director's Flagged Anom
 - Only the **Nurse** encodes (4 roles total — no Doctor login).
 - The encode form is titled "Doctor's Assessment" in the UI but is nurse-operated.
 - `result` = Fit or Unfit (required to save).
-- Case categories (0..n, D-23) and purpose are optional (can save without them).
+- Case categories (0..n, D-23) and purpose are optional (can save without them). Purpose is **nurse-entered only when the visit's appointment carries no student-supplied purpose** (walk-in / batch / pre-D-28); when the student chose a purpose at booking, encode hides its purpose input and carries that choice onto the clearance record (D-28).
 - The printed form carries the **pre-printed physician signature: REYNALDO S. ALIPIO, MD, License No. 60252**.
 - **Respiratory Rate** is intentionally blank on the print form — it is not a captured vital.
 
@@ -284,8 +284,9 @@ Progress steps: Consent → Account Info → Email Verify → Link ID
 #### Book Appointment (`student-book`)
 - **Service picker**: two selectable cards (Medical Clearance 🏥 / Dental Check 🦷). Selected card gets orange border + peach background.
 - **Month calendar**: 7-column grid. Past dates disabled (greyed/transparent). Full days greyed with "FULL" micro-label. Selected day orange fill + white text. Available days: white with slate-14 border.
+- **Purpose of Medical Clearance** (third card, **Medical only** — hidden for Dental, which is scheduling-only): the same locked dropdown as nurse encode (Off Campus Procedure, On-the-job Training, Field Trip/Educational Tour, Sports Activities, **Others, Specify…** → required free-text event, max 120 chars). Shared `<x-hp.purpose-fieldset>` Blade component with encode. Stored on the appointment (`purpose`/`purpose_other`) and carried through to encode + the printed form (D-28).
 - **Clinic hours note**: "7:00 AM – 5:00 PM · Daily · Campus Clinic, Main Building".
-- "Confirm Booking" disabled until a service and date are both selected. On click, a confirmation modal opens ("Book {Service} on {date}?" → Yes, book it / Cancel) before the record is created. A same-service-same-date duplicate (BR-04 / FR-STU-05) is surfaced as an in-page modal with a "Choose another date" action — no page reload, selected service and date preserved.
+- "Confirm Booking" disabled until a service and date are both selected (and, for Medical, a purpose — Others also needs its specify text; validated server-side, D-28). On click, a confirmation modal opens ("Book {Service} on {date}?" → Yes, book it / Cancel) before the record is created. A same-service-same-date duplicate (BR-04 / FR-STU-05) is surfaced as an in-page modal with a "Choose another date" action — no page reload, selected service and date preserved.
 
 #### Booking Confirmed (`student-book-confirm`)
 - Centered success: orange circle with check icon.
@@ -355,7 +356,7 @@ Progress steps: Consent → Account Info → Email Verify → Link ID
   - **Right column** — "Doctor's Assessment" card:
     - **Fit / Unfit** selector (two cards; selected = peach bg + orange border).
     - **Medical Case Categories** multi-select checkboxes (D-23 — a case can span several systems; each persists as a `clearance_case_categories` row): Alimentary System, Respiratory System, Musculo-Skeletal System, Integumentary System, Urinary System, Metabolic Endocrine System, Cardiovascular System, Eyes, Ears, Nose & Throat Disorders. The kiosk's **vision/hearing answers are decision support** for the "Eyes, Ears, Nose & Throat Disorders" pick — they have no physical-sign row of their own.
-    - **Purpose / Cleared For** dropdown: Off Campus Procedure, On-the-job Training, Field Trip/Educational Tour, Sports Activities, **Others, Specify…** — picking Others reveals a required text input for the exact event (max 120 chars, stored in `clearance_records.purpose_other`, D-24).
+    - **Purpose / Cleared For** dropdown: Off Campus Procedure, On-the-job Training, Field Trip/Educational Tour, Sports Activities, **Others, Specify…** — picking Others reveals a required text input for the exact event (max 120 chars, stored in `clearance_records.purpose_other`, D-24). **Shown only when the visit's appointment carries no student-supplied purpose** (walk-in / batch / pre-D-28). When the student chose the purpose at booking (D-28), this input is replaced by a read-only echo of their choice and the value is copied onto the clearance record on Save. Shares the `<x-hp.purpose-fieldset>` component with the student booking page.
     - **Physical Signs Disorder of** (D-22): nine Yes/No rows — SKIN, ABDOMEN (GIT), HEENT, GUT, CHEST/LUNGS, EXTREMITIES, HEART/CVS, NEUROLOGICAL, BREAST. The physician examines the student at the clinic; the nurse records the findings. Each row optional — an unanswered row prints as blank bubbles on the form. Stored in `clearance_records.ps_*`. **Kiosk pre-fill:** a row whose questionnaire counterpart was answered YES opens pre-checked YES (skin→SKIN, digestive→ABDOMEN (GIT), nose→HEENT, respiratory→CHEST/LUNGS, bones→EXTREMITIES, heart→HEART/CVS, nervous→NEUROLOGICAL) for the nurse to confirm or correct — **YES and NO alike** (D-25); rows without a kiosk counterpart (GUT, BREAST) open unanswered and print as blank bubbles.
     - **Nurse Notes** textarea (optional).
     - "Preview & Print Medical Clearance" button (ghost style, full width, Download icon).
@@ -555,6 +556,8 @@ id                    bigint PK
 reference_no          varchar(20) UNIQUE    -- APT-YYYY-####
 student_id            bigint FK → users.id
 service_type          enum('medical','dental')
+purpose               varchar(50) NULL  -- student-chosen clearance purpose at self-booking: four locked values or 'Others'; Rule::in validation is the gate; NULL for dental/batch/pre-D-28 (D-28)
+purpose_other         varchar(120) NULL -- the Others specify-event text; required when purpose='Others' (D-28)
 scheduled_date        date
 status                enum('scheduled','checked_in','completed','cancelled') DEFAULT 'scheduled'
 source                enum('self','batch')  -- how the appointment was created

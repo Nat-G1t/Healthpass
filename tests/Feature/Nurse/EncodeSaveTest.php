@@ -417,4 +417,95 @@ class EncodeSaveTest extends TestCase
             'purpose_other' => null,
         ]);
     }
+
+    // ── 8. D-28 purpose carry-through from booking ────────────────────────────
+
+    public function test_booking_purpose_carries_onto_the_clearance_record(): void
+    {
+        // The student chose the purpose at booking, so the encode screen hid its
+        // own purpose input — the payload carries no purpose. The controller must
+        // copy the appointment's choice onto the clearance record for the print.
+        $appointment = Appointment::factory()->withPurpose('Field Trip/Educational Tour')->create();
+        $visit = $this->makeVisit($appointment);
+
+        $this->save($this->nurse(), $visit, ['result' => 'Fit'])
+            ->assertRedirect(route('nurse.queue'));
+
+        $this->assertDatabaseHas('clearance_records', [
+            'clinic_visit_id' => $visit->id,
+            'purpose' => 'Field Trip/Educational Tour',
+            'purpose_other' => null,
+        ]);
+    }
+
+    public function test_booking_others_purpose_carries_with_its_specify_text(): void
+    {
+        $appointment = Appointment::factory()
+            ->withPurpose(ClearanceRecord::PURPOSE_OTHERS, 'Regional quiz bee at PSU Lubao')
+            ->create();
+        $visit = $this->makeVisit($appointment);
+
+        $this->save($this->nurse(), $visit, ['result' => 'Fit'])
+            ->assertRedirect(route('nurse.queue'));
+
+        $this->assertDatabaseHas('clearance_records', [
+            'clinic_visit_id' => $visit->id,
+            'purpose' => 'Others',
+            'purpose_other' => 'Regional quiz bee at PSU Lubao',
+        ]);
+    }
+
+    public function test_booking_purpose_is_authoritative_over_a_submitted_purpose(): void
+    {
+        // Defense in depth: even if a purpose somehow rides the encode POST, the
+        // student's booking choice wins — the nurse never re-picks it here.
+        $appointment = Appointment::factory()->withPurpose('Sports Activities')->create();
+        $visit = $this->makeVisit($appointment);
+
+        $this->save($this->nurse(), $visit, [
+            'result' => 'Fit',
+            'purpose' => 'On-the-job Training',
+            'purpose_other' => 'tampered',
+        ])->assertRedirect(route('nurse.queue'));
+
+        $this->assertDatabaseHas('clearance_records', [
+            'clinic_visit_id' => $visit->id,
+            'purpose' => 'Sports Activities',
+            'purpose_other' => null,
+        ]);
+    }
+
+    public function test_booking_purpose_reaches_the_printed_form(): void
+    {
+        // End-to-end (D-28): appointment purpose → clearance record → print,
+        // with zero print-template changes.
+        $nurse = $this->nurse();
+        $appointment = Appointment::factory()->withPurpose('Off Campus Procedure')->create();
+        $visit = $this->makeVisit($appointment);
+
+        $this->save($nurse, $visit, ['result' => 'Fit']);
+
+        $this->actingAs($nurse)
+            ->get(route('nurse.visits.print', $visit))
+            ->assertOk()
+            ->assertSee('Off Campus Procedure');
+    }
+
+    public function test_purposeless_appointment_falls_back_to_the_nurse_entered_purpose(): void
+    {
+        // Batch-booked / pre-D-28 appointments carry no purpose → the encode
+        // dropdown still applies and the nurse's choice is saved.
+        $appointment = Appointment::factory()->medical()->create(); // purpose null
+        $visit = $this->makeVisit($appointment);
+
+        $this->save($this->nurse(), $visit, [
+            'result' => 'Fit',
+            'purpose' => 'On-the-job Training',
+        ])->assertRedirect(route('nurse.queue'));
+
+        $this->assertDatabaseHas('clearance_records', [
+            'clinic_visit_id' => $visit->id,
+            'purpose' => 'On-the-job Training',
+        ]);
+    }
 }
