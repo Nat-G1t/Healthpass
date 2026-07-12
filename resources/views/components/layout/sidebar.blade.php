@@ -112,22 +112,14 @@
             /* Hide the name/role block in the footer. */
             html.sidebar-collapsed .hp-user-meta { display: none; }
 
-            /* Collapsed nav item: icon STACKED ABOVE a tiny label.
-               The label font is small and wraps inside the 72px rail so long
-               labels (e.g. "Book Appointment") never spill over the pill. */
+            /* Collapsed nav item: ICON ONLY, centered in the rail.
+               The label is hidden entirely (not shrunk) so the collapsed
+               rail is a clean icon strip with no stray lettering. */
             html.sidebar-collapsed .hp-nav-link {
-                flex-direction: column;
-                gap: 4px;
-                padding: 8px 6px;
-                text-align: center;
+                justify-content: center;
+                padding: 10px 6px;
             }
-            html.sidebar-collapsed .hp-nav-label {
-                font-size: 9px;
-                line-height: 1.15;
-                width: 100%;
-                overflow-wrap: anywhere;
-                word-break: break-word;
-            }
+            html.sidebar-collapsed .hp-nav-label { display: none; }
 
             /* Collapsed footer: initials circle above the logout icon. */
             html.sidebar-collapsed .hp-user-row {
