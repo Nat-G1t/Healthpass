@@ -422,7 +422,7 @@ questionnaire item that prints.
 
 ---
 
-### KIOSK (separate Blade route — 800×480, scaled to fit window, dark `#1c1917` letterbox)
+### KIOSK (separate Blade route — 1080×1920 portrait, panel fills the viewport with `--k-zoom` scaling; D-26 supersedes the original 800×480 letterbox)
 
 The kiosk is a **touch-first fullscreen app**. It auto-resets to Welcome 12 seconds after a student submits. In production the simulated sensor readings are replaced by **Web Serial** reads from the microcontroller, and **every vital step also offers first-class manual entry** (an "Enter manually" action opening a numeric on-screen pad; same validation ranges; provenance recorded in `vital_signs.entry_method` — Decision D-7 / FR-KSK-06). The kiosk runs at `localhost` on the Pi so Web Serial has a secure context.
 
@@ -436,7 +436,7 @@ Identity → Walk-in check (skip if any appt — medical or dental — is booked
 ```
 
 #### Screen 1 — Welcome
-- Dark letterbox, `#F6F2ED` inner panel.
+- `#F6F2ED` panel fills the screen (no letterbox — D-18/D-26).
 - Left: pulsing orange QR target SVG + "Tap to Scan Your ID" (xl button).
 - Vertical divider with "or".
 - Right: "Welcome to HealthPass" heading, tagline, "Lost ID? Log in with email" (ghost sm).
@@ -718,7 +718,7 @@ clearance_records ──< clearance_case_categories   (0..n categories per case,
 | Functional suitability | Clearance workflow produces a correct, printable result per student matching the official PamSU form |
 | Performance efficiency | Kiosk feels immediate; nurse queue refreshes via polling |
 | Compatibility | Kiosk: Chromium kiosk mode on Pi; web app: standard desktop browsers |
-| Interaction capability | Kiosk is touch-first at 800×480 with large targets and on-screen keyboard |
+| Interaction capability | Kiosk is touch-first at 1080×1920 portrait (D-26) with large targets and on-screen keyboard |
 | Reliability | Captured visits are never lost if encoding is delayed; kiosk auto-resets between students |
 | Security | RA 10173 compliance (consent capture), RBAC, hashed passwords, least-privilege, Web Serial on `localhost` |
 | Maintainability | One Laravel codebase with shared Blade components; Git feature-branch workflow |

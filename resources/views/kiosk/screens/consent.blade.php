@@ -3,13 +3,13 @@
      at final submit) and proceeds to Vitals. "Decline" resets to Welcome storing
      NOTHING (no DB write happens on this screen either way). --}}
 <section class="kiosk-screen" x-show="state.screen === 'consent'" x-cloak>
-    <div class="flex w-full flex-col items-center px-8 py-6">
-        <span class="rounded-full bg-hp-peach/40 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-hp-orange">Data Privacy</span>
-        <h1 class="mt-2 text-xl font-semibold text-hp-slate">Privacy Consent</h1>
-        <p class="mt-1 text-sm text-hp-slate/70">Republic Act No. 10173 — Data Privacy Act of 2012</p>
+    <div class="flex w-full flex-col items-center justify-center px-10 py-10">
+        <span class="rounded-full bg-hp-peach/40 px-4 py-1.5 text-sm font-semibold uppercase tracking-widest text-hp-orange">Data Privacy</span>
+        <h1 class="mt-3 text-3xl font-semibold text-hp-slate">Privacy Consent</h1>
+        <p class="mt-2 text-base text-hp-slate/70">Republic Act No. 10173 — Data Privacy Act of 2012</p>
 
         {{-- Scrollable notice --}}
-        <div class="mt-4 max-h-56 w-full max-w-xl overflow-y-auto rounded-2xl bg-hp-white p-5 text-left text-sm leading-relaxed text-hp-slate shadow-sm">
+        <div class="mt-6 max-h-[26rem] w-full max-w-2xl overflow-y-auto rounded-2xl bg-hp-white p-7 text-left text-base leading-relaxed text-hp-slate shadow-sm">
             <p>
                 By proceeding, you consent to PSU University Health Services collecting
                 and processing your <strong>vital signs and health-screening responses</strong>
@@ -29,16 +29,16 @@
         </div>
 
         {{-- Actions --}}
-        <div class="mt-5 flex items-center gap-3">
+        <div class="mt-8 flex items-center gap-4">
             <button
                 type="button"
                 @click="reset()"
-                class="rounded-xl px-6 py-3 text-sm font-medium text-hp-slate/70 transition hover:text-hp-orange"
+                class="rounded-2xl px-8 py-5 text-base font-medium text-hp-slate/70 transition hover:text-hp-orange"
             >Decline</button>
             <button
                 type="button"
                 @click="agreeConsent()"
-                class="rounded-xl bg-hp-orange px-8 py-3 text-base font-semibold text-hp-white shadow-sm transition hover:brightness-95 active:scale-[0.98]"
+                class="rounded-2xl bg-hp-orange px-12 py-5 text-lg font-semibold text-hp-white shadow-sm transition hover:brightness-95 active:scale-[0.98]"
             >I Agree — Proceed</button>
         </div>
     </div>

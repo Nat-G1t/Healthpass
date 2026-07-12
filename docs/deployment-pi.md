@@ -215,6 +215,33 @@ curl -I http://localhost/kiosk        # expect HTTP/1.1 200 OK
 
 ## 4. Chromium kiosk autostart
 
+### Display rotation — 15.6″ 1080×1920 portrait (D-26)
+
+The kiosk display is a **15.6″ 1080p panel used in portrait** (1080×1920,
+PRD D-26 — replaces the old 7″ 800×480 landscape screen). The panel is
+physically landscape-native, so the Pi must rotate the output 90° at the
+OS level; the app itself just fills whatever viewport Chromium reports.
+
+> **PLACEHOLDER — for Baldo to pin down on the actual Pi.** On Bookworm's
+> default Wayland (labwc) session the tool is `wlr-randr`, e.g.:
+>
+> ```bash
+> wlr-randr --output HDMI-A-1 --transform 90     # or 270, depending on mount
+> ```
+>
+> Things to confirm and document here:
+>
+> - [ ] The real output name (`wlr-randr` with no args lists outputs).
+> - [ ] `--transform 90` vs `270` for the physical mounting direction.
+> - [ ] Where to persist it so it applies before Chromium launches —
+>       `~/.config/labwc/autostart` (before the kiosk-service start line)
+>       or a `kanshi` profile.
+> - [ ] **Touch input rotates with it?** If touches land 90° off, map the
+>       touchscreen to the output (labwc `rc.xml` input config or a udev
+>       calibration matrix) and document the exact snippet.
+> - [ ] Chromium reports 1080×1920 (portrait) at `http://localhost/kiosk`
+>       — check `window.innerWidth/innerHeight` in DevTools.
+
 Launcher script: `scripts/pi/kiosk-chromium.sh` — opens Chromium full-screen on
 `http://localhost/kiosk`, disables screen blanking (X11 only; see below), and
 suppresses the crash-restore / info bars. Copy it somewhere stable and make it
@@ -509,5 +536,6 @@ Fill this section with the tested, working configuration.
 | Kiosk launcher | `scripts/pi/kiosk-chromium.sh` |
 | Dev-mode desktop shortcut | `scripts/pi/healthpass-kiosk.desktop` (§4 dev mode) |
 | Kiosk URL (on Pi) | `http://localhost/kiosk` |
+| Display rotation (portrait) | `wlr-randr --output <name> --transform 90` (§4, Baldo to finalize) |
 | Staff URL (LAN) | `http://<pi-ip>/` |
 | Local health check | `curl -I http://localhost/kiosk` |
