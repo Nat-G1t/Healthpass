@@ -13,6 +13,25 @@ class BatchRequest extends Model
 {
     use HasFactory;
 
+    /**
+     * The locked batch reasons (FR-ADM-02 / BR-06): DB enum value => label
+     * shown in the UI. One source of truth for the form options, the
+     * validation rule, and display — the keys must match the `reason`
+     * enum in the batch_requests migration exactly.
+     */
+    public const REASONS = [
+        'graduation' => 'Graduation Clearance',
+        'ojt' => 'OJT / Practicum',
+        'enrollment' => 'General Enrollment',
+        'scholarship' => 'Scholarship',
+        'sports' => 'Sports / Athletics',
+        'fieldtrip' => 'Field Trip / Educational Tour',
+        'others' => 'Others',
+    ];
+
+    /** The one reason that additionally requires reason_detail (BR-06). */
+    public const REASON_OTHERS = 'others';
+
     protected $fillable = [
         'reference_no',
         'college_id',

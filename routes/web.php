@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\BatchRequestController as AdminBatchRequestController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Auth\PasswordChangeController;
 use App\Http\Controllers\Kiosk\KioskController;
@@ -95,6 +96,11 @@ Route::middleware(['auth', 'role:college_admin', 'college.scope'])
     ->name('admin.')
     ->group(function () {
         Route::get('/dashboard', AdminDashboardController::class)->name('dashboard');
+        // New Batch Request (FR-ADM-02/03, BR-06/07). The create page ships
+        // ONLY the managed college's roster; store re-checks every student id
+        // against that college server-side.
+        Route::get('/batches/create', [AdminBatchRequestController::class, 'create'])->name('batches.create');
+        Route::post('/batches', [AdminBatchRequestController::class, 'store'])->name('batches.store');
     });
 
 // ── Nurse (FR-AUTH-03) ───────────────────────────────────────────────────────
