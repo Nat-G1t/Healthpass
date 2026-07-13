@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Auth\PasswordChangeController;
 use App\Http\Controllers\Kiosk\KioskController;
 use App\Http\Controllers\Nurse\EncodeController as NurseEncodeController;
@@ -84,12 +85,16 @@ Route::middleware(['auth', 'role:student'])
     });
 
 // ── College Admin (FR-AUTH-03) ───────────────────────────────────────────────
+// `college.scope` (FR-AUTH-06): every /admin/* request is refused unless the
+// admin has a non-null managed_college_id — controllers then derive ALL data
+// from that college via the ScopedToManagedCollege trait, never from request
+// input, so the scope cannot be tampered with client-side (FR-ADM-06).
 
-Route::middleware(['auth', 'role:college_admin'])
+Route::middleware(['auth', 'role:college_admin', 'college.scope'])
     ->prefix('admin')
     ->name('admin.')
     ->group(function () {
-        Route::get('/dashboard', fn () => view('admin.dashboard'))->name('dashboard');
+        Route::get('/dashboard', AdminDashboardController::class)->name('dashboard');
     });
 
 // ── Nurse (FR-AUTH-03) ───────────────────────────────────────────────────────

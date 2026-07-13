@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureCollegeScope;
 use App\Http\Middleware\EnsureRole;
 use App\Http\Middleware\KioskAccess;
 use Illuminate\Foundation\Application;
@@ -16,6 +17,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role' => EnsureRole::class,
             'kiosk.access' => KioskAccess::class,
+            'college.scope' => EnsureCollegeScope::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
