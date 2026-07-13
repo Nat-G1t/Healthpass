@@ -101,6 +101,11 @@ Route::middleware(['auth', 'role:college_admin', 'college.scope'])
         // against that college server-side.
         Route::get('/batches/create', [AdminBatchRequestController::class, 'create'])->name('batches.create');
         Route::post('/batches', [AdminBatchRequestController::class, 'store'])->name('batches.store');
+        // Batch Tracking + post-submit confirmation (FR-ADM-04/05). Both fetch
+        // through managedCollege(), so foreign batch ids 404.
+        Route::get('/batches', [AdminBatchRequestController::class, 'index'])->name('batches.index');
+        Route::get('/batches/{batch}/confirmation', [AdminBatchRequestController::class, 'confirmation'])
+            ->whereNumber('batch')->name('batches.confirmation');
     });
 
 // ── Nurse (FR-AUTH-03) ───────────────────────────────────────────────────────

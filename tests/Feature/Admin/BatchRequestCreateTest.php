@@ -13,9 +13,8 @@ use Tests\TestCase;
 /**
  * New Batch Request — create page + validation (FR-ADM-02/03, BR-06/07).
  *
- * Persistence is intentionally NOT covered yet: store() only validates today
- * (Day 50); the write path + reference-number minting land tomorrow, with
- * their own tests.
+ * Persistence (the write path + reference-number minting, FR-ADM-04) is
+ * covered separately in BatchRequestSubmitTest.
  */
 class BatchRequestCreateTest extends TestCase
 {
@@ -192,7 +191,7 @@ class BatchRequestCreateTest extends TestCase
             ->assertSessionHasErrors('students.0');
     }
 
-    // ── Valid submission (persistence lands Day 51) ──────────────────────────
+    // ── Valid submission (persistence asserted in BatchRequestSubmitTest) ────
 
     public function test_a_valid_submission_passes_validation(): void
     {
@@ -205,6 +204,6 @@ class BatchRequestCreateTest extends TestCase
                 'students' => $students->pluck('id')->all(),
             ])
             ->assertSessionHasNoErrors()
-            ->assertRedirect('/admin/batches/create');
+            ->assertRedirect(route('admin.batches.confirmation', \App\Models\BatchRequest::sole()));
     }
 }

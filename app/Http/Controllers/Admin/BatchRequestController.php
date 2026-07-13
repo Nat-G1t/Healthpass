@@ -7,12 +7,16 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Admin\Concerns\ScopedToManagedCollege;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreBatchRequestRequest;
+use App\Models\BatchRequest;
 use App\Models\StudentProfile;
+use App\Services\ReferenceNumberService;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 /**
- * New Batch Request (FR-ADM-02/03, BR-06/07).
+ * Batch Requests: New Batch form, submission, confirmation and Tracking
+ * (FR-ADM-02/03/04/05, BR-05/06/07).
  *
  * create() ships the FULL roster of the admin's college to the page in one
  * scoped query (hybrid search: the server owns the scope, the browser owns
@@ -22,6 +26,22 @@ use Illuminate\View\View;
 class BatchRequestController extends Controller
 {
     use ScopedToManagedCollege;
+
+    /**
+     * Batch Tracking (FR-ADM-05): the college's requests, newest first.
+     * Same scoped query shape as the dashboard table.
+     */
+    public function index(): View
+    {
+        $college = $this->managedCollege();
+
+        $batchRequests = $college->batchRequests()
+            ->withCount('batchRequestStudents')
+            ->latest()
+            ->get();
+
+        return view('admin.batches.index', compact('college', 'batchRequests'));
+    }
 
     public function create(): View
     {
@@ -47,15 +67,58 @@ class BatchRequestController extends Controller
         return view('admin.batches.create', compact('college', 'students'));
     }
 
-    public function store(StoreBatchRequestRequest $request): RedirectResponse
+    /**
+     * Persist a validated batch (FR-ADM-04): one batch_requests row plus one
+     * batch_request_students row per student, atomically. Validation (BR-06/07
+     * + the college-scope check on EVERY student id) has already run in the
+     * Form Request by the time we get here.
+     */
+    public function store(StoreBatchRequestRequest $request, ReferenceNumberService $refs): RedirectResponse
     {
-        // Validation (BR-06/07 + college-scope check on every student id)
-        // has already run in the Form Request by the time we get here.
-        //
-        // TODO (Day 51): persist batch_requests + batch_request_students in
-        // one transaction and mint the BR-YYYY-### reference number.
-        return redirect()
-            ->route('admin.batches.create')
-            ->with('status', 'Your batch request passed validation. Saving is not wired up yet — it lands with tomorrow\'s build.');
+        $college = $this->managedCollege();
+
+        // The form posts student_profile ids (that's what the roster picker
+        // knows), but the pivot stores USER ids (data dictionary:
+        // batch_request_students.student_id → users) — translate here.
+        $studentUserIds = StudentProfile::whereIn('id', $request->validated('students'))
+            ->pluck('user_id');
+
+        // One transaction: the reference number, the batch row and all pivot
+        // rows commit together or not at all. generateBatchRef() is called
+        // INSIDE so its sequence lock holds until this commit (see the
+        // service's concurrency notes).
+        $batch = DB::transaction(function () use ($request, $refs, $college, $studentUserIds): BatchRequest {
+            $batch = BatchRequest::create([
+                'reference_no' => $refs->generateBatchRef(),
+                'college_id' => $college->id, // from the session scope — never the request (BR-05)
+                'requested_by' => $request->user()->id,
+                'reason' => $request->validated('reason'),
+                'reason_detail' => $request->validated('reason_detail'),
+                'service_type' => $request->validated('service_type'),
+                'status' => 'pending',
+            ]);
+
+            $batch->batchRequestStudents()->createMany(
+                $studentUserIds->map(fn ($userId): array => ['student_id' => $userId])->all(),
+            );
+
+            return $batch;
+        });
+
+        return redirect()->route('admin.batches.confirmation', $batch);
+    }
+
+    /**
+     * Post-submit confirmation screen (FR-ADM-04). Fetched through the
+     * managed college's relationship, so another college's batch id is a
+     * plain 404 (FR-ADM-06) — ids can't be enumerated across colleges.
+     */
+    public function confirmation(int $batchId): View
+    {
+        $batch = $this->managedCollege()->batchRequests()
+            ->withCount('batchRequestStudents')
+            ->findOrFail($batchId);
+
+        return view('admin.batches.confirmation', ['batch' => $batch]);
     }
 }
