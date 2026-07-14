@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\BatchRequestController as AdminBatchRequestController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Auth\PasswordChangeController;
+use App\Http\Controllers\Director\BatchApprovalController as DirectorBatchApprovalController;
 use App\Http\Controllers\Kiosk\KioskController;
 use App\Http\Controllers\Nurse\EncodeController as NurseEncodeController;
 use App\Http\Controllers\Nurse\KioskDeviceController as NurseKioskDeviceController;
@@ -151,6 +152,17 @@ Route::middleware(['auth', 'role:director'])
     ->name('director.')
     ->group(function () {
         Route::get('/dashboard', fn () => view('director.dashboard'))->name('dashboard');
+        // Batch Approvals (FR-DIRA-01/05/06): ALL colleges' requests — no
+        // college scope, the Director reviews everything.
+        Route::get('/batches', [DirectorBatchApprovalController::class, 'index'])->name('batches.index');
+        // JSON for the approve modal's capacity warning (FR-DIRA-06). Must be
+        // declared BEFORE /batches/{batch}-style routes would ever match it.
+        Route::get('/batches/capacity', [DirectorBatchApprovalController::class, 'capacity'])->name('batches.capacity');
+        // Decision endpoints — STUBS today; FR-DIRA-02/04 wire them up next.
+        Route::post('/batches/{batch}/approve', [DirectorBatchApprovalController::class, 'approve'])
+            ->whereNumber('batch')->name('batches.approve');
+        Route::post('/batches/{batch}/reject', [DirectorBatchApprovalController::class, 'reject'])
+            ->whereNumber('batch')->name('batches.reject');
     });
 
 // ── Kiosk (Module KSK, FR-KSK-01..16) — PUBLIC clinic terminal ───────────────

@@ -150,8 +150,9 @@ npm run dev                       # terminal 2
   the 9-system questionnaire and routes to the Nurse queue.
 - **Manual vitals entry is a first-class kiosk path**, sensors are
   progressive enhancement. Every reading records `entry_method`.
-- Clinic capacity is a config value; batch appointment dates are
-  Director-selected; dental is scheduling-only.
+- Clinic capacity is a config value; batch clinic dates are
+  admin-requested and Director-confirmed at approval (the Director may
+  adjust — D-29); dental is scheduling-only.
 - Printed clearance must match official form DHVSU-QSP-OSS-004-FO002-R03.
 
 ## Database

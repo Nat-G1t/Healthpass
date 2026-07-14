@@ -74,6 +74,14 @@
             </dd>
         </div>
 
+        {{-- Requested clinic date (D-29) --}}
+        <div class="flex items-center justify-between gap-4">
+            <dt class="text-sm text-hp-slate/50">Requested Date</dt>
+            <dd class="text-sm font-semibold text-hp-slate">
+                {{ $batch->requested_date?->format('l, F j, Y') ?? '—' }}
+            </dd>
+        </div>
+
         {{-- Submitted date --}}
         <div class="flex items-center justify-between gap-4">
             <dt class="text-sm text-hp-slate/50">Submitted</dt>
@@ -96,9 +104,10 @@
         <div>
             <p class="text-sm font-semibold text-hp-slate">What happens next</p>
             <p class="mt-1 text-xs leading-relaxed text-hp-slate/60">
-                The Clinic Director reviews the request and picks a clinic date.
-                Once approved, an appointment is created automatically for every
-                listed student — you can follow the status in Batch Tracking.
+                The Clinic Director reviews the request and confirms your
+                requested date (they may adjust it if the clinic is full that
+                day). Once approved, an appointment is created automatically for
+                every listed student — you can follow the status in Batch Tracking.
             </p>
         </div>
     </div>

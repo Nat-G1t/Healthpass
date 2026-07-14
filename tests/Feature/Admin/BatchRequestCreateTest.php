@@ -47,6 +47,7 @@ class BatchRequestCreateTest extends TestCase
         return array_merge([
             'reason' => 'ojt',
             'service_type' => 'medical',
+            'requested_date' => now()->addDays(7)->toDateString(),
             'students' => [$student->id],
         ], $overrides);
     }
@@ -95,11 +96,29 @@ class BatchRequestCreateTest extends TestCase
 
     // ── BR-06: reason + conditional reason_detail ───────────────────────────
 
-    public function test_reason_and_service_type_and_students_are_required(): void
+    public function test_reason_and_service_type_and_date_and_students_are_required(): void
     {
         $this->actingAs($this->admin)
             ->post('/admin/batches', [])
-            ->assertSessionHasErrors(['reason', 'service_type', 'students']);
+            ->assertSessionHasErrors(['reason', 'service_type', 'requested_date', 'students']);
+    }
+
+    // ── D-29: the admin proposes the clinic date ─────────────────────────────
+
+    public function test_a_past_requested_date_is_rejected(): void
+    {
+        $this->actingAs($this->admin)
+            ->post('/admin/batches', $this->validPayload([
+                'requested_date' => now()->subDay()->toDateString(),
+            ]))
+            ->assertSessionHasErrors('requested_date');
+    }
+
+    public function test_a_malformed_requested_date_is_rejected(): void
+    {
+        $this->actingAs($this->admin)
+            ->post('/admin/batches', $this->validPayload(['requested_date' => 'next tuesday']))
+            ->assertSessionHasErrors('requested_date');
     }
 
     public function test_unknown_reason_is_rejected(): void
@@ -201,6 +220,7 @@ class BatchRequestCreateTest extends TestCase
             ->post('/admin/batches', [
                 'reason' => 'graduation',
                 'service_type' => 'dental',
+                'requested_date' => now()->addDays(7)->toDateString(),
                 'students' => $students->pluck('id')->all(),
             ])
             ->assertSessionHasNoErrors()

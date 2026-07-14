@@ -58,6 +58,7 @@ class CollegeScopeTest extends TestCase
         return array_merge([
             'reason' => 'ojt',
             'service_type' => 'medical',
+            'requested_date' => now()->addDays(7)->toDateString(),
             'students' => [$this->ownStudent->id],
         ], $overrides);
     }
