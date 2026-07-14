@@ -57,6 +57,24 @@ class ClinicVisit extends Model
             ->orderBy('id');
     }
 
+    /**
+     * FR-ANL-01/05 — visits whose vitals tripped ANY flag threshold.
+     *
+     * whereHas() filters by a related table: it compiles to an EXISTS
+     * subquery on vital_signs, so no join/duplicate rows. The closure's
+     * conditions are grouped inside that subquery, so the orWhere chain
+     * can't leak into the outer query. Flags surface from CAPTURE
+     * (FR-ANL-07) — no status filter here, un-encoded visits count too.
+     */
+    public function scopeFlagged(Builder $query): Builder
+    {
+        return $query->whereHas('vitalSigns', function (Builder $vitals): void {
+            $vitals->where('is_bp_flagged', true)
+                ->orWhere('is_temp_flagged', true)
+                ->orWhere('is_bmi_flagged', true);
+        });
+    }
+
     // ── Relationships ────────────────────────────────────────────────────────
 
     /** The student who submitted this kiosk visit. */
