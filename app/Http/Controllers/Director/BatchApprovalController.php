@@ -28,7 +28,8 @@ use Illuminate\View\View;
  * approve() is the real decision flow (FR-DIRA-02, BR-08): one DB
  * transaction that flips the batch, stamps the reviewer fields, fans out
  * one appointment per listed student, and back-writes each appointment_id
- * onto its pivot row. reject() is still a STUB — FR-DIRA-04 lands next.
+ * onto its pivot row. reject() (FR-DIRA-04) is the same shape minus the
+ * fan-out: stamp the reviewer fields, create nothing.
  */
 class BatchApprovalController extends Controller
 {
@@ -136,10 +137,43 @@ class BatchApprovalController extends Controller
             ->with('status', "{$batch->reference_no} approved — {$studentCount} appointment(s) created.");
     }
 
-    /** STUB — FR-DIRA-04 (reject + reviewer stamps) is next. */
-    public function reject(BatchRequest $batch): RedirectResponse
+    /**
+     * Reject a pending batch (FR-DIRA-04): status → rejected + reviewer
+     * stamps, and NOTHING else — no appointments, no scheduled_date.
+     *
+     * Same lock-and-recheck guard as approve() (FR-DIRA-05): the row is
+     * re-read with lockForUpdate() inside the transaction, so a reject
+     * racing an approve (or a duplicate reject) waits for the first commit
+     * and then no-ops on the non-pending status. A decision is terminal
+     * in both directions.
+     */
+    public function reject(Request $request, BatchRequest $batch): RedirectResponse
     {
+        $director = $request->user();
+
+        $wasRejected = DB::transaction(function () use ($batch, $director): bool {
+            $locked = BatchRequest::whereKey($batch->id)->lockForUpdate()->firstOrFail();
+
+            // A decided batch cannot be re-decided (FR-DIRA-05).
+            if ($locked->status !== 'pending') {
+                return false;
+            }
+
+            $locked->update([
+                'status' => 'rejected',
+                'reviewed_by' => $director->id,
+                'reviewed_at' => now(),
+            ]);
+
+            return true;
+        });
+
+        if (! $wasRejected) {
+            return redirect()->route('director.batches.index')
+                ->with('error', "{$batch->reference_no} has already been decided — nothing was changed.");
+        }
+
         return redirect()->route('director.batches.index')
-            ->with('status', "Reject for {$batch->reference_no} isn't wired up yet — no changes were made.");
+            ->with('status', "{$batch->reference_no} rejected — no appointments were created.");
     }
 }

@@ -137,20 +137,6 @@ class BatchApprovalsPageTest extends TestCase
             ->assertUnprocessable();
     }
 
-    public function test_reject_stub_changes_nothing_yet(): void
-    {
-        // Approve is live (see BatchApprovalDecisionTest); reject is still a
-        // stub until FR-DIRA-04 lands.
-        $pending = $this->makeBatch($this->ccs);
-
-        $this->actingAs($this->director)
-            ->post("/director/batches/{$pending->id}/reject")
-            ->assertRedirect('/director/batches');
-
-        $this->assertSame('pending', $pending->fresh()->status);
-        $this->assertDatabaseCount('appointments', 0);
-    }
-
     public function test_page_and_feed_are_refused_for_other_roles_and_guests(): void
     {
         $this->get('/director/batches')->assertRedirect('/login');

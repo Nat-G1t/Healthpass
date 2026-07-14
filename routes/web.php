@@ -158,8 +158,9 @@ Route::middleware(['auth', 'role:director'])
         // JSON for the approve modal's capacity warning (FR-DIRA-06). Must be
         // declared BEFORE /batches/{batch}-style routes would ever match it.
         Route::get('/batches/capacity', [DirectorBatchApprovalController::class, 'capacity'])->name('batches.capacity');
-        // Decision endpoints. Approve is live (FR-DIRA-02, BR-08: transaction
-        // + appointment fan-out); reject is still a stub — FR-DIRA-04 is next.
+        // Decision endpoints — both terminal (FR-DIRA-05). Approve: FR-DIRA-02,
+        // BR-08 (transaction + appointment fan-out). Reject: FR-DIRA-04
+        // (reviewer stamps, zero appointments).
         Route::post('/batches/{batch}/approve', [DirectorBatchApprovalController::class, 'approve'])
             ->whereNumber('batch')->name('batches.approve');
         Route::post('/batches/{batch}/reject', [DirectorBatchApprovalController::class, 'reject'])

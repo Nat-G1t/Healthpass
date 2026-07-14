@@ -42,6 +42,11 @@ node your-script.js   # require('playwright') resolves locally
 - **Checkboxes:** `@tailwindcss/forms` sets `appearance:none` and paints
   checked boxes with `currentColor` — style with `text-hp-orange`, never
   `accent-*` (renders default blue).
+- **Booking-calendar day cells:** each day button also contains a hidden
+  "FULL" span, so `filter({ hasText: /^14$/ })` on the button never matches —
+  target the inner span instead: `locator('... button > span').filter(...)`.
+- **Tinker JSON shows date casts in UTC** (`2026-07-13T16:00:00Z` IS
+  `2026-07-14` in Asia/Manila) — compare with `->toDateString()`, not the JSON.
 - **Test data:** dev colleges have only ~3 students each. For volume tests,
   factory-create into a college, then delete those profiles + their users
   after (record the pre-existing max id first). Never `migrate:fresh`.

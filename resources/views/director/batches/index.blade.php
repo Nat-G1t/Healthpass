@@ -5,7 +5,8 @@
 
     One page-level Alpine component owns the approve modal's state: which
     batch is being approved, the picked date, and the live booked-count for
-    the capacity warning. Approve/Reject POST to stub endpoints for now.
+    the capacity warning. Approve opens the modal; Reject posts directly
+    (FR-DIRA-04 — no date to pick, nothing is generated).
 --}}
 <div x-data="batchApprovals()">
 
