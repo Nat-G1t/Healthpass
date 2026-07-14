@@ -13,6 +13,35 @@ class BatchRequest extends Model
 {
     use HasFactory;
 
+    /**
+     * The locked batch reasons (FR-ADM-02 / BR-06): DB enum value => label
+     * shown in the UI. One source of truth for the form options, the
+     * validation rule, and display — the keys must match the `reason`
+     * enum in the batch_requests migration exactly.
+     */
+    public const REASONS = [
+        'graduation' => 'Graduation Clearance',
+        'ojt' => 'OJT / Practicum',
+        'enrollment' => 'General Enrollment',
+        'scholarship' => 'Scholarship',
+        'sports' => 'Sports / Athletics',
+        'fieldtrip' => 'Field Trip / Educational Tour',
+        'others' => 'Others',
+    ];
+
+    /** The one reason that additionally requires reason_detail (BR-06). */
+    public const REASON_OTHERS = 'others';
+
+    /**
+     * DB status value => label shown to admins. FR-ADM-04/05 word pending
+     * as "Pending Director Approval" everywhere the admin sees it.
+     */
+    public const STATUS_LABELS = [
+        'pending' => 'Pending Director Approval',
+        'approved' => 'Approved',
+        'rejected' => 'Rejected',
+    ];
+
     protected $fillable = [
         'reference_no',
         'college_id',
@@ -32,6 +61,24 @@ class BatchRequest extends Model
             'scheduled_date' => 'date',
             'reviewed_at' => 'datetime',
         ];
+    }
+
+    // ── Display helpers ──────────────────────────────────────────────────────
+
+    /** Status as shown to admins (pending → "Pending Director Approval"). */
+    public function statusLabel(): string
+    {
+        return self::STATUS_LABELS[$this->status] ?? ucfirst($this->status);
+    }
+
+    /** Human-readable reason: the label, or the admin's own text for "others". */
+    public function reasonText(): string
+    {
+        if ($this->reason === self::REASON_OTHERS && $this->reason_detail !== null) {
+            return $this->reason_detail;
+        }
+
+        return self::REASONS[$this->reason] ?? ucfirst($this->reason);
     }
 
     // ── Relationships ────────────────────────────────────────────────────────

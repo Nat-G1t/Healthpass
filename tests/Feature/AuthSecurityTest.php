@@ -140,8 +140,36 @@ class AuthSecurityTest extends TestCase
             route('admin.dashboard'),
             route('nurse.queue'),
             route('director.dashboard'),
+            route('admin.batches.create'),
+            route('admin.batches.index'),
+            route('admin.batches.confirmation', 1),
         ] as $url) {
             $this->get($url)->assertRedirect(route('login'));
+        }
+    }
+
+    /**
+     * Day-51 extension: the batch-request routes joined the /admin group after
+     * the original suite, so re-prove role isolation on each of them for the
+     * three non-admin roles (FR-AUTH-03 / FR-ADM-06).
+     */
+    public function test_non_admin_roles_cannot_reach_admin_batch_routes(): void
+    {
+        $dashboards = [
+            'student' => route('student.dashboard'),
+            'nurse' => route('nurse.queue'),
+            'director' => route('director.dashboard'),
+        ];
+
+        foreach ($dashboards as $role => $home) {
+            $user = User::factory()->create(['role' => $role]);
+
+            $this->actingAs($user)->get(route('admin.batches.create'))->assertRedirect($home);
+            $this->actingAs($user)->get(route('admin.batches.index'))->assertRedirect($home);
+            $this->actingAs($user)->get(route('admin.batches.confirmation', 1))->assertRedirect($home);
+            $this->actingAs($user)
+                ->post(route('admin.batches.store'), ['students' => [1]])
+                ->assertRedirect($home);
         }
     }
 
