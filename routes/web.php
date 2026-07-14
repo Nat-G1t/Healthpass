@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\BatchRequestController as AdminBatchRequestController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Auth\PasswordChangeController;
+use App\Http\Controllers\Director\AnalyticsController as DirectorAnalyticsController;
 use App\Http\Controllers\Director\BatchApprovalController as DirectorBatchApprovalController;
 use App\Http\Controllers\Director\DashboardController as DirectorDashboardController;
 use App\Http\Controllers\Kiosk\KioskController;
@@ -154,6 +155,8 @@ Route::middleware(['auth', 'role:director'])
     ->group(function () {
         // Dashboard (FR-ANL-01): KPI cards + the two preview panels.
         Route::get('/dashboard', DirectorDashboardController::class)->name('dashboard');
+        // Analytics (FR-ANL-02): Medical Cases by College stacked bar.
+        Route::get('/analytics', DirectorAnalyticsController::class)->name('analytics');
         // Flagged Anomalies (FR-ANL-05) — stub page for now; it exists so the
         // dashboard's "View all →" has a real destination.
         Route::get('/anomalies', fn () => view('director.anomalies'))->name('anomalies');
