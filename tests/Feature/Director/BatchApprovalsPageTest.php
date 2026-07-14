@@ -137,13 +137,11 @@ class BatchApprovalsPageTest extends TestCase
             ->assertUnprocessable();
     }
 
-    public function test_decision_stubs_change_nothing_yet(): void
+    public function test_reject_stub_changes_nothing_yet(): void
     {
+        // Approve is live (see BatchApprovalDecisionTest); reject is still a
+        // stub until FR-DIRA-04 lands.
         $pending = $this->makeBatch($this->ccs);
-
-        $this->actingAs($this->director)
-            ->post("/director/batches/{$pending->id}/approve", ['scheduled_date' => now()->toDateString()])
-            ->assertRedirect('/director/batches');
 
         $this->actingAs($this->director)
             ->post("/director/batches/{$pending->id}/reject")

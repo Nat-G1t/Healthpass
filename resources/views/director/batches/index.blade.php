@@ -17,10 +17,15 @@
         </p>
     </div>
 
-    {{-- Flash from the (stub) decision endpoints --}}
+    {{-- Flash from the decision endpoints --}}
     @if (session('status'))
         <div class="mb-6 rounded-lg border border-hp-orange/30 bg-hp-peach/40 px-4 py-3 text-sm text-hp-slate">
             {{ session('status') }}
+        </div>
+    @endif
+    @if (session('error'))
+        <div class="mb-6 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {{ session('error') }}
         </div>
     @endif
 
@@ -168,15 +173,18 @@
                     already passed — pick a new date, ideally with the college admin.
                 </p>
 
-                <form method="POST" :action="batch?.url" class="mt-5">
+                {{-- @submit sets `submitting` (without preventing the POST) so a
+                     double-click can't fire twice; the server re-check is the
+                     real guard, this just avoids the round trip. --}}
+                <form method="POST" :action="batch?.url" @submit="submitting = true" class="mt-5">
                     @csrf
 
                     <label for="approve-date" class="block text-xs font-semibold uppercase tracking-widest text-hp-slate/40">
                         Appointment date
                     </label>
                     {{-- Pre-filled with the admin's requested date, or today when
-                         it has passed / is absent (D-29). Past dates disabled;
-                         enforced again server-side once the real approve lands. --}}
+                         it has passed / is absent (D-29). Past dates disabled here
+                         and enforced server-side (ApproveBatchRequest). --}}
                     <input
                         id="approve-date"
                         type="date"
@@ -199,7 +207,9 @@
 
                     <div class="mt-6 flex justify-end gap-3">
                         <x-hp.button variant="muted" @click="close()">Cancel</x-hp.button>
-                        <x-hp.button type="submit" variant="primary">Approve Batch</x-hp.button>
+                        <x-hp.button type="submit" variant="primary" x-bind:disabled="submitting">
+                            <span x-text="submitting ? 'Approving…' : 'Approve Batch'"></span>
+                        </x-hp.button>
                     </div>
                 </form>
             </div>
@@ -214,6 +224,7 @@
         return {
             batch: null,                              // { ref, students, requested, url } of the row being approved
             date: '',
+            submitting: false,                        // disables Approve after first click
             today: '{{ now()->toDateString() }}',
             booked: null,                             // null until the capacity fetch answers
             capacity: {{ (int) config('healthpass.daily_capacity') }},
@@ -237,6 +248,7 @@
 
             openApprove(batch) {
                 this.batch = batch;
+                this.submitting = false;
                 // D-29: default to the admin's requested date; fall back to
                 // today when it has passed (ISO strings compare correctly) or
                 // the batch predates requested_date.
