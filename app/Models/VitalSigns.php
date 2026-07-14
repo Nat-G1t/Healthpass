@@ -43,6 +43,35 @@ class VitalSigns extends Model
         ];
     }
 
+    // ── Display helpers ──────────────────────────────────────────────────────
+
+    /**
+     * Human-readable line per tripped flag, e.g. "High Blood Pressure —
+     * 145/92 mmHg" (Director dashboard preview, FR-ANL-01; same labels as
+     * the Flagged Anomalies stat cards, FR-ANL-05). Reads the STORED flag
+     * booleans — thresholds are computed once at kiosk submit, never here.
+     *
+     * @return list<string>
+     */
+    public function flagDescriptions(): array
+    {
+        $flags = [];
+
+        if ($this->is_bp_flagged) {
+            $flags[] = "High Blood Pressure — {$this->bp_systolic}/{$this->bp_diastolic} mmHg";
+        }
+
+        if ($this->is_temp_flagged) {
+            $flags[] = "Fever — {$this->temperature_c}°C";
+        }
+
+        if ($this->is_bmi_flagged) {
+            $flags[] = "Abnormal BMI — {$this->bmi}";
+        }
+
+        return $flags;
+    }
+
     // ── Relationships ────────────────────────────────────────────────────────
 
     /** The kiosk visit these vitals belong to. */

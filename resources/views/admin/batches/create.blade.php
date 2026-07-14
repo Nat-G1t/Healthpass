@@ -36,6 +36,8 @@ function batchForm() {
         reason:        @js(old('reason', '')),
         reasonDetail:  @js(old('reason_detail', '') ?? ''),
         serviceType:   @js(old('service_type', 'medical')),
+        // D-29: the admin proposes the clinic date (defaults to today).
+        requestedDate: @js(old('requested_date', now()->toDateString())),
         reasonOthers:  @js(\App\Models\BatchRequest::REASON_OTHERS),
 
         // ── Student picker ──────────────────────────────────────────────────
@@ -94,7 +96,7 @@ function batchForm() {
         },
 
         get canSubmit() {
-            return this.reasonReady && this.selected.length > 0;
+            return this.reasonReady && this.requestedDate !== '' && this.selected.length > 0;
         },
     };
 }
@@ -151,6 +153,22 @@ function batchForm() {
                             @endforeach
                         </div>
                         @error('service_type')
+                            <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    {{-- Requested clinic date (D-29): the admin knows the
+                         cohort's event; the Director confirms or adjusts at
+                         approval. Past dates disabled; server re-checks. --}}
+                    <div>
+                        <x-hp.input label="Requested clinic date" type="date"
+                                    name="requested_date" x-model="requestedDate"
+                                    min="{{ now()->toDateString() }}" required />
+                        <p class="mt-1 text-xs text-hp-slate/50">
+                            When should these students visit the clinic? The
+                            Director may adjust this if the clinic is full that day.
+                        </p>
+                        @error('requested_date')
                             <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
                         @enderror
                     </div>

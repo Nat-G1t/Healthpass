@@ -51,6 +51,7 @@ class BatchRequestSubmitTest extends TestCase
         return $this->actingAs($this->admin)->post('/admin/batches', array_merge([
             'reason' => 'ojt',
             'service_type' => 'medical',
+            'requested_date' => now()->addDays(7)->toDateString(),
             'students' => $students->pluck('id')->all(),
         ], $overrides));
     }
@@ -61,10 +62,13 @@ class BatchRequestSubmitTest extends TestCase
     {
         $students = StudentProfile::factory()->count(30)->forCollege($this->ccs)->create();
 
+        $requestedDate = now()->addDays(10)->toDateString();
+
         $this->actingAs($this->admin)
             ->post('/admin/batches', [
                 'reason' => 'graduation',
                 'service_type' => 'dental',
+                'requested_date' => $requestedDate,
                 'students' => $students->pluck('id')->all(),
             ])
             ->assertSessionHasNoErrors();
@@ -78,6 +82,9 @@ class BatchRequestSubmitTest extends TestCase
         $this->assertSame($this->admin->id, $batch->requested_by);
         $this->assertSame('graduation', $batch->reason);
         $this->assertSame('dental', $batch->service_type);
+        // D-29: the admin's proposed date is stored at submission…
+        $this->assertSame($requestedDate, $batch->requested_date->toDateString());
+        // …while the FINAL date stays empty until the Director approves.
         $this->assertNull($batch->scheduled_date);
 
         // The pivot stores USER ids (data dictionary: student_id → users),
@@ -156,6 +163,7 @@ class BatchRequestSubmitTest extends TestCase
             ->assertOk()
             ->assertSee($batch->reference_no)
             ->assertSee('Pending Director Approval')
+            ->assertSee($batch->requested_date->format('l, F j, Y'))
             ->assertSee($batch->created_at->format('l, F j, Y'))
             ->assertSee('View Tracking')
             ->assertSee('Back to Dashboard');

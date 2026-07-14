@@ -169,9 +169,9 @@ Flagged Anomalies. (Flags show from capture; case counts need encoding.)
 
 ## E2E-3 — Batch cohort (College Admin → Director → students)
 
-**Goal:** a College Admin submits a batch for a group of students, the
-Director approves with a date, one appointment per student is created, and
-sampled students complete the loop.
+**Goal:** a College Admin submits a batch for a group of students with a
+requested clinic date, the Director confirms the date and approves, one
+appointment per student is created, and sampled students complete the loop.
 
 **Account:** CCS Admin `admin.ccs@healthpass.test`, then Director, then two
 students.
@@ -181,7 +181,8 @@ students.
 1. Log in as `admin.ccs@healthpass.test`. → **Expect:** the Admin Dashboard
    with a banner naming **College of Computing Studies** and stat cards.
 2. Go to **New Batch Request**. Choose a **Reason** (e.g. "OJT/practicum"),
-   **Service Type = medical**.
+   **Service Type = medical**, and a **Requested Clinic Date** (defaults to
+   today; past dates disabled — D-29).
 3. In the student picker, use **Select All** (or tick several). → **Expect:**
    only **CCS** students are listed; selected rows highlight peach; a
    "(N of M selected)" counter updates. **You must not be able to find a CEA
@@ -190,9 +191,10 @@ students.
    `BR-2026-001`, status "Pending Director Approval". Note the Batch ID.
 5. Log out; log in as `director@healthpass.test`. Open **Batch Approvals**. →
    **Expect:** the CCS batch row with **Approve / Reject** buttons.
-6. Click **Approve**, pick an appointment **date** (default today; past dates
-   disabled), confirm. → **Expect:** the row flips to "✓ Approved" and can no
-   longer be re-approved.
+6. Click **Approve**. → **Expect:** the date picker is **pre-filled with the
+   admin's requested date** (falls back to today if it passed; past dates
+   disabled — D-29). Confirm. → **Expect:** the row flips to "✓ Approved" and
+   can no longer be re-approved.
 7. Log in as one of the batch students (e.g. `carlo.cruz@psu.edu.ph`), open the
    Dashboard. → **Expect:** the generated appointment appears under Next
    Appointment on the approved date, looking like any self-booked one.

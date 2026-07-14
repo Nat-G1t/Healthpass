@@ -53,6 +53,9 @@ class StoreBatchRequestRequest extends FormRequest
                 'max:500',
             ],
             'service_type' => ['required', 'in:medical,dental'],
+            // D-29: the admin proposes the clinic date (they know the
+            // cohort's event); the Director confirms/adjusts at approval.
+            'requested_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:today'],
             // BR-07: at least one student per batch.
             'students' => ['required', 'array', 'min:1'],
             'students.*' => [
@@ -71,6 +74,9 @@ class StoreBatchRequestRequest extends FormRequest
             'reason_detail.required_if' => 'Please specify the reason when choosing "Others".',
             'service_type.required' => 'Please choose a service type.',
             'service_type.in' => 'Invalid service type.',
+            'requested_date.required' => 'Please pick the date your students should visit the clinic.',
+            'requested_date.date_format' => 'Invalid requested date.',
+            'requested_date.after_or_equal' => 'The requested date cannot be in the past.',
             'students.required' => 'Select at least one student for this batch.',
             'students.min' => 'Select at least one student for this batch.',
             'students.*.distinct' => 'A student was selected more than once.',

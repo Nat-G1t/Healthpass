@@ -9,6 +9,7 @@ export default defineConfig({
                 'resources/js/app.js',
                 'resources/js/kiosk/kiosk.js',
                 'resources/js/nurse/live-queue.js',
+                'resources/js/director/analytics.js',
             ],
             refresh: true,
         }),

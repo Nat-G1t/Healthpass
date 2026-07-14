@@ -49,6 +49,7 @@ class BatchRequest extends Model
         'reason',
         'reason_detail',
         'service_type',
+        'requested_date',
         'scheduled_date',
         'status',
         'reviewed_by',
@@ -58,6 +59,7 @@ class BatchRequest extends Model
     protected function casts(): array
     {
         return [
+            'requested_date' => 'date',
             'scheduled_date' => 'date',
             'reviewed_at' => 'datetime',
         ];

@@ -95,6 +95,7 @@ class BatchRequestController extends Controller
                 'reason' => $request->validated('reason'),
                 'reason_detail' => $request->validated('reason_detail'),
                 'service_type' => $request->validated('service_type'),
+                'requested_date' => $request->validated('requested_date'), // D-29
                 'status' => 'pending',
             ]);
 

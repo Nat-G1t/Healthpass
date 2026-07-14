@@ -4,11 +4,13 @@ namespace Database\Seeders;
 
 use App\Models\ClearanceRecord;
 use App\Models\ClinicVisit;
+use App\Models\College;
 use App\Models\ScreeningResponse;
 use App\Models\User;
 use App\Models\VitalSigns;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 /**
  * DEV/DEMO ONLY — synthetic kiosk data.
@@ -25,6 +27,12 @@ use Illuminate\Database\Seeder;
  *       - HP-2026-9005  Maria Reyes     temperature flagged (verifies flag display)
  *       - HP-2026-9006  Maria Reyes     normal vitals
  *
+ * Plus an ANALYTICS SPREAD (HP-2026-9101…) — encoded visits with case
+ * categories across all 12 colleges, all 8 medical systems, and both sexes,
+ * so the Director analytics charts (FR-ANL-02/03/04/08) have meaningful data
+ * during development. Fully deterministic — no randomness, so re-seeding a
+ * fresh DB always produces the same chart.
+ *
  * Reference band HP-2026-9xxx is reserved for synthetic data and will not
  * collide with real sequences (which start from HP-2026-0001).
  *
@@ -33,14 +41,35 @@ use Illuminate\Database\Seeder;
  */
 class DemoClinicVisitSeeder extends Seeder
 {
+    /**
+     * Encoded-visit volume per college for the analytics spread. Deliberately
+     * uneven so the "sorted by volume" ordering in FR-ANL-02 is visible.
+     * Keys must match colleges.code; values sum to 88.
+     */
+    private const ANALYTICS_VOLUME = [
+        'CCS' => 14, 'COE' => 12, 'CEA' => 11, 'CBS' => 9,
+        'CAS' => 8, 'CSSP' => 7, 'CHTM' => 6, 'CIT' => 6,
+        'LAW' => 5, 'GS' => 4, 'SHS' => 3, 'LHS' => 3,
+    ];
+
     public function run(): void
     {
         if (app()->environment('production')) {
             return;
         }
 
-        // Idempotent: skip if demo visits already exist.
-        if (ClinicVisit::where('reference_no', 'like', 'HP-2026-9%')->exists()) {
+        $this->seedRecordsPageVisits();
+        $this->seedAnalyticsSpread();
+    }
+
+    /**
+     * The original 6 My-Records demo visits (HP-2026-9001–9006).
+     */
+    private function seedRecordsPageVisits(): void
+    {
+        // Idempotent: skip if these demo visits already exist. Guard is 90%
+        // (not 9%) so it stays independent of the analytics band (91xx).
+        if (ClinicVisit::where('reference_no', 'like', 'HP-2026-90%')->exists()) {
             $this->command->info('DemoClinicVisitSeeder: demo visits already exist, skipping.');
 
             return;
@@ -50,10 +79,16 @@ class DemoClinicVisitSeeder extends Seeder
         $maria = User::where('email', 'maria.reyes@psu.edu.ph')->firstOrFail();
         $nurse = User::where('email', 'nurse@healthpass.test')->firstOrFail();
 
+        // Both demo students are CCS. clinic_visits.college_id became NOT NULL
+        // with the D-17 snapshot migration (2026_06_30), so every seeded visit
+        // must freeze it explicitly — without this, a fresh --seed fails.
+        $ccs = College::where('code', 'CCS')->firstOrFail();
+
         // ── Encoded visit 1 — Juan Santos, Fit, no case category ──────────────
         $v1 = ClinicVisit::create([
             'reference_no' => 'HP-2026-9001',
             'student_id' => $juan->id,
+            'college_id' => $ccs->id,
             'login_method' => 'qr',
             'status' => 'encoded',
             'privacy_consent_at' => Carbon::parse('2026-01-10 08:55:00'),
@@ -99,6 +134,7 @@ class DemoClinicVisitSeeder extends Seeder
         $v2 = ClinicVisit::create([
             'reference_no' => 'HP-2026-9002',
             'student_id' => $juan->id,
+            'college_id' => $ccs->id,
             'login_method' => 'qr',
             'status' => 'encoded',
             'privacy_consent_at' => Carbon::parse('2026-03-05 09:10:00'),
@@ -149,6 +185,7 @@ class DemoClinicVisitSeeder extends Seeder
         $v3 = ClinicVisit::create([
             'reference_no' => 'HP-2026-9003',
             'student_id' => $maria->id,
+            'college_id' => $ccs->id,
             'login_method' => 'qr',
             'status' => 'encoded',
             'privacy_consent_at' => Carbon::parse('2026-02-03 10:50:00'),
@@ -194,6 +231,7 @@ class DemoClinicVisitSeeder extends Seeder
         $v4 = ClinicVisit::create([
             'reference_no' => 'HP-2026-9004',
             'student_id' => $juan->id,
+            'college_id' => $ccs->id,
             'login_method' => 'qr',
             'status' => 'captured',
             'privacy_consent_at' => Carbon::parse('2026-06-15 08:40:00'),
@@ -231,6 +269,7 @@ class DemoClinicVisitSeeder extends Seeder
         $v5 = ClinicVisit::create([
             'reference_no' => 'HP-2026-9005',
             'student_id' => $maria->id,
+            'college_id' => $ccs->id,
             'login_method' => 'qr',
             'status' => 'captured',
             'privacy_consent_at' => Carbon::parse('2026-05-10 08:55:00'),
@@ -268,6 +307,7 @@ class DemoClinicVisitSeeder extends Seeder
         $v6 = ClinicVisit::create([
             'reference_no' => 'HP-2026-9006',
             'student_id' => $maria->id,
+            'college_id' => $ccs->id,
             'login_method' => 'qr',
             'status' => 'captured',
             'privacy_consent_at' => Carbon::parse('2026-06-20 08:25:00'),
@@ -302,5 +342,153 @@ class DemoClinicVisitSeeder extends Seeder
         ]);
 
         $this->command->info('DemoClinicVisitSeeder: 6 demo visits created (HP-2026-9001 – HP-2026-9006).');
+    }
+
+    /**
+     * Analytics spread (HP-2026-9101…): encoded visits + case categories
+     * across all 12 colleges so FR-ANL-02/03/04/08 charts have real shape.
+     */
+    private function seedAnalyticsSpread(): void
+    {
+        // Own idempotence guard so this band can still be added to dev DBs
+        // that were seeded before it existed.
+        if (ClinicVisit::where('reference_no', 'like', 'HP-2026-91%')->exists()) {
+            $this->command->info('DemoClinicVisitSeeder: analytics spread already exists, skipping.');
+
+            return;
+        }
+
+        $nurse = User::where('email', 'nurse@healthpass.test')->firstOrFail();
+        $colleges = College::all()->keyBy('code');
+
+        $seq = 0;
+        $collegeIndex = 0;
+
+        // All-or-nothing: a mid-loop failure must not leave a partial band
+        // behind, or the guard above would skip the re-run forever.
+        DB::transaction(function () use ($colleges, $nurse, &$seq, &$collegeIndex): void {
+            foreach (self::ANALYTICS_VOLUME as $code => $visitCount) {
+                $college = $colleges[$code];
+
+                // The college's students take turns, so both sexes end up with
+                // encoded visits in every unit (feeds the By-Sex donut, FR-ANL-04).
+                $students = User::where('role', 'student')
+                    ->whereHas('studentProfile', fn ($q) => $q->where('college_id', $college->id))
+                    ->orderBy('id')
+                    ->get();
+
+                for ($i = 0; $i < $visitCount; $i++) {
+                    $this->createEncodedAnalyticsVisit(
+                        seq: $seq++,
+                        collegeSeq: $i,
+                        collegeIndex: $collegeIndex,
+                        student: $students[$i % $students->count()],
+                        college: $college,
+                        nurse: $nurse,
+                    );
+                }
+
+                $collegeIndex++;
+            }
+        });
+
+        $last = 9101 + $seq - 1;
+        $this->command->info("DemoClinicVisitSeeder: {$seq} encoded analytics visits created (HP-2026-9101 – HP-2026-{$last}).");
+    }
+
+    /**
+     * One encoded visit with unflagged vitals and 0–2 case categories.
+     * Everything derives from the counters — deterministic, no randomness.
+     */
+    private function createEncodedAnalyticsVisit(
+        int $seq,
+        int $collegeSeq,
+        int $collegeIndex,
+        User $student,
+        College $college,
+        User $nurse,
+    ): void {
+        // Visits spread over AY 2025–2026 (Sep 2025 → May 2026).
+        $checkedIn = Carbon::parse('2025-09-01 09:00:00')
+            ->addDays($seq * 3)
+            ->addMinutes(($seq % 8) * 7);
+
+        $visit = ClinicVisit::create([
+            'reference_no' => sprintf('HP-2026-%d', 9101 + $seq),
+            'student_id' => $student->id,
+            'college_id' => $college->id, // capture-time snapshot (FR-STU-09, D-17)
+            'login_method' => 'qr',
+            'status' => 'encoded',
+            'privacy_consent_at' => $checkedIn->copy()->subMinutes(5),
+            'checked_in_at' => $checkedIn,
+        ]);
+
+        $this->createNormalVitalsAndScreening($visit, $seq);
+
+        $record = ClearanceRecord::create([
+            'clinic_visit_id' => $visit->id,
+            'encoded_by' => $nurse->id,
+            'result' => $seq % 6 === 5 ? 'Unfit' : 'Fit',
+            'physician_name' => 'REYNALDO S. ALIPIO, MD',
+            'physician_license_no' => '60252',
+            'encoded_at' => $checkedIn->copy()->addHours(2),
+        ]);
+
+        // Case categories (D-23): every 9th visit per college is screened-only
+        // (no case — the donut intentionally counts more people than cases,
+        // FR-ANL AC). The college index offsets the 8-system cycle so each
+        // college gets a different mix; every 5th visit is multi-category.
+        if ($collegeSeq % 9 !== 8) {
+            $systems = ClearanceRecord::CASE_CATEGORIES;
+            $record->caseCategories()->create([
+                'case_category' => $systems[($collegeIndex + $collegeSeq) % count($systems)],
+            ]);
+
+            if ($collegeSeq % 5 === 4) {
+                $record->caseCategories()->create([
+                    'case_category' => $systems[($collegeIndex + $collegeSeq + 3) % count($systems)],
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Plausible in-range vitals (nothing flagged — Flagged Anomalies is
+     * already demoed by HP-2026-9002/9005) and an all-clear questionnaire.
+     */
+    private function createNormalVitalsAndScreening(ClinicVisit $visit, int $seq): void
+    {
+        $heightCm = 158 + ($seq % 18);
+        $bmi = 19.0 + ($seq % 6);                 // 19–24 → never BMI-flagged
+        $weightKg = round($bmi * ($heightCm / 100) ** 2, 1);
+
+        VitalSigns::create([
+            'clinic_visit_id' => $visit->id,
+            'height_cm' => $heightCm,
+            'weight_kg' => $weightKg,
+            'bmi' => $bmi,
+            'temperature_c' => 36.2 + ($seq % 6) / 10, // ≤ 36.7 → no fever flag
+            'heart_rate_bpm' => 66 + ($seq % 24),
+            'bp_systolic' => 105 + ($seq % 20),        // ≤ 124/79 → no BP flag
+            'bp_diastolic' => 65 + ($seq % 15),
+            'entry_method' => $seq % 2 === 0 ? 'manual' : 'sensor',
+            'is_bmi_flagged' => false,
+            'is_temp_flagged' => false,
+            'is_bp_flagged' => false,
+        ]);
+
+        ScreeningResponse::create([
+            'clinic_visit_id' => $visit->id,
+            'vision' => false,
+            'hearing' => false,
+            'nose' => false,
+            'skin' => false,
+            'respiratory' => false,
+            'heart' => false,
+            'digestive' => false,
+            'bones' => false,
+            'nervous' => false,
+            'is_pregnant' => false,
+        ]);
     }
 }

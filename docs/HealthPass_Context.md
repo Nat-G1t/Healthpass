@@ -575,7 +575,8 @@ requested_by          bigint FK → users.id  -- the college_admin
 reason                enum('graduation','ojt','enrollment','scholarship','sports','fieldtrip','others')
 reason_detail         text NULL             -- used when reason = 'others'
 service_type          enum('medical','dental')
-scheduled_date        date NULL             -- Director-selected appointment date, stamped at approval (D-5)
+requested_date        date NULL             -- admin-proposed clinic date, set at submission (D-29); NULL only on pre-D-29 batches
+scheduled_date        date NULL             -- FINAL appointment date, Director-confirmed at approval (D-5, amended by D-29)
 status                enum('pending','approved','rejected') DEFAULT 'pending'
 reviewed_by           bigint NULL FK → users.id   -- director who acted
 reviewed_at           timestamp NULL
@@ -773,7 +774,7 @@ clearance_records ──< clearance_case_categories   (0..n categories per case,
 1. **Week-1 hardware spike**: validate Web Serial + BP monitor serial output before buying hardware.
 2. **Paper/scope mismatch**: the capstone paper still frames the system as AI-powered. The documentation team must revise the title and chapter scope to match the no-AI, scheduling + digital clearance system. This is a parallel workstream with its own deadline.
 3. **Decided (PRD D-4)** — clinic day capacity is a config value in `config/healthpass.php`; only the initial number remains to be set with clinic staff input.
-4. **Decided (PRD D-5)** — the Director picks the appointment date at batch approval (default today), stored in `batch_requests.scheduled_date`.
+4. **Decided (PRD D-5, amended by D-29)** — the College Admin proposes the clinic date at batch submission (`batch_requests.requested_date`); the Director confirms or adjusts it at approval, stamping the final date into `batch_requests.scheduled_date`.
 ---
 
 *End of HealthPass context document.*
