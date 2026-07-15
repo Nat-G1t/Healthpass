@@ -70,6 +70,21 @@ class ClinicVisit extends Model
     }
 
     /**
+     * FR-ANL-02/03/08 + FR-ANL-06 — the shared row set behind every CASE
+     * statistic: encoded visits joined to their clearance record and its
+     * case-category rows, i.e. one row per record × category (D-23).
+     * The college chart, the matrix, the by-system chart, and the CSV
+     * exports all GROUP BY over this same base — one source of truth,
+     * so a download can never disagree with the screen it sits on.
+     */
+    public function scopeEncodedCaseRows(Builder $query): Builder
+    {
+        return $query->encoded() // FR-ANL-07
+            ->join('clearance_records', 'clearance_records.clinic_visit_id', '=', 'clinic_visits.id')
+            ->join('clearance_case_categories', 'clearance_case_categories.clearance_record_id', '=', 'clearance_records.id');
+    }
+
+    /**
      * FR-ANL-01/05 — visits whose vitals tripped ANY flag threshold.
      *
      * whereHas() filters by a related table: it compiles to an EXISTS

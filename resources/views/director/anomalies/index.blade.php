@@ -45,9 +45,16 @@
                     Includes visits still awaiting the nurse (flags surface from capture).
                 </p>
             </div>
-            <x-hp.badge :variant="$visits->isNotEmpty() ? 'flagged' : 'neutral'">
-                {{ $visits->count() }} flagged
-            </x-hp.badge>
+            <div class="flex items-center gap-3">
+                {{-- CSV export (FR-ANL-06): same flagged rows, one line per tripped flag --}}
+                <a href="{{ route('director.anomalies.export') }}"
+                   class="inline-flex items-center rounded-full border-[1.5px] border-hp-slate/30 px-4 py-1.5 text-xs font-semibold text-hp-slate transition-colors duration-150 hover:bg-hp-slate/8">
+                    Export CSV
+                </a>
+                <x-hp.badge :variant="$visits->isNotEmpty() ? 'flagged' : 'neutral'">
+                    {{ $visits->count() }} flagged
+                </x-hp.badge>
+            </div>
         </div>
 
         @if ($visits->isEmpty())

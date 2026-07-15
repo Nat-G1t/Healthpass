@@ -8,7 +8,11 @@ use App\Http\Controllers\Controller;
 use App\Models\ClearanceRecord;
 use App\Models\ClinicVisit;
 use App\Models\College;
+use App\Support\CaseMonths;
+use App\Support\MedicalCaseSummary;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
@@ -40,6 +44,12 @@ use Illuminate\View\View;
  *    once in EACH of its systems;
  *  - grouped by clinic_visits.college_id, the capture-time college snapshot
  *    (FR-STU-09, D-17) — a later transfer never re-attributes a past case.
+ *
+ * Month scope: the whole page is scoped to ONE month (the ?month=YYYY-MM
+ * picker, defaulting to the newest month with data — see CaseMonths). A
+ * case belongs to the month of its VISIT (checked_in_at), and every view
+ * here — chart, matrix, by-system, donut, footnote — filters to it, so the
+ * on-screen numbers and the printed monthly report always match.
  */
 class AnalyticsController extends Controller
 {
@@ -71,36 +81,21 @@ class AnalyticsController extends Controller
     /** Donut slice colors (prototype): Male = brand orange, Female = peach. */
     private const SEX_COLORS = ['#FF8C2A', '#FFCAA0'];
 
-    public function __invoke(): View
+    public function __invoke(Request $request): View
     {
-        // One row per (college, category): plain portable JOIN + GROUP BY —
-        // exactly what the D-23 child table was designed for. Starting from
-        // the shared encoded() scope keeps this query and the by-sex donut
-        // (FR-ANL-04) on the same "encoded only" base; toBase() drops the
-        // Eloquent model layer so we get plain rows, not ClinicVisit objects.
-        $rows = ClinicVisit::encoded() // FR-ANL-07
-            ->join('clearance_records', 'clearance_records.clinic_visit_id', '=', 'clinic_visits.id')
-            ->join('clearance_case_categories', 'clearance_case_categories.clearance_record_id', '=', 'clearance_records.id')
-            ->groupBy('clinic_visits.college_id', 'clearance_case_categories.case_category')
-            ->select(
-                'clinic_visits.college_id',
-                'clearance_case_categories.case_category',
-                DB::raw('count(*) as cases'),
-            )
-            ->toBase()
-            ->get();
+        // The month the whole page is scoped to (picker value, or the newest
+        // month with data). Everything below filters to it.
+        $month = CaseMonths::resolve($request->query('month'));
 
-        // counts[college_id][category], totals[college_id] (matrix columns),
-        // and categoryTotals[category] (matrix TOTAL column) — all three
-        // shapes fall out of the same result set in one pass.
-        $counts = [];
-        $totals = [];
-        $categoryTotals = [];
-        foreach ($rows as $row) {
-            $counts[$row->college_id][$row->case_category] = (int) $row->cases;
-            $totals[$row->college_id] = ($totals[$row->college_id] ?? 0) + (int) $row->cases;
-            $categoryTotals[$row->case_category] = ($categoryTotals[$row->case_category] ?? 0) + (int) $row->cases;
-        }
+        // The college × category counts (FR-ANL-03). Built by the shared
+        // MedicalCaseSummary — month-scoped — so the matrix here and the
+        // printable monthly report (CaseSummaryPrintController) read from ONE
+        // aggregation and can never disagree.
+        $summary = MedicalCaseSummary::build($month);
+        $counts = $summary->counts;                 // counts[college_id][category]
+        $totals = $summary->totals;                 // matrix column totals
+        $categoryTotals = $summary->categoryTotals; // matrix TOTAL column
+        $totalCases = $summary->grandTotal;
 
         $allColleges = College::orderBy('code')->get();
 
@@ -119,10 +114,12 @@ class AnalyticsController extends Controller
 
         // Footnote count: encoded records that carry no category at all —
         // excluded from the matrix (FR-ANL-03), but the Director should
-        // still see they exist. whereDoesntHave() is whereHas()'s inverse:
-        // a NOT EXISTS subquery on clearance_case_categories.
+        // still see they exist. Month-scoped like everything else on the
+        // page. whereDoesntHave() is whereHas()'s inverse: a NOT EXISTS
+        // subquery on clearance_case_categories.
         $uncategorizedCount = ClearanceRecord::query()
-            ->whereHas('clinicVisit', fn (Builder $visit) => $visit->encoded())
+            ->whereHas('clinicVisit', fn (Builder $visit) => $visit->encoded()
+                ->whereBetween('checked_in_at', $this->monthBounds($month)))
             ->whereDoesntHave('caseCategories')
             ->count();
 
@@ -142,7 +139,12 @@ class AnalyticsController extends Controller
                 'labels' => $colleges->pluck('code')->all(),
                 'datasets' => $datasets,
             ],
-            'totalCases' => (int) $rows->sum('cases'),
+            'totalCases' => $totalCases,
+            // Month picker: the months that have data (newest first) and the
+            // one currently shown. Changing it reloads the page for that
+            // month; the same value drives the Preview & Print report.
+            'availableMonths' => CaseMonths::available(),
+            'selectedMonth' => $month->format('Y-m'),
             // For the table view (the chart's accessible/contrast fallback).
             'colleges' => $colleges,
             'categories' => ClearanceRecord::CASE_CATEGORIES,
@@ -154,9 +156,20 @@ class AnalyticsController extends Controller
             'matrixColleges' => $matrixColleges,
             'categoryTotals' => $categoryTotals,
             'uncategorizedCount' => $uncategorizedCount,
-            ...$this->casesBySystem(),
-            ...$this->bySexDonut(),
+            ...$this->casesBySystem($month),
+            ...$this->bySexDonut($month),
         ]);
+    }
+
+    /**
+     * The [start, end] bounds of $month's calendar days — a parameterized
+     * BETWEEN on clinic_visits.checked_in_at, portable to the SQLite test DB.
+     *
+     * @return array{0: CarbonInterface, 1: CarbonInterface}
+     */
+    private function monthBounds(CarbonInterface $month): array
+    {
+        return [$month->copy()->startOfMonth(), $month->copy()->endOfMonth()];
     }
 
     /**
@@ -165,15 +178,15 @@ class AnalyticsController extends Controller
      * plus the student's profile sex so each system's bar can stack a
      * Male and a Female segment. A student without a profile row can't
      * exist through registration, so the extra join drops nothing real.
+     * Month-scoped to $month like the rest of the page.
      *
      * @return array{systemChart: array}
      */
-    private function casesBySystem(): array
+    private function casesBySystem(CarbonInterface $month): array
     {
-        $rows = ClinicVisit::encoded() // FR-ANL-07
-            ->join('clearance_records', 'clearance_records.clinic_visit_id', '=', 'clinic_visits.id')
-            ->join('clearance_case_categories', 'clearance_case_categories.clearance_record_id', '=', 'clearance_records.id')
+        $rows = ClinicVisit::encodedCaseRows() // FR-ANL-07
             ->join('student_profiles', 'student_profiles.user_id', '=', 'clinic_visits.student_id')
+            ->whereBetween('clinic_visits.checked_in_at', $this->monthBounds($month))
             ->groupBy('clearance_case_categories.case_category', 'student_profiles.sex')
             ->select(
                 'clearance_case_categories.case_category',
@@ -248,13 +261,15 @@ class AnalyticsController extends Controller
      * Per the PRD §4.9 AC the two totals therefore diverge by design as
      * soon as a record carries several categories (counts once per system
      * in the matrix) or none (counts zero there, one person here).
+     * Month-scoped to $month like the rest of the page.
      *
      * @return array{donut: array, bySex: array, totalScreened: int}
      */
-    private function bySexDonut(): array
+    private function bySexDonut(CarbonInterface $month): array
     {
         $bySex = ClinicVisit::encoded() // FR-ANL-07
             ->join('student_profiles', 'student_profiles.user_id', '=', 'clinic_visits.student_id')
+            ->whereBetween('clinic_visits.checked_in_at', $this->monthBounds($month))
             ->groupBy('student_profiles.sex')
             ->select('student_profiles.sex', DB::raw('count(*) as visits'))
             ->toBase()

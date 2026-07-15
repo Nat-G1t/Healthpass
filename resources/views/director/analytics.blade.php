@@ -12,11 +12,44 @@
                     Students only &mdash; Faculty and NASA excluded. Encoded results only.
                 </p>
             </div>
-            {{-- Total-cases headline (FR-ANL-02) --}}
-            <p class="text-3xl font-bold leading-none text-hp-orange">
-                {{ $totalCases }}
-                <span class="ml-1 text-sm font-medium text-hp-slate/50">total cases</span>
-            </p>
+            <div class="flex flex-col items-end gap-3">
+                {{-- Total-cases headline (FR-ANL-02), for the selected month --}}
+                <p class="text-3xl font-bold leading-none text-hp-orange">
+                    {{ $totalCases }}
+                    <span class="ml-1 text-sm font-medium text-hp-slate/50">total cases</span>
+                </p>
+                @if (!empty($availableMonths))
+                    <div class="flex flex-wrap items-center justify-end gap-2">
+                        {{-- Month filter: changing the month reloads the whole
+                             page (charts, matrix, donut) scoped to it. Auto-
+                             submits on change; the overlay below shows while the
+                             new page loads. --}}
+                        <form method="GET" action="{{ route('director.analytics') }}" id="analytics-month-form">
+                            <label for="analytics-month" class="sr-only">Analytics month</label>
+                            <select id="analytics-month" name="month" data-month-select
+                                    class="rounded-lg border-hp-slate/20 py-1.5 pl-3 pr-8 text-xs font-medium text-hp-slate focus:border-hp-orange focus:ring-hp-orange">
+                                @foreach ($availableMonths as $month)
+                                    <option value="{{ $month['value'] }}" @selected($month['value'] === $selectedMonth)>
+                                        {{ $month['label'] }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </form>
+                        {{-- Preview & Print the SAME month's official report. It
+                             posts that month into the hidden iframe below; the
+                             script prints it once it loads — same mechanism as
+                             the nurse encode print. --}}
+                        <form action="{{ route('director.analytics.summary-print') }}" method="GET"
+                              target="hp-summary-frame">
+                            <input type="hidden" name="month" value="{{ $selectedMonth }}">
+                            <button type="submit" data-print-trigger
+                                    class="inline-flex items-center rounded-full border-[1.5px] border-hp-slate/30 px-4 py-1.5 text-xs font-semibold text-hp-slate transition-colors duration-150 hover:bg-hp-slate/8">
+                                Preview &amp; Print
+                            </button>
+                        </form>
+                    </div>
+                @endif
+            </div>
         </div>
 
         @if ($totalCases === 0)
@@ -174,6 +207,62 @@
             @endif
         </x-hp.card>
     </div>
+
+    {{-- Reload overlay: shown the moment the Director changes month, and
+         torn down when the fresh page paints — so switching months has a
+         visible loading beat before the charts re-animate in. --}}
+    <div id="analytics-loading"
+         class="fixed inset-0 z-50 hidden items-center justify-center bg-white/70 backdrop-blur-sm">
+        <svg class="h-10 w-10 animate-spin text-hp-orange" viewBox="0 0 24 24" fill="none">
+            <circle class="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-90" fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+        </svg>
+    </div>
+
+    {{-- Hidden print frame: the Preview & Print form posts the monthly
+         Summary of Medical Cases in here. 0×0 rather than display:none —
+         Chrome won't reliably print an unrendered frame. --}}
+    <iframe name="hp-summary-frame" id="hp-summary-frame" title="Summary of Medical Cases print preview"
+            style="position: fixed; right: 0; bottom: 0; width: 0; height: 0; border: 0;"></iframe>
+
+    <script>
+        (function () {
+            // Month switch: show the reload overlay, then submit the filter
+            // form so the page reloads scoped to the chosen month.
+            const monthSelect = document.querySelector('[data-month-select]');
+            const overlay = document.getElementById('analytics-loading');
+            if (monthSelect && overlay) {
+                monthSelect.addEventListener('change', () => {
+                    overlay.classList.remove('hidden');
+                    overlay.classList.add('flex');
+                    monthSelect.form.submit();
+                });
+            }
+
+            // When the summary form finishes loading in the hidden iframe,
+            // print the iframe's window (NOT this page). `armed` skips the
+            // frame's initial about:blank load; the data-hp-print-doc marker
+            // makes sure we only ever print the summary, never a stray nav.
+            const frame = document.getElementById('hp-summary-frame');
+            let armed = false;
+
+            document.querySelectorAll('[data-print-trigger]').forEach((btn) => {
+                btn.addEventListener('click', () => { armed = true; });
+            });
+
+            frame.addEventListener('load', () => {
+                if (!armed) return;
+                armed = false;
+
+                const doc = frame.contentDocument;
+                if (!doc || !doc.body || !doc.body.hasAttribute('data-hp-print-doc')) return;
+
+                frame.contentWindow.focus();
+                frame.contentWindow.print();
+            });
+        })();
+    </script>
 
     @vite('resources/js/director/analytics.js')
 

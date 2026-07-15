@@ -57,7 +57,7 @@ class AnalyticsPageTest extends TestCase
      * Persist one visit + clearance with the given case categories, frozen
      * to $college (the capture-time snapshot column, not the profile).
      */
-    private function makeCase(College $college, array $categories, string $visitStatus = 'encoded', ?User $student = null): ClearanceRecord
+    private function makeCase(College $college, array $categories, string $visitStatus = 'encoded', ?User $student = null, ?string $checkedInAt = null): ClearanceRecord
     {
         static $seq = 7000;
 
@@ -67,7 +67,7 @@ class AnalyticsPageTest extends TestCase
             'college_id' => $college->id,
             'login_method' => 'qr',
             'status' => $visitStatus,
-            'checked_in_at' => now(),
+            'checked_in_at' => $checkedInAt ? now()->parse($checkedInAt) : now(),
         ]);
 
         $record = ClearanceRecord::create([
@@ -338,6 +338,57 @@ class AnalyticsPageTest extends TestCase
 
         // Same counting rules as the matrix: bar totals sum to its total.
         $this->assertSame($response->viewData('totalCases'), array_sum($chart['totals']));
+    }
+
+    public function test_month_picker_scopes_the_whole_page_to_the_selected_month(): void
+    {
+        // Two Respiratory cases in December, one in November — different
+        // students so the by-sex donut is scoped too.
+        $dec = $this->makeStudentOfSex('M');
+        $nov = $this->makeStudentOfSex('F');
+        $this->makeCase($this->ccs, ['Respiratory System'], student: $dec, checkedInAt: '2026-12-03');
+        $this->makeCase($this->ccs, ['Respiratory System'], student: $dec, checkedInAt: '2026-12-20');
+        $this->makeCase($this->cea, ['Respiratory System'], student: $nov, checkedInAt: '2026-11-15');
+
+        // December: chart, matrix, and donut all show only the two Dec cases.
+        $december = $this->actingAs($this->director)
+            ->get('/director/analytics?month=2026-12')
+            ->assertOk();
+        $this->assertSame(2, $december->viewData('totalCases'));
+        $this->assertSame(2, $december->viewData('counts')[$this->ccs->id]['Respiratory System']);
+        $this->assertSame(2, $december->viewData('totalScreened'));
+        $this->assertSame('2026-12', $december->viewData('selectedMonth'));
+
+        // November: only the one CEA case.
+        $november = $this->actingAs($this->director)
+            ->get('/director/analytics?month=2026-11')
+            ->assertOk();
+        $this->assertSame(1, $november->viewData('totalCases'));
+        $this->assertSame(1, $november->viewData('counts')[$this->cea->id]['Respiratory System']);
+        $this->assertSame(1, $november->viewData('totalScreened'));
+    }
+
+    public function test_no_month_param_defaults_to_the_newest_month_with_data(): void
+    {
+        $this->makeCase($this->ccs, ['Respiratory System'], checkedInAt: '2026-10-05');
+        $this->makeCase($this->ccs, ['Respiratory System'], checkedInAt: '2026-12-05');
+
+        $response = $this->actingAs($this->director)
+            ->get('/director/analytics')
+            ->assertOk();
+
+        // Newest month with data (December) is the default view.
+        $this->assertSame('2026-12', $response->viewData('selectedMonth'));
+        $this->assertSame(1, $response->viewData('totalCases'));
+
+        // The picker lists both months, newest first.
+        $this->assertSame(
+            [
+                ['value' => '2026-12', 'label' => 'December 2026'],
+                ['value' => '2026-10', 'label' => 'October 2026'],
+            ],
+            $response->viewData('availableMonths'),
+        );
     }
 
     public function test_college_snapshot_wins_over_current_profile_college(): void
