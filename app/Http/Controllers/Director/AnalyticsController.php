@@ -13,7 +13,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 /**
- * Director Analytics — two views over ONE grouped college × category query:
+ * Director Analytics — two views over ONE grouped college × category query,
+ * plus the By-Sex donut:
  *
  *  - Medical Cases by College (FR-ANL-02): a horizontal stacked bar, one row
  *    per college (all 12, zero-case rows included), each bar segmented by
@@ -24,8 +25,15 @@ use Illuminate\View\View;
  *    one dataset, two formats, so the page never shows the same numbers
  *    twice. Encoded records with no category contribute nothing to either
  *    view; their count appears in a card-level footnote instead.
+ *  - Cases by Medical System (FR-ANL-08): a horizontal bar per system,
+ *    overall total across all units, sorted descending — each bar split
+ *    into Male/Female segments (full-strength series color vs a lighter
+ *    tint of it; the per-system total is drawn at the bar's end).
+ *  - By-Sex donut (FR-ANL-04): encoded visits counted once per visit by the
+ *    student's profile sex — see bySexDonut() for why its total is allowed
+ *    to differ from the case totals above.
  *
- * Counting rules (both views):
+ * Counting rules (the case views):
  *  - encoded records only (FR-ANL-07) — a clearance_records row only exists
  *    once the nurse encodes, and the status guard keeps that explicit;
  *  - one count per record × category (D-23) — a multi-category case counts
@@ -59,6 +67,9 @@ class AnalyticsController extends Controller
         'COE', 'CEA', 'CBS', 'CAS', 'CSSP', 'CCS',
         'CHTM', 'CIT', 'LAW', 'GS', 'SHS', 'LHS',
     ];
+
+    /** Donut slice colors (prototype): Male = brand orange, Female = peach. */
+    private const SEX_COLORS = ['#FF8C2A', '#FFCAA0'];
 
     public function __invoke(): View
     {
@@ -143,6 +154,136 @@ class AnalyticsController extends Controller
             'matrixColleges' => $matrixColleges,
             'categoryTotals' => $categoryTotals,
             'uncategorizedCount' => $uncategorizedCount,
+            ...$this->casesBySystem(),
+            ...$this->bySexDonut(),
         ]);
+    }
+
+    /**
+     * Cases by Medical System (FR-ANL-08): same joins and counting rules
+     * as the matrix query (encoded only, one count per record × category),
+     * plus the student's profile sex so each system's bar can stack a
+     * Male and a Female segment. A student without a profile row can't
+     * exist through registration, so the extra join drops nothing real.
+     *
+     * @return array{systemChart: array}
+     */
+    private function casesBySystem(): array
+    {
+        $rows = ClinicVisit::encoded() // FR-ANL-07
+            ->join('clearance_records', 'clearance_records.clinic_visit_id', '=', 'clinic_visits.id')
+            ->join('clearance_case_categories', 'clearance_case_categories.clearance_record_id', '=', 'clearance_records.id')
+            ->join('student_profiles', 'student_profiles.user_id', '=', 'clinic_visits.student_id')
+            ->groupBy('clearance_case_categories.case_category', 'student_profiles.sex')
+            ->select(
+                'clearance_case_categories.case_category',
+                'student_profiles.sex',
+                DB::raw('count(*) as cases'),
+            )
+            ->toBase()
+            ->get();
+
+        $bySexCounts = [];
+        foreach ($rows as $row) {
+            $bySexCounts[$row->case_category][$row->sex] = (int) $row->cases;
+        }
+
+        // All 8 systems, zero-case rows included, sorted by total volume
+        // descending — the stable sort keeps CASE_CATEGORIES order as the
+        // tie-break, so equal totals render deterministically.
+        $categories = collect(ClearanceRecord::CASE_CATEGORIES)
+            ->sortByDesc(fn (string $category) => array_sum($bySexCounts[$category] ?? []))
+            ->values();
+
+        // Same color per category as the Cases-by-College chart: index in
+        // CASE_CATEGORIES = index in SERIES_COLORS. Male keeps the
+        // full-strength color; Female gets a lighter tint of it.
+        $colorFor = array_combine(ClearanceRecord::CASE_CATEGORIES, self::SERIES_COLORS);
+
+        return [
+            'systemChart' => [
+                'labels' => $categories->all(),
+                // Per-system totals, drawn at each bar's end by the JS —
+                // with two segments neither shows the total on its own.
+                'totals' => $categories
+                    ->map(fn (string $category) => array_sum($bySexCounts[$category] ?? []))
+                    ->all(),
+                'datasets' => [
+                    [
+                        'label' => 'Male',
+                        'data' => $categories->map(fn (string $c) => $bySexCounts[$c]['M'] ?? 0)->all(),
+                        'backgroundColor' => $categories->map(fn (string $c) => $colorFor[$c])->all(),
+                    ],
+                    [
+                        'label' => 'Female',
+                        'data' => $categories->map(fn (string $c) => $bySexCounts[$c]['F'] ?? 0)->all(),
+                        'backgroundColor' => $categories->map(fn (string $c) => $this->tint($colorFor[$c]))->all(),
+                    ],
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * 50% white tint of a #RRGGBB color — the Female shade of each series
+     * color. Derived, not hand-picked, so the pairing can never drift if
+     * SERIES_COLORS changes.
+     */
+    private function tint(string $hex): string
+    {
+        [$red, $green, $blue] = sscanf($hex, '#%02x%02x%02x');
+
+        return sprintf(
+            '#%02X%02X%02X',
+            intdiv($red + 255, 2),
+            intdiv($green + 255, 2),
+            intdiv($blue + 255, 2),
+        );
+    }
+
+    /**
+     * By-Sex donut (FR-ANL-04): encoded visits grouped by the student's
+     * profile sex — the SAME encoded() base scope as the matrix query, but
+     * counting once per VISIT (people screened), not per record × category.
+     * Per the PRD §4.9 AC the two totals therefore diverge by design as
+     * soon as a record carries several categories (counts once per system
+     * in the matrix) or none (counts zero there, one person here).
+     *
+     * @return array{donut: array, bySex: array, totalScreened: int}
+     */
+    private function bySexDonut(): array
+    {
+        $bySex = ClinicVisit::encoded() // FR-ANL-07
+            ->join('student_profiles', 'student_profiles.user_id', '=', 'clinic_visits.student_id')
+            ->groupBy('student_profiles.sex')
+            ->select('student_profiles.sex', DB::raw('count(*) as visits'))
+            ->toBase()
+            ->pluck('visits', 'sex');
+
+        $maleCount = (int) ($bySex['M'] ?? 0);
+        $femaleCount = (int) ($bySex['F'] ?? 0);
+        $totalScreened = $maleCount + $femaleCount;
+
+        // Whole-number legend percentages that always sum to exactly 100:
+        // round one slice, the other takes the remainder.
+        $malePercent = $totalScreened > 0 ? (int) round($maleCount / $totalScreened * 100) : 0;
+        $femalePercent = $totalScreened > 0 ? 100 - $malePercent : 0;
+
+        return [
+            // Chart.js payload, shipped on a data attribute like 'chart'.
+            'donut' => [
+                'labels' => ['Male', 'Female'],
+                'datasets' => [[
+                    'data' => [$maleCount, $femaleCount],
+                    'backgroundColor' => self::SEX_COLORS,
+                ]],
+            ],
+            // Server-rendered legend rows (count + %, FR-ANL-04).
+            'bySex' => [
+                ['label' => 'Male', 'count' => $maleCount, 'percent' => $malePercent, 'color' => self::SEX_COLORS[0]],
+                ['label' => 'Female', 'count' => $femaleCount, 'percent' => $femalePercent, 'color' => self::SEX_COLORS[1]],
+            ],
+            'totalScreened' => $totalScreened,
+        ];
     }
 }

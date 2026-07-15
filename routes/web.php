@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\BatchRequestController as AdminBatchRequestContro
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Auth\PasswordChangeController;
 use App\Http\Controllers\Director\AnalyticsController as DirectorAnalyticsController;
+use App\Http\Controllers\Director\AnomaliesController as DirectorAnomaliesController;
 use App\Http\Controllers\Director\BatchApprovalController as DirectorBatchApprovalController;
 use App\Http\Controllers\Director\DashboardController as DirectorDashboardController;
 use App\Http\Controllers\Kiosk\KioskController;
@@ -157,9 +158,13 @@ Route::middleware(['auth', 'role:director'])
         Route::get('/dashboard', DirectorDashboardController::class)->name('dashboard');
         // Analytics (FR-ANL-02): Medical Cases by College stacked bar.
         Route::get('/analytics', DirectorAnalyticsController::class)->name('analytics');
-        // Flagged Anomalies (FR-ANL-05) — stub page for now; it exists so the
-        // dashboard's "View all →" has a real destination.
-        Route::get('/anomalies', fn () => view('director.anomalies'))->name('anomalies');
+        // Flagged Anomalies (FR-ANL-05): stat cards + the flagged-visits
+        // table. Flags surface from CAPTURE (FR-ANL-07) — un-encoded visits
+        // are included, unlike every case statistic on Analytics.
+        Route::get('/anomalies', [DirectorAnomaliesController::class, 'index'])->name('anomalies');
+        // Read-only record detail behind each table row's "View" link.
+        Route::get('/anomalies/{visit}', [DirectorAnomaliesController::class, 'show'])
+            ->whereNumber('visit')->name('anomalies.show');
         // Batch Approvals (FR-DIRA-01/05/06): ALL colleges' requests — no
         // college scope, the Director reviews everything.
         Route::get('/batches', [DirectorBatchApprovalController::class, 'index'])->name('batches.index');

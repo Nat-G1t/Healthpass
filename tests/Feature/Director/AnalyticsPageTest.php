@@ -57,13 +57,13 @@ class AnalyticsPageTest extends TestCase
      * Persist one visit + clearance with the given case categories, frozen
      * to $college (the capture-time snapshot column, not the profile).
      */
-    private function makeCase(College $college, array $categories, string $visitStatus = 'encoded'): ClearanceRecord
+    private function makeCase(College $college, array $categories, string $visitStatus = 'encoded', ?User $student = null): ClearanceRecord
     {
         static $seq = 7000;
 
         $visit = ClinicVisit::create([
             'reference_no' => 'HP-2026-'.$seq++,
-            'student_id' => $this->student->id,
+            'student_id' => ($student ?? $this->student)->id,
             'college_id' => $college->id,
             'login_method' => 'qr',
             'status' => $visitStatus,
@@ -233,6 +233,111 @@ class AnalyticsPageTest extends TestCase
         $this->actingAs($this->director)
             ->get('/director/analytics')
             ->assertDontSee('encoded without category');
+    }
+
+    /** A student user whose profile has the given sex. */
+    private function makeStudentOfSex(string $sex): User
+    {
+        $student = User::factory()->create(['role' => 'student']);
+        StudentProfile::factory()
+            ->forCollege($this->ccs)
+            ->create(['user_id' => $student->id, 'sex' => $sex]);
+
+        return $student;
+    }
+
+    public function test_by_sex_donut_counts_encoded_visits_by_profile_sex(): void
+    {
+        // FR-ANL-04: 3 male + 1 female encoded visits; a captured visit
+        // never enters the donut (FR-ANL-07), whatever the sex.
+        $male = $this->makeStudentOfSex('M');
+        $female = $this->makeStudentOfSex('F');
+
+        $this->makeCase($this->ccs, ['Respiratory System'], student: $male);
+        $this->makeCase($this->ccs, [], student: $male);
+        $this->makeCase($this->cea, [], student: $male);
+        $this->makeCase($this->ccs, ['Alimentary System'], student: $female);
+        $this->makeCase($this->ccs, ['Respiratory System'], visitStatus: 'captured', student: $female);
+
+        $response = $this->actingAs($this->director)
+            ->get('/director/analytics')
+            ->assertOk()
+            ->assertSee('Screened Students by Sex');
+
+        $bySex = $response->viewData('bySex');
+        $this->assertSame(['Male', 3, 75], [$bySex[0]['label'], $bySex[0]['count'], $bySex[0]['percent']]);
+        $this->assertSame(['Female', 1, 25], [$bySex[1]['label'], $bySex[1]['count'], $bySex[1]['percent']]);
+
+        $this->assertSame(4, $response->viewData('totalScreened'));
+        $this->assertSame([3, 1], $response->viewData('donut')['datasets'][0]['data']);
+    }
+
+    public function test_donut_shares_the_encoded_scope_but_counts_people_not_cases(): void
+    {
+        // PRD §4.9 AC: the donut counts people screened (one per encoded
+        // visit), the matrix counts record × category pairs — same
+        // encoded() base scope, intentionally different totals.
+        $male = $this->makeStudentOfSex('M');
+
+        // One person, two systems (D-23): donut 1, matrix 2.
+        $this->makeCase($this->ccs, ['Cardiovascular System', 'Respiratory System'], student: $male);
+
+        $response = $this->actingAs($this->director)->get('/director/analytics');
+        $this->assertSame(1, $response->viewData('totalScreened'));
+        $this->assertSame(2, $response->viewData('totalCases'));
+
+        // One more person, no category: donut counts them, matrix doesn't.
+        $this->makeCase($this->ccs, [], student: $male);
+
+        $response = $this->actingAs($this->director)->get('/director/analytics');
+        $this->assertSame(2, $response->viewData('totalScreened'));
+        $this->assertSame(ClinicVisit::encoded()->count(), $response->viewData('totalScreened'));
+        $this->assertSame(2, $response->viewData('totalCases'));
+        $this->assertSame(1, $response->viewData('uncategorizedCount'));
+    }
+
+    public function test_cases_by_system_chart_splits_each_bar_by_sex(): void
+    {
+        // FR-ANL-08 with the by-sex split: 2 male + 1 female Respiratory,
+        // plus a female multi-category case adding one Respiratory AND one
+        // Cardiovascular count (D-23). A captured visit counts nothing
+        // (FR-ANL-07).
+        $male = $this->makeStudentOfSex('M');
+        $female = $this->makeStudentOfSex('F');
+
+        $this->makeCase($this->ccs, ['Respiratory System'], student: $male);
+        $this->makeCase($this->cea, ['Respiratory System'], student: $male);
+        $this->makeCase($this->ccs, ['Respiratory System'], student: $female);
+        $this->makeCase($this->ccs, ['Respiratory System', 'Cardiovascular System'], student: $female);
+        $this->makeCase($this->ccs, ['Respiratory System'], visitStatus: 'captured', student: $male);
+
+        $response = $this->actingAs($this->director)
+            ->get('/director/analytics')
+            ->assertOk()
+            ->assertSee('Cases by Medical System');
+
+        $chart = $response->viewData('systemChart');
+
+        // Sorted by total volume descending, all 8 systems present.
+        $this->assertCount(8, $chart['labels']);
+        $this->assertSame(['Respiratory System', 'Cardiovascular System'], array_slice($chart['labels'], 0, 2));
+        $this->assertSame([4, 1, 0], array_slice($chart['totals'], 0, 3));
+
+        // Male segment first, Female second — Respiratory splits 2/2,
+        // Cardiovascular 0/1.
+        [$maleSet, $femaleSet] = $chart['datasets'];
+        $this->assertSame('Male', $maleSet['label']);
+        $this->assertSame('Female', $femaleSet['label']);
+        $this->assertSame([2, 0], array_slice($maleSet['data'], 0, 2));
+        $this->assertSame([2, 1], array_slice($femaleSet['data'], 0, 2));
+
+        // Colors follow the CATEGORY through the sort (Respiratory = the
+        // college chart's navy), Female = its 50% white tint.
+        $this->assertSame('#1E3A8A', $maleSet['backgroundColor'][0]);
+        $this->assertSame('#8E9CC4', $femaleSet['backgroundColor'][0]);
+
+        // Same counting rules as the matrix: bar totals sum to its total.
+        $this->assertSame($response->viewData('totalCases'), array_sum($chart['totals']));
     }
 
     public function test_college_snapshot_wins_over_current_profile_college(): void

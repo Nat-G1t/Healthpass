@@ -97,6 +97,84 @@
         @endif
     </x-hp.card>
 
+    <div class="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-3">
+
+        {{-- ── Cases by Medical System (FR-ANL-08) ──────────────────────
+             Same source and counting rules as the matrix; each system's
+             bar stacks a Male segment (full-strength series color — the
+             same color the college chart uses for that system) and a
+             Female segment (lighter tint of it). --}}
+        <x-hp.card class="xl:col-span-2">
+            <h3 class="text-sm font-semibold text-hp-slate">Cases by Medical System</h3>
+            <p class="mt-1 text-xs text-hp-slate/50">
+                Overall total per system across all units &mdash; sorted by volume.
+                Each bar splits by sex: <span class="font-semibold">stronger shade = Male</span>,
+                lighter = Female.
+            </p>
+
+            @if ($totalCases === 0)
+                <div class="flex flex-col items-center py-14 text-center">
+                    <p class="text-sm font-medium text-hp-slate/60">No encoded cases yet</p>
+                    <p class="mt-1 text-xs text-hp-slate/40">
+                        Cases appear here once the nurse encodes results with a case category.
+                    </p>
+                </div>
+            @else
+                <div class="relative mt-4 h-[420px]" data-cases-by-system data-chart="{{ json_encode($systemChart) }}">
+                    <canvas role="img" aria-label="Stacked bar chart: total cases per medical system, each bar split into male and female counts. Hover a bar for the exact split."></canvas>
+                </div>
+            @endif
+        </x-hp.card>
+
+        {{-- ── By-Sex donut (FR-ANL-04) ──────────────────────────────────
+             Counts PEOPLE SCREENED (one per encoded visit), not cases —
+             its total intentionally differs from the matrix total once
+             records carry several categories or none (PRD §4.9 AC). --}}
+        <x-hp.card>
+            <h3 class="text-sm font-semibold text-hp-slate">Screened Students by Sex</h3>
+            <p class="mt-1 text-xs text-hp-slate/50">
+                Encoded visits, counted once per visit &mdash; includes visits without a case category.
+            </p>
+
+            @if ($totalScreened === 0)
+                <div class="flex flex-col items-center py-10 text-center">
+                    <p class="text-sm font-medium text-hp-slate/60">No encoded visits yet</p>
+                    <p class="mt-1 text-xs text-hp-slate/40">
+                        The donut fills in as the nurse encodes kiosk visits.
+                    </p>
+                </div>
+            @else
+                <div class="mt-6 flex flex-wrap items-center justify-center gap-8">
+                    {{-- 160px donut, total in the center. The overlay ignores
+                         pointer events so slice tooltips still work. --}}
+                    <div class="relative h-40 w-40 shrink-0" data-by-sex data-chart="{{ json_encode($donut) }}">
+                        <canvas role="img" aria-label="Donut chart: encoded visits by sex. The same counts are in the legend beside it."></canvas>
+                        <div class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                            <p class="text-2xl font-bold leading-none text-hp-slate">{{ $totalScreened }}</p>
+                            <p class="mt-1 text-[10px] font-semibold uppercase tracking-widest text-hp-slate/40">total</p>
+                        </div>
+                    </div>
+
+                    {{-- Legend: count + % per slice (FR-ANL-04) --}}
+                    <div class="space-y-3">
+                        @foreach ($bySex as $slice)
+                            <div class="flex items-center gap-2.5">
+                                <span class="h-2.5 w-2.5 shrink-0 rounded-sm"
+                                      style="background-color: {{ $slice['color'] }}"></span>
+                                <p class="text-xs text-hp-slate">
+                                    <span class="font-semibold">{{ $slice['label'] }}</span>
+                                    <span class="ml-1 text-hp-slate/60">
+                                        {{ $slice['count'] }} &middot; {{ $slice['percent'] }}%
+                                    </span>
+                                </p>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
+        </x-hp.card>
+    </div>
+
     @vite('resources/js/director/analytics.js')
 
 </x-layout.sidebar>
