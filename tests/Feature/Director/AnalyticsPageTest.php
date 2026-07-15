@@ -13,13 +13,16 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * Director Analytics — Medical Cases by College (FR-ANL-02):
+ * Director Analytics — Medical Cases by College (FR-ANL-02) and the
+ * Summary of Medical Cases matrix (FR-ANL-03):
  *  - the PRD acceptance dataset (3 Respiratory in CCS, 2 in CEA) produces
- *    exactly those bars, all colleges present, sorted by volume;
+ *    exactly those bars and matrix cells, all colleges present;
  *  - encoded records only (FR-ANL-07);
  *  - one count per record × category (D-23);
  *  - grouped by the capture-time college snapshot, so a transfer never
- *    re-attributes a past case (FR-STU-09, D-17).
+ *    re-attributes a past case (FR-STU-09, D-17);
+ *  - matrix columns in the FR-ANL-03 fixed order; uncategorized encoded
+ *    records excluded from cells but surfaced in a footnote.
  */
 class AnalyticsPageTest extends TestCase
 {
@@ -153,6 +156,83 @@ class AnalyticsPageTest extends TestCase
         $response = $this->actingAs($this->director)->get('/director/analytics');
 
         $this->assertSame(0, $response->viewData('totalCases'));
+    }
+
+    public function test_matrix_shows_prd_acceptance_cells_in_fixed_college_order(): void
+    {
+        // AC: 3 Respiratory System cases in CCS, 2 in CEA.
+        $this->makeCase($this->ccs, ['Respiratory System']);
+        $this->makeCase($this->ccs, ['Respiratory System']);
+        $this->makeCase($this->ccs, ['Respiratory System']);
+        $this->makeCase($this->cea, ['Respiratory System']);
+        $this->makeCase($this->cea, ['Respiratory System']);
+
+        $response = $this->actingAs($this->director)
+            ->get('/director/analytics')
+            ->assertOk()
+            ->assertSee('Summary of Medical Cases')
+            ->assertSee('Rows = medical system');
+
+        // FR-ANL-03 fixed column order (…CEA, CBS, …CCS…), NOT the chart's
+        // volume-descending order — only the three seeded colleges exist here.
+        $matrixCodes = $response->viewData('matrixColleges')->pluck('code')->all();
+        $this->assertSame(['CEA', 'CBS', 'CCS'], $matrixCodes);
+
+        // Exactly those cells: cells and column totals come from the same
+        // $counts/$totals the chart uses; the TOTAL column is categoryTotals.
+        $counts = $response->viewData('counts');
+        $this->assertSame(3, $counts[$this->ccs->id]['Respiratory System']);
+        $this->assertSame(2, $counts[$this->cea->id]['Respiratory System']);
+        $this->assertArrayNotHasKey($this->cbs->id, $counts);
+
+        $this->assertSame(
+            ['Respiratory System' => 5],
+            $response->viewData('categoryTotals'),
+        );
+    }
+
+    public function test_matrix_grand_total_matches_the_by_sex_donut_source(): void
+    {
+        // The FR-ANL-04 donut will count ClinicVisit::encoded() rows — the
+        // same shared scope the matrix query starts from. On this dataset
+        // (every record has exactly one category) the two totals coincide.
+        // They diverge BY DESIGN per the PRD AC once records carry multiple
+        // categories or no category — the donut counts people screened, the
+        // matrix counts record × category pairs.
+        $this->makeCase($this->ccs, ['Respiratory System']);
+        $this->makeCase($this->ccs, ['Respiratory System']);
+        $this->makeCase($this->ccs, ['Respiratory System']);
+        $this->makeCase($this->cea, ['Respiratory System']);
+        $this->makeCase($this->cea, ['Respiratory System']);
+
+        $response = $this->actingAs($this->director)->get('/director/analytics');
+
+        $this->assertSame(5, $response->viewData('totalCases'));
+        $this->assertSame(5, ClinicVisit::encoded()->count());
+    }
+
+    public function test_matrix_footnotes_encoded_records_without_category(): void
+    {
+        // Encoded, no category → excluded from cells, counted in the footnote.
+        $this->makeCase($this->cea, []);
+        // Captured (un-encoded) → invisible everywhere, footnote included.
+        $this->makeCase($this->ccs, ['Respiratory System'], visitStatus: 'captured');
+
+        $response = $this->actingAs($this->director)
+            ->get('/director/analytics')
+            ->assertSee('1 encoded without category');
+
+        $this->assertSame(1, $response->viewData('uncategorizedCount'));
+        $this->assertSame(0, $response->viewData('totalCases'));
+    }
+
+    public function test_matrix_footnote_hidden_when_every_record_has_a_category(): void
+    {
+        $this->makeCase($this->ccs, ['Respiratory System']);
+
+        $this->actingAs($this->director)
+            ->get('/director/analytics')
+            ->assertDontSee('encoded without category');
     }
 
     public function test_college_snapshot_wins_over_current_profile_college(): void

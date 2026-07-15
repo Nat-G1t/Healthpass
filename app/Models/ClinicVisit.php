@@ -58,6 +58,18 @@ class ClinicVisit extends Model
     }
 
     /**
+     * FR-ANL-07 — encoded visits only: the shared base scope for ALL case
+     * statistics (cases-by-college chart, the FR-ANL-03 matrix, and the
+     * FR-ANL-04 by-sex donut), so every analytics number filters "encoded"
+     * the same way. Captured (un-encoded) visits never enter case stats;
+     * vitals flags are the one exception (scopeFlagged below).
+     */
+    public function scopeEncoded(Builder $query): Builder
+    {
+        return $query->where('status', 'encoded');
+    }
+
+    /**
      * FR-ANL-01/05 — visits whose vitals tripped ANY flag threshold.
      *
      * whereHas() filters by a related table: it compiles to an EXISTS

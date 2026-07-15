@@ -6,17 +6,26 @@ namespace App\Http\Controllers\Director;
 
 use App\Http\Controllers\Controller;
 use App\Models\ClearanceRecord;
+use App\Models\ClinicVisit;
 use App\Models\College;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 /**
- * Director Analytics — Medical Cases by College (FR-ANL-02): a horizontal
- * stacked bar, one row per college (all 12, zero-case rows included), each
- * bar segmented by the 8 medical-system categories, sorted by total case
- * volume descending.
+ * Director Analytics — two views over ONE grouped college × category query:
  *
- * Counting rules:
+ *  - Medical Cases by College (FR-ANL-02): a horizontal stacked bar, one row
+ *    per college (all 12, zero-case rows included), each bar segmented by
+ *    the 8 medical-system categories, sorted by total case volume descending.
+ *  - Summary of Medical Cases matrix (FR-ANL-03): 8 medical-system rows ×
+ *    12 college columns in the PRD's fixed order, plus a TOTAL column and a
+ *    totals row. Rendered as the chart's "View as table" toggle (D-30) —
+ *    one dataset, two formats, so the page never shows the same numbers
+ *    twice. Encoded records with no category contribute nothing to either
+ *    view; their count appears in a card-level footnote instead.
+ *
+ * Counting rules (both views):
  *  - encoded records only (FR-ANL-07) — a clearance_records row only exists
  *    once the nurse encodes, and the status guard keeps that explicit;
  *  - one count per record × category (D-23) — a multi-category case counts
@@ -45,37 +54,66 @@ class AnalyticsController extends Controller
         '#06B6D4', // Eyes, Ears, Nose & Throat Disorders — cyan
     ];
 
+    /** Fixed matrix column order, locked by FR-ANL-03. */
+    private const MATRIX_COLLEGE_ORDER = [
+        'COE', 'CEA', 'CBS', 'CAS', 'CSSP', 'CCS',
+        'CHTM', 'CIT', 'LAW', 'GS', 'SHS', 'LHS',
+    ];
+
     public function __invoke(): View
     {
         // One row per (college, category): plain portable JOIN + GROUP BY —
-        // exactly what the D-23 child table was designed for.
-        $rows = DB::table('clearance_case_categories')
-            ->join('clearance_records', 'clearance_records.id', '=', 'clearance_case_categories.clearance_record_id')
-            ->join('clinic_visits', 'clinic_visits.id', '=', 'clearance_records.clinic_visit_id')
-            ->where('clinic_visits.status', 'encoded') // FR-ANL-07
+        // exactly what the D-23 child table was designed for. Starting from
+        // the shared encoded() scope keeps this query and the by-sex donut
+        // (FR-ANL-04) on the same "encoded only" base; toBase() drops the
+        // Eloquent model layer so we get plain rows, not ClinicVisit objects.
+        $rows = ClinicVisit::encoded() // FR-ANL-07
+            ->join('clearance_records', 'clearance_records.clinic_visit_id', '=', 'clinic_visits.id')
+            ->join('clearance_case_categories', 'clearance_case_categories.clearance_record_id', '=', 'clearance_records.id')
             ->groupBy('clinic_visits.college_id', 'clearance_case_categories.case_category')
             ->select(
                 'clinic_visits.college_id',
                 'clearance_case_categories.case_category',
                 DB::raw('count(*) as cases'),
             )
+            ->toBase()
             ->get();
 
-        // counts[college_id][category] and totals[college_id].
+        // counts[college_id][category], totals[college_id] (matrix columns),
+        // and categoryTotals[category] (matrix TOTAL column) — all three
+        // shapes fall out of the same result set in one pass.
         $counts = [];
         $totals = [];
+        $categoryTotals = [];
         foreach ($rows as $row) {
             $counts[$row->college_id][$row->case_category] = (int) $row->cases;
             $totals[$row->college_id] = ($totals[$row->college_id] ?? 0) + (int) $row->cases;
+            $categoryTotals[$row->case_category] = ($categoryTotals[$row->case_category] ?? 0) + (int) $row->cases;
         }
 
-        // All colleges, sorted by total volume descending. The initial
+        $allColleges = College::orderBy('code')->get();
+
+        // Chart rows: sorted by total volume descending. The initial
         // code-ascending order is the tie-break: PHP sorts are stable, so
         // equal totals keep alphabetical order — deterministic chart rows.
-        $colleges = College::orderBy('code')
-            ->get()
+        $colleges = $allColleges
             ->sortByDesc(fn (College $college) => $totals[$college->id] ?? 0)
             ->values();
+
+        // Matrix columns: the FR-ANL-03 fixed order instead.
+        $matrixOrder = array_flip(self::MATRIX_COLLEGE_ORDER);
+        $matrixColleges = $allColleges
+            ->sortBy(fn (College $college) => $matrixOrder[$college->code] ?? PHP_INT_MAX)
+            ->values();
+
+        // Footnote count: encoded records that carry no category at all —
+        // excluded from the matrix (FR-ANL-03), but the Director should
+        // still see they exist. whereDoesntHave() is whereHas()'s inverse:
+        // a NOT EXISTS subquery on clearance_case_categories.
+        $uncategorizedCount = ClearanceRecord::query()
+            ->whereHas('clinicVisit', fn (Builder $visit) => $visit->encoded())
+            ->whereDoesntHave('caseCategories')
+            ->count();
 
         $datasets = [];
         foreach (ClearanceRecord::CASE_CATEGORIES as $i => $category) {
@@ -99,6 +137,12 @@ class AnalyticsController extends Controller
             'categories' => ClearanceRecord::CASE_CATEGORIES,
             'counts' => $counts,
             'totals' => $totals,
+            // Summary of Medical Cases matrix (FR-ANL-03). Cells and column
+            // totals reuse $counts/$totals above; the grand total is
+            // $totalCases — same numbers, fixed column order.
+            'matrixColleges' => $matrixColleges,
+            'categoryTotals' => $categoryTotals,
+            'uncategorizedCount' => $uncategorizedCount,
         ]);
     }
 }
