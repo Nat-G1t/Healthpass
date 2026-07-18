@@ -13,13 +13,16 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * Director Analytics — Medical Cases by College (FR-ANL-02):
+ * Director Analytics — Medical Cases by College (FR-ANL-02) and the
+ * Summary of Medical Cases matrix (FR-ANL-03):
  *  - the PRD acceptance dataset (3 Respiratory in CCS, 2 in CEA) produces
- *    exactly those bars, all colleges present, sorted by volume;
+ *    exactly those bars and matrix cells, all colleges present;
  *  - encoded records only (FR-ANL-07);
  *  - one count per record × category (D-23);
  *  - grouped by the capture-time college snapshot, so a transfer never
- *    re-attributes a past case (FR-STU-09, D-17).
+ *    re-attributes a past case (FR-STU-09, D-17);
+ *  - matrix columns in the FR-ANL-03 fixed order; uncategorized encoded
+ *    records excluded from cells but surfaced in a footnote.
  */
 class AnalyticsPageTest extends TestCase
 {
@@ -54,17 +57,17 @@ class AnalyticsPageTest extends TestCase
      * Persist one visit + clearance with the given case categories, frozen
      * to $college (the capture-time snapshot column, not the profile).
      */
-    private function makeCase(College $college, array $categories, string $visitStatus = 'encoded'): ClearanceRecord
+    private function makeCase(College $college, array $categories, string $visitStatus = 'encoded', ?User $student = null, ?string $checkedInAt = null): ClearanceRecord
     {
         static $seq = 7000;
 
         $visit = ClinicVisit::create([
             'reference_no' => 'HP-2026-'.$seq++,
-            'student_id' => $this->student->id,
+            'student_id' => ($student ?? $this->student)->id,
             'college_id' => $college->id,
             'login_method' => 'qr',
             'status' => $visitStatus,
-            'checked_in_at' => now(),
+            'checked_in_at' => $checkedInAt ? now()->parse($checkedInAt) : now(),
         ]);
 
         $record = ClearanceRecord::create([
@@ -153,6 +156,239 @@ class AnalyticsPageTest extends TestCase
         $response = $this->actingAs($this->director)->get('/director/analytics');
 
         $this->assertSame(0, $response->viewData('totalCases'));
+    }
+
+    public function test_matrix_shows_prd_acceptance_cells_in_fixed_college_order(): void
+    {
+        // AC: 3 Respiratory System cases in CCS, 2 in CEA.
+        $this->makeCase($this->ccs, ['Respiratory System']);
+        $this->makeCase($this->ccs, ['Respiratory System']);
+        $this->makeCase($this->ccs, ['Respiratory System']);
+        $this->makeCase($this->cea, ['Respiratory System']);
+        $this->makeCase($this->cea, ['Respiratory System']);
+
+        $response = $this->actingAs($this->director)
+            ->get('/director/analytics')
+            ->assertOk()
+            ->assertSee('Summary of Medical Cases')
+            ->assertSee('Rows = medical system');
+
+        // FR-ANL-03 fixed column order (…CEA, CBS, …CCS…), NOT the chart's
+        // volume-descending order — only the three seeded colleges exist here.
+        $matrixCodes = $response->viewData('matrixColleges')->pluck('code')->all();
+        $this->assertSame(['CEA', 'CBS', 'CCS'], $matrixCodes);
+
+        // Exactly those cells: cells and column totals come from the same
+        // $counts/$totals the chart uses; the TOTAL column is categoryTotals.
+        $counts = $response->viewData('counts');
+        $this->assertSame(3, $counts[$this->ccs->id]['Respiratory System']);
+        $this->assertSame(2, $counts[$this->cea->id]['Respiratory System']);
+        $this->assertArrayNotHasKey($this->cbs->id, $counts);
+
+        $this->assertSame(
+            ['Respiratory System' => 5],
+            $response->viewData('categoryTotals'),
+        );
+    }
+
+    public function test_matrix_grand_total_matches_the_by_sex_donut_source(): void
+    {
+        // The FR-ANL-04 donut will count ClinicVisit::encoded() rows — the
+        // same shared scope the matrix query starts from. On this dataset
+        // (every record has exactly one category) the two totals coincide.
+        // They diverge BY DESIGN per the PRD AC once records carry multiple
+        // categories or no category — the donut counts people screened, the
+        // matrix counts record × category pairs.
+        $this->makeCase($this->ccs, ['Respiratory System']);
+        $this->makeCase($this->ccs, ['Respiratory System']);
+        $this->makeCase($this->ccs, ['Respiratory System']);
+        $this->makeCase($this->cea, ['Respiratory System']);
+        $this->makeCase($this->cea, ['Respiratory System']);
+
+        $response = $this->actingAs($this->director)->get('/director/analytics');
+
+        $this->assertSame(5, $response->viewData('totalCases'));
+        $this->assertSame(5, ClinicVisit::encoded()->count());
+    }
+
+    public function test_matrix_footnotes_encoded_records_without_category(): void
+    {
+        // Encoded, no category → excluded from cells, counted in the footnote.
+        $this->makeCase($this->cea, []);
+        // Captured (un-encoded) → invisible everywhere, footnote included.
+        $this->makeCase($this->ccs, ['Respiratory System'], visitStatus: 'captured');
+
+        $response = $this->actingAs($this->director)
+            ->get('/director/analytics')
+            ->assertSee('1 encoded without category');
+
+        $this->assertSame(1, $response->viewData('uncategorizedCount'));
+        $this->assertSame(0, $response->viewData('totalCases'));
+    }
+
+    public function test_matrix_footnote_hidden_when_every_record_has_a_category(): void
+    {
+        $this->makeCase($this->ccs, ['Respiratory System']);
+
+        $this->actingAs($this->director)
+            ->get('/director/analytics')
+            ->assertDontSee('encoded without category');
+    }
+
+    /** A student user whose profile has the given sex. */
+    private function makeStudentOfSex(string $sex): User
+    {
+        $student = User::factory()->create(['role' => 'student']);
+        StudentProfile::factory()
+            ->forCollege($this->ccs)
+            ->create(['user_id' => $student->id, 'sex' => $sex]);
+
+        return $student;
+    }
+
+    public function test_by_sex_donut_counts_encoded_visits_by_profile_sex(): void
+    {
+        // FR-ANL-04: 3 male + 1 female encoded visits; a captured visit
+        // never enters the donut (FR-ANL-07), whatever the sex.
+        $male = $this->makeStudentOfSex('M');
+        $female = $this->makeStudentOfSex('F');
+
+        $this->makeCase($this->ccs, ['Respiratory System'], student: $male);
+        $this->makeCase($this->ccs, [], student: $male);
+        $this->makeCase($this->cea, [], student: $male);
+        $this->makeCase($this->ccs, ['Alimentary System'], student: $female);
+        $this->makeCase($this->ccs, ['Respiratory System'], visitStatus: 'captured', student: $female);
+
+        $response = $this->actingAs($this->director)
+            ->get('/director/analytics')
+            ->assertOk()
+            ->assertSee('Screened Students by Sex');
+
+        $bySex = $response->viewData('bySex');
+        $this->assertSame(['Male', 3, 75], [$bySex[0]['label'], $bySex[0]['count'], $bySex[0]['percent']]);
+        $this->assertSame(['Female', 1, 25], [$bySex[1]['label'], $bySex[1]['count'], $bySex[1]['percent']]);
+
+        $this->assertSame(4, $response->viewData('totalScreened'));
+        $this->assertSame([3, 1], $response->viewData('donut')['datasets'][0]['data']);
+    }
+
+    public function test_donut_shares_the_encoded_scope_but_counts_people_not_cases(): void
+    {
+        // PRD §4.9 AC: the donut counts people screened (one per encoded
+        // visit), the matrix counts record × category pairs — same
+        // encoded() base scope, intentionally different totals.
+        $male = $this->makeStudentOfSex('M');
+
+        // One person, two systems (D-23): donut 1, matrix 2.
+        $this->makeCase($this->ccs, ['Cardiovascular System', 'Respiratory System'], student: $male);
+
+        $response = $this->actingAs($this->director)->get('/director/analytics');
+        $this->assertSame(1, $response->viewData('totalScreened'));
+        $this->assertSame(2, $response->viewData('totalCases'));
+
+        // One more person, no category: donut counts them, matrix doesn't.
+        $this->makeCase($this->ccs, [], student: $male);
+
+        $response = $this->actingAs($this->director)->get('/director/analytics');
+        $this->assertSame(2, $response->viewData('totalScreened'));
+        $this->assertSame(ClinicVisit::encoded()->count(), $response->viewData('totalScreened'));
+        $this->assertSame(2, $response->viewData('totalCases'));
+        $this->assertSame(1, $response->viewData('uncategorizedCount'));
+    }
+
+    public function test_cases_by_system_chart_splits_each_bar_by_sex(): void
+    {
+        // FR-ANL-08 with the by-sex split: 2 male + 1 female Respiratory,
+        // plus a female multi-category case adding one Respiratory AND one
+        // Cardiovascular count (D-23). A captured visit counts nothing
+        // (FR-ANL-07).
+        $male = $this->makeStudentOfSex('M');
+        $female = $this->makeStudentOfSex('F');
+
+        $this->makeCase($this->ccs, ['Respiratory System'], student: $male);
+        $this->makeCase($this->cea, ['Respiratory System'], student: $male);
+        $this->makeCase($this->ccs, ['Respiratory System'], student: $female);
+        $this->makeCase($this->ccs, ['Respiratory System', 'Cardiovascular System'], student: $female);
+        $this->makeCase($this->ccs, ['Respiratory System'], visitStatus: 'captured', student: $male);
+
+        $response = $this->actingAs($this->director)
+            ->get('/director/analytics')
+            ->assertOk()
+            ->assertSee('Cases by Medical System');
+
+        $chart = $response->viewData('systemChart');
+
+        // Sorted by total volume descending, all 8 systems present.
+        $this->assertCount(8, $chart['labels']);
+        $this->assertSame(['Respiratory System', 'Cardiovascular System'], array_slice($chart['labels'], 0, 2));
+        $this->assertSame([4, 1, 0], array_slice($chart['totals'], 0, 3));
+
+        // Male segment first, Female second — Respiratory splits 2/2,
+        // Cardiovascular 0/1.
+        [$maleSet, $femaleSet] = $chart['datasets'];
+        $this->assertSame('Male', $maleSet['label']);
+        $this->assertSame('Female', $femaleSet['label']);
+        $this->assertSame([2, 0], array_slice($maleSet['data'], 0, 2));
+        $this->assertSame([2, 1], array_slice($femaleSet['data'], 0, 2));
+
+        // Colors follow the CATEGORY through the sort (Respiratory = the
+        // college chart's navy), Female = its 50% white tint.
+        $this->assertSame('#1E3A8A', $maleSet['backgroundColor'][0]);
+        $this->assertSame('#8E9CC4', $femaleSet['backgroundColor'][0]);
+
+        // Same counting rules as the matrix: bar totals sum to its total.
+        $this->assertSame($response->viewData('totalCases'), array_sum($chart['totals']));
+    }
+
+    public function test_month_picker_scopes_the_whole_page_to_the_selected_month(): void
+    {
+        // Two Respiratory cases in December, one in November — different
+        // students so the by-sex donut is scoped too.
+        $dec = $this->makeStudentOfSex('M');
+        $nov = $this->makeStudentOfSex('F');
+        $this->makeCase($this->ccs, ['Respiratory System'], student: $dec, checkedInAt: '2026-12-03');
+        $this->makeCase($this->ccs, ['Respiratory System'], student: $dec, checkedInAt: '2026-12-20');
+        $this->makeCase($this->cea, ['Respiratory System'], student: $nov, checkedInAt: '2026-11-15');
+
+        // December: chart, matrix, and donut all show only the two Dec cases.
+        $december = $this->actingAs($this->director)
+            ->get('/director/analytics?month=2026-12')
+            ->assertOk();
+        $this->assertSame(2, $december->viewData('totalCases'));
+        $this->assertSame(2, $december->viewData('counts')[$this->ccs->id]['Respiratory System']);
+        $this->assertSame(2, $december->viewData('totalScreened'));
+        $this->assertSame('2026-12', $december->viewData('selectedMonth'));
+
+        // November: only the one CEA case.
+        $november = $this->actingAs($this->director)
+            ->get('/director/analytics?month=2026-11')
+            ->assertOk();
+        $this->assertSame(1, $november->viewData('totalCases'));
+        $this->assertSame(1, $november->viewData('counts')[$this->cea->id]['Respiratory System']);
+        $this->assertSame(1, $november->viewData('totalScreened'));
+    }
+
+    public function test_no_month_param_defaults_to_the_newest_month_with_data(): void
+    {
+        $this->makeCase($this->ccs, ['Respiratory System'], checkedInAt: '2026-10-05');
+        $this->makeCase($this->ccs, ['Respiratory System'], checkedInAt: '2026-12-05');
+
+        $response = $this->actingAs($this->director)
+            ->get('/director/analytics')
+            ->assertOk();
+
+        // Newest month with data (December) is the default view.
+        $this->assertSame('2026-12', $response->viewData('selectedMonth'));
+        $this->assertSame(1, $response->viewData('totalCases'));
+
+        // The picker lists both months, newest first.
+        $this->assertSame(
+            [
+                ['value' => '2026-12', 'label' => 'December 2026'],
+                ['value' => '2026-10', 'label' => 'October 2026'],
+            ],
+            $response->viewData('availableMonths'),
+        );
     }
 
     public function test_college_snapshot_wins_over_current_profile_college(): void

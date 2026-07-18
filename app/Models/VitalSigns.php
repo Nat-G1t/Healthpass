@@ -46,30 +46,46 @@ class VitalSigns extends Model
     // ── Display helpers ──────────────────────────────────────────────────────
 
     /**
+     * One ['label' => …, 'value' => …] pair per tripped flag — the Flagged
+     * Anomalies table (FR-ANL-05) renders label and value in separate
+     * columns. Reads the STORED flag booleans — thresholds are computed
+     * once at kiosk submit, never here.
+     *
+     * @return list<array{label: string, value: string}>
+     */
+    public function flagDetails(): array
+    {
+        $flags = [];
+
+        if ($this->is_bp_flagged) {
+            $flags[] = ['label' => 'High Blood Pressure', 'value' => "{$this->bp_systolic}/{$this->bp_diastolic} mmHg"];
+        }
+
+        if ($this->is_temp_flagged) {
+            $flags[] = ['label' => 'Fever', 'value' => "{$this->temperature_c}°C"];
+        }
+
+        if ($this->is_bmi_flagged) {
+            $flags[] = ['label' => 'Abnormal BMI', 'value' => (string) $this->bmi];
+        }
+
+        return $flags;
+    }
+
+    /**
      * Human-readable line per tripped flag, e.g. "High Blood Pressure —
-     * 145/92 mmHg" (Director dashboard preview, FR-ANL-01; same labels as
-     * the Flagged Anomalies stat cards, FR-ANL-05). Reads the STORED flag
-     * booleans — thresholds are computed once at kiosk submit, never here.
+     * 145/92 mmHg" (Director dashboard preview, FR-ANL-01). Same data as
+     * flagDetails(), joined — the preview and the anomalies table can
+     * never disagree.
      *
      * @return list<string>
      */
     public function flagDescriptions(): array
     {
-        $flags = [];
-
-        if ($this->is_bp_flagged) {
-            $flags[] = "High Blood Pressure — {$this->bp_systolic}/{$this->bp_diastolic} mmHg";
-        }
-
-        if ($this->is_temp_flagged) {
-            $flags[] = "Fever — {$this->temperature_c}°C";
-        }
-
-        if ($this->is_bmi_flagged) {
-            $flags[] = "Abnormal BMI — {$this->bmi}";
-        }
-
-        return $flags;
+        return array_map(
+            fn (array $flag): string => "{$flag['label']} — {$flag['value']}",
+            $this->flagDetails(),
+        );
     }
 
     // ── Relationships ────────────────────────────────────────────────────────

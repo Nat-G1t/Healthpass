@@ -118,16 +118,15 @@ class DashboardPageTest extends TestCase
 
     // ── 1. Access control ─────────────────────────────────────────────────────
 
-    public function test_dashboard_and_anomalies_stub_are_refused_for_guests_and_other_roles(): void
+    public function test_dashboard_is_refused_for_guests_and_other_roles(): void
     {
+        // /director/anomalies has its own guard coverage in AnomaliesPageTest.
         $this->get('/director/dashboard')->assertRedirect('/login');
-        $this->get('/director/anomalies')->assertRedirect('/login');
 
         foreach (['student', 'nurse', 'college_admin'] as $role) {
             $user = User::factory()->create(['role' => $role]);
 
             $this->actingAs($user)->get('/director/dashboard')->assertRedirect();
-            $this->actingAs($user)->get('/director/anomalies')->assertRedirect();
         }
     }
 
@@ -242,16 +241,5 @@ class DashboardPageTest extends TestCase
             ->assertSee('New requests from College Admins will appear here.')
             ->assertSee('No flagged visits')
             ->assertSee('Kiosk vitals that trip a flag threshold will appear here.');
-    }
-
-    // ── 6. Anomalies stub ─────────────────────────────────────────────────────
-
-    public function test_anomalies_stub_renders_for_the_director(): void
-    {
-        $this->actingAs($this->director)
-            ->get('/director/anomalies')
-            ->assertOk()
-            ->assertSee('Flagged Anomalies')
-            ->assertSee(route('director.dashboard'));
     }
 }

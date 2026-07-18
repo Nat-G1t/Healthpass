@@ -33,6 +33,10 @@ use Illuminate\Support\Facades\DB;
  * during development. Fully deterministic — no randomness, so re-seeding a
  * fresh DB always produces the same chart.
  *
+ * Plus MONTHLY BANDS (HP-2026-9200…) — encoded single-category visits placed
+ * inside Apr, May and Jun 2026 (40 / 60 / 100 cases) so the Director's month
+ * picker has three clearly-distinct months to switch between.
+ *
  * Reference band HP-2026-9xxx is reserved for synthetic data and will not
  * collide with real sequences (which start from HP-2026-0001).
  *
@@ -52,6 +56,28 @@ class DemoClinicVisitSeeder extends Seeder
         'LAW' => 5, 'GS' => 4, 'SHS' => 3, 'LHS' => 3,
     ];
 
+    /**
+     * Per-month case volume for Apr–Jun 2026, so the Director's month picker
+     * has clearly-distinct months to switch between (each visit here carries
+     * exactly one category → cases == visits). Deliberately rising toward
+     * June, whose 100 total is a clean, recognizable demo figure. Keys must
+     * match colleges.code.
+     */
+    private const MONTHLY_ANALYTICS_BANDS = [
+        '2026-04' => [ // 40 cases
+            'CCS' => 7, 'COE' => 5, 'CEA' => 5, 'CBS' => 4, 'CAS' => 4, 'CSSP' => 3,
+            'CHTM' => 3, 'CIT' => 2, 'LAW' => 2, 'GS' => 2, 'SHS' => 2, 'LHS' => 1,
+        ],
+        '2026-05' => [ // 60 cases
+            'CCS' => 10, 'COE' => 8, 'CEA' => 7, 'CBS' => 6, 'CAS' => 6, 'CSSP' => 5,
+            'CHTM' => 4, 'CIT' => 4, 'LAW' => 3, 'GS' => 3, 'SHS' => 2, 'LHS' => 2,
+        ],
+        '2026-06' => [ // 100 cases
+            'CCS' => 18, 'COE' => 14, 'CEA' => 12, 'CBS' => 11, 'CAS' => 10, 'CSSP' => 8,
+            'CHTM' => 7, 'CIT' => 6, 'LAW' => 5, 'GS' => 4, 'SHS' => 3, 'LHS' => 2,
+        ],
+    ];
+
     public function run(): void
     {
         if (app()->environment('production')) {
@@ -60,6 +86,7 @@ class DemoClinicVisitSeeder extends Seeder
 
         $this->seedRecordsPageVisits();
         $this->seedAnalyticsSpread();
+        $this->seedMonthlyBands();
     }
 
     /**
@@ -450,6 +477,108 @@ class DemoClinicVisitSeeder extends Seeder
                 ]);
             }
         }
+    }
+
+    /**
+     * Monthly bands (HP-2026-92xx): encoded, single-category visits placed
+     * squarely inside Apr, May and Jun 2026, so the Director's month picker
+     * shows three clearly-different months (40 / 60 / 100 cases). Each
+     * visit's checked_in_at — the date the month scope keys on — lands in
+     * its band's month.
+     */
+    private function seedMonthlyBands(): void
+    {
+        // Own idempotence guard so this band can be added to dev DBs seeded
+        // before it existed, without disturbing the other bands.
+        if (ClinicVisit::where('reference_no', 'like', 'HP-2026-92%')->exists()) {
+            $this->command->info('DemoClinicVisitSeeder: monthly analytics bands already exist, skipping.');
+
+            return;
+        }
+
+        $nurse = User::where('email', 'nurse@healthpass.test')->firstOrFail();
+        $colleges = College::all()->keyBy('code');
+        $systems = ClearanceRecord::CASE_CATEGORIES;
+
+        $seq = 0;
+        $systemIndex = 0;
+
+        // All-or-nothing: a mid-loop failure must not leave a partial band
+        // behind, or the guard above would skip the re-run forever.
+        DB::transaction(function () use ($colleges, $nurse, $systems, &$seq, &$systemIndex): void {
+            foreach (self::MONTHLY_ANALYTICS_BANDS as $yearMonth => $volumeByCollege) {
+                $monthStart = Carbon::createFromFormat('Y-m-d', $yearMonth.'-01')->startOfMonth();
+
+                foreach ($volumeByCollege as $code => $visitCount) {
+                    $college = $colleges[$code];
+
+                    // Both sexes take turns per college → feeds the donut.
+                    $students = User::where('role', 'student')
+                        ->whereHas('studentProfile', fn ($q) => $q->where('college_id', $college->id))
+                        ->orderBy('id')
+                        ->get();
+
+                    if ($students->isEmpty()) {
+                        continue; // no students seeded for this unit — skip
+                    }
+
+                    for ($i = 0; $i < $visitCount; $i++) {
+                        // Spread across the first ~4 weeks; always in-month.
+                        $checkedIn = $monthStart->copy()
+                            ->addDays($i % 27)
+                            ->setTime(9, 0)
+                            ->addMinutes(($seq % 8) * 7);
+
+                        $this->createMonthlyBandVisit(
+                            seq: $seq,
+                            student: $students[$i % $students->count()],
+                            college: $college,
+                            nurse: $nurse,
+                            checkedIn: $checkedIn,
+                            category: $systems[$systemIndex % count($systems)],
+                        );
+
+                        $seq++;
+                        $systemIndex++;
+                    }
+                }
+            }
+        });
+
+        $this->command->info("DemoClinicVisitSeeder: {$seq} monthly analytics visits created for Apr–Jun 2026 (HP-2026-92xx).");
+    }
+
+    /**
+     * One encoded, single-category monthly-band visit with unflagged vitals.
+     */
+    private function createMonthlyBandVisit(
+        int $seq,
+        User $student,
+        College $college,
+        User $nurse,
+        Carbon $checkedIn,
+        string $category,
+    ): void {
+        $visit = ClinicVisit::create([
+            'reference_no' => sprintf('HP-2026-%d', 9200 + $seq),
+            'student_id' => $student->id,
+            'college_id' => $college->id, // capture-time snapshot (FR-STU-09, D-17)
+            'login_method' => 'qr',
+            'status' => 'encoded',
+            'privacy_consent_at' => $checkedIn->copy()->subMinutes(5),
+            'checked_in_at' => $checkedIn,
+        ]);
+
+        $this->createNormalVitalsAndScreening($visit, $seq);
+
+        ClearanceRecord::create([
+            'clinic_visit_id' => $visit->id,
+            'encoded_by' => $nurse->id,
+            'result' => $seq % 6 === 5 ? 'Unfit' : 'Fit',
+            'physician_name' => 'REYNALDO S. ALIPIO, MD',
+            'physician_license_no' => '60252',
+            'encoded_at' => $checkedIn->copy()->addHours(2),
+        ])->caseCategories()->create(['case_category' => $category]);
     }
 
     /**

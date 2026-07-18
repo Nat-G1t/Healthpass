@@ -4,8 +4,11 @@ use App\Http\Controllers\Admin\BatchRequestController as AdminBatchRequestContro
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Auth\PasswordChangeController;
 use App\Http\Controllers\Director\AnalyticsController as DirectorAnalyticsController;
+use App\Http\Controllers\Director\AnomaliesController as DirectorAnomaliesController;
 use App\Http\Controllers\Director\BatchApprovalController as DirectorBatchApprovalController;
+use App\Http\Controllers\Director\CaseSummaryPrintController as DirectorCaseSummaryPrintController;
 use App\Http\Controllers\Director\DashboardController as DirectorDashboardController;
+use App\Http\Controllers\Director\ExportController as DirectorExportController;
 use App\Http\Controllers\Kiosk\KioskController;
 use App\Http\Controllers\Nurse\EncodeController as NurseEncodeController;
 use App\Http\Controllers\Nurse\KioskDeviceController as NurseKioskDeviceController;
@@ -157,9 +160,20 @@ Route::middleware(['auth', 'role:director'])
         Route::get('/dashboard', DirectorDashboardController::class)->name('dashboard');
         // Analytics (FR-ANL-02): Medical Cases by College stacked bar.
         Route::get('/analytics', DirectorAnalyticsController::class)->name('analytics');
-        // Flagged Anomalies (FR-ANL-05) — stub page for now; it exists so the
-        // dashboard's "View all →" has a real destination.
-        Route::get('/anomalies', fn () => view('director.anomalies'))->name('anomalies');
+        // Printable monthly Summary of Medical Cases (FR-ANL-06/03): a
+        // month-scoped reproduction of the official report, printed via a
+        // hidden iframe like the nurse clearance form (FR-NRS-05).
+        Route::get('/analytics/summary-print', DirectorCaseSummaryPrintController::class)->name('analytics.summary-print');
+        // Flagged Anomalies CSV export (FR-ANL-06): same flagged() scope as
+        // the screen, one row per tripped flag.
+        Route::get('/anomalies/export', [DirectorExportController::class, 'anomalies'])->name('anomalies.export');
+        // Flagged Anomalies (FR-ANL-05): stat cards + the flagged-visits
+        // table. Flags surface from CAPTURE (FR-ANL-07) — un-encoded visits
+        // are included, unlike every case statistic on Analytics.
+        Route::get('/anomalies', [DirectorAnomaliesController::class, 'index'])->name('anomalies');
+        // Read-only record detail behind each table row's "View" link.
+        Route::get('/anomalies/{visit}', [DirectorAnomaliesController::class, 'show'])
+            ->whereNumber('visit')->name('anomalies.show');
         // Batch Approvals (FR-DIRA-01/05/06): ALL colleges' requests — no
         // college scope, the Director reviews everything.
         Route::get('/batches', [DirectorBatchApprovalController::class, 'index'])->name('batches.index');
