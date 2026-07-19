@@ -262,14 +262,15 @@ class KioskSubmitTest extends TestCase
     }
 
     /**
-     * Dental is scheduling-only (Decision D-3) and never enters the kiosk loop:
-     * a student with only a dental appointment today is a WALK-IN, so the submit
-     * linkage stays NULL — consistent with the Walk-in Check gate (FR-KSK-03a).
+     * D-33 (amends D-3): a dental-only student's kiosk submit now LINKS today's
+     * dental appointment instead of recording a walk-in, so the nurse-encode
+     * step can complete it and the visit carries a college snapshot like any
+     * other visit.
      */
-    public function test_dental_only_same_day_appointment_is_a_walk_in(): void
+    public function test_dental_only_student_links_todays_dental_appointment(): void
     {
         $student = $this->student();
-        Appointment::factory()->dental()->create([
+        $dental = Appointment::factory()->dental()->create([
             'student_id' => $student->id,
             'scheduled_date' => now()->toDateString(),
             'status' => 'scheduled',
@@ -277,7 +278,56 @@ class KioskSubmitTest extends TestCase
 
         $this->submit($student->id)->assertOk();
 
+        $visit = ClinicVisit::first();
+        $this->assertSame($dental->id, $visit->appointment_id);
+        $this->assertSame($student->studentProfile->college_id, $visit->college_id);
+    }
+
+    /**
+     * D-33 edge rule: with BOTH a medical and a dental appointment today, the
+     * medical one wins the link and the dental one stays `scheduled`.
+     */
+    public function test_medical_wins_when_both_appointments_are_booked_today(): void
+    {
+        $student = $this->student();
+        // Dental created FIRST (lower id) so the test fails if the resolution
+        // orders by id instead of the medical-first rule.
+        $dental = Appointment::factory()->dental()->create([
+            'student_id' => $student->id,
+            'scheduled_date' => now()->toDateString(),
+            'status' => 'scheduled',
+        ]);
+        $medical = Appointment::factory()->medical()->create([
+            'student_id' => $student->id,
+            'scheduled_date' => now()->toDateString(),
+            'status' => 'scheduled',
+        ]);
+
+        $this->submit($student->id)->assertOk();
+
+        $this->assertSame($medical->id, ClinicVisit::first()->appointment_id);
+        $this->assertSame('scheduled', $dental->fresh()->status);
+    }
+
+    /**
+     * The appointment linkage is resolved SERVER-side: an appointmentId smuggled
+     * into the body (someone else's, or the student's own on another day) never
+     * influences the link — same trust rule as the student identity.
+     */
+    public function test_forged_appointment_id_in_body_is_ignored(): void
+    {
+        $student = $this->student();
+        $otherStudentsAppointment = Appointment::factory()->medical()->create([
+            'scheduled_date' => now()->toDateString(),
+            'status' => 'scheduled',
+        ]);
+
+        $this->submit($student->id, ['appointmentId' => $otherStudentsAppointment->id])
+            ->assertOk();
+
+        // No appointment of their own today → walk-in, forged id discarded.
         $this->assertNull(ClinicVisit::first()->appointment_id);
+        $this->assertSame('scheduled', $otherStudentsAppointment->fresh()->status);
     }
 
     public function test_walk_in_gets_null_appointment(): void

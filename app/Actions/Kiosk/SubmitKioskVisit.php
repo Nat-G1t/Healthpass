@@ -101,23 +101,31 @@ final class SubmitKioskVisit
     }
 
     /**
-     * Today's non-cancelled MEDICAL appointment for this student, or null
-     * (walk-in, BR-10). Dental is scheduling-only (Decision D-3) and never
-     * enters the kiosk loop, so a dental-only same-day booking is a walk-in —
-     * the same medical-only rule the Walk-in Check (FR-KSK-03a) gates on.
-     * Walk-ins are first-class — they flow through the queue identically.
+     * Today's non-cancelled appointment for this student, or null (walk-in,
+     * BR-10). D-33 (amends D-3): dental appointments now link too, so the
+     * nurse-encode step completes them and dental visits get a college
+     * snapshot. Medical is tried first — when BOTH are booked today the
+     * medical appointment wins the link and the dental one stays `scheduled`
+     * (D-33 edge rule). Walk-ins are first-class — they flow through the
+     * queue identically.
      */
     private function todaysAppointmentId(int $studentId): ?int
     {
-        $id = Appointment::query()
-            ->where('student_id', $studentId)
-            ->where('service_type', 'medical')
-            ->whereDate('scheduled_date', Carbon::today())
-            ->where('status', '!=', 'cancelled')
-            ->orderBy('id')
-            ->value('id');
+        foreach (['medical', 'dental'] as $serviceType) {
+            $id = Appointment::query()
+                ->where('student_id', $studentId)
+                ->where('service_type', $serviceType)
+                ->whereDate('scheduled_date', Carbon::today())
+                ->where('status', '!=', 'cancelled')
+                ->orderBy('id')
+                ->value('id');
 
-        return $id === null ? null : (int) $id;
+            if ($id !== null) {
+                return (int) $id;
+            }
+        }
+
+        return null;
     }
 
     /** BMI = weight(kg) ÷ height(m)², 1 decimal — matches the kiosk display (FR-KSK-09). */

@@ -269,6 +269,21 @@ class EncodeSaveTest extends TestCase
         $this->assertSame('completed', $appointment->fresh()->status);
     }
 
+    /**
+     * D-33: kiosk submit now links dental appointments too, and the SAME
+     * encode-completes-the-appointment line must work for them — dental
+     * appointments were previously never completed (visits stored as walk-ins).
+     */
+    public function test_linked_dental_appointment_is_marked_completed(): void
+    {
+        $appointment = Appointment::factory()->dental()->create();
+        $visit = $this->makeVisit($appointment);
+
+        $this->save($this->nurse(), $visit);
+
+        $this->assertSame('completed', $appointment->fresh()->status);
+    }
+
     public function test_validation_failure_leaves_the_appointment_untouched(): void
     {
         $appointment = Appointment::factory()->medical()->create();

@@ -336,9 +336,10 @@ final class KioskController extends Controller
      * nothing booked today), the kiosk shows the "No Scheduled Clearance
      * Today" screen; when true, it goes straight to Privacy Consent.
      *
-     * Dental is still scheduling-only (Decision D-3): it suppresses this notice
-     * but does NOT link at submit — a dental-only student proceeds through the
-     * medical vitals flow and is recorded as a walk-in (appointment_id NULL).
+     * Dental counts here AND links at submit (D-33, amending D-3): a
+     * dental-only student proceeds through the same vitals flow and their
+     * dental appointment is linked to the visit, medical taking priority
+     * when both are booked today.
      */
     private function hasAppointmentToday(int $studentId): bool
     {
