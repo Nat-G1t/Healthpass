@@ -144,24 +144,28 @@ npm run dev                       # terminal 2
   flagging only. (BP flag threshold locked at **140/90**; other
   thresholds per PRD business rules.)
 - **Four roles only:** Student, College Admin, Nurse, Clinic Director.
-  There is **no Doctor role** — the Nurse encodes Fit/Unfit + case
-  category; the University Physician signs the printed form.
+  There is **no Doctor role** — the Nurse encodes **Fit/Unfit only**
+  (case categories were dropped by D-32); the University Physician signs
+  the printed form.
 - **Kiosk never shows Fit/Unfit to the student.** It captures vitals +
   the 9-system questionnaire and routes to the Nurse queue.
 - **Manual vitals entry is a first-class kiosk path**, sensors are
   progressive enhancement. Every reading records `entry_method`.
 - Clinic capacity is a config value; batch clinic dates are
   admin-requested and Director-confirmed at approval (the Director may
-  adjust — D-29); dental is scheduling-only.
+  adjust — D-29); dental is scheduling-only, except that kiosk submit now
+  links today's dental appointment so it can be completed (D-33).
 - Printed clearance must match official form DHVSU-QSP-OSS-004-FO002-R03.
 
 ## Database
 
-11 tables, canonical in `HealthPass_Context.md` / PRD data dictionary:
+10 tables, canonical in `HealthPass_Context.md` / PRD data dictionary:
 `colleges`, `users`, `student_profiles`, `appointments`, `batch_requests`,
 `batch_request_students`, `clinic_visits`, `vital_signs`,
-`screening_responses`, `clearance_records`, `clearance_case_categories`
-(#11, added by D-23 — multi-category cases).
+`screening_responses`, `clearance_records`.
+(`clearance_case_categories`, added as table #11 by D-23, was **removed by
+D-32** with the case-category concept. The `kiosk_devices` device-auth
+table, D-27, is a flagged extension tracked in the PRD data dictionary.)
 Do not add tables or columns without checking the PRD and flagging the
 schema change explicitly.
 

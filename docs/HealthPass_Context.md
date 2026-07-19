@@ -408,18 +408,26 @@ questionnaire item that prints.
 - **On Reject**: update `batch_requests.status` → `Rejected`. No appointments created.
 - Approved/rejected rows show "✓ Approved" or "✕ Rejected" static text (no action buttons).
 
-#### Analytics (`director-analytics`)
-- "Export Report" button (ghost sm, top-right, Download icon).
-- **Medical Cases by College** — horizontal stacked bar chart (Chart.js). One row per college/unit (all 12 units), each bar segmented by the 8 medical-system categories, sorted by total case volume descending. Total-cases headline (e.g. '235 total cases'). Subtitle: 'Total cases per college, broken down by medical system — sorted by volume.' Students only — Faculty and NASA excluded. Series colors follow the prototype legend. Source: `clearance_case_categories` joined through encoded `clearance_records` (one count per record × category — a multi-category case counts once in each of its systems, D-23), grouped by `clinic_visits.college_id` (the capture-time college snapshot, so a later transfer does not re-attribute past cases) × `case_category`.
-- **Summary of Medical Cases matrix** (table): 8 medical-system rows × 12 college-code columns + TOTAL column and totals row. Fixed column order: COE, CEA, CBS, CAS, CSSP, CCS, CHTM, CIT, LAW, GS, SHS, LHS. Subtitle: 'Rows = medical system · Columns = college · Faculty & NASA excluded.' Total row at bottom in orange. Alternating row backgrounds. Source: `clearance_case_categories` joined through encoded `clearance_records` (one count per record × category, D-23), grouped by `clinic_visits.college_id` (capture-time college snapshot, FR-STU-09) × `case_category`; records with no categories contribute nothing.
-- **Cases by Medical System** — horizontal bar chart (Chart.js). One bar per medical-system category (the 8 above), overall total per system across all units, sorted descending, the per-system total drawn at the bar's end. **Each bar splits into Male + Female segments (D-31):** Male in the system's full-strength series color (same per-category colors as the college chart), Female in a code-derived 50%-white tint of it; the card subtitle states the shade convention (stronger = Male, lighter = Female) in place of a legend, tooltips give the exact split. Same source/scope as the matrix (capture-time `clinic_visits.college_id` snapshot) plus a `student_profiles.sex` join.
-- **By-Sex donut** (Chart.js) — 160px, Male (orange) + Female (peach), centre shows total count. Legend below with count + %. The donut counts students by sex across all encoded clinic visits in scope (one count per student/visit), so its total intentionally differs from the cases total — visits with no assigned case categories are still counted as people screened, and a multi-category case counts once per system in the cases charts (D-23).
+#### Analytics (`director-analytics`) — rescoped by D-32 (v1.11)
+> The Medical Cases analytics (Medical Cases by College, Summary of Medical
+> Cases matrix, Cases by Medical System) and the case-category concept were
+> **dropped** — HealthPass never sees clinic-wide caseload, only its own
+> kiosk/clearance encounters. Every card below reads only data the system
+> itself collects: appointments booked in the web app + vitals captured at
+> the kiosk. **No Export/print** — analytics is on-screen only (FR-ANL-06
+> removed). The approved layout is `docs/prototypes/web/director-analytics-rescope.html`.
+- **Filters** (FR-ANL-13): the existing month picker + a new **college dropdown** (default "All colleges"). Both scope every card except the Visits-per-Month trend.
+- **Clinic Visits by College** (FR-ANL-09) — horizontal stacked bar chart, one row per college (all 12, zero-visit rows included), segmented Medical (`#FF8C2A`) / Dental (`#2563EB`), sorted by total visits descending, total-visits headline, "View as table" toggle (college × service type). Medical = kiosk check-ins (`clinic_visits`, capture-time `college_id` snapshot); Dental = completed dental appointments (D-33), grouped by the student's current college (no capture-time snapshot exists for dental — stated limitation). Includes a **Visits by Purpose** mini bar chart from the linked appointment's `purpose`/`purpose_other`; visits with no linked appointment or purpose fall into a "Walk-in / not specified" bucket.
+- **Vital-Sign Flags** (FR-ANL-10) — three stat tiles (High BP, Fever, Abnormal BMI), each showing count **and rate** (% of the month's captured screenings). Recomputed server-side from `vital_signs` flags.
+- **Visits per Month** (FR-ANL-11) — line chart across all months with data, **two series**: medical screenings + completed dental appointments. Ignores the page filters by design (whole-year, all-college).
+- **Students Screened by Sex** (FR-ANL-04, retitled from "By-Sex donut") — Chart.js donut, 160px, Male (orange) + Female (peach), centre total, legend with count + %. Counts students screened (captured kiosk visits), so it already fits the system-collected scope; now obeys the college filter too.
+- **BMI Distribution** (FR-ANL-12, optional) — four rule-based buckets of captured screenings: Underweight (< 18.5), Normal (18.5–24.9), Overweight (25–29.9), Obese (≥ 30). Descriptive only, no profiling (no-AI lock).
 
 #### Flagged Anomalies (`director-flagged`)
 - **3 stat cards** (orange left border): High Blood Pressure count, Fever count, Abnormal BMI count.
-- **Table**: Student (600), College (muted — capture-time `clinic_visits.college_id` snapshot, not the student's current college), Flag (flagged badge), Value (orange 700), Category, View (link).
-- Source: clinic visits where `vital_signs.is_bp_flagged OR is_temp_flagged OR is_bmi_flagged` = true, joined to student name, the visit's snapshot college, and clearance category.
-- "Export" button (ghost sm, top-right).
+- **Table**: Student (600), College (muted — capture-time `clinic_visits.college_id` snapshot, not the student's current college), Flag (flagged badge), Value (orange 700), View (link). **The Category column is dropped (D-32).**
+- Source: clinic visits where `vital_signs.is_bp_flagged OR is_temp_flagged OR is_bmi_flagged` = true, joined to student name and the visit's snapshot college.
+- No Export button (FR-ANL-06 removed by D-32).
 
 ---
 
@@ -502,10 +510,14 @@ Each vital screen has:
 
 ---
 
-## 8. Database schema (11 tables)
+## 8. Database schema (10 tables)
 
-> Originally locked at 10 tables; `clearance_case_categories` was added as
-> table #11 on July 9, 2026 (D-23 — multi-category cases).
+> Locked at 10 tables. `clearance_case_categories` (added as table #11 on
+> July 9, 2026 by D-23) was **removed by D-32** (July 18, 2026) when the
+> Medical Cases analytics and the case-category concept were dropped — the
+> schema returns to the original 10.
+> (The `kiosk_devices` device-auth table, D-27, is documented in the PRD
+> data dictionary as a flagged extension and is not shown in this section.)
 
 ### `colleges`
 ```sql
@@ -649,8 +661,9 @@ id                    bigint PK
 clinic_visit_id       bigint UNIQUE FK → clinic_visits.id
 encoded_by            bigint FK → users.id  -- the nurse
 result                enum('Fit','Unfit')
--- case_category moved to the clearance_case_categories child table (D-23):
--- a case can span several medical systems
+-- No case_category: the case-category concept was dropped by D-32 (the
+-- nurse encodes Fit/Unfit only). The clearance_case_categories child table
+-- added by D-23 was removed with it.
 purpose               varchar(50) NULL  -- four locked values or 'Others'; Rule::in validation is the gate (D-24)
 purpose_other         varchar(120) NULL -- the Others specify-event text; required when purpose='Others' (D-24)
 nurse_notes           text NULL
@@ -669,19 +682,6 @@ physician_name        varchar(120) DEFAULT 'REYNALDO S. ALIPIO, MD'
 physician_license_no  varchar(20)  DEFAULT '60252'
 encoded_at            timestamp NULL
 printed_at            timestamp NULL
-created_at, updated_at
-```
-
-### `clearance_case_categories` (table #11 — D-23)
-```sql
--- One row per medical-system category on a clearance; a case can span
--- several systems. Child table (not JSON) so cases-per-category analytics
--- stay portable JOIN + GROUP BY SQL. Valid values = the locked 8-category
--- list (ClearanceRecord::CASE_CATEGORIES); validation is the gate.
-id                    bigint PK
-clearance_record_id   bigint FK → clearance_records.id (cascade on delete)
-case_category         varchar(60)
-UNIQUE (clearance_record_id, case_category)
 created_at, updated_at
 ```
 
@@ -709,8 +709,6 @@ appointments ──|── clinic_visits (appointment_id, nullable)
 clinic_visits ──|| vital_signs          (1:1)
               ──|| screening_responses  (1:1)
               ──|  clearance_records    (1:0..1)
-
-clearance_records ──< clearance_case_categories   (0..n categories per case, D-23)
 ```
 
 ---
