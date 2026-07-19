@@ -67,9 +67,15 @@ Route::middleware(['auth', 'role:student'])
         Route::get('/dashboard', StudentDashboardController::class)->name('dashboard');
         Route::get('/appointments', [BookAppointmentController::class, 'show'])->name('appointments');
         Route::get('/appointments/availability', [BookAppointmentController::class, 'availability'])->name('appointments.availability');
-        Route::post('/appointments', [BookAppointmentController::class, 'store'])->name('appointments.store');
+        // State-changing writes carry a per-user rate cap (security.md: "Rate
+        // limiting on all endpoints"). Authed throttles key on the user id with no
+        // path, so each endpoint gets its own 3rd-arg bucket prefix — otherwise
+        // booking + cancelling would share one counter (see routes/auth.php note).
+        Route::post('/appointments', [BookAppointmentController::class, 'store'])
+            ->middleware('throttle:20,1,appt-store')->name('appointments.store');
         Route::get('/appointments/{appointment}/confirmed', [BookAppointmentController::class, 'confirmed'])->name('appointments.confirmed');
-        Route::delete('/appointments/{appointment}', [BookAppointmentController::class, 'cancel'])->name('appointments.cancel');
+        Route::delete('/appointments/{appointment}', [BookAppointmentController::class, 'cancel'])
+            ->middleware('throttle:20,1,appt-cancel')->name('appointments.cancel');
         Route::get('/records', StudentRecordsController::class)->name('records');
         // Kiosk Tutorial (FR-STU-11): static walkthrough, no data to prepare —
         // Route::view renders the Blade view directly, no controller needed.
@@ -104,7 +110,8 @@ Route::middleware(['auth', 'role:college_admin', 'college.scope'])
         // ONLY the managed college's roster; store re-checks every student id
         // against that college server-side.
         Route::get('/batches/create', [AdminBatchRequestController::class, 'create'])->name('batches.create');
-        Route::post('/batches', [AdminBatchRequestController::class, 'store'])->name('batches.store');
+        Route::post('/batches', [AdminBatchRequestController::class, 'store'])
+            ->middleware('throttle:15,1,batch-store')->name('batches.store');
         // Batch Tracking + post-submit confirmation (FR-ADM-04/05). Both fetch
         // through managedCollege(), so foreign batch ids 404.
         Route::get('/batches', [AdminBatchRequestController::class, 'index'])->name('batches.index');
@@ -128,7 +135,8 @@ Route::middleware(['auth', 'role:nurse'])
         Route::get('/visits/{visit}/encode', [NurseEncodeController::class, 'show'])->name('visits.encode');
         // Save & Close (FR-NRS-04): creates the clearance record and flips the
         // visit to encoded — one-time, guarded in the controller + DB unique.
-        Route::post('/visits/{visit}/encode', [NurseEncodeController::class, 'store'])->name('visits.encode.store');
+        Route::post('/visits/{visit}/encode', [NurseEncodeController::class, 'store'])
+            ->middleware('throttle:40,1,encode-store')->name('visits.encode.store');
         // Printable Medical Clearance (Module PRT, FR-PRT-01..05 / FR-NRS-05) —
         // the official DHVSU form as a standalone document.
         //  GET  print         — plain view of an encoded visit's form, no side effects
@@ -144,8 +152,10 @@ Route::middleware(['auth', 'role:nurse'])
         // DEVICES so a clinic terminal can open /kiosk without anyone signing in
         // at the screen. See App\Http\Middleware\KioskAccess.
         Route::get('/kiosk-devices', [NurseKioskDeviceController::class, 'index'])->name('kiosk-devices');
-        Route::post('/kiosk-devices', [NurseKioskDeviceController::class, 'store'])->name('kiosk-devices.store');
-        Route::delete('/kiosk-devices/{device}', [NurseKioskDeviceController::class, 'destroy'])->name('kiosk-devices.destroy');
+        Route::post('/kiosk-devices', [NurseKioskDeviceController::class, 'store'])
+            ->middleware('throttle:15,1,kioskdev-store')->name('kiosk-devices.store');
+        Route::delete('/kiosk-devices/{device}', [NurseKioskDeviceController::class, 'destroy'])
+            ->middleware('throttle:15,1,kioskdev-destroy')->name('kiosk-devices.destroy');
     });
 
 // ── Director (FR-AUTH-03) ────────────────────────────────────────────────────
@@ -177,9 +187,9 @@ Route::middleware(['auth', 'role:director'])
         // BR-08 (transaction + appointment fan-out). Reject: FR-DIRA-04
         // (reviewer stamps, zero appointments).
         Route::post('/batches/{batch}/approve', [DirectorBatchApprovalController::class, 'approve'])
-            ->whereNumber('batch')->name('batches.approve');
+            ->whereNumber('batch')->middleware('throttle:20,1,batch-approve')->name('batches.approve');
         Route::post('/batches/{batch}/reject', [DirectorBatchApprovalController::class, 'reject'])
-            ->whereNumber('batch')->name('batches.reject');
+            ->whereNumber('batch')->middleware('throttle:20,1,batch-reject')->name('batches.reject');
     });
 
 // ── Kiosk (Module KSK, FR-KSK-01..16) — PUBLIC clinic terminal ───────────────
@@ -213,8 +223,18 @@ Route::prefix('kiosk')->name('kiosk.')->middleware('kiosk.access')->group(functi
     // Final submit (FR-KSK-12): re-validates server-side and writes the
     // clinic_visits + vital_signs + screening_responses trio in one transaction,
     // returning the minted HP-YYYY-#### for the Complete screen.
+    //
+    // ->block() = SESSION LOCKING: Laravel holds an atomic lock on THIS session
+    // for the request's duration, so two submits from the same kiosk session
+    // (a double-tap, or a network retry of an in-flight POST) run one-at-a-time
+    // instead of overlapping. The first mints the visit and forgets the identity
+    // (see KioskController@submit); the second then loads the now-cleared session
+    // and is refused — so one screening can never become two clinic visits. The
+    // throttle caps volume; the lock guarantees the single-use identity is
+    // actually single-use under concurrency.
     Route::post('/submit', [KioskController::class, 'submit'])
         ->middleware('throttle:20,1,kiosk-submit')
+        ->block()
         ->name('submit');
     // Forget the server-side kiosk identity (kiosk.* session keys). The Alpine
     // reset() calls this on every abandon/finish path so a bound student never
