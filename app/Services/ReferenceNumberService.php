@@ -54,14 +54,25 @@ class ReferenceNumberService
                 return DB::transaction(function () use ($table, $column, $prefix, $year, $pad) {
                     // Lock matching rows (or gap if empty) so concurrent reads
                     // block until this transaction commits.
-                    $max = DB::table($table)
+                    //
+                    // We must find the highest SEQUENCE, not the lexicographically
+                    // largest string: reference_no is a varchar, so a plain max()
+                    // ranks 'HP-2026-9999' above 'HP-2026-10000' (because '9' > '1'
+                    // char-by-char). Once a year's counter crosses the pad width the
+                    // stale max would recompute the same seq forever → every mint
+                    // collides on the unique index. Ordering by LENGTH first (a
+                    // longer number is always larger) then by the string makes the
+                    // comparison numeric. LENGTH() is portable across MySQL + SQLite.
+                    $latest = DB::table($table)
                         ->whereRaw("{$column} LIKE ?", ["{$prefix}-{$year}-%"])
                         ->lockForUpdate()
-                        ->max($column);
+                        ->orderByRaw("LENGTH({$column}) DESC")
+                        ->orderBy($column, 'desc')
+                        ->value($column);
 
-                    $seq = $max === null
+                    $seq = $latest === null
                         ? 1
-                        : ((int) Str::afterLast($max, '-')) + 1;
+                        : ((int) Str::afterLast($latest, '-')) + 1;
 
                     return sprintf('%s-%d-%0'.$pad.'d', $prefix, $year, $seq);
                 });

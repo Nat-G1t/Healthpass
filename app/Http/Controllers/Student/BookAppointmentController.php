@@ -13,6 +13,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class BookAppointmentController extends Controller
@@ -54,17 +55,54 @@ class BookAppointmentController extends Controller
      */
     public function store(StoreAppointmentRequest $request, ReferenceNumberService $refService): RedirectResponse|JsonResponse
     {
-        $appointment = DB::transaction(function () use ($request, $refService): Appointment {
+        $userId = $request->user()->id;
+        $service = $request->validated('service');
+        $date = $request->validated('date');
+
+        $appointment = DB::transaction(function () use ($request, $refService, $userId, $service, $date): Appointment {
+            // The Form Request already checked capacity (BR-02) and the one-active-
+            // per-student-per-date rule (BR-04), but those reads are unlocked and
+            // race with a concurrent booking (two tabs, a double-click, or two
+            // students grabbing the last slot): both pass the check, both insert.
+            // Re-check HERE under a row lock so the read and the insert are one
+            // atomic unit. lockForUpdate() takes range/gap locks on MySQL (and
+            // SQLite serializes write transactions), so the second caller blocks
+            // until the first commits, then sees the up-to-date count/duplicate.
+            $capacity = (int) config('healthpass.daily_capacity');
+            $booked = Appointment::whereDate('scheduled_date', $date)
+                ->where('status', '!=', 'cancelled')
+                ->lockForUpdate()
+                ->count();
+
+            if ($booked >= $capacity) {
+                throw ValidationException::withMessages([
+                    'date' => 'This day is fully booked. Please select a different date.',
+                ]);
+            }
+
+            $duplicate = Appointment::where('student_id', $userId)
+                ->where('service_type', $service)
+                ->whereDate('scheduled_date', $date)
+                ->where('status', '!=', 'cancelled')
+                ->lockForUpdate()
+                ->exists();
+
+            if ($duplicate) {
+                throw ValidationException::withMessages([
+                    'date' => 'You already have an active '.ucfirst($service).' appointment on this date.',
+                ]);
+            }
+
             return Appointment::create([
                 'reference_no' => $refService->generateAppointmentRef(),
-                'student_id' => $request->user()->id,
-                'service_type' => $request->validated('service'),
+                'student_id' => $userId,
+                'service_type' => $service,
                 // D-28: student-chosen purpose of the medical clearance. NULL for
                 // dental (normalized away in the Form Request); purpose_other holds
                 // the free-text event only when "Others" was picked.
                 'purpose' => $request->validated('purpose'),
                 'purpose_other' => $request->validated('purpose_other'),
-                'scheduled_date' => $request->validated('date'),
+                'scheduled_date' => $date,
                 'status' => 'scheduled',
                 'source' => 'self',
             ]);

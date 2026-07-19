@@ -53,18 +53,20 @@ return [
         // See App\Http\Middleware\KioskAccess.
         'restrict_access' => env('HEALTHPASS_KIOSK_RESTRICT', true),
 
-        // Whether a loopback (127.0.0.1/::1) request counts as authorized. TRUE for
-        // the Pi-local defense shape (Chromium hits http://localhost/kiosk); the
-        // hosted internet deploy sets it FALSE. NEVER key this on APP_ENV — the Pi
-        // is APP_ENV=production over plain http://localhost by design.
+        // Whether a loopback (127.0.0.1/::1) request counts as authorized. The
+        // Pi-local defense shape NEEDS this on (Chromium hits http://localhost/kiosk)
+        // and enables it explicitly in scripts/pi/pi.env.example; the hosted internet
+        // deploy leaves it OFF. NEVER key this on APP_ENV — the Pi is
+        // APP_ENV=production over plain http://localhost by design.
         //
-        // Why a switch and not "always trust loopback": behind a MISCONFIGURED
-        // reverse proxy, $request->ip() can report 127.0.0.1 for every internet
-        // visitor (if trusted proxies aren't set correctly), which would open the
-        // kiosk to the whole world. The hosted deploy closes that door with false
-        // and relies on device tokens + nurse auth instead. (Also configure
-        // trusted proxies to the real proxy IPs — never '*' — see docs.)
-        'allow_loopback' => env('HEALTHPASS_KIOSK_ALLOW_LOOPBACK', true),
+        // DEFAULT IS FALSE (fail-safe): behind a same-host reverse proxy (nginx →
+        // php-fpm/app on 127.0.0.1 is the common single-box setup) $request->ip()
+        // reports 127.0.0.1 for EVERY internet visitor unless trusted proxies are
+        // set exactly right — a true default would silently open /kiosk/scan to the
+        // whole world as a PII oracle. So loopback trust must be opted INTO by the
+        // deployment that actually runs on loopback (the Pi), never assumed. (Also
+        // configure trusted proxies to the real proxy IPs — never '*' — see docs.)
+        'allow_loopback' => env('HEALTHPASS_KIOSK_ALLOW_LOOPBACK', false),
 
         'complete_reset_seconds' => 12,  // FR-KSK-13: auto-reset after successful submission
         'idle_timeout_seconds' => 90,  // FR-KSK-15: abandon reset on no interaction mid-flow
