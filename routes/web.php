@@ -156,8 +156,9 @@ Route::middleware(['auth', 'role:director'])
     ->group(function () {
         // Dashboard (FR-ANL-01): KPI cards + the two preview panels.
         Route::get('/dashboard', DirectorDashboardController::class)->name('dashboard');
-        // Analytics (FR-ANL-04, month-scoped): By-Sex donut today; the
-        // rescoped captured-data analytics (D-32) land in the rebuild phase.
+        // Analytics (FR-ANL-09..13 + amended FR-ANL-04): captured-data
+        // charts — visits by college, flags, trend, BMI, by-sex donut —
+        // scoped by the month + college filters (D-32 rescope).
         Route::get('/analytics', DirectorAnalyticsController::class)->name('analytics');
         // Flagged Anomalies (FR-ANL-05): stat cards + the flagged-visits
         // table. Flags surface from CAPTURE (FR-ANL-07) — un-encoded visits

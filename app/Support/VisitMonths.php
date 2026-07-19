@@ -4,37 +4,49 @@ declare(strict_types=1);
 
 namespace App\Support;
 
+use App\Models\Appointment;
 use App\Models\ClinicVisit;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
-use Illuminate\Database\Eloquent\Builder;
 
 /**
  * The month dimension for Director analytics — the list of months that
  * have data (for the picker) and the parse/fallback rule (for the request
- * value).
+ * value). Generalized from the old CaseMonths (D-32 rescope, FR-ANL-13).
  *
- * A "month with data" is one with at least one encoded visit — the same
- * rows the By-Sex donut counts (FR-ANL-04/07), so the picker never offers
- * a month that would render empty.
+ * A "month with data" is one with at least one clinic-visit check-in
+ * (captured OR encoded — FR-ANL-07 counts from capture) OR at least one
+ * completed dental appointment (D-33), so the picker never offers a month
+ * that would render every card empty.
  */
-final class CaseMonths
+final class VisitMonths
 {
     /**
      * Distinct months as ['value' => 'YYYY-MM', 'label' => 'Month YYYY'],
      * newest first, for the month <select>. Months are derived in PHP from
-     * Carbon-cast checked_in_at values (not a raw DATE_FORMAT), so the query
-     * stays portable to the SQLite test database.
+     * Carbon-cast dates (not a raw DATE_FORMAT), so the queries stay
+     * portable to the SQLite test database.
      *
      * @return list<array{value: string, label: string}>
      */
     public static function available(): array
     {
-        return self::encodedVisits()
-            ->orderByDesc('checked_in_at')
+        $visitMonths = ClinicVisit::query()
+            ->whereNotNull('checked_in_at')
             ->pluck('checked_in_at')
-            ->map(fn (CarbonInterface $date) => $date->format('Y-m'))
+            ->map(fn (CarbonInterface $date) => $date->format('Y-m'));
+
+        // Dental has no clinic_visits row — its month is the appointment's
+        // scheduled date, and only completed appointments count (D-33).
+        $dentalMonths = Appointment::query()
+            ->where('service_type', 'dental')
+            ->where('status', 'completed')
+            ->pluck('scheduled_date')
+            ->map(fn (CarbonInterface $date) => $date->format('Y-m'));
+
+        return $visitMonths->merge($dentalMonths)
             ->unique()
+            ->sortDesc()
             ->values()
             ->map(fn (string $yearMonth) => [
                 'value' => $yearMonth,
@@ -56,16 +68,10 @@ final class CaseMonths
             return CarbonImmutable::createFromFormat('Y-m-d', $month.'-01')->startOfMonth();
         }
 
-        $latest = self::encodedVisits()->max('checked_in_at');
+        $newest = self::available()[0]['value'] ?? null;
 
-        return $latest
-            ? CarbonImmutable::parse($latest)->startOfMonth()
+        return $newest
+            ? CarbonImmutable::createFromFormat('Y-m-d', $newest.'-01')->startOfMonth()
             : CarbonImmutable::now()->startOfMonth();
-    }
-
-    /** Encoded visits (FR-ANL-07) — the donut's base scope. */
-    private static function encodedVisits(): Builder
-    {
-        return ClinicVisit::encoded();
     }
 }

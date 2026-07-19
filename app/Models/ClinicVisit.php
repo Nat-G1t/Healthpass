@@ -58,17 +58,6 @@ class ClinicVisit extends Model
     }
 
     /**
-     * Encoded visits only — the base scope for the By-Sex donut (FR-ANL-04)
-     * and the analytics month list (CaseMonths). Captured (un-encoded)
-     * visits never enter these counts; vitals flags are the one exception
-     * (scopeFlagged below).
-     */
-    public function scopeEncoded(Builder $query): Builder
-    {
-        return $query->where('status', 'encoded');
-    }
-
-    /**
      * FR-ANL-01/05 — visits whose vitals tripped ANY flag threshold.
      *
      * whereHas() filters by a related table: it compiles to an EXISTS
