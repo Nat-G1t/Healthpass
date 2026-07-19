@@ -46,8 +46,8 @@ class PrintClearanceController extends Controller
         abort_unless($visit->status === 'captured', 404);
 
         $validated = $request->validated();
-        // Child-list / flag fields that aren't clearance_records columns.
-        unset($validated['case_categories'], $validated['printed']);
+        // `printed` is a screen flag, not a clearance_records column.
+        unset($validated['printed']);
 
         $record = new ClearanceRecord([
             ...$validated,

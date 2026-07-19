@@ -16,11 +16,10 @@ use Tests\TestCase;
 /**
  * Flagged Anomalies (FR-ANL-05) and its record-detail page:
  *  - sourced from vital_signs flag booleans, INCLUDING still-captured
- *    visits — flags surface from capture while case statistics stay
+ *    visits — flags surface from capture while the donut stays
  *    encoded-only (FR-ANL-07). The PRD AC's cross-check lives here: a
  *    captured flagged visit is on this screen but in no analytics count;
  *  - three stat cards counting each flag type independently;
- *  - Category column: encoded case categories, or "Pending" until then;
  *  - College column = the capture-time snapshot (FR-STU-09, D-17).
  */
 class AnomaliesPageTest extends TestCase
@@ -86,22 +85,16 @@ class AnomaliesPageTest extends TestCase
     }
 
     /** Encode a visit: clearance record + status flip, like FR-NRS-04. */
-    private function encode(ClinicVisit $visit, array $categories = []): ClearanceRecord
+    private function encode(ClinicVisit $visit): ClearanceRecord
     {
         $visit->update(['status' => 'encoded']);
 
-        $record = ClearanceRecord::create([
+        return ClearanceRecord::create([
             'clinic_visit_id' => $visit->id,
             'encoded_by' => $this->nurse->id,
             'result' => 'Fit',
             'encoded_at' => now(),
         ]);
-
-        foreach ($categories as $category) {
-            $record->caseCategories()->create(['case_category' => $category]);
-        }
-
-        return $record;
     }
 
     public function test_guests_and_other_roles_cannot_open_anomalies(): void
@@ -121,37 +114,32 @@ class AnomaliesPageTest extends TestCase
         // PRD §4.9 AC: freshly captured, temp-flagged, NOT yet encoded.
         $this->makeVisit($this->ccs, ['is_temp_flagged' => true, 'temperature_c' => 38.1]);
 
-        // On Flagged Anomalies: listed, counted, Category = Pending.
+        // On Flagged Anomalies: listed and counted.
         $response = $this->actingAs($this->director)
             ->get('/director/anomalies')
             ->assertOk()
             ->assertSee('Juan Santos')
             ->assertSee('Fever')
-            ->assertSee('38.1')
-            ->assertSee('Pending');
+            ->assertSee('38.1');
 
         $this->assertSame(1, $response->viewData('visits')->count());
         $this->assertSame(['bp' => 0, 'temp' => 1, 'bmi' => 0], $response->viewData('stats'));
 
-        // On Analytics: invisible everywhere — matrix, donut, footnote.
+        // On Analytics: invisible — the donut counts encoded visits only.
         $analytics = $this->actingAs($this->director)->get('/director/analytics');
-        $this->assertSame(0, $analytics->viewData('totalCases'));
         $this->assertSame(0, $analytics->viewData('totalScreened'));
-        $this->assertSame(0, $analytics->viewData('uncategorizedCount'));
     }
 
-    public function test_encoded_flagged_visit_shows_its_case_categories(): void
+    public function test_encoded_flagged_visit_stays_listed(): void
     {
         $visit = $this->makeVisit($this->ccs, ['is_bp_flagged' => true, 'bp_systolic' => 145, 'bp_diastolic' => 93]);
-        $this->encode($visit, ['Cardiovascular System', 'Respiratory System']);
+        $this->encode($visit);
 
         $this->actingAs($this->director)
             ->get('/director/anomalies')
             ->assertOk()
             ->assertSee('High Blood Pressure')
-            ->assertSee('145/93 mmHg')
-            ->assertSee('Cardiovascular System, Respiratory System')
-            ->assertDontSee('Pending');
+            ->assertSee('145/93 mmHg');
     }
 
     public function test_unflagged_visits_are_not_listed(): void
@@ -212,14 +200,13 @@ class AnomaliesPageTest extends TestCase
     public function test_detail_page_shows_the_encoded_assessment(): void
     {
         $visit = $this->makeVisit($this->ccs, ['is_bp_flagged' => true, 'bp_systolic' => 145, 'bp_diastolic' => 93]);
-        $this->encode($visit, ['Cardiovascular System']);
+        $this->encode($visit);
 
         $this->actingAs($this->director)
             ->get("/director/anomalies/{$visit->id}")
             ->assertOk()
             ->assertSee('145/93')
             ->assertSee('Fit')
-            ->assertSee('Cardiovascular System')
             ->assertDontSee('Awaiting nurse encode');
     }
 }

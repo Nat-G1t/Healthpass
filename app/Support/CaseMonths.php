@@ -11,13 +11,12 @@ use Illuminate\Database\Eloquent\Builder;
 
 /**
  * The month dimension for Director analytics — the list of months that
- * have cases (for the picker) and the parse/fallback rule (for the request
- * value). Shared by AnalyticsController (the on-screen dashboard) and
- * CaseSummaryPrintController (the printed report) so both agree on which
- * month is "current" and both fall back the same way.
+ * have data (for the picker) and the parse/fallback rule (for the request
+ * value).
  *
- * A "month with data" is one that has at least one categorized encoded
- * case — the same rows the matrix counts (FR-ANL-03/07).
+ * A "month with data" is one with at least one encoded visit — the same
+ * rows the By-Sex donut counts (FR-ANL-04/07), so the picker never offers
+ * a month that would render empty.
  */
 final class CaseMonths
 {
@@ -31,7 +30,7 @@ final class CaseMonths
      */
     public static function available(): array
     {
-        return self::categorizedEncoded()
+        return self::encodedVisits()
             ->orderByDesc('checked_in_at')
             ->pluck('checked_in_at')
             ->map(fn (CarbonInterface $date) => $date->format('Y-m'))
@@ -46,7 +45,7 @@ final class CaseMonths
 
     /**
      * Parse a YYYY-MM request value to the first day of that month. Anything
-     * missing or malformed falls back to the newest month that has cases (or
+     * missing or malformed falls back to the newest month that has data (or
      * the current month when there is no data at all) — every screen still
      * renders. The regex pins a valid 01–12 month so createFromFormat can't
      * roll over into the next year.
@@ -57,16 +56,16 @@ final class CaseMonths
             return CarbonImmutable::createFromFormat('Y-m-d', $month.'-01')->startOfMonth();
         }
 
-        $latest = self::categorizedEncoded()->max('checked_in_at');
+        $latest = self::encodedVisits()->max('checked_in_at');
 
         return $latest
             ? CarbonImmutable::parse($latest)->startOfMonth()
             : CarbonImmutable::now()->startOfMonth();
     }
 
-    /** Encoded visits carrying at least one case category (FR-ANL-03/07). */
-    private static function categorizedEncoded(): Builder
+    /** Encoded visits (FR-ANL-07) — the donut's base scope. */
+    private static function encodedVisits(): Builder
     {
-        return ClinicVisit::encoded()->whereHas('clearanceRecord.caseCategories');
+        return ClinicVisit::encoded();
     }
 }

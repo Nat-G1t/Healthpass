@@ -11,8 +11,6 @@
                                    ? ucfirst($v->appointment->service_type) . ' Clearance'
                                    : 'Medical Clearance',
             'result'          => $v->clearanceRecord->result,
-            // 0..n categories per case (D-23) — the modal chips them all.
-            'case_categories' => $v->clearanceRecord->categoryNames(),
             'encoded_at'    => ($v->clearanceRecord->encoded_at
                                    ?? $v->clearanceRecord->created_at)->format('M j, Y'),
             'vitals'        => [
@@ -310,23 +308,6 @@ function recordsPageData() {
                             </div>
 
                         </dl>
-
-                        {{-- A case can carry several categories (D-23) — one chip each. --}}
-                        <template x-if="rec.case_categories.length > 0">
-                            <div class="mt-5 border-t border-hp-slate/10 pt-4">
-                                <p class="mb-2 text-[11px] font-semibold uppercase
-                                          tracking-widest text-hp-slate/40"
-                                   x-text="rec.case_categories.length > 1 ? 'Case Categories' : 'Case Category'"></p>
-                                <div class="flex flex-wrap gap-1.5">
-                                    <template x-for="category in rec.case_categories" :key="category">
-                                        <span class="inline-flex items-center rounded-full bg-hp-peach
-                                                     px-3 py-1 text-xs font-semibold text-hp-orange"
-                                              x-text="category">
-                                        </span>
-                                    </template>
-                                </div>
-                            </div>
-                        </template>
                     </div>
 
                     {{-- Right: 9-system questionnaire --}}

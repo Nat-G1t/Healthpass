@@ -22,8 +22,8 @@ use Tests\TestCase;
  *
  * Encoding is one-time: a re-submit must NOT create a second record — it gets
  * a friendly redirect to the read-only view instead. BR-16: result required,
- * category/purpose optional. BR-18/FR-STU-08: the result becomes visible in
- * the student's My Records only after this save.
+ * purpose optional. BR-18/FR-STU-08: the result becomes visible in the
+ * student's My Records only after this save.
  */
 class EncodeSaveTest extends TestCase
 {
@@ -160,27 +160,14 @@ class EncodeSaveTest extends TestCase
         $this->assertDatabaseCount('clearance_records', 0);
     }
 
-    public function test_case_categories_and_purpose_must_come_from_the_locked_lists(): void
+    public function test_purpose_must_come_from_the_locked_list(): void
     {
         $visit = $this->makeVisit();
 
         $this->save($this->nurse(), $visit, [
             'result' => 'Fit',
-            'case_categories' => ['Made-up System'],
             'purpose' => 'Vacation',
-        ])->assertSessionHasErrors(['case_categories.0', 'purpose']);
-
-        $this->assertDatabaseCount('clearance_records', 0);
-    }
-
-    public function test_duplicate_case_categories_are_blocked(): void
-    {
-        $visit = $this->makeVisit();
-
-        $this->save($this->nurse(), $visit, [
-            'result' => 'Fit',
-            'case_categories' => ['Respiratory System', 'Respiratory System'],
-        ])->assertSessionHasErrors('case_categories.0');
+        ])->assertSessionHasErrors(['purpose']);
 
         $this->assertDatabaseCount('clearance_records', 0);
     }
@@ -226,7 +213,7 @@ class EncodeSaveTest extends TestCase
             ->assertSessionHas('status');
 
         $this->assertSame('encoded', $visit->fresh()->status);
-        // Categories/purpose optional (BR-16); physician block pre-filled (§7.5).
+        // Purpose optional (BR-16); physician block pre-filled (§7.5).
         $this->assertDatabaseHas('clearance_records', [
             'clinic_visit_id' => $visit->id,
             'encoded_by' => $nurse->id,
@@ -235,7 +222,6 @@ class EncodeSaveTest extends TestCase
             'physician_name' => 'REYNALDO S. ALIPIO, MD',
             'physician_license_no' => '60252',
         ]);
-        $this->assertDatabaseCount('clearance_case_categories', 0);
         $this->assertNotNull($visit->fresh()->clearanceRecord->encoded_at);
     }
 
@@ -244,11 +230,8 @@ class EncodeSaveTest extends TestCase
         $nurse = $this->nurse();
         $visit = $this->makeVisit();
 
-        // A case can span several systems (D-23) — each persists as its own
-        // child row so the Director's analytics can count per category.
         $this->save($nurse, $visit, [
             'result' => 'Unfit',
-            'case_categories' => ['Respiratory System', 'Cardiovascular System'],
             'purpose' => 'On-the-job Training',
             'nurse_notes' => 'Advised rest and follow-up in one week.',
         ])->assertRedirect(route('nurse.queue'));
@@ -259,12 +242,6 @@ class EncodeSaveTest extends TestCase
             'purpose' => 'On-the-job Training',
             'nurse_notes' => 'Advised rest and follow-up in one week.',
         ]);
-
-        $record = ClearanceRecord::firstWhere('clinic_visit_id', $visit->id);
-        $this->assertEqualsCanonicalizing(
-            ['Respiratory System', 'Cardiovascular System'],
-            $record->categoryNames()
-        );
     }
 
     public function test_encoded_visit_vanishes_from_the_queue_feed(): void

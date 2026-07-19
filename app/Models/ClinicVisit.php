@@ -58,30 +58,14 @@ class ClinicVisit extends Model
     }
 
     /**
-     * FR-ANL-07 — encoded visits only: the shared base scope for ALL case
-     * statistics (cases-by-college chart, the FR-ANL-03 matrix, and the
-     * FR-ANL-04 by-sex donut), so every analytics number filters "encoded"
-     * the same way. Captured (un-encoded) visits never enter case stats;
-     * vitals flags are the one exception (scopeFlagged below).
+     * Encoded visits only — the base scope for the By-Sex donut (FR-ANL-04)
+     * and the analytics month list (CaseMonths). Captured (un-encoded)
+     * visits never enter these counts; vitals flags are the one exception
+     * (scopeFlagged below).
      */
     public function scopeEncoded(Builder $query): Builder
     {
         return $query->where('status', 'encoded');
-    }
-
-    /**
-     * FR-ANL-02/03/08 + FR-ANL-06 — the shared row set behind every CASE
-     * statistic: encoded visits joined to their clearance record and its
-     * case-category rows, i.e. one row per record × category (D-23).
-     * The college chart, the matrix, the by-system chart, and the CSV
-     * exports all GROUP BY over this same base — one source of truth,
-     * so a download can never disagree with the screen it sits on.
-     */
-    public function scopeEncodedCaseRows(Builder $query): Builder
-    {
-        return $query->encoded() // FR-ANL-07
-            ->join('clearance_records', 'clearance_records.clinic_visit_id', '=', 'clinic_visits.id')
-            ->join('clearance_case_categories', 'clearance_case_categories.clearance_record_id', '=', 'clearance_records.id');
     }
 
     /**

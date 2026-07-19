@@ -7,32 +7,14 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ClearanceRecord extends Model
 {
     use HasFactory;
 
     /**
-     * The 8 medical-system case categories (FR-NRS-03, locked per PRD).
-     * A clearance can carry several (D-23) — stored one row per category in
-     * `clearance_case_categories`; this list is the validation gate.
-     *
-     * @var list<string>
-     */
-    public const CASE_CATEGORIES = [
-        'Alimentary System',
-        'Respiratory System',
-        'Musculo-Skeletal System',
-        'Integumentary System',
-        'Urinary System',
-        'Metabolic Endocrine System',
-        'Cardiovascular System',
-        'Eyes, Ears, Nose & Throat Disorders',
-    ];
-
-    /**
-     * Clearance purposes (FR-NRS-03) — same in-step rule as above.
+     * Clearance purposes (FR-NRS-03) — the locked PRD list; validation is
+     * the real gate (SQLite in tests doesn't enforce the MySQL enum).
      *
      * @var list<string>
      */
@@ -129,23 +111,6 @@ class ClearanceRecord extends Model
     public function clinicVisit(): BelongsTo
     {
         return $this->belongsTo(ClinicVisit::class);
-    }
-
-    /** 0..n medical-system case categories for this clearance (D-23). */
-    public function caseCategories(): HasMany
-    {
-        return $this->hasMany(ClearanceCaseCategory::class);
-    }
-
-    /**
-     * The category names as a plain list — for display (encode read-only,
-     * student records).
-     *
-     * @return list<string>
-     */
-    public function categoryNames(): array
-    {
-        return $this->caseCategories->pluck('case_category')->all();
     }
 
     /** The nurse who encoded this result. */

@@ -14,10 +14,7 @@ use Illuminate\View\View;
  * and the flagged-visits table.
  *
  * Scope (FR-ANL-07): flags surface from CAPTURE, so still-captured
- * (un-encoded) visits appear here — unlike every case statistic on
- * Analytics, which counts encoded records only. The Category column is
- * where the two rules meet: it shows the encoded case categories when
- * they exist and "Pending" while the visit is still in the nurse queue.
+ * (un-encoded) visits appear here too.
  */
 class AnomaliesController extends Controller
 {
@@ -42,7 +39,6 @@ class AnomaliesController extends Controller
                 'student:id,name',
                 'college:id,code',
                 'vitalSigns',
-                'clearanceRecord.caseCategories',
             ])
             ->latest('checked_in_at')
             ->latest('id')
@@ -61,7 +57,7 @@ class AnomaliesController extends Controller
             'student.studentProfile',
             'college',
             'vitalSigns',
-            'clearanceRecord.caseCategories',
+            'clearanceRecord',
         ]);
 
         return view('director.anomalies.show', compact('visit'));

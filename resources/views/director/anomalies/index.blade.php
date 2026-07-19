@@ -46,11 +46,6 @@
                 </p>
             </div>
             <div class="flex items-center gap-3">
-                {{-- CSV export (FR-ANL-06): same flagged rows, one line per tripped flag --}}
-                <a href="{{ route('director.anomalies.export') }}"
-                   class="inline-flex items-center rounded-full border-[1.5px] border-hp-slate/30 px-4 py-1.5 text-xs font-semibold text-hp-slate transition-colors duration-150 hover:bg-hp-slate/8">
-                    Export CSV
-                </a>
                 <x-hp.badge :variant="$visits->isNotEmpty() ? 'flagged' : 'neutral'">
                     {{ $visits->count() }} flagged
                 </x-hp.badge>
@@ -80,7 +75,6 @@
                             <th class="px-3 py-2 font-semibold">College</th>
                             <th class="px-3 py-2 font-semibold">Flag</th>
                             <th class="px-3 py-2 font-semibold">Value</th>
-                            <th class="px-3 py-2 font-semibold">Category</th>
                             <th class="py-2 pl-3 font-semibold"><span class="sr-only">View</span></th>
                         </tr>
                     </thead>
@@ -105,14 +99,6 @@
                                             <span>{{ $flag['value'] }}</span>
                                         @endforeach
                                     </div>
-                                </td>
-                                <td class="px-3 py-3 text-xs">
-                                    @if ($visit->status === 'captured')
-                                        {{-- Not yet encoded — in the nurse queue (FR-ANL-07) --}}
-                                        <x-hp.badge variant="pending">Pending</x-hp.badge>
-                                    @else
-                                        {{ $visit->clearanceRecord?->caseCategories->pluck('case_category')->implode(', ') ?: '—' }}
-                                    @endif
                                 </td>
                                 <td class="py-3 pl-3 text-right">
                                     <a href="{{ route('director.anomalies.show', $visit) }}"

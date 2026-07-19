@@ -17,7 +17,7 @@ use Tests\TestCase;
 /**
  * FR-NRS-03 — Encode Result ("Doctor's Assessment"):
  * a captured visit opens the editable assessment form (identity + vitals with
- * flags + all questionnaire answers, Result required, Category/Purpose/Notes
+ * flags + all questionnaire answers, Result required, Purpose/Notes
  * optional); an encoded visit renders the same screen read-only with Reprint.
  */
 class EncodePageTest extends TestCase
@@ -115,8 +115,6 @@ class EncodePageTest extends TestCase
             'encoded_at' => now(),
         ], $overrides));
 
-        $record->caseCategories()->create(['case_category' => 'Respiratory System']);
-
         $visit->update(['status' => 'encoded']);
 
         return $record;
@@ -168,7 +166,6 @@ class EncodePageTest extends TestCase
             // Form controls + buttons (stubs today)
             ->assertSee('Fit')
             ->assertSee('Unfit')
-            ->assertSee('Medical Case Categories')
             ->assertSee('Purpose')
             ->assertSee('Nurse Notes')
             ->assertSee('Preview & Print')
@@ -222,7 +219,7 @@ class EncodePageTest extends TestCase
             ->assertSee('May 20, 2026');
     }
 
-    public function test_case_category_options_are_the_locked_prd_list(): void
+    public function test_purpose_options_are_the_locked_prd_list(): void
     {
         $visit = $this->makeVisit();
 
@@ -230,9 +227,6 @@ class EncodePageTest extends TestCase
             ->get(route('nurse.visits.encode', $visit))
             ->assertOk();
 
-        foreach (ClearanceRecord::CASE_CATEGORIES as $category) {
-            $response->assertSee($category);
-        }
         foreach (ClearanceRecord::PURPOSES as $purpose) {
             $response->assertSee($purpose);
         }
@@ -352,24 +346,6 @@ class EncodePageTest extends TestCase
         $this->assertMatchesRegularExpression('~name="ps_heent" value="0"[^>]*checked~', $html);
         // ps_chest_lungs was left NULL → no kiosk prefill in read-only mode.
         $this->assertDoesNotMatchRegularExpression('~name="ps_chest_lungs" value="1"[^>]*checked~', $html);
-    }
-
-    public function test_encoded_visit_shows_all_saved_case_categories_checked(): void
-    {
-        $nurse = $this->nurse();
-        $visit = $this->makeVisit('Multi Category Student');
-        $record = $this->encode($visit, $nurse);
-        // A case can span several systems (D-23).
-        $record->caseCategories()->create(['case_category' => 'Cardiovascular System']);
-
-        $html = $this->actingAs($nurse)
-            ->get(route('nurse.visits.encode', $visit))
-            ->assertOk()
-            ->getContent();
-
-        $this->assertMatchesRegularExpression('~value="Respiratory System"[^>]*checked~', $html);
-        $this->assertMatchesRegularExpression('~value="Cardiovascular System"[^>]*checked~', $html);
-        $this->assertDoesNotMatchRegularExpression('~value="Urinary System"[^>]*checked~', $html);
     }
 
     public function test_encoded_visit_renders_read_only_with_reprint(): void

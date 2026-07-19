@@ -17,9 +17,8 @@ use Tests\TestCase;
  * Module PRT (FR-PRT-01..04, BR-17) — printable Medical Clearance
  * (DHVSU-QSP-OSS-004-FO002-R03): nurse-only, encoded visits only, populated
  * per FR-PRT-02 as amended by D-22 (physical signs + pregnancy shade from the
- * kiosk questionnaire; no Student No.; no Case Category — physician's manual
- * REMARKS annotation), Respiratory Rate intentionally blank, physician block
- * pre-printed from the record's stored defaults.
+ * kiosk questionnaire; no Student No.), Respiratory Rate intentionally blank,
+ * physician block pre-printed from the record's stored defaults.
  */
 class PrintViewTest extends TestCase
 {
@@ -116,9 +115,6 @@ class PrintViewTest extends TestCase
             'encoded_at' => now(),
         ], $overrides));
 
-        // Case categories never print (D-22) — present to prove that.
-        $record->caseCategories()->create(['case_category' => 'Respiratory System']);
-
         $visit->update(['status' => 'encoded']);
 
         return $record;
@@ -204,11 +200,9 @@ class PrintViewTest extends TestCase
             ->assertSee('Advised rest and hydration.')
             // Encode date on the form's Date line
             ->assertSee($record->encoded_at->format('F j, Y'))
-            // NOT printed (D-22): the official form has no Student No. field,
-            // and Case Category is the physician's manual REMARKS annotation.
+            // NOT printed (D-22): the official form has no Student No. field.
             ->assertDontSee('Student No.')
-            ->assertDontSee('2023-000111')
-            ->assertDontSee('Case Category');
+            ->assertDontSee('2023-000111');
     }
 
     // ── 3. Physical signs + pregnancy shading (D-22) ──────────────────────────

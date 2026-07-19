@@ -18,9 +18,9 @@ use Illuminate\View\View;
  *
  * One screen, two modes, decided by the visit's status (BR-11):
  *
- *  - `captured` → the editable assessment form (Result required, Category /
- *    Purpose / Notes optional). Save & Close and Preview & Print are wired
- *    in FR-NRS-04/05.
+ *  - `captured` → the editable assessment form (Result required, Purpose /
+ *    Notes optional). Save & Close and Preview & Print are wired in
+ *    FR-NRS-04/05.
  *  - `encoded`  → the SAME screen read-only, showing the saved clearance
  *    record with a Reprint button. Encoding is one-time (FR-NRS-04), so an
  *    encoded visit can never be edited back into the queue.
@@ -43,7 +43,6 @@ class EncodeController extends Controller
             'vitalSigns',
             'screeningResponse',
             'clearanceRecord.encoder',
-            'clearanceRecord.caseCategories',
         ]);
 
         return view('nurse.encode', [
@@ -77,11 +76,10 @@ class EncodeController extends Controller
 
         try {
             DB::transaction(function () use ($request, $visit): void {
-                // case_categories is a 0..n child list (D-23) and printed a
-                // flag, not columns — pull both out before the record create.
+                // `printed` is a screen flag, not a clearance_records column —
+                // pull it out before the record create.
                 $validated = $request->validated();
-                $categories = $validated['case_categories'] ?? [];
-                unset($validated['case_categories'], $validated['printed']);
+                unset($validated['printed']);
 
                 // D-28 purpose carry-through: when the visit came from a booked
                 // appointment whose student chose a purpose at booking, that
@@ -99,7 +97,7 @@ class EncodeController extends Controller
                 // physician_name / physician_license_no are intentionally NOT
                 // set here — the column defaults (§7.5: REYNALDO S. ALIPIO, MD
                 // / 60252) fill them, keeping the migration the single source.
-                $record = ClearanceRecord::create([
+                ClearanceRecord::create([
                     ...$validated,
                     'clinic_visit_id' => $visit->id,
                     'encoded_by' => $request->user()->id,
@@ -109,10 +107,6 @@ class EncodeController extends Controller
                     // lands here. Reprints re-stamp via the print controller.
                     'printed_at' => $request->boolean('printed') ? now() : null,
                 ]);
-
-                $record->caseCategories()->createMany(
-                    array_map(fn (string $category) => ['case_category' => $category], $categories)
-                );
 
                 $visit->update(['status' => 'encoded']);
 

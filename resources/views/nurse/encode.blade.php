@@ -46,10 +46,6 @@
         'ps_neurological' => 'nervous',
     ];
 
-    // Saved categories for the multi-select (D-23), old() first after a
-    // validation bounce, then the saved child rows in read-only mode.
-    $savedCategories = old('case_categories', $record?->categoryNames() ?? []);
-
     // The 9 body systems, column → label. Mirrors SYSTEMS in
     // resources/js/kiosk/state-machine.js — keep the two lists in step.
     $systems = [
@@ -257,29 +253,6 @@
                     </label>
                 </div>
                 @error('result')
-                    <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
-                @enderror
-            </div>
-
-            {{-- Medical Case Categories — multi-select (D-23): a case can span
-                 several systems; each checked category counts once in the
-                 Director's cases-per-category analytics. The kiosk's
-                 vision/hearing answers (left column) are decision support for
-                 the "Eyes, Ears, Nose & Throat Disorders" pick. --}}
-            <div>
-                <span class="text-sm font-semibold text-hp-slate">Medical Case Categories</span>
-                <p class="mt-0.5 text-xs text-hp-slate/50">Optional — tick every system the case involves.</p>
-                <div class="mt-1.5 space-y-1">
-                    @foreach (\App\Models\ClearanceRecord::CASE_CATEGORIES as $category)
-                        <label class="flex items-center gap-2 {{ $readOnly ? 'cursor-not-allowed' : 'cursor-pointer' }}">
-                            <input type="checkbox" name="case_categories[]" value="{{ $category }}"
-                                   class="accent-hp-orange"
-                                   @checked(in_array($category, $savedCategories, true)) @disabled($readOnly)>
-                            <span class="text-sm text-hp-slate/70">{{ $category }}</span>
-                        </label>
-                    @endforeach
-                </div>
-                @error('case_categories.*')
                     <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
                 @enderror
             </div>

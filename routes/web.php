@@ -6,9 +6,7 @@ use App\Http\Controllers\Auth\PasswordChangeController;
 use App\Http\Controllers\Director\AnalyticsController as DirectorAnalyticsController;
 use App\Http\Controllers\Director\AnomaliesController as DirectorAnomaliesController;
 use App\Http\Controllers\Director\BatchApprovalController as DirectorBatchApprovalController;
-use App\Http\Controllers\Director\CaseSummaryPrintController as DirectorCaseSummaryPrintController;
 use App\Http\Controllers\Director\DashboardController as DirectorDashboardController;
-use App\Http\Controllers\Director\ExportController as DirectorExportController;
 use App\Http\Controllers\Kiosk\KioskController;
 use App\Http\Controllers\Nurse\EncodeController as NurseEncodeController;
 use App\Http\Controllers\Nurse\KioskDeviceController as NurseKioskDeviceController;
@@ -158,15 +156,9 @@ Route::middleware(['auth', 'role:director'])
     ->group(function () {
         // Dashboard (FR-ANL-01): KPI cards + the two preview panels.
         Route::get('/dashboard', DirectorDashboardController::class)->name('dashboard');
-        // Analytics (FR-ANL-02): Medical Cases by College stacked bar.
+        // Analytics (FR-ANL-04, month-scoped): By-Sex donut today; the
+        // rescoped captured-data analytics (D-32) land in the rebuild phase.
         Route::get('/analytics', DirectorAnalyticsController::class)->name('analytics');
-        // Printable monthly Summary of Medical Cases (FR-ANL-06/03): a
-        // month-scoped reproduction of the official report, printed via a
-        // hidden iframe like the nurse clearance form (FR-NRS-05).
-        Route::get('/analytics/summary-print', DirectorCaseSummaryPrintController::class)->name('analytics.summary-print');
-        // Flagged Anomalies CSV export (FR-ANL-06): same flagged() scope as
-        // the screen, one row per tripped flag.
-        Route::get('/anomalies/export', [DirectorExportController::class, 'anomalies'])->name('anomalies.export');
         // Flagged Anomalies (FR-ANL-05): stat cards + the flagged-visits
         // table. Flags surface from CAPTURE (FR-ANL-07) — un-encoded visits
         // are included, unlike every case statistic on Analytics.

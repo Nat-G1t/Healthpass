@@ -10,9 +10,9 @@ use Illuminate\Validation\Rule;
 
 /**
  * FR-NRS-04 / BR-16 — the Save & Close payload: `result` (Fit/Unfit) is the
- * one required field; category and purpose are optional but must come from
- * the locked PRD lists (the model constants — SQLite in tests doesn't
- * enforce the MySQL enums, so validation is the real gate).
+ * one required field; purpose is optional but must come from the locked PRD
+ * list (the model constants — SQLite in tests doesn't enforce the MySQL
+ * enums, so validation is the real gate).
  */
 class StoreClearanceRequest extends FormRequest
 {
@@ -40,10 +40,6 @@ class StoreClearanceRequest extends FormRequest
     {
         $rules = [
             'result' => ['required', Rule::in(['Fit', 'Unfit'])],
-            // A case can span several systems (D-23) — zero or more from the
-            // locked list, no duplicates.
-            'case_categories' => ['nullable', 'array'],
-            'case_categories.*' => ['distinct', Rule::in(ClearanceRecord::CASE_CATEGORIES)],
             // The four locked purposes plus the form's "Others, Specify" line;
             // picking Others requires the specify text.
             'purpose' => ['nullable', Rule::in([...ClearanceRecord::PURPOSES, ClearanceRecord::PURPOSE_OTHERS])],
