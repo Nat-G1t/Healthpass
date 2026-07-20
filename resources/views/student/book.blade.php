@@ -386,7 +386,9 @@ function bookCalendar() {
                             class="relative flex h-10 w-10 flex-col items-center justify-center rounded-full
                                    text-[13px] transition-colors focus:outline-none"
                             :class="{
-                                'bg-hp-orange text-white font-semibold shadow-sm ring-2 ring-hp-orange/25':
+                                {{-- hp-anim-pop (§5.7): the class lands only on the newly
+                                     selected day, so picking a date pops it once. --}}
+                                'bg-hp-orange text-white font-semibold shadow-sm ring-2 ring-hp-orange/25 hp-anim-pop':
                                     !cell.blank && selectedDate === cell.dateStr,
                                 'ring-2 ring-hp-orange font-semibold':
                                     !cell.blank && cell.isToday && !cell.isDisabled && selectedDate !== cell.dateStr,

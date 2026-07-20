@@ -9,7 +9,7 @@
 </div>
 
 @if (session('status'))
-    <div class="mb-6 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+    <div data-hp-flash class="mb-6 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
         {{ session('status') }}
     </div>
 @endif
@@ -177,7 +177,7 @@ function batchForm() {
 
             {{-- Submit — disabled until reason valid + ≥1 student (FR-ADM-03) --}}
             <x-hp.card>
-                <x-hp.button type="submit" class="w-full" x-bind:disabled="!canSubmit">
+                <x-hp.button type="submit" class="w-full" x-bind:disabled="!canSubmit" data-pending-label="Submitting…">
                     Submit Batch Request
                 </x-hp.button>
                 <p class="mt-2 text-center text-xs text-hp-slate/50"

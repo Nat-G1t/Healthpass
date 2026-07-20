@@ -319,7 +319,7 @@
                       transition-colors hover:bg-hp-slate/5">
                 ← Back
             </a>
-            <x-hp.button type="submit" variant="primary" size="sm" x-bind:disabled="!ready" class="shrink-0 whitespace-nowrap sm:px-8 sm:py-[13px] sm:text-[15px]">
+            <x-hp.button type="submit" variant="primary" size="sm" x-bind:disabled="!ready" data-pending-label="Please wait…" class="shrink-0 whitespace-nowrap sm:px-8 sm:py-[13px] sm:text-[15px]">
                 Continue →
             </x-hp.button>
         </div>

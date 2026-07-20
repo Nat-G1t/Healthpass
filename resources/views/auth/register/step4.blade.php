@@ -120,6 +120,7 @@
                 <input type="hidden" name="id_number" :value="matchedId">
                 <button
                     type="submit"
+                    data-pending-label="Linking…"
                     class="w-full rounded-lg bg-hp-orange py-2.5 text-sm font-semibold text-white
                            hover:bg-hp-orange/90 transition-opacity
                            focus:outline-none focus:ring-2 focus:ring-hp-orange/50"
@@ -164,7 +165,7 @@
         {{-- ── Skip for now ─────────────────────────────────────────────────── --}}
         <form method="POST" action="{{ route('register.link-id.skip') }}">
             @csrf
-            <x-hp.button type="submit" variant="muted" size="lg" class="w-full">
+            <x-hp.button type="submit" variant="muted" size="lg" class="w-full" data-pending-label="Please wait…">
                 Skip for now — link it later from My ID &amp; Profile
             </x-hp.button>
         </form>

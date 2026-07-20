@@ -1,14 +1,14 @@
-<x-layout.sidebar title="Flagged Anomalies">
+﻿<x-layout.sidebar title="Flagged Anomalies">
 
     {{-- ── Stat cards (FR-ANL-05): one per flag type ─────────────────────
          Subtitles quote the thresholds from config/healthpass.php (BR-13:
          one source — kiosk badges, queue flags, and this screen agree). --}}
-    <div class="mb-6 grid grid-cols-1 gap-5 sm:grid-cols-3">
+    <div class="hp-stagger mb-6 grid grid-cols-1 gap-5 sm:grid-cols-3">
         <x-hp.card class="border-l-4 border-l-hp-orange">
             <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
                 High Blood Pressure
             </p>
-            <p class="mt-3 text-3xl font-bold leading-none text-hp-slate">{{ $stats['bp'] }}</p>
+            <p class="mt-3 text-3xl font-bold leading-none text-hp-slate" data-hp-countup>{{ $stats['bp'] }}</p>
             <p class="mt-2 text-xs text-hp-slate/50">
                 {{ config('healthpass.thresholds.bp_systolic') }}/{{ config('healthpass.thresholds.bp_diastolic') }} mmHg or higher
             </p>
@@ -18,7 +18,7 @@
             <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
                 Fever
             </p>
-            <p class="mt-3 text-3xl font-bold leading-none text-hp-slate">{{ $stats['temp'] }}</p>
+            <p class="mt-3 text-3xl font-bold leading-none text-hp-slate" data-hp-countup>{{ $stats['temp'] }}</p>
             <p class="mt-2 text-xs text-hp-slate/50">
                 above {{ config('healthpass.thresholds.temperature_max') }}&deg;C
             </p>
@@ -28,7 +28,7 @@
             <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
                 Abnormal BMI
             </p>
-            <p class="mt-3 text-3xl font-bold leading-none text-hp-slate">{{ $stats['bmi'] }}</p>
+            <p class="mt-3 text-3xl font-bold leading-none text-hp-slate" data-hp-countup>{{ $stats['bmi'] }}</p>
             <p class="mt-2 text-xs text-hp-slate/50">
                 BMI of {{ config('healthpass.thresholds.bmi_obese') }} or higher
             </p>

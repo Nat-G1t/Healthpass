@@ -35,6 +35,12 @@ Chart.register(
 
 Chart.defaults.font.family = "'Poppins', sans-serif";
 
+// Motion pass (§8): one global entrance animation for every chart — set ONCE
+// here, never per-chart. Skipped entirely under the OS "reduce motion" setting.
+Chart.defaults.animation = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ? false
+    : { duration: 600, easing: 'easeOutQuart' };
+
 const INK = '#4B5563';
 const GRID = 'rgba(75, 85, 99, .12)';
 

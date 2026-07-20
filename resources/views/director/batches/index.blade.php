@@ -20,12 +20,12 @@
 
     {{-- Flash from the decision endpoints --}}
     @if (session('status'))
-        <div class="mb-6 rounded-lg border border-hp-orange/30 bg-hp-peach/40 px-4 py-3 text-sm text-hp-slate">
+        <div data-hp-flash class="mb-6 rounded-lg border border-hp-orange/30 bg-hp-peach/40 px-4 py-3 text-sm text-hp-slate">
             {{ session('status') }}
         </div>
     @endif
     @if (session('error'))
-        <div class="mb-6 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div data-hp-flash data-flash-sticky class="mb-6 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">
             {{ session('error') }}
         </div>
     @endif
@@ -98,7 +98,7 @@
                                             </button>
                                             <form method="POST" action="{{ route('director.batches.reject', $batch) }}">
                                                 @csrf
-                                                <x-hp.button type="submit" variant="danger" size="sm">Reject</x-hp.button>
+                                                <x-hp.button type="submit" variant="danger" size="sm" data-pending-label="Rejecting…">Reject</x-hp.button>
                                             </form>
                                         </div>
                                     @elseif ($batch->status === 'approved')

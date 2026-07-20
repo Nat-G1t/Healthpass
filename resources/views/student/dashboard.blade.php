@@ -15,7 +15,7 @@
 </div>
 
 {{-- ── Stat cards ──────────────────────────────────────────────────────────── --}}
-<div class="grid grid-cols-1 gap-5 md:grid-cols-3 mb-6">
+<div class="hp-stagger grid grid-cols-1 gap-5 md:grid-cols-3 mb-6">
 
     {{-- Card 1: Clearance Status --}}
     <x-hp.card class="flex flex-col">

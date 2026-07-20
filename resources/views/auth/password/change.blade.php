@@ -19,12 +19,12 @@
 
         {{-- Success / failure flashes --}}
         @if (session('status'))
-            <div class="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+            <div data-hp-flash class="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
                 {{ session('status') }}
             </div>
         @endif
         @if (session('error'))
-            <div class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div data-hp-flash data-flash-sticky class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                 {{ session('error') }}
             </div>
         @endif
@@ -90,7 +90,7 @@
                 The new passwords don't match yet.
             </p>
 
-            <x-hp.button type="submit" variant="primary" size="lg" class="mt-0.5 w-full" x-bind:disabled="!ready">
+            <x-hp.button type="submit" variant="primary" size="lg" class="mt-0.5 w-full" x-bind:disabled="!ready" data-pending-label="Sending code…">
                 Update Password
             </x-hp.button>
         </form>

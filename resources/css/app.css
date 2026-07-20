@@ -88,6 +88,14 @@
     .hp-anim-shake    { animation: hp-shake 350ms var(--hp-ease-out); }
     .hp-anim-pop      { animation: hp-pop 200ms var(--hp-ease-out); }
 
+    /* Success checkmark draw-in. Put this on an SVG <path pathLength="48">:
+       pathLength normalises any path to 48 units so one keyframe fits every
+       icon size. The tiny delay lets the surrounding card land first. */
+    .hp-anim-check-draw {
+        stroke-dasharray: 48;
+        animation: hp-check-draw var(--hp-dur-slow) var(--hp-ease-out) 150ms both;
+    }
+
     /* Page-content entrance (§5.5): soft landing for the <main> container on
        every navigation, even in browsers without View Transitions. NO fill
        mode on purpose — a retained transform (even identity) would turn the

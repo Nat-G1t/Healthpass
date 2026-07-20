@@ -77,7 +77,7 @@
 
                     <form method="POST" action="{{ route('logout') }}">
                         @csrf
-                        <x-hp.button type="submit" variant="primary">Log out</x-hp.button>
+                        <x-hp.button type="submit" variant="primary" data-pending-label="Logging out…">Log out</x-hp.button>
                     </form>
                 </div>
             </div>

@@ -38,7 +38,7 @@
 
         {{-- Error / status flash --}}
         @if (session('status'))
-            <div class="mb-4 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
+            <div data-hp-flash class="mb-4 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
                 {{ session('status') }}
             </div>
         @endif
@@ -73,7 +73,7 @@
             />
 
             {{-- Submit --}}
-            <x-hp.button type="submit" variant="primary" size="lg" class="mt-0.5 w-full">
+            <x-hp.button type="submit" variant="primary" size="lg" class="mt-0.5 w-full" data-pending-label="Signing in…">
                 Sign In
             </x-hp.button>
 

@@ -88,7 +88,8 @@ function recordsPageData() {
         @else
 
             {{-- ── Mobile: stacked cards (hidden on sm+) ──────────────────────── --}}
-            <div class="space-y-3 sm:hidden">
+            {{-- hp-stagger: records fade up in sequence on first paint (§6.2). --}}
+            <div class="hp-stagger space-y-3 sm:hidden">
                 @foreach ($visits as $visit)
                 @php
                     $isEncoded = $visit->clearanceRecord !== null;
@@ -142,7 +143,7 @@ function recordsPageData() {
                                        tracking-widest text-hp-slate/40 font-normal text-right">Action</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-hp-slate/10">
+                    <tbody class="hp-stagger divide-y divide-hp-slate/10">
                         @foreach ($visits as $visit)
                         @php
                             $isEncoded = $visit->clearanceRecord !== null;

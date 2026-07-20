@@ -21,8 +21,22 @@
  *     `data-flash-sticky` and stay until the user leaves the page.
  */
 
+import { countUp } from './motion.js';
+
 const FLASH_DISMISS_MS = 5000;
 const FLASH_FADE_MS = 400; // mirrors --hp-dur-slow
+
+/**
+ * True when a form submit will actually navigate THIS window. The submitter
+ * button's `formtarget` overrides the form's `target` (the nurse encode form
+ * posts its print buttons into a hidden iframe this way while Save & Close
+ * navigates normally — only the latter should run progress/pending motion).
+ */
+function submitNavigates(event) {
+    if (event.defaultPrevented) return false; // JS-handled (fetch) — no navigation
+    const target = event.submitter?.getAttribute('formtarget') || event.target.target;
+    return !target || target === '_self';
+}
 
 /** True when a link click will actually navigate this window. */
 function isNavigatingLink(link, event) {
@@ -54,10 +68,8 @@ function initProgressBar() {
     });
 
     document.addEventListener('submit', (event) => {
-        const form = event.target;
-        if (event.defaultPrevented) return; // JS-handled form (fetch) — no navigation
-        if (form.hasAttribute('data-no-progress')) return;
-        if (form.target && form.target !== '_self') return; // iframe posts
+        if (!submitNavigates(event)) return;
+        if (event.target.hasAttribute('data-no-progress')) return;
         start();
     });
 
@@ -68,10 +80,13 @@ function initProgressBar() {
 
 function initPendingButtons() {
     document.addEventListener('submit', (event) => {
+        if (!submitNavigates(event)) return; // iframe posts never navigate
         const form = event.target;
-        if (event.defaultPrevented) return;
-        if (form.target && form.target !== '_self') return; // iframe posts never navigate
-        const button = form.querySelector('button[data-pending-label]');
+        // Prefer the button that actually fired the submit; fall back to the
+        // form's (single) pending button for Enter-key submits.
+        const button = event.submitter?.dataset.pendingLabel
+            ? event.submitter
+            : form.querySelector('button[data-pending-label]');
         if (!button || button.disabled) return;
 
         // Freeze the width first so the label swap never changes the layout.
@@ -101,8 +116,23 @@ function initFlashBanners() {
     });
 }
 
+/**
+ * Stat tiles marked data-hp-countup count up from 0 to their server-rendered
+ * integer on first paint (once per page load — never re-run on polls).
+ * countUp() itself skips straight to the value under reduced motion.
+ */
+function initCountUps() {
+    document.querySelectorAll('[data-hp-countup]').forEach((el) => {
+        const value = parseInt(el.textContent.replace(/[^\d-]/g, ''), 10);
+        if (Number.isNaN(value)) return;
+        el.textContent = '0';
+        countUp(el, value);
+    });
+}
+
 export function initPageMotion() {
     initProgressBar();
     initPendingButtons();
     initFlashBanners();
+    initCountUps();
 }

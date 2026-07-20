@@ -84,7 +84,7 @@
 {{-- Re-submit flash (FR-NRS-04) — a Save on an already-encoded visit lands
      here with a friendly note instead of a second record. --}}
 @if (session('status'))
-    <div class="mb-5 rounded-xl border border-hp-peach bg-hp-peach/30 px-4 py-3 text-sm text-hp-slate">
+    <div data-hp-flash class="mb-5 rounded-xl border border-hp-peach bg-hp-peach/30 px-4 py-3 text-sm text-hp-slate">
         {{ session('status') }}
     </div>
 @endif
@@ -368,7 +368,14 @@
                                  formtarget="hp-print-frame">
                         Preview &amp; Print
                     </x-hp.button>
-                    <x-hp.button type="submit" variant="primary" class="w-full">Save &amp; Close</x-hp.button>
+                    {{-- data-pending-label: spinner + disable while the save
+                         navigates (§5.6) — belt-and-braces double-submit
+                         protection on top of the controller's one-shot guard.
+                         The print buttons above are exempt automatically:
+                         their formtarget posts into the iframe, and
+                         page-motion.js keys off the SUBMITTER's target. --}}
+                    <x-hp.button type="submit" variant="primary" class="w-full"
+                                 data-pending-label="Saving…">Save &amp; Close</x-hp.button>
                 @endif
             </div>
         </form>
