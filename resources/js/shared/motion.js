@@ -63,9 +63,14 @@ export function collapseRow(tr, { onDone } = {}) {
     });
 
     fade.onfinish = () => {
-        // …then slide every following row up by one slot height. We animate
-        // FROM 0 TO -slot, remove the row at the end, and the rows land
-        // exactly where the closed-up layout puts them — no snap.
+        // …then REMOVE it and slide the rows below up into the gap. This is
+        // the Invert step of FLIP: removal makes the browser lay the rows out
+        // one slot higher immediately, and starting each animation from
+        // translateY(+slot) in the same tick puts them visually back where
+        // they were — they then glide to their real (new) position with a
+        // pure transform, and there is no end-of-animation snap because the
+        // final keyframe IS the natural layout.
+        tr.remove();
         if (following.length === 0) {
             finish();
             return;
@@ -73,7 +78,7 @@ export function collapseRow(tr, { onDone } = {}) {
         let done = 0;
         following.forEach((row) => {
             const move = row.animate(
-                [{ transform: 'translateY(0)' }, { transform: `translateY(-${slot}px)` }],
+                [{ transform: `translateY(${slot}px)` }, { transform: 'translateY(0)' }],
                 { duration: DUR_BASE_MS, easing: EASE_OUT },
             );
             move.onfinish = () => {

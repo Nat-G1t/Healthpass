@@ -116,8 +116,13 @@ class EncodeController extends Controller
             return $this->alreadyEncoded($visit);
         }
 
+        // `encoded_visit_id` powers the queue's "reverse-stack" exit animation:
+        // a session flash lives for exactly ONE request (and is gone on reload
+        // by design), so the queue page can render the just-encoded visit once
+        // as a leaving "ghost" row and animate it out.
         return redirect()->route('nurse.queue')
-            ->with('status', "Assessment saved — {$visit->reference_no} encoded.");
+            ->with('status', "Assessment saved — {$visit->reference_no} encoded.")
+            ->with('encoded_visit_id', $visit->id);
     }
 
     /** Friendly landing for a re-submit: the same screen, now read-only. */
