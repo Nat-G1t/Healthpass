@@ -41,13 +41,15 @@
             aria-labelledby="{{ $titleId }}"
         >
             {{-- Backdrop — click outside to cancel --}}
+            {{-- Motion tokens (§5.7): backdrop fades; the panel rises like an
+                 iOS sheet (--hp-ease-spring); exits ~60% of enter duration. --}}
             <div
                 x-show="open"
                 @click="open = false"
-                x-transition:enter="ease-out duration-200"
+                x-transition:enter="ease-hp-out duration-hp-base"
                 x-transition:enter-start="opacity-0"
                 x-transition:enter-end="opacity-100"
-                x-transition:leave="ease-in duration-150"
+                x-transition:leave="ease-hp-in duration-hp-fast"
                 x-transition:leave-start="opacity-100"
                 x-transition:leave-end="opacity-0"
                 class="absolute inset-0 bg-hp-slate/50"
@@ -57,12 +59,12 @@
             {{-- Panel --}}
             <div
                 x-show="open"
-                x-transition:enter="ease-out duration-200"
-                x-transition:enter-start="opacity-0 scale-95"
-                x-transition:enter-end="opacity-100 scale-100"
-                x-transition:leave="ease-in duration-150"
-                x-transition:leave-start="opacity-100 scale-100"
-                x-transition:leave-end="opacity-0 scale-95"
+                x-transition:enter="ease-hp-spring duration-hp-slow"
+                x-transition:enter-start="opacity-0 translate-y-6"
+                x-transition:enter-end="opacity-100 translate-y-0"
+                x-transition:leave="ease-hp-in duration-hp-base"
+                x-transition:leave-start="opacity-100 translate-y-0"
+                x-transition:leave-end="opacity-0 translate-y-6"
                 class="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl"
             >
                 <h2 id="{{ $titleId }}" class="text-lg font-semibold text-hp-slate">Log out?</h2>

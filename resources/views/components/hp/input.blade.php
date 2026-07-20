@@ -8,9 +8,15 @@
 @php
     $inputId      = $id ?? ($label ? Str::slug($label, '_') : null);
     $baseClasses  = 'w-full rounded-lg border-[1.5px] border-hp-slate/25 px-3.5 py-2.5 text-sm text-hp-slate
-                     placeholder-hp-slate/40 transition-colors duration-150
+                     placeholder-hp-slate/40 transition-colors duration-hp-fast
                      focus:border-hp-orange focus:ring-1 focus:ring-hp-orange focus:outline-none
                      disabled:bg-hp-slate/5 disabled:cursor-not-allowed';
+
+    // Validation motion (§5.7): a field that arrives with an error shakes once
+    // (hp-anim-shake) and its message fades in — at rest nothing changes.
+    if ($error) {
+        $baseClasses .= ' hp-anim-shake';
+    }
 @endphp
 
 <div class="flex flex-col gap-1">
@@ -63,6 +69,6 @@
     @endif
 
     @if ($error)
-        <p class="text-xs text-red-600">{{ $error }}</p>
+        <p class="hp-anim-fade text-xs text-red-600">{{ $error }}</p>
     @endif
 </div>

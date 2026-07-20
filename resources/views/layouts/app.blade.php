@@ -8,14 +8,19 @@
         <title>{{ config('app.name', 'Laravel') }}</title>
 
         <!-- Fonts -->
+        {{-- NOTE (flagged, not fixed): this Breeze layout still loads Figtree
+             while the design system is Poppins (loaded via app.css). --}}
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
         <!-- Scripts -->
         @vite(['resources/css/app.css', 'resources/js/app.js'])
         @include('partials.favicon')
     </head>
     <body class="font-sans antialiased">
+        <x-hp.splash />
         <div class="min-h-screen bg-gray-100">
             @include('layouts.navigation')
 

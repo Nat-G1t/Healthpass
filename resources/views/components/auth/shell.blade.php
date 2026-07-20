@@ -12,13 +12,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ $title }} — HealthPass</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @include('partials.favicon')
 </head>
 <body class="min-h-full bg-hp-bg">
 
+<x-hp.splash />
+
 <div class="flex min-h-screen items-center justify-center p-6">
-    <div class="w-full max-w-[420px]">
+    <div class="hp-page-enter w-full max-w-[420px]">
 
         {{-- Logo + tagline --}}
         <div class="mb-7 flex flex-col items-center gap-2 text-center">
