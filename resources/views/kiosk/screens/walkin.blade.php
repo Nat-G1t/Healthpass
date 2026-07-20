@@ -1,4 +1,4 @@
-{{-- Walk-in Check / No Scheduled Clearance Today (FR-KSK-03a).
+﻿{{-- Walk-in Check / No Scheduled Clearance Today (FR-KSK-03a).
      Shown between Identity Confirm and Privacy Consent ONLY when the server
      found NO non-cancelled appointment dated today for this student — medical
      OR dental. The check is server-side (state.identity.hasAppointmentToday);
@@ -6,7 +6,10 @@
      full reset to Welcome. The appointment_id linkage is still resolved
      server-side (medical-only) at submit, so a dental-only student records
      as a walk-in. --}}
-<section class="kiosk-screen" x-show="state.screen === 'walkin'" x-cloak>
+<section class="kiosk-screen" x-show="state.screen === 'walkin'" x-cloak
+         x-transition:enter="transition ease-hp-out duration-hp-base"
+         x-transition:enter-start="opacity-0 translate-y-1"
+         x-transition:enter-end="opacity-100 translate-y-0">
     <div class="flex w-full flex-col items-center justify-center px-10 py-8 text-center">
         {{-- Calendar icon in a peach rounded square --}}
         <div class="flex h-24 w-24 items-center justify-center rounded-3xl bg-hp-peach/40 text-hp-orange">

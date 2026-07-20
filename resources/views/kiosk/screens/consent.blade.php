@@ -1,8 +1,11 @@
-{{-- Privacy Consent (FR-KSK-04): RA 10173 notice shown once per session.
+﻿{{-- Privacy Consent (FR-KSK-04): RA 10173 notice shown once per session.
      "I Agree" stamps state.consentAt (persisted to clinic_visits.privacy_consent_at
      at final submit) and proceeds to Vitals. "Decline" resets to Welcome storing
      NOTHING (no DB write happens on this screen either way). --}}
-<section class="kiosk-screen" x-show="state.screen === 'consent'" x-cloak>
+<section class="kiosk-screen" x-show="state.screen === 'consent'" x-cloak
+         x-transition:enter="transition ease-hp-out duration-hp-base"
+         x-transition:enter-start="opacity-0 translate-y-1"
+         x-transition:enter-end="opacity-100 translate-y-0">
     <div class="flex w-full flex-col items-center justify-center px-10 py-10">
         <span class="rounded-full bg-hp-peach/40 px-4 py-1.5 text-sm font-semibold uppercase tracking-widest text-hp-orange">Data Privacy</span>
         <h1 class="mt-3 text-3xl font-semibold text-hp-slate">Privacy Consent</h1>

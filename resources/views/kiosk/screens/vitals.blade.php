@@ -1,4 +1,4 @@
-{{-- Vitals (FR-KSK-05): ONE screen, four internal steps via state.vitalStep.
+﻿{{-- Vitals (FR-KSK-05): ONE screen, four internal steps via state.vitalStep.
      Every step renders from the SAME 3-phase card — ready (instructions) →
      scanning (animation) → captured (value + status badge) — driven entirely by
      the VITALS metadata in state-machine.js, so the four steps are data, not
@@ -14,7 +14,10 @@
      Sizing: the panel renders 1:1 on the 1080×1920 portrait Pi screen, so this
      layout centres one generously spaced column — the old 800×480 compactness
      is gone; --k-zoom-vitals scales the type on top of that. --}}
-<section class="kiosk-screen" x-show="state.screen === 'vitals'" x-cloak>
+<section class="kiosk-screen" x-show="state.screen === 'vitals'" x-cloak
+         x-transition:enter="transition ease-hp-out duration-hp-base"
+         x-transition:enter-start="opacity-0 translate-y-1"
+         x-transition:enter-end="opacity-100 translate-y-0">
     <div class="relative flex h-full w-full flex-col items-center justify-center gap-5 px-8 py-8 text-center">
 
         {{-- Disguised manual-entry trigger (FR-KSK-06): looks like branding, but
@@ -33,9 +36,11 @@
         <div class="flex items-center gap-4">
             <span class="rounded-full bg-hp-peach/40 px-3.5 py-1 text-xs font-semibold uppercase tracking-widest text-hp-orange">Vitals</span>
             <div class="flex items-center gap-2">
+                {{-- transition-colors, not -all: the size difference between
+                     dots snaps (animating width/height would re-layout — §7). --}}
                 <template x-for="n in 4" :key="n">
                     <span
-                        class="rounded-full transition-all"
+                        class="rounded-full transition-colors duration-hp-fast ease-hp-out"
                         :class="n === state.vitalStep
                             ? 'h-3.5 w-3.5 bg-hp-orange ring-2 ring-hp-orange/30'
                             : (n < state.vitalStep ? 'h-3 w-3 bg-hp-orange' : 'h-3 w-3 bg-hp-slate/20')"
@@ -52,7 +57,13 @@
             </h1>
 
             {{-- ── Phase: READY (instructions) ──────────────────────────────── --}}
-            <div x-show="stepPhase() === 'ready'" class="flex w-full flex-col items-center gap-4 rounded-2xl bg-hp-white p-8 shadow-sm">
+            {{-- Enter-only fade-ups per phase/step (§7): travel is translate-y-1
+                 (8 px visual — --k-zoom doubles rem sizes, so -2 would be 16). --}}
+            <div x-show="stepPhase() === 'ready'"
+                 x-transition:enter="transition ease-hp-out duration-hp-base"
+                 x-transition:enter-start="opacity-0 translate-y-1"
+                 x-transition:enter-end="opacity-100 translate-y-0"
+                 class="flex w-full flex-col items-center gap-4 rounded-2xl bg-hp-white p-8 shadow-sm">
                 {{-- Pulsing sensor icon (generic across steps — reusable). --}}
                 <div class="relative grid h-20 w-20 place-items-center">
                     <span class="k-pulse-ring absolute h-20 w-20 rounded-full bg-hp-peach/50"></span>
@@ -115,7 +126,11 @@
             </div>
 
             {{-- ── Phase: SCANNING (animation) ──────────────────────────────── --}}
-            <div x-show="stepPhase() === 'scanning'" x-cloak class="flex w-full flex-col items-center gap-4 rounded-2xl bg-hp-white p-8 shadow-sm">
+            <div x-show="stepPhase() === 'scanning'" x-cloak
+                 x-transition:enter="transition ease-hp-out duration-hp-base"
+                 x-transition:enter-start="opacity-0"
+                 x-transition:enter-end="opacity-100"
+                 class="flex w-full flex-col items-center gap-4 rounded-2xl bg-hp-white p-8 shadow-sm">
                 <div class="relative grid h-20 w-20 place-items-center">
                     <span class="k-pulse-ring absolute h-20 w-20 rounded-full bg-hp-orange/40"></span>
                     <span class="k-pulse-ring absolute h-20 w-20 rounded-full bg-hp-orange/30" style="animation-delay: .6s"></span>
@@ -130,7 +145,12 @@
             </div>
 
             {{-- ── Phase: CAPTURED (value + badge) ──────────────────────────── --}}
-            <div x-show="stepPhase() === 'captured'" x-cloak class="flex w-full flex-col items-center gap-3 rounded-2xl bg-hp-white px-6 py-6 shadow-sm">
+            {{-- Captured settles with a scale-in pop (§7). --}}
+            <div x-show="stepPhase() === 'captured'" x-cloak
+                 x-transition:enter="transition ease-hp-out duration-hp-base"
+                 x-transition:enter-start="opacity-0 scale-[0.96]"
+                 x-transition:enter-end="opacity-100 scale-100"
+                 class="flex w-full flex-col items-center gap-3 rounded-2xl bg-hp-white px-6 py-6 shadow-sm">
                 {{-- Primary value. Single-field steps show value + unit; Blood
                      Pressure shows systolic/diastolic together. --}}
                 <template x-if="state.vitalStep !== 4">
@@ -150,7 +170,7 @@
 
                 {{-- Recorded chip + status badge + provenance chip. --}}
                 <div class="flex flex-wrap items-center justify-center gap-2.5">
-                    <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-600">✓ Recorded</span>
+                    <span class="hp-anim-pop inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-600">✓ Recorded</span>
 
                     {{-- Temperature status badge — neutral wording only (FR-KSK-14). --}}
                     <template x-if="vitalMeta(state.vitalStep).badge === 'temperature'">
@@ -174,8 +194,10 @@
                 </div>
 
                 {{-- ── BMI panel (step 2 only) — computed, never entered (FR-KSK-09). ── --}}
+                {{-- x-if re-creates the node each time it appears, so the
+                     fade-up replays; styling stays NEUTRAL (FR-KSK-14). --}}
                 <template x-if="vitalMeta(state.vitalStep).showsBmi && bmiValue() !== null">
-                    <div class="w-full rounded-xl border border-hp-slate/10 bg-hp-bg/60 p-4">
+                    <div class="hp-anim-fade-up w-full rounded-xl border border-hp-slate/10 bg-hp-bg/60 p-4">
                         <p class="text-xs font-semibold uppercase tracking-wider text-hp-slate/50">Body Mass Index</p>
                         <div class="mt-1.5 flex items-center justify-center gap-3">
                             <span class="text-3xl font-bold text-hp-slate" x-text="bmiValue().toFixed(1)"></span>
@@ -239,7 +261,7 @@
             class="absolute inset-0 z-20 flex items-center justify-center bg-hp-slate/40 backdrop-blur-sm"
             @click.self="padCancel()"
         >
-            <div class="w-full max-w-[18rem] rounded-2xl bg-hp-white p-4 shadow-xl">
+            <div class="hp-anim-sheet-up w-full max-w-[18rem] rounded-2xl bg-hp-white p-4 shadow-xl">
                 <p class="text-center text-base font-semibold text-hp-slate">
                     Enter <span x-text="(padField()?.label ?? vitalMeta(state.pad.step)?.label)?.toLowerCase()"></span>
                     <span class="text-hp-slate/50">(<span x-text="padField()?.unit"></span>)</span>
@@ -252,8 +274,10 @@
                     class="mt-1 text-center text-sm text-hp-slate/40"
                 >Field <span x-text="state.pad.fieldIndex + 1"></span> of <span x-text="vitalMeta(state.pad.step)?.fields.length"></span></p>
 
-                {{-- Display --}}
-                <div class="mt-2.5 flex min-h-[3.25rem] items-center justify-center rounded-xl border-2 border-hp-slate/15 bg-hp-bg/50 px-4">
+                {{-- Display — shakes once on an out-of-range/empty confirm; the
+                     class drops when typing clears the error, so it can replay. --}}
+                <div class="mt-2.5 flex min-h-[3.25rem] items-center justify-center rounded-xl border-2 border-hp-slate/15 bg-hp-bg/50 px-4"
+                     :class="state.pad.error ? 'hp-anim-shake' : ''">
                     <span class="text-3xl font-bold text-hp-slate" x-text="state.pad.value || '0'"></span>
                     <span class="ml-2 text-base text-hp-slate/40" x-text="padField()?.unit"></span>
                 </div>

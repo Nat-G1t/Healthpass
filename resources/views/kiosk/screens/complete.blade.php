@@ -1,14 +1,18 @@
-{{-- Complete (FR-KSK-13): success check, "proceed to the nurse's station", a
+﻿{{-- Complete (FR-KSK-13): success check, "proceed to the nurse's station", a
      countdown pill that auto-resets to Welcome after 12s, and an instant Done
      tap. All session state is cleared on reset (handled by reset() → freshState).
      Per FR-KSK-14/D-? the kiosk shows NO Fit/Unfit here — only that it was sent. --}}
-<section class="kiosk-screen" x-show="state.screen === 'complete'" x-cloak>
+<section class="kiosk-screen" x-show="state.screen === 'complete'" x-cloak
+         x-transition:enter="transition ease-hp-out duration-hp-base"
+         x-transition:enter-start="opacity-0 translate-y-1"
+         x-transition:enter-end="opacity-100 translate-y-0">
     <div class="flex w-full flex-col items-center justify-center gap-6 px-10 text-center">
 
-        {{-- Success check --}}
-        <div class="flex h-28 w-28 items-center justify-center rounded-full bg-emerald-50">
+        {{-- Success check — draws itself in (§7). Celebrates SUBMISSION only;
+             neutral motion, nothing that could read as an outcome (FR-KSK-14). --}}
+        <div class="hp-anim-scale-in flex h-28 w-28 items-center justify-center rounded-full bg-emerald-50">
             <svg class="h-16 w-16 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M20 6 9 17l-5-5" />
+                <path d="M20 6 9 17l-5-5" pathLength="48" class="hp-anim-check-draw" />
             </svg>
         </div>
 
@@ -20,8 +24,10 @@
             </p>
         </div>
 
-        {{-- Server-minted reference (HP-YYYY-####). --}}
-        <p x-show="state.submit.reference" x-cloak class="text-base text-hp-slate/50">
+        {{-- Server-minted reference (HP-YYYY-####) — revealed a beat after the
+             screen lands so the eye finds it. --}}
+        <p x-show="state.submit.reference" x-cloak
+           class="hp-anim-fade-up text-base text-hp-slate/50" style="animation-delay: 200ms">
             Reference <span class="font-semibold text-hp-slate/70" x-text="state.submit.reference"></span>
         </p>
 

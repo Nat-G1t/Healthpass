@@ -4,8 +4,10 @@
      which flow is open (handled in keyPress → submitLogin / submitExit). The
      LAYOUT lives in this small nested x-data; all behaviour is on the kiosk
      component (keyPress / pressKey / backspaceDown / kbSending / kbEnterLabel). --}}
+{{-- hp-anim-sheet-up (§7): the keyboard slides up whenever its host (the
+     email-login screen or the staff-exit prompt) brings it on screen. --}}
 <div
-    class="flex w-full max-w-2xl flex-col gap-1.5 select-none"
+    class="hp-anim-sheet-up flex w-full max-w-2xl flex-col gap-1.5 select-none"
     x-data="{
         rows: [
             ['1','2','3','4','5','6','7','8','9','0'],

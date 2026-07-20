@@ -1,7 +1,10 @@
-{{-- Welcome (FR-KSK-01): scan-your-ID on top, email fallback below. Stacked
+﻿{{-- Welcome (FR-KSK-01): scan-your-ID on top, email fallback below. Stacked
      vertically for the 1080×1920 portrait panel (was side-by-side columns on
      the old landscape screen). --}}
-<section class="kiosk-screen" x-show="state.screen === 'welcome'" x-cloak>
+<section class="kiosk-screen" x-show="state.screen === 'welcome'" x-cloak
+         x-transition:enter="transition ease-hp-out duration-hp-base"
+         x-transition:enter-start="opacity-0 translate-y-1"
+         x-transition:enter-end="opacity-100 translate-y-0">
     <div class="flex w-full flex-col items-center justify-center px-10 text-center">
         {{-- ── Top: pulsing QR target ───────────────────────────────────────── --}}
         <div class="relative mb-6 flex h-44 w-44 items-center justify-center">
@@ -25,10 +28,12 @@
 
         {{-- Inline scan feedback (sending / error) --}}
         <div class="mt-4 h-8">
-            <p x-show="state.scan.status === 'sending'" x-cloak class="text-base font-medium text-hp-orange">
+            {{-- animate-pulse while sending: the scan affordance visibly "works". --}}
+            <p x-show="state.scan.status === 'sending'" x-cloak class="animate-pulse text-base font-medium text-hp-orange">
                 Reading your ID…
             </p>
-            <p x-show="state.scan.status === 'error'" x-cloak class="text-base font-medium text-red-600" x-text="state.scan.error"></p>
+            {{-- hp-anim-shake replays each time the error re-appears (§7). --}}
+            <p x-show="state.scan.status === 'error'" x-cloak class="hp-anim-shake text-base font-medium text-red-600" x-text="state.scan.error"></p>
         </div>
 
         {{-- ── Divider ──────────────────────────────────────────────────────── --}}
