@@ -1,4 +1,4 @@
-<x-layout.sidebar title="Verify New Email">
+﻿<x-layout.sidebar title="Verify New Email">
 
 <div class="mx-auto max-w-md">
 
@@ -87,7 +87,7 @@
                         @keydown="onKeydown({{ $i }}, $event)"
                         @paste="onPaste($event)"
                         class="h-[58px] w-[46px] rounded-[10px] border-2 text-center text-[24px] font-bold
-                               transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-hp-orange/30
+                               transition-all duration-hp-fast focus:outline-none focus:ring-2 focus:ring-hp-orange/30
                                [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none
                                [&::-webkit-outer-spin-button]:appearance-none"
                         :class="digits[{{ $i }}]

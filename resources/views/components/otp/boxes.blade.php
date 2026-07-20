@@ -1,4 +1,4 @@
-{{--
+﻿{{--
     Six auto-advancing OTP boxes + submit button, posting `otp` to $action.
     Same Alpine UX as registration Step 3 / student email verify. The submit
     button stays disabled until all 6 digits are present (UX only — the server
@@ -61,7 +61,7 @@
                 @keydown="onKeydown({{ $i }}, $event)"
                 @paste="onPaste($event)"
                 class="h-[58px] w-[46px] rounded-[10px] border-2 text-center text-[24px] font-bold
-                       transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-hp-orange/30
+                       transition-all duration-hp-fast focus:outline-none focus:ring-2 focus:ring-hp-orange/30
                        [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none
                        [&::-webkit-outer-spin-button]:appearance-none"
                 {{-- hp-anim-pop (§5.7): each box pops once as its digit lands. --}}

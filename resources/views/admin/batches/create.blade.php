@@ -1,4 +1,4 @@
-<x-layout.sidebar title="New Batch Request">
+﻿<x-layout.sidebar title="New Batch Request">
 
 {{-- ── Page header ────────────────────────────────────────────────────────── --}}
 <div class="mb-6">
@@ -233,7 +233,7 @@ function batchForm() {
                         <input type="search" x-model="query"
                                placeholder="Search by name or student number…"
                                class="w-full rounded-lg border border-hp-slate/25 py-2 pl-9 pr-3 text-sm text-hp-slate
-                                      placeholder-hp-slate/40 transition-colors duration-150
+                                      placeholder-hp-slate/40 transition-colors duration-hp-fast
                                       focus:border-hp-orange focus:ring-1 focus:ring-hp-orange focus:outline-none">
                     </div>
 

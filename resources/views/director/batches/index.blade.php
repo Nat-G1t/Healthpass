@@ -1,4 +1,4 @@
-<x-layout.sidebar title="Batch Approvals">
+﻿<x-layout.sidebar title="Batch Approvals">
 
 {{--
     Director Batch Approvals (FR-DIRA-01/05/06).
@@ -91,7 +91,7 @@
                                                 ]) }})"
                                                 class="inline-flex items-center justify-center gap-2 rounded-full
                                                        bg-hp-orange px-4 py-1.5 text-xs font-semibold text-white
-                                                       transition-colors duration-150 hover:bg-orange-500
+                                                       transition-colors duration-hp-fast hover:bg-orange-500
                                                        focus-visible:outline-none focus-visible:ring-2
                                                        focus-visible:ring-hp-orange focus-visible:ring-offset-1">
                                                 Approve
@@ -129,14 +129,15 @@
             aria-modal="true"
             aria-labelledby="approve-batch-title"
         >
-            {{-- Backdrop — click outside to cancel --}}
+            {{-- Backdrop — click outside to cancel. Motion tokens (§5.7):
+                 backdrop fades, panel rises like an iOS sheet, exits faster. --}}
             <div
                 x-show="batch !== null"
                 @click="close()"
-                x-transition:enter="ease-out duration-200"
+                x-transition:enter="ease-hp-out duration-hp-base"
                 x-transition:enter-start="opacity-0"
                 x-transition:enter-end="opacity-100"
-                x-transition:leave="ease-in duration-150"
+                x-transition:leave="ease-hp-in duration-hp-fast"
                 x-transition:leave-start="opacity-100"
                 x-transition:leave-end="opacity-0"
                 class="absolute inset-0 bg-hp-slate/50"
@@ -146,12 +147,12 @@
             {{-- Panel --}}
             <div
                 x-show="batch !== null"
-                x-transition:enter="ease-out duration-200"
-                x-transition:enter-start="opacity-0 scale-95"
-                x-transition:enter-end="opacity-100 scale-100"
-                x-transition:leave="ease-in duration-150"
-                x-transition:leave-start="opacity-100 scale-100"
-                x-transition:leave-end="opacity-0 scale-95"
+                x-transition:enter="ease-hp-spring duration-hp-slow"
+                x-transition:enter-start="opacity-0 translate-y-6"
+                x-transition:enter-end="opacity-100 translate-y-0"
+                x-transition:leave="ease-hp-in duration-hp-base"
+                x-transition:leave-start="opacity-100 translate-y-0"
+                x-transition:leave-end="opacity-0 translate-y-6"
                 class="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
             >
                 <h2 id="approve-batch-title" class="text-lg font-semibold text-hp-slate">

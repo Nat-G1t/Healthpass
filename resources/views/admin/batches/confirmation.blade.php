@@ -1,4 +1,4 @@
-<x-layout.sidebar title="Batch Request Submitted">
+﻿<x-layout.sidebar title="Batch Request Submitted">
 
 {{-- ── Page header ──────────────────────────────────────────────────────────── --}}
 <div class="mb-7">
@@ -120,7 +120,7 @@
     <a href="{{ route('admin.batches.index') }}"
        class="inline-flex w-full items-center justify-center gap-2 rounded-full bg-hp-orange
               px-6 py-2.5 text-sm font-semibold text-white transition-colors
-              duration-150 hover:bg-orange-500 sm:w-auto">
+              duration-hp-fast hover:bg-orange-500 sm:w-auto">
         View Tracking
     </a>
 

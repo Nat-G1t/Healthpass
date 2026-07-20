@@ -1,4 +1,4 @@
-<x-layout.sidebar title="Booking Confirmed">
+﻿<x-layout.sidebar title="Booking Confirmed">
 
 {{-- ── Page header ──────────────────────────────────────────────────────────── --}}
 <div class="mb-7">
@@ -178,7 +178,7 @@
                 <a href="{{ route('student.tutorial') }}"
                    class="inline-flex items-center justify-center gap-2 rounded-full bg-hp-orange
                           px-6 py-2.5 text-sm font-semibold text-white transition-colors
-                          duration-150 hover:bg-orange-500">
+                          duration-hp-fast hover:bg-orange-500">
                     View tutorial
                 </a>
                 <button type="button" @click="open = false"

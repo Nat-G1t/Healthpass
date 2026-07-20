@@ -1,4 +1,4 @@
-<x-layout.sidebar title="Kiosk Tutorial">
+﻿<x-layout.sidebar title="Kiosk Tutorial">
 
 {{--
     FR-STU-11 — Kiosk Tutorial. One page, seven steps, driven by a single
@@ -178,7 +178,7 @@
                         <a href="{{ route('student.dashboard') }}"
                            class="inline-flex items-center justify-center gap-2 rounded-full bg-hp-orange
                                   px-6 py-2.5 text-sm font-semibold text-white transition-colors
-                                  duration-150 hover:bg-orange-500">
+                                  duration-hp-fast hover:bg-orange-500">
                             Done — Back to Dashboard
                         </a>
                     @endif

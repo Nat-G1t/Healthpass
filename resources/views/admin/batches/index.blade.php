@@ -1,4 +1,4 @@
-<x-layout.sidebar title="Batch Tracking">
+﻿<x-layout.sidebar title="Batch Tracking">
 
 {{-- ── Page header ────────────────────────────────────────────────────────── --}}
 <div class="mb-6 flex flex-wrap items-end justify-between gap-3">
@@ -12,7 +12,7 @@
     <a href="{{ route('admin.batches.create') }}"
        class="inline-flex items-center justify-center gap-2 rounded-full bg-hp-orange
               px-5 py-2 text-sm font-semibold text-white transition-colors
-              duration-150 hover:bg-orange-500">
+              duration-hp-fast hover:bg-orange-500">
         New Batch Request
     </a>
 </div>
