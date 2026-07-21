@@ -130,8 +130,13 @@ class PasswordChangeController extends Controller
         Cache::forget($cacheKey);
 
         // Already bcrypt from staging; the User model's 'hashed' cast detects
-        // that and does not double-hash.
-        $user->update(['password' => $entry['new_password_hash']]);
+        // that and does not double-hash. Clearing must_change_password releases a
+        // seeded staff account from the D-35 gate — this is the only place the
+        // flag is cleared, so it can only happen via a fully OTP-confirmed change.
+        $user->update([
+            'password' => $entry['new_password_hash'],
+            'must_change_password' => false,
+        ]);
 
         // New session id for this browser; every other session is logged out.
         $request->session()->regenerate();

@@ -3,6 +3,7 @@
 use App\Http\Middleware\EnsureCollegeScope;
 use App\Http\Middleware\EnsureRole;
 use App\Http\Middleware\KioskAccess;
+use App\Http\Middleware\RequirePasswordChange;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -18,6 +19,14 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => EnsureRole::class,
             'kiosk.access' => KioskAccess::class,
             'college.scope' => EnsureCollegeScope::class,
+        ]);
+
+        // D-35: runs on every web request, so a seeded staff account cannot reach
+        // any page until it has replaced its one-time password. Appended to the
+        // web group (not an alias) precisely because it must not be possible to
+        // forget it on a route.
+        $middleware->web(append: [
+            RequirePasswordChange::class,
         ]);
 
         // NOTE: trusted proxies (D-34) are NOT configured here. This closure runs

@@ -174,12 +174,35 @@ Only students self-register (FR-AUTH-05). `nurse`, `college_admin`, and
 `director` accounts come from `database/seeders/StaffSeeder.php` — 1 director,
 1 nurse, and 1 admin per college (12).
 
-**Before going live**, the seeder's placeholder `@healthpass.test` emails and
-shared `password` must be replaced with real addresses and one-time passwords
-that each staff member is forced to change at first login (Decision **D-35** —
-see the PRD; the `users.must_change_password` flag is a flagged schema change and
-is *not implemented yet*). Until D-35 lands, **do not expose the site publicly
-with seeded credentials**.
+On this shape the seeder must issue **one-time passwords** (D-35). Set both keys
+in `.env` **before** seeding:
+
+```dotenv
+HEALTHPASS_SEED_STAFF_ONE_TIME=true
+HEALTHPASS_STAFF_EMAIL_DOMAIN=dhvsu.edu.ph
+```
+
+Then `php artisan db:seed --force` prints a table of 14 accounts with a distinct
+random password each:
+
+```
+ Name               Email                        One-time password
+ Clinic Director    director@dhvsu.edu.ph        k7Qv2mXp9RtLb4Ns
+ ...
+```
+
+**Copy that table immediately — the passwords are stored nowhere in plaintext**
+and cannot be recovered. Hand each person their own; on first login
+`RequirePasswordChange` sends them to the OTP-confirmed change-password screen
+and lets nothing else through until they set their own.
+
+> The generated addresses follow the seeder's pattern (`director@`, `nurse@`,
+> `admin.<code>@`). **Confirm the real addresses** with the clinic and each
+> college and edit `StaffSeeder` before seeding production — the OTP mail has to
+> reach a mailbox the person actually reads.
+
+Leave `HEALTHPASS_SEED_STAFF_ONE_TIME` unset locally: dev keeps the familiar
+shared `password` accounts from `docs/dev-notes.md`.
 
 ---
 
@@ -256,7 +279,8 @@ mysqldump -u healthpass -p healthpass > ~/healthpass-$(date +%F).sql
 - [ ] ESP32 grant re-issued on the new origin; one full sensor-fed kiosk session
       lands in the nurse queue with `entry_method` = `sensor`/`mixed`
 - [ ] Real staff credentials in place (§5, D-35) — **no `@healthpass.test`
-      accounts reachable**
+      accounts reachable**, and logging in as a seeded account lands on the
+      change-password screen and refuses to go anywhere else
 - [ ] Registration OTP email actually arrives via real SMTP
 - [ ] Database backup taken and restore tested
 

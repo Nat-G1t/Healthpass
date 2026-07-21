@@ -23,6 +23,7 @@ class User extends Authenticatable
         'password',
         'managed_college_id',
         'status',
+        'must_change_password',
     ];
 
     protected $hidden = [
@@ -30,11 +31,22 @@ class User extends Authenticatable
         'remember_token',
     ];
 
+    /**
+     * Column defaults mirrored on the model. Without this, a just-created User
+     * reports `must_change_password` as NULL until it is reloaded (Eloquent does
+     * not read database defaults back), which reads as "unknown" in code that
+     * should see a plain false. (D-35)
+     */
+    protected $attributes = [
+        'must_change_password' => false,
+    ];
+
     protected function casts(): array
     {
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'must_change_password' => 'boolean',
         ];
     }
 

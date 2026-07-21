@@ -9,6 +9,13 @@ npm run dev
 
 Run `php artisan migrate:fresh --seed` to restore this state at any time.
 
+> **Dev only, by design (D-35).** These shared-password accounts exist because
+> `HEALTHPASS_SEED_STAFF_ONE_TIME` is unset locally. On the hosted deploy that
+> switch is `true`, and `StaffSeeder` instead issues a distinct random one-time
+> password per account and flags each one `must_change_password`, so the owner
+> must set their own before the app lets them anywhere. See
+> `docs/deployment-hosted.md` §5.
+
 ### Staff accounts
 
 | Role | Email | Password | Notes |

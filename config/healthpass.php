@@ -15,6 +15,21 @@ return [
     // docs/deployment-hosted.md.
     'trusted_proxies' => env('TRUSTED_PROXIES'),
 
+    // D-35, StaffSeeder: how seeded staff accounts (director, nurse, 12 college
+    // admins — FR-AUTH-05, there is no staff registration) get their credentials.
+    'seed_staff' => [
+        // TRUE on the hosted deploy: each account gets a distinct random one-time
+        // password, printed once by the seeder and never stored, and is flagged
+        // must_change_password so the owner must replace it at first login.
+        // FALSE (default) keeps the local/dev shared 'password' — see dev-notes.
+        'one_time_passwords' => env('HEALTHPASS_SEED_STAFF_ONE_TIME', false),
+
+        // Email domain for the generated staff addresses. Override on the hosted
+        // deploy with the real institutional domain, then confirm each individual
+        // address with the clinic and the colleges before go-live.
+        'email_domain' => env('HEALTHPASS_STAFF_EMAIL_DOMAIN', 'healthpass.test'),
+    ],
+
     // BR-01 (updated): Clinic open daily, 7 AM–5 PM.
     'clinic_hours' => [
         'open' => '07:00',
