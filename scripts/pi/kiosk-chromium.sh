@@ -5,13 +5,17 @@
 # Uses http://localhost so Web Serial (navigator.serial) has a secure context.
 set -euo pipefail
 
-# If the kiosk is NETWORK-restricted (HEALTHPASS_KIOSK_ALLOW_LOOPBACK=false, the
-# hosted shape) this Pi must present a DEVICE TOKEN. Because --incognito wipes
-# cookies each launch, bake a one-time provisioning token into the URL — enroll
-# the device on the nurse "Kiosk Devices" page and copy its URL here, e.g.
-#   KIOSK_URL="http://localhost/kiosk?device_token=XXXXXXXX"
+# D-34: the defense runs against the HOSTED site, so this points at the public
+# HTTPS origin, e.g. KIOSK_URL="https://healthpass.example.edu.ph/kiosk".
+# The Pi-local URL below stays the documented offline fallback (see §10).
+#
+# The hosted shape sets HEALTHPASS_KIOSK_ALLOW_LOOPBACK=false, so this Pi must
+# present a DEVICE TOKEN. Enroll it once on the nurse "Kiosk Devices" page: the
+# persistent profile below keeps the resulting cookie across reboots, so the
+# plain URL is enough after enrollment. If the profile is ever wiped, re-provision
+# by pasting the one-time URL here:
+#   KIOSK_URL="https://healthpass.example.edu.ph/kiosk?device_token=XXXXXXXX"
 # KioskAccess validates it, drops the cookie, and redirects to the clean URL.
-# On the Pi-local defense shape (allow_loopback=true) the plain URL is enough.
 KIOSK_URL="${KIOSK_URL:-http://localhost/kiosk}"
 
 # Chromium is 'chromium-browser' on Pi OS, 'chromium' on some builds.
@@ -25,14 +29,18 @@ if command -v xset >/dev/null 2>&1; then
 fi
 
 # --kiosk: borderless full screen, no exit chrome.
-# --incognito + fresh profile dir: no restore-tabs / "didn't shut down" bubble.
+# NO --incognito (deliberate): incognito wipes the profile every launch, which
+#   would throw away BOTH the Web Serial port grant (FR-HW-05 — the ESP32 would
+#   need a manual "Allow" tap at every boot) and the kiosk device-token cookie
+#   (D-27/D-34). The persistent --user-data-dir below is what makes unattended
+#   restart work. The crash-restore bubble is suppressed by the flags below
+#   instead.
 # --disable-* flags: suppress the crash-restore bar and info bars on the Pi.
 # --password-store=basic: desktop autologin leaves the GNOME keyring locked, which
 #   makes Chromium pop an "unlock keyring" dialog on launch (fatal on an unattended
 #   kiosk). Force a plaintext store so no dialog appears. See docs/deployment-pi.md §4.
 exec "$CHROME_BIN" \
   --kiosk \
-  --incognito \
   --noerrdialogs \
   --disable-infobars \
   --disable-session-crashed-bubble \

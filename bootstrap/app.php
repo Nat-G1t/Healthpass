@@ -19,6 +19,12 @@ return Application::configure(basePath: dirname(__DIR__))
             'kiosk.access' => KioskAccess::class,
             'college.scope' => EnsureCollegeScope::class,
         ]);
+
+        // NOTE: trusted proxies (D-34) are NOT configured here. This closure runs
+        // BEFORE the config files are loaded, so config() is unavailable and
+        // env() is empty once `php artisan config:cache` has run — the proxy list
+        // would silently be empty in production. It is set in
+        // App\Providers\AppServiceProvider::boot() instead.
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

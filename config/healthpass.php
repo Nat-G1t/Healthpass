@@ -6,6 +6,15 @@ return [
     // Clinic staff update this value without touching any controller or view.
     'daily_capacity' => env('HEALTHPASS_DAILY_CAPACITY', 40),
 
+    // D-34, hosted internet deploy: the IP address(es) of the reverse proxy /
+    // load balancer sitting in front of the app, comma-separated. Laravel only
+    // honours X-Forwarded-For / X-Forwarded-Proto from these addresses, which is
+    // what makes per-IP throttles count the real visitor and https:// links come
+    // out as https://. Leave EMPTY on the Pi-local shape (no proxy in front).
+    // NEVER '*' — App\Support\TrustedProxies rejects it at boot; see
+    // docs/deployment-hosted.md.
+    'trusted_proxies' => env('TRUSTED_PROXIES'),
+
     // BR-01 (updated): Clinic open daily, 7 AM–5 PM.
     'clinic_hours' => [
         'open' => '07:00',
