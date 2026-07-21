@@ -9,9 +9,32 @@ campus LAN can reach the same app through the Pi's IP address.
 > numbers, FR-IDs, and architecture come from `docs/HealthPass_PRD.md` and
 > `CLAUDE.md`.
 
+> ## ⚠️ Read this first — Decision D-34 changed the primary shape
+>
+> **The defense now runs against the hosted internet deployment**, not against
+> the app running on the Pi. The Pi is a **browser/terminal**: Chromium opens
+> `https://<domain>/kiosk`, and the server lives elsewhere — see
+> **`docs/deployment-hosted.md`**.
+>
+> This document stays authoritative for everything about the **terminal itself**
+> — Chromium kiosk autostart (§4), display rotation (§4), Web Serial and the
+> ESP32 (§7), device enrollment (§9) — and for running the **whole app on the Pi**,
+> which is now the **documented offline fallback** (§10) rather than the plan of
+> record. Sections 1–3 (installing PHP/MariaDB/nginx on the Pi) apply only to
+> that fallback.
+>
+> HTTPS is a secure context, so Web Serial works at `https://<domain>/kiosk`
+> exactly as it did at `http://localhost`. **But serial grants are per-origin** —
+> Baldo must re-authorize the ESP32 once on the new domain.
+
 ---
 
 ## 0. Why the Pi runs the app locally (important)
+
+> **D-34 update:** this section explains the *original* reason the app ran on the
+> Pi — the secure-context rule. That rule is unchanged and still the reason
+> `http://<LAN-IP>` can never work. What changed is *how* we satisfy it: the
+> hosted shape satisfies it with **TLS** instead of the `localhost` exemption.
 
 Web Serial (`navigator.serial`, FR-KSK-07 / FR-HW-05 sensor path) only works in
 a **secure context**. Browsers count these as secure:
@@ -450,24 +473,39 @@ sudo systemctl restart nginx php8.2-fpm     # or: healthpass-serve
 
 ## 7. Web Serial permission persistence in unattended kiosk mode (FR-HW-05)
 
-> **PLACEHOLDER — for Baldo to complete after hardware testing.**
+> **PARTIALLY RESOLVED — remaining items for Baldo after hardware testing.**
 
 The problem: Chromium normally shows a **per-visit permission prompt** the first
 time a page calls `navigator.serial.requestPort()`, and remembered grants are
 tied to the browser profile / origin. On an unattended kiosk that reboots, we
-need the serial device (BP monitor / sensor bridge) to connect **without a human
-tapping "Allow"** every boot.
+need the ESP32 sensor bridge to connect **without a human tapping "Allow"**
+every boot.
+
+**Resolved: `--incognito` is gone from `kiosk-chromium.sh`.** Incognito wiped the
+profile on every launch, which threw away *both* the Web Serial grant and the
+D-27 device-token cookie — guaranteeing a manual tap at every boot. The launcher
+now relies on the persistent `--user-data-dir` alone; the crash-restore bubble it
+used to suppress is handled by `--disable-session-crashed-bubble` /
+`--noerrdialogs` instead.
+
+**Resolved by D-34: the origin is now `https://<domain>`, not `http://localhost`.**
+Grants are per-origin, so the ESP32 must be re-authorized once on the new domain,
+and any Chromium policy below must name the **https origin**.
 
 Things for Baldo to test and document here once we have the hardware:
 
-- [ ] Does the grant survive a reboot with a **persistent profile**
-      (`--user-data-dir`, as set in `kiosk-chromium.sh`)? Or does `--incognito`
-      wipe it — do we need to drop `--incognito` for the sensor build?
+- [ ] Confirm the grant actually survives a reboot now that the profile persists
+      (expected, but verify on the real Pi — this is the whole point).
 - [ ] Chromium enterprise policy `SerialAllowAllPortsForUrls` /
-      `SerialAllowUsbDevicesForUrls` — can we pre-authorize `http://localhost`
-      to a specific USB VID/PID so there's **no prompt at all**? (Policy file
-      under `/etc/chromium/policies/managed/`.) Document the exact VID/PID and
-      JSON here.
+      `SerialAllowUsbDevicesForUrls` — can we pre-authorize
+      `https://<domain>` to the ESP32's USB VID/PID so there's **no prompt at
+      all**, even on a fresh profile? (Policy file under
+      `/etc/chromium/policies/managed/`.) Document the exact VID/PID and JSON
+      here.
+- [ ] **Serial port permissions:** confirm the kiosk user is in the `dialout`
+      group (`sudo usermod -aG dialout $USER`, then log out/in) so Chromium can
+      open `/dev/ttyUSB*` / `/dev/ttyACM*`. Without it the kiosk reports a
+      generic serial `error` status with no obvious cause.
 - [ ] Confirm the app still auto-reconnects to a previously granted port on load
       (the Web Serial module's reconnect path, FR-KSK-07) without user gesture,
       or note what gesture is unavoidable.
@@ -544,36 +582,34 @@ branded 403 page — not a bare stub or a login redirect.
 The token is a long random string; the server stores only its **SHA-256 hash**.
 The browser presents the plaintext on every `/kiosk` request. Two paths:
 
-- **Persistent-profile cookie (simplest for the Pi-local shape).** On the
-  terminal, sign in as a nurse, open **Kiosk Devices**, name the device, and
-  click **Enable Kiosk Mode on this device**. That drops a long-lived HttpOnly
-  cookie on the browser. This survives reboots **only if the browser keeps its
-  profile** — i.e. the launcher must **not** run `--incognito` (which wipes
-  cookies every launch). Drop `--incognito` from `kiosk-chromium.sh` if you rely
-  on the cookie.
+- **Persistent-profile cookie (now the default path).** On the terminal, sign in
+  as a nurse, open **Kiosk Devices**, name the device, and click **Enable Kiosk
+  Mode on this device**. That drops a long-lived HttpOnly cookie on the browser.
+  This survives reboots because the launcher keeps its profile — `--incognito`
+  was **removed** from `kiosk-chromium.sh` (see §7), so the cookie and the Web
+  Serial grant both persist.
 
-- **`KIOSK_URL` query token (works with the incognito launcher).** Keep
-  `--incognito`, and bake the one-time provisioning URL shown after enrollment
-  into the launcher's `KIOSK_URL`:
+- **`KIOSK_URL` query token (re-provisioning / wiped profile).** Bake the
+  one-time provisioning URL shown after enrollment into the launcher's
+  `KIOSK_URL`:
 
   ```bash
-  KIOSK_URL="http://localhost/kiosk?device_token=XXXXXXXX"
+  KIOSK_URL="https://<domain>/kiosk?device_token=XXXXXXXX"
   ```
 
   On launch, `KioskAccess` validates the token, sets the cookie, and redirects
-  to the clean `/kiosk` URL (the token never lingers in the address bar). Because
-  the token is provisioned fresh from env each start, incognito wiping the cookie
-  afterward is harmless.
+  to the clean `/kiosk` URL (the token never lingers in the address bar).
 
-> On the **Pi-local defense shape** `allow_loopback` stays **true**, so
-> `http://localhost/kiosk` needs no device token at all — enrollment is only
-> required when you turn loopback off (below).
+> On the **Pi-local fallback shape** (§10) `allow_loopback` is **true**, so
+> `http://localhost/kiosk` needs no device token at all — enrollment is required
+> on the hosted shape, where loopback trust is off.
 
 ### Hosted internet shape — turn loopback off + set trusted proxies
 
-The single hosted app over HTTPS points Chromium at `https://<domain>/kiosk`
+**This is the primary shape as of D-34** — full runbook in
+`docs/deployment-hosted.md`. Chromium points at `https://<domain>/kiosk`
 (HTTPS is a secure context, so Web Serial works; serial grants are per-origin).
-For that shape:
+The essentials:
 
 - Set **`HEALTHPASS_KIOSK_ALLOW_LOOPBACK=false`**. Reason: behind a
   **misconfigured** reverse proxy, `$request->ip()` can report `127.0.0.1` for
@@ -583,10 +619,41 @@ For that shape:
   `APP_ENV=production` over plain `http://localhost` by design.
 
 - Configure Laravel's **trusted proxies to the actual proxy IPs only — never
-  `*`** (Laravel 12: `bootstrap/app.php` → `$middleware->trustProxies(at: […])`).
+  `*`**. Set `TRUSTED_PROXIES` in `.env` (comma-separated); it is applied in
+  `App\Providers\AppServiceProvider::boot()` via `App\Support\TrustedProxies`.
   A wildcard trusts any client's `X-Forwarded-For`, letting a visitor spoof their
-  IP (e.g. claim `127.0.0.1`). Pin the real load-balancer/proxy addresses so
-  client IPs resolve correctly and `X-Forwarded-For` can't be forged.
+  IP (e.g. claim `127.0.0.1`) — the app **refuses to boot** on `*`. Pin the real
+  load-balancer/proxy addresses so client IPs resolve correctly.
+
+  > Not configured in `bootstrap/app.php`: that closure runs before the config
+  > files load, so `config()` is unavailable there and `env()` reads empty once
+  > `config:cache` has run — the proxy list would silently be empty in production.
+
+---
+
+## 10. Offline fallback — running the whole app on the Pi
+
+Before D-34 this was the plan of record; it is now the **backup** for defense day
+if the venue's internet fails (`docs/deployment-hosted.md` §7).
+
+Keep a working local install by following §§1–4 of this document. To switch the
+Pi from hosted to local:
+
+1. `KIOSK_URL="http://localhost/kiosk"` in the launcher (or its env).
+2. In the Pi's `.env`: `HEALTHPASS_KIOSK_ALLOW_LOOPBACK=true`,
+   `APP_URL=http://localhost`, `TRUSTED_PROXIES=` (empty).
+3. `sudo -u www-data php artisan config:cache`
+4. Restart the kiosk service / relaunch Chromium.
+
+Two things to know before you rely on it:
+
+- **The serial grant is per-origin**, so the ESP32 must be granted separately on
+  `http://localhost` — do it once *before* defense day, not during the failure.
+- **The local database is separate.** Restore a fresh dump from the hosted server
+  or the fallback demos stale data.
+
+**Rehearse this switch end to end at least once.** An untested fallback is not a
+fallback.
 
 ---
 
@@ -599,8 +666,10 @@ For that shape:
 | Pi env template | `scripts/pi/pi.env.example` |
 | Kiosk launcher | `scripts/pi/kiosk-chromium.sh` |
 | Dev-mode desktop shortcut | `scripts/pi/healthpass-kiosk.desktop` (§4 dev mode) |
-| Kiosk URL (on Pi) | `http://localhost/kiosk` |
+| **Kiosk URL (primary, D-34)** | `https://<domain>/kiosk` — see `docs/deployment-hosted.md` |
+| Kiosk URL (offline fallback) | `http://localhost/kiosk` (§10) |
 | Display rotation (portrait) | `wlr-randr --output <name> --transform 90` (§4, Baldo to finalize) |
-| Staff URL (LAN) | `http://<pi-ip>/` |
+| Serial port access | `sudo usermod -aG dialout $USER`, then log out/in (§7) |
+| Staff URL (LAN, fallback only) | `http://<pi-ip>/` |
 | Enroll a kiosk device | Nurse nav → **Enable Kiosk Mode** → *Kiosk Devices* (§9) |
 | Local health check | `curl -I http://localhost/kiosk` |

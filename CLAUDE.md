@@ -93,13 +93,26 @@ Do not silently reconcile conflicts.
 
 ## Deployment shapes
 
-- **Defense = Pi-local.** The app runs on the Pi; Chromium opens the kiosk
-  at `http://localhost/kiosk` (D-9) — see `docs/deployment-pi.md`.
-- **Internet = single hosted app over HTTPS.** The kiosk points at
-  `https://<domain>/kiosk` (HTTPS is a secure context, so Web Serial works;
-  serial permission grants are per-origin).
-- **Never key HTTPS-forcing logic on `APP_ENV`** — the Pi is
-  `APP_ENV=production` over plain `http://localhost` by design.
+- **Primary = single hosted app over HTTPS (D-34).** One Laravel app on a
+  public domain serves the web app and the kiosk; **the defense demos this
+  deployment**, with Chromium on the Pi opening `https://<domain>/kiosk`.
+  The Pi is a terminal, not a server — see `docs/deployment-hosted.md`.
+  Requires `TRUSTED_PROXIES` set to the real proxy IP (never `*`),
+  `HEALTHPASS_KIOSK_ALLOW_LOOPBACK=false`, and the Pi enrolled as a kiosk
+  device (D-27).
+- **Fallback = Pi-local (was D-9).** The app runs on the Pi, Chromium opens
+  `http://localhost/kiosk`. Kept and **rehearsed** for venue-internet
+  failure — `docs/deployment-pi.md` §10.
+- **Web Serial grants are per-origin.** Changing the kiosk's origin
+  (localhost ↔ domain) invalidates the ESP32's grant; it must be re-issued
+  once per origin. This is why the launcher no longer uses `--incognito`.
+- **Never key HTTPS-forcing logic on `APP_ENV`** — the fallback Pi is
+  `APP_ENV=production` over plain `http://localhost` by design. HTTPS is
+  forced at nginx.
+- **Trusted proxies live in `AppServiceProvider::boot()`**, not
+  `bootstrap/app.php` — that middleware closure runs before the config files
+  load, so `config()` is unavailable and `env()` reads empty once
+  `config:cache` has run.
 
 ## Run / dev commands
 
