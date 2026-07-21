@@ -657,6 +657,83 @@ fallback.
 
 ---
 
+## 11. Moving the kiosk between networks (classroom → clinic)
+
+**Short version: the Pi only needs Wi-Fi.** On the hosted shape (D-34) the Pi is
+a browser pointed at a public URL, so moving it to a different room or a
+different Wi-Fi changes nothing about the app. Everything the kiosk depends on is
+bound to the **origin** (`https://<domain>`), not to the network:
+
+| Thing | Survives a network change? | Why |
+|---|---|---|
+| Kiosk device token (D-27) | ✅ | Cookie on the browser profile, keyed to the origin |
+| Web Serial grant for the ESP32 | ✅ | Granted per origin, stored in the profile |
+| Display rotation / touch mapping | ✅ | OS-level, per device |
+| Database, accounts, queue | ✅ | They live on the server, not the Pi |
+| **Internet access** | ❌ | The one thing you must re-establish |
+
+Nothing on the student/staff side needs configuration at all — anyone can reach
+`https://<domain>` from any device on any network.
+
+### Before the defense (do this in the lab, not on the day)
+
+1. **Pre-add every Wi-Fi network you might use.** NetworkManager stores multiple
+   networks and joins whichever is in range, so add the classroom *and* the
+   clinic SSIDs ahead of time:
+
+   ```bash
+   nmcli device wifi connect "<SSID>" password "<password>"
+   nmcli connection show           # confirm both are saved
+   ```
+
+   Also add your **phone hotspot** as a third saved network — that is the
+   fastest recovery if venue Wi-Fi fails.
+
+2. **Ask campus IT about the two things that actually break kiosks:**
+   - **Captive portal** (a "click here to accept" page). This is the single
+     biggest risk: Chromium in `--kiosk` mode has no address bar or tabs, so
+     nobody can accept the terms, and the kiosk just shows a redirect page.
+     Ask IT to **whitelist the Pi's MAC address** so it bypasses the portal.
+   - **MAC registration / device approval**, common on campus networks —
+     register the Pi in advance on both the classroom and clinic networks.
+
+   Get the Pi's MAC with `ip link show wlan0`.
+
+3. **Enroll the device and grant the sensor once** (§9 and §7). Both persist
+   across reboots and network changes, so this is genuinely a one-time step.
+
+4. **Rehearse the offline fallback** (§10) at least once.
+
+### On the day — classroom
+
+1. Power on. Confirm the Pi joined the Wi-Fi: `nmcli connection show --active`.
+2. Confirm it can actually reach the app — not just the network:
+   ```bash
+   curl -I https://<domain>/kiosk        # expect 200, not a portal redirect
+   ```
+   A `200` from a captive portal is still a portal page; if in doubt open the URL
+   in a normal browser window before starting the kiosk.
+3. Launch the kiosk (desktop shortcut or `systemctl --user start
+   healthpass-kiosk`).
+4. Run one full session with a sensor reading. No permission prompt should
+   appear — if one does, the profile was wiped and you need to re-grant (§7) and
+   re-enroll (§9).
+
+### Moving to the clinic
+
+1. Power off, move the Pi, power on.
+2. It auto-joins the clinic Wi-Fi if you saved it in step 1 above.
+3. Repeat the `curl` check and launch.
+
+**That's it — no re-enrollment, no re-granting, no config edits**, because the
+domain did not change.
+
+> **The one thing that would force a redo:** changing the domain itself. A new
+> origin invalidates both the device token cookie and the Web Serial grant. Pick
+> the domain before you enroll anything, and don't change it after.
+
+---
+
 ## Quick reference
 
 | What | Command / path |
