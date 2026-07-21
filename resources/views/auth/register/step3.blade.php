@@ -1,4 +1,4 @@
-<x-register.wizard-shell :step="3">
+﻿<x-register.wizard-shell :step="3">
 
     <h2 class="mb-[6px] text-center text-[15px] font-bold text-hp-slate">Step 3 — Verify Your Email</h2>
     <p class="mb-[20px] text-center text-[13px] leading-[1.6] text-hp-slate/60">
@@ -8,7 +8,7 @@
 
     {{-- Resend success flash --}}
     @if (session('status'))
-        <div class="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+        <div data-hp-flash class="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
             {{ session('status') }}
         </div>
     @endif
@@ -76,7 +76,7 @@
                     @keydown="onKeydown({{ $i }}, $event)"
                     @paste="onPaste($event)"
                     class="h-[60px] w-[50px] rounded-[10px] border-2 text-center text-[26px] font-bold
-                           transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-hp-orange/30
+                           transition-all duration-hp-fast focus:outline-none focus:ring-2 focus:ring-hp-orange/30
                            [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none
                            [&::-webkit-outer-spin-button]:appearance-none"
                     :class="digits[{{ $i }}]
@@ -93,6 +93,7 @@
             size="lg"
             class="w-full"
             x-bind:disabled="!ready"
+            data-pending-label="Verifying…"
         >
             Verify &amp; Continue →
         </x-hp.button>

@@ -64,6 +64,11 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ $title ? $title . ' — HealthPass' : 'HealthPass' }}</title>
 
+    {{-- Warm up the Google Fonts origins the Poppins @import in app.css hits —
+         saves two TLS handshakes on slow connections. --}}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
     {{--
         Read the saved sidebar choice BEFORE the page paints. We add the
         `sidebar-collapsed` class to <html> here so the first frame already
@@ -133,6 +138,8 @@
     @include('partials.favicon')
 </head>
 <body class="h-full">
+
+<x-hp.splash />
 
 {{--
     Alpine holds the open/closed flag (`collapsed`). toggle() flips it,
@@ -292,8 +299,10 @@
             <h1 class="truncate text-sm font-semibold text-hp-slate">{{ $title }}</h1>
         </header>
 
-        {{-- Main content --}}
-        <main class="flex-1 overflow-y-auto bg-hp-bg p-4 sm:p-6 lg:p-7">
+        {{-- Main content — hp-page-enter gives every navigation a soft landing
+             on the CONTENT only; the sidebar/header chrome stays stationary
+             like a native app (§5.5). --}}
+        <main class="hp-page-enter flex-1 overflow-y-auto bg-hp-bg p-4 sm:p-6 lg:p-7">
             {{ $slot }}
         </main>
 

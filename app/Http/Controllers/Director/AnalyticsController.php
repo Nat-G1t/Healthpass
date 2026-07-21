@@ -5,271 +5,358 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Director;
 
 use App\Http\Controllers\Controller;
-use App\Models\ClearanceRecord;
+use App\Models\Appointment;
 use App\Models\ClinicVisit;
 use App\Models\College;
-use App\Support\CaseMonths;
-use App\Support\MedicalCaseSummary;
-use Carbon\CarbonInterface;
+use App\Models\VitalSigns;
+use App\Support\VisitMonths;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 /**
- * Director Analytics — two views over ONE grouped college × category query,
- * plus the By-Sex donut:
+ * Director Analytics, rebuilt after the D-32 rescope (FR-ANL-09..13).
+ * Every card reads only data HealthPass itself collects — appointments
+ * from the web app, vitals from the kiosk:
  *
- *  - Medical Cases by College (FR-ANL-02): a horizontal stacked bar, one row
- *    per college (all 12, zero-case rows included), each bar segmented by
- *    the 8 medical-system categories, sorted by total case volume descending.
- *  - Summary of Medical Cases matrix (FR-ANL-03): 8 medical-system rows ×
- *    12 college columns in the PRD's fixed order, plus a TOTAL column and a
- *    totals row. Rendered as the chart's "View as table" toggle (D-30) —
- *    one dataset, two formats, so the page never shows the same numbers
- *    twice. Encoded records with no category contribute nothing to either
- *    view; their count appears in a card-level footnote instead.
- *  - Cases by Medical System (FR-ANL-08): a horizontal bar per system,
- *    overall total across all units, sorted descending — each bar split
- *    into Male/Female segments (full-strength series color vs a lighter
- *    tint of it; the per-system total is drawn at the bar's end).
- *  - By-Sex donut (FR-ANL-04): encoded visits counted once per visit by the
- *    student's profile sex — see bySexDonut() for why its total is allowed
- *    to differ from the case totals above.
+ *  - Clinic Visits by College (FR-ANL-09): kiosk check-ins + completed
+ *    dental appointments, stacked per college, with a Visits-by-Purpose
+ *    breakdown from the linked appointments.
+ *  - Vital-Sign Flags (FR-ANL-10): count + rate per flag column.
+ *  - Visits per Month trend (FR-ANL-11): whole-year, ignores the filters.
+ *  - BMI Distribution (FR-ANL-12): four rule-based buckets.
+ *  - Students Screened by Sex (FR-ANL-04 as amended).
  *
- * Counting rules (the case views):
- *  - encoded records only (FR-ANL-07) — a clearance_records row only exists
- *    once the nurse encodes, and the status guard keeps that explicit;
- *  - one count per record × category (D-23) — a multi-category case counts
- *    once in EACH of its systems;
- *  - grouped by clinic_visits.college_id, the capture-time college snapshot
- *    (FR-STU-09, D-17) — a later transfer never re-attributes a past case.
- *
- * Month scope: the whole page is scoped to ONE month (the ?month=YYYY-MM
- * picker, defaulting to the newest month with data — see CaseMonths). A
- * case belongs to the month of its VISIT (checked_in_at), and every view
- * here — chart, matrix, by-system, donut, footnote — filters to it, so the
- * on-screen numbers and the printed monthly report always match.
+ * All counts compute from CAPTURED data (FR-ANL-07 as rewritten): medical
+ * visits count at kiosk check-in — no encoded-only guard — and dental
+ * counts from completed appointments (D-33). The page is scoped by the
+ * ?month=YYYY-MM picker and the ?college=<id> dropdown (FR-ANL-13);
+ * only the trend ignores them, by design.
  */
 class AnalyticsController extends Controller
 {
-    /**
-     * Series color per CASE_CATEGORIES slot (same index = same category,
-     * fixed order — never reassigned when counts change). Hues chosen by
-     * Nat (2026-07-14); colorblind-safety checked with the dataviz palette
-     * validator: adjacent-pair CVD separation passes (worst ΔE 40.8), and
-     * the two light slots (orange, cyan) sit under 3:1 contrast — the
-     * "View as table" fallback below the chart is their required relief.
-     */
-    private const SERIES_COLORS = [
-        '#B45309', // Alimentary System — warm brown
-        '#1E3A8A', // Respiratory System — deep navy
-        '#F97316', // Musculo-Skeletal System — brand orange
-        '#059669', // Integumentary System — emerald
-        '#8B5CF6', // Urinary System — purple
-        '#64748B', // Metabolic Endocrine System — slate gray
-        '#DC2626', // Cardiovascular System — crimson red
-        '#06B6D4', // Eyes, Ears, Nose & Throat Disorders — cyan
-    ];
+    /** FR-ANL-09 series colors (pair CVD-validated 2026-07-18). */
+    private const MEDICAL_COLOR = '#FF8C2A';
 
-    /** Fixed matrix column order, locked by FR-ANL-03. */
-    private const MATRIX_COLLEGE_ORDER = [
-        'COE', 'CEA', 'CBS', 'CAS', 'CSSP', 'CCS',
-        'CHTM', 'CIT', 'LAW', 'GS', 'SHS', 'LHS',
-    ];
+    private const DENTAL_COLOR = '#2563EB';
 
     /** Donut slice colors (prototype): Male = brand orange, Female = peach. */
     private const SEX_COLORS = ['#FF8C2A', '#FFCAA0'];
 
+    /** Purpose bucket for visits with no linked appointment or no purpose. */
+    private const WALK_IN_LABEL = 'Walk-in / not specified';
+
     public function __invoke(Request $request): View
     {
-        // The month the whole page is scoped to (picker value, or the newest
-        // month with data). Everything below filters to it.
-        $month = CaseMonths::resolve($request->query('month'));
-
-        // The college × category counts (FR-ANL-03). Built by the shared
-        // MedicalCaseSummary — month-scoped — so the matrix here and the
-        // printable monthly report (CaseSummaryPrintController) read from ONE
-        // aggregation and can never disagree.
-        $summary = MedicalCaseSummary::build($month);
-        $counts = $summary->counts;                 // counts[college_id][category]
-        $totals = $summary->totals;                 // matrix column totals
-        $categoryTotals = $summary->categoryTotals; // matrix TOTAL column
-        $totalCases = $summary->grandTotal;
-
-        $allColleges = College::orderBy('code')->get();
-
-        // Chart rows: sorted by total volume descending. The initial
-        // code-ascending order is the tie-break: PHP sorts are stable, so
-        // equal totals keep alphabetical order — deterministic chart rows.
-        $colleges = $allColleges
-            ->sortByDesc(fn (College $college) => $totals[$college->id] ?? 0)
-            ->values();
-
-        // Matrix columns: the FR-ANL-03 fixed order instead.
-        $matrixOrder = array_flip(self::MATRIX_COLLEGE_ORDER);
-        $matrixColleges = $allColleges
-            ->sortBy(fn (College $college) => $matrixOrder[$college->code] ?? PHP_INT_MAX)
-            ->values();
-
-        // Footnote count: encoded records that carry no category at all —
-        // excluded from the matrix (FR-ANL-03), but the Director should
-        // still see they exist. Month-scoped like everything else on the
-        // page. whereDoesntHave() is whereHas()'s inverse: a NOT EXISTS
-        // subquery on clearance_case_categories.
-        $uncategorizedCount = ClearanceRecord::query()
-            ->whereHas('clinicVisit', fn (Builder $visit) => $visit->encoded()
-                ->whereBetween('checked_in_at', $this->monthBounds($month)))
-            ->whereDoesntHave('caseCategories')
-            ->count();
-
-        $datasets = [];
-        foreach (ClearanceRecord::CASE_CATEGORIES as $i => $category) {
-            $datasets[] = [
-                'label' => $category,
-                'data' => $colleges
-                    ->map(fn (College $college) => $counts[$college->id][$category] ?? 0)
-                    ->all(),
-                'backgroundColor' => self::SERIES_COLORS[$i],
-            ];
-        }
+        // Both filters validate server-side: an unknown month format falls
+        // back to the newest month with data (VisitMonths::resolve), an
+        // unknown college id falls back to "All colleges".
+        $month = VisitMonths::resolve($request->query('month'));
+        $college = $this->resolveCollege($request->query('college'));
 
         return view('director.analytics', [
-            'chart' => [
-                'labels' => $colleges->pluck('code')->all(),
-                'datasets' => $datasets,
-            ],
-            'totalCases' => $totalCases,
-            // Month picker: the months that have data (newest first) and the
-            // one currently shown. Changing it reloads the page for that
-            // month; the same value drives the Preview & Print report.
-            'availableMonths' => CaseMonths::available(),
+            'availableMonths' => VisitMonths::available(),
             'selectedMonth' => $month->format('Y-m'),
-            // For the table view (the chart's accessible/contrast fallback).
-            'colleges' => $colleges,
-            'categories' => ClearanceRecord::CASE_CATEGORIES,
-            'counts' => $counts,
-            'totals' => $totals,
-            // Summary of Medical Cases matrix (FR-ANL-03). Cells and column
-            // totals reuse $counts/$totals above; the grand total is
-            // $totalCases — same numbers, fixed column order.
-            'matrixColleges' => $matrixColleges,
-            'categoryTotals' => $categoryTotals,
-            'uncategorizedCount' => $uncategorizedCount,
-            ...$this->casesBySystem($month),
-            ...$this->bySexDonut($month),
+            'selectedMonthLabel' => $month->format('F Y'),
+            'colleges' => College::orderBy('code')->get(['id', 'code']),
+            'selectedCollegeId' => $college?->id,
+            ...$this->visitsByCollege($month, $college),
+            ...$this->visitsByPurpose($month, $college),
+            ...$this->vitalSignFlags($month, $college),
+            ...$this->visitsTrend(),
+            ...$this->bmiDistribution($month, $college),
+            ...$this->bySexDonut($month, $college),
         ]);
     }
 
     /**
-     * The [start, end] bounds of $month's calendar days — a parameterized
-     * BETWEEN on clinic_visits.checked_in_at, portable to the SQLite test DB.
-     *
-     * @return array{0: CarbonInterface, 1: CarbonInterface}
+     * The ?college=<id> filter value as a College, or null for "All
+     * colleges". Anything non-numeric or unknown degrades to null so a
+     * hand-edited URL can never error the page (FR-ANL-13).
      */
-    private function monthBounds(CarbonInterface $month): array
+    private function resolveCollege(mixed $collegeId): ?College
     {
-        return [$month->copy()->startOfMonth(), $month->copy()->endOfMonth()];
+        if (! is_string($collegeId) || ! ctype_digit($collegeId)) {
+            return null;
+        }
+
+        return College::find((int) $collegeId);
     }
 
     /**
-     * Cases by Medical System (FR-ANL-08): same joins and counting rules
-     * as the matrix query (encoded only, one count per record × category),
-     * plus the student's profile sex so each system's bar can stack a
-     * Male and a Female segment. A student without a profile row can't
-     * exist through registration, so the extra join drops nothing real.
-     * Month-scoped to $month like the rest of the page.
+     * The [start, end] bounds of $month's calendar days — a parameterized
+     * BETWEEN, portable to the SQLite test DB.
      *
-     * @return array{systemChart: array}
+     * @return array{0: CarbonImmutable, 1: CarbonImmutable}
      */
-    private function casesBySystem(CarbonInterface $month): array
+    private function monthBounds(CarbonImmutable $month): array
     {
-        $rows = ClinicVisit::encodedCaseRows() // FR-ANL-07
-            ->join('student_profiles', 'student_profiles.user_id', '=', 'clinic_visits.student_id')
+        return [$month->startOfMonth(), $month->endOfMonth()];
+    }
+
+    /**
+     * Medical visits in scope: ALL kiosk check-ins of the month — captured
+     * and encoded alike (FR-ANL-07) — optionally narrowed to one college
+     * via the capture-time snapshot (FR-STU-09).
+     */
+    private function medicalVisitsInScope(CarbonImmutable $month, ?College $college): Builder
+    {
+        return ClinicVisit::query()
             ->whereBetween('clinic_visits.checked_in_at', $this->monthBounds($month))
-            ->groupBy('clearance_case_categories.case_category', 'student_profiles.sex')
-            ->select(
-                'clearance_case_categories.case_category',
-                'student_profiles.sex',
-                DB::raw('count(*) as cases'),
-            )
+            ->when($college, fn ($query) => $query->where('clinic_visits.college_id', $college->id));
+    }
+
+    /**
+     * Dental visits in scope: COMPLETED dental appointments of the month
+     * (D-33), attributed to the student's CURRENT college — dental has no
+     * capture-time snapshot (stated limitation, FR-ANL-09).
+     */
+    private function dentalVisitsInScope(CarbonImmutable $month, ?College $college): Builder
+    {
+        [$start, $end] = $this->monthBounds($month);
+
+        return Appointment::query()
+            ->where('service_type', 'dental')
+            ->where('status', 'completed')
+            ->whereBetween('scheduled_date', [$start->toDateString(), $end->toDateString()])
+            ->join('student_profiles', 'student_profiles.user_id', '=', 'appointments.student_id')
+            ->when($college, fn ($query) => $query->where('student_profiles.college_id', $college->id));
+    }
+
+    /**
+     * Clinic Visits by College (FR-ANL-09): one row per college — all 12
+     * with zero rows included, or just the filtered one — sorted by total
+     * descending (stable tie-break by code), split Medical / Dental.
+     *
+     * @return array{collegeRows: list<array{code: string, medical: int, dental: int, total: int}>, totalVisits: int, totalMedical: int, totalDental: int, collegeBar: array}
+     */
+    private function visitsByCollege(CarbonImmutable $month, ?College $college): array
+    {
+        $medical = $this->medicalVisitsInScope($month, $college)
+            ->groupBy('college_id')
+            ->select('college_id', DB::raw('count(*) as visits'))
             ->toBase()
-            ->get();
+            ->pluck('visits', 'college_id');
 
-        $bySexCounts = [];
-        foreach ($rows as $row) {
-            $bySexCounts[$row->case_category][$row->sex] = (int) $row->cases;
-        }
+        $dental = $this->dentalVisitsInScope($month, $college)
+            ->groupBy('student_profiles.college_id')
+            ->select('student_profiles.college_id', DB::raw('count(*) as visits'))
+            ->toBase()
+            ->pluck('visits', 'college_id');
 
-        // All 8 systems, zero-case rows included, sorted by total volume
-        // descending — the stable sort keeps CASE_CATEGORIES order as the
-        // tie-break, so equal totals render deterministically.
-        $categories = collect(ClearanceRecord::CASE_CATEGORIES)
-            ->sortByDesc(fn (string $category) => array_sum($bySexCounts[$category] ?? []))
+        $rows = College::orderBy('code')
+            ->when($college, fn ($query) => $query->whereKey($college->id))
+            ->get(['id', 'code'])
+            ->map(fn (College $unit) => [
+                'code' => $unit->code,
+                'medical' => (int) ($medical[$unit->id] ?? 0),
+                'dental' => (int) ($dental[$unit->id] ?? 0),
+                'total' => (int) ($medical[$unit->id] ?? 0) + (int) ($dental[$unit->id] ?? 0),
+            ])
+            // sortBy is stable, and the rows arrive code-ascending — so
+            // equal totals keep their alphabetical order (the tie-break).
+            ->sortByDesc('total')
             ->values();
 
-        // Same color per category as the Cases-by-College chart: index in
-        // CASE_CATEGORIES = index in SERIES_COLORS. Male keeps the
-        // full-strength color; Female gets a lighter tint of it.
-        $colorFor = array_combine(ClearanceRecord::CASE_CATEGORIES, self::SERIES_COLORS);
-
         return [
-            'systemChart' => [
-                'labels' => $categories->all(),
-                // Per-system totals, drawn at each bar's end by the JS —
-                // with two segments neither shows the total on its own.
-                'totals' => $categories
-                    ->map(fn (string $category) => array_sum($bySexCounts[$category] ?? []))
-                    ->all(),
+            'collegeRows' => $rows->all(),
+            'totalVisits' => $rows->sum('total'),
+            'totalMedical' => $rows->sum('medical'),
+            'totalDental' => $rows->sum('dental'),
+            // Chart.js payload for the stacked horizontal bar.
+            'collegeBar' => [
+                'labels' => $rows->pluck('code')->all(),
                 'datasets' => [
-                    [
-                        'label' => 'Male',
-                        'data' => $categories->map(fn (string $c) => $bySexCounts[$c]['M'] ?? 0)->all(),
-                        'backgroundColor' => $categories->map(fn (string $c) => $colorFor[$c])->all(),
-                    ],
-                    [
-                        'label' => 'Female',
-                        'data' => $categories->map(fn (string $c) => $bySexCounts[$c]['F'] ?? 0)->all(),
-                        'backgroundColor' => $categories->map(fn (string $c) => $this->tint($colorFor[$c]))->all(),
-                    ],
+                    ['label' => 'Medical', 'data' => $rows->pluck('medical')->all(), 'backgroundColor' => self::MEDICAL_COLOR],
+                    ['label' => 'Dental', 'data' => $rows->pluck('dental')->all(), 'backgroundColor' => self::DENTAL_COLOR],
                 ],
             ],
         ];
     }
 
     /**
-     * 50% white tint of a #RRGGBB color — the Female shade of each series
-     * color. Derived, not hand-picked, so the pairing can never drift if
-     * SERIES_COLORS changes.
+     * Visits by Purpose (inside the FR-ANL-09 card): the month's medical
+     * visits bucketed by their linked appointment's purpose. A visit with
+     * no linked appointment (walk-in, BR-10) or an appointment without a
+     * purpose falls into the "Walk-in / not specified" bucket — the LEFT
+     * JOIN yields NULL for both cases.
+     *
+     * @return array{purposeRows: list<array{label: string, count: int}>, purposeMax: int}
      */
-    private function tint(string $hex): string
+    private function visitsByPurpose(CarbonImmutable $month, ?College $college): array
     {
-        [$red, $green, $blue] = sscanf($hex, '#%02x%02x%02x');
+        $counts = $this->medicalVisitsInScope($month, $college)
+            ->leftJoin('appointments', 'appointments.id', '=', 'clinic_visits.appointment_id')
+            ->groupBy('appointments.purpose')
+            ->select('appointments.purpose', DB::raw('count(*) as visits'))
+            ->toBase()
+            ->get();
 
-        return sprintf(
-            '#%02X%02X%02X',
-            intdiv($red + 255, 2),
-            intdiv($green + 255, 2),
-            intdiv($blue + 255, 2),
-        );
+        $rows = $counts
+            ->map(fn (object $row) => [
+                'label' => $row->purpose ?? self::WALK_IN_LABEL,
+                'count' => (int) $row->visits,
+            ])
+            ->sortBy('label')          // stable tie-break…
+            ->sortByDesc('count')      // …under the count ordering
+            ->values();
+
+        return [
+            'purposeRows' => $rows->all(),
+            'purposeMax' => (int) $rows->max('count'),
+        ];
     }
 
     /**
-     * By-Sex donut (FR-ANL-04): encoded visits grouped by the student's
-     * profile sex — the SAME encoded() base scope as the matrix query, but
-     * counting once per VISIT (people screened), not per record × category.
-     * Per the PRD §4.9 AC the two totals therefore diverge by design as
-     * soon as a record carries several categories (counts once per system
-     * in the matrix) or none (counts zero there, one person here).
-     * Month-scoped to $month like the rest of the page.
+     * Vital-Sign Flags (FR-ANL-10): count + rate per flag column, over ALL
+     * captured screenings of the month (no encoded-only guard, FR-ANL-07).
+     * The flags were computed server-side at capture (BR-13/14); here they
+     * are only counted. Rate = % of the month's screenings, one decimal.
+     *
+     * @return array{screenings: int, flagTiles: list<array{label: string, count: int, rate: float, sub: string}>}
+     */
+    private function vitalSignFlags(CarbonImmutable $month, ?College $college): array
+    {
+        $screeningsInScope = fn () => VitalSigns::query()
+            ->join('clinic_visits', 'clinic_visits.id', '=', 'vital_signs.clinic_visit_id')
+            ->whereBetween('clinic_visits.checked_in_at', $this->monthBounds($month))
+            ->when($college, fn ($query) => $query->where('clinic_visits.college_id', $college->id));
+
+        $screenings = $screeningsInScope()->count();
+        $thresholds = config('healthpass.thresholds');
+
+        $rate = fn (int $count): float => $screenings > 0
+            ? round($count / $screenings * 100, 1)
+            : 0.0;
+
+        $tile = function (string $label, string $column, string $sub) use ($screeningsInScope, $rate): array {
+            $count = $screeningsInScope()->where($column, true)->count();
+
+            return ['label' => $label, 'count' => $count, 'rate' => $rate($count), 'sub' => $sub];
+        };
+
+        return [
+            'screenings' => $screenings,
+            'flagTiles' => [
+                $tile('High Blood Pressure', 'is_bp_flagged', "≥ {$thresholds['bp_systolic']}/{$thresholds['bp_diastolic']} · locked threshold"),
+                $tile('Fever', 'is_temp_flagged', "> {$thresholds['temperature_max']} °C · per PRD business rule"),
+                $tile('Abnormal BMI', 'is_bmi_flagged', "BMI ≥ {$thresholds['bmi_obese']} · flagged at capture"),
+            ],
+        ];
+    }
+
+    /**
+     * Visits per Month trend (FR-ANL-11): medical screenings and completed
+     * dental appointments per month, across ALL months with data. Ignores
+     * both page filters by design — the whole-year, all-college view.
+     * Months are derived in PHP from Carbon-cast dates, so no MySQL-only
+     * date functions reach the SQLite test DB.
+     *
+     * @return array{trend: array, trendMonthCount: int}
+     */
+    private function visitsTrend(): array
+    {
+        $medicalByMonth = ClinicVisit::query()
+            ->whereNotNull('checked_in_at')
+            ->pluck('checked_in_at')
+            ->countBy(fn ($date) => $date->format('Y-m'));
+
+        $dentalByMonth = Appointment::query()
+            ->where('service_type', 'dental')
+            ->where('status', 'completed')
+            ->pluck('scheduled_date')
+            ->countBy(fn ($date) => $date->format('Y-m'));
+
+        $months = $medicalByMonth->keys()
+            ->merge($dentalByMonth->keys())
+            ->unique()
+            ->sort()
+            ->values();
+
+        // Short month names; the year is added only when the data spans
+        // more than one calendar year, to keep the axis readable.
+        $spansYears = $months->map(fn (string $m) => substr($m, 0, 4))->unique()->count() > 1;
+        $label = fn (string $yearMonth) => CarbonImmutable::createFromFormat('Y-m-d', $yearMonth.'-01')
+            ->format($spansYears ? 'M Y' : 'M');
+
+        return [
+            'trend' => [
+                'labels' => $months->map($label)->all(),
+                'datasets' => [
+                    [
+                        'label' => 'Medical screenings',
+                        'data' => $months->map(fn (string $m) => $medicalByMonth[$m] ?? 0)->all(),
+                        'borderColor' => self::MEDICAL_COLOR,
+                    ],
+                    [
+                        'label' => 'Completed dental',
+                        'data' => $months->map(fn (string $m) => $dentalByMonth[$m] ?? 0)->all(),
+                        'borderColor' => self::DENTAL_COLOR,
+                    ],
+                ],
+            ],
+            'trendMonthCount' => $months->count(),
+        ];
+    }
+
+    /**
+     * BMI Distribution (FR-ANL-12): the month's captured screenings across
+     * four rule-based buckets of their STORED BMI (computed server-side at
+     * submit). Bucketed in PHP — portable, and the row volumes are small.
+     * Descriptive only, no profiling (D-1 stands).
+     *
+     * @return array{bmiRows: list<array{label: string, count: int, opacity: float}>, bmiMax: int, bmiTotal: int}
+     */
+    private function bmiDistribution(CarbonImmutable $month, ?College $college): array
+    {
+        $bmis = VitalSigns::query()
+            ->join('clinic_visits', 'clinic_visits.id', '=', 'vital_signs.clinic_visit_id')
+            ->whereBetween('clinic_visits.checked_in_at', $this->monthBounds($month))
+            ->when($college, fn ($query) => $query->where('clinic_visits.college_id', $college->id))
+            ->pluck('vital_signs.bmi')
+            ->map(fn ($bmi) => (float) $bmi);
+
+        $buckets = [
+            'Underweight (< 18.5)' => fn (float $bmi) => $bmi < 18.5,
+            'Normal (18.5–24.9)' => fn (float $bmi) => $bmi >= 18.5 && $bmi < 25,
+            'Overweight (25–29.9)' => fn (float $bmi) => $bmi >= 25 && $bmi < 30,
+            'Obese (≥ 30)' => fn (float $bmi) => $bmi >= 30,
+        ];
+
+        // Single hue, stepping opacity with the ordinal buckets (mockup) —
+        // an ordinal ramp, not four categorical colors.
+        $opacities = [0.45, 0.65, 0.85, 1.0];
+
+        $rows = [];
+        foreach ($buckets as $label => $matches) {
+            $rows[] = [
+                'label' => $label,
+                'count' => $bmis->filter($matches)->count(),
+                'opacity' => $opacities[count($rows)],
+            ];
+        }
+
+        return [
+            'bmiRows' => $rows,
+            'bmiMax' => (int) collect($rows)->max('count'),
+            'bmiTotal' => $bmis->count(),
+        ];
+    }
+
+    /**
+     * Students Screened by Sex (FR-ANL-04 as amended): the month's captured
+     * visits — no encoded-only guard any more (FR-ANL-07) — grouped by the
+     * student's profile sex, counting once per VISIT (people screened).
+     * Obeys both filters (FR-ANL-13).
      *
      * @return array{donut: array, bySex: array, totalScreened: int}
      */
-    private function bySexDonut(CarbonInterface $month): array
+    private function bySexDonut(CarbonImmutable $month, ?College $college): array
     {
-        $bySex = ClinicVisit::encoded() // FR-ANL-07
+        $bySex = $this->medicalVisitsInScope($month, $college)
             ->join('student_profiles', 'student_profiles.user_id', '=', 'clinic_visits.student_id')
-            ->whereBetween('clinic_visits.checked_in_at', $this->monthBounds($month))
             ->groupBy('student_profiles.sex')
             ->select('student_profiles.sex', DB::raw('count(*) as visits'))
             ->toBase()
@@ -285,7 +372,7 @@ class AnalyticsController extends Controller
         $femalePercent = $totalScreened > 0 ? 100 - $malePercent : 0;
 
         return [
-            // Chart.js payload, shipped on a data attribute like 'chart'.
+            // Chart.js payload, shipped on a data attribute.
             'donut' => [
                 'labels' => ['Male', 'Female'],
                 'datasets' => [[

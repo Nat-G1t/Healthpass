@@ -1,6 +1,7 @@
 // Explicit .js extension so the module also resolves under Node's test runner
 // (`npm run test:js`), which — unlike Vite — does not guess extensions.
 import { createSerialReader } from './serial.js';
+import { prefersReducedMotion } from '../shared/motion.js';
 
 /**
  * Kiosk state machine (Module KSK).
@@ -1096,6 +1097,30 @@ export function kioskMachine() {
         /** Record a Yes (true) / No (false) answer for one system card. */
         setSystem(key, value) {
             this.state.questionnaire.systems[key] = value;
+            this.scrollToNextUnanswered(key);
+        },
+
+        /**
+         * Motion pass (§7): after answering, nudge the NEXT unanswered card
+         * into view. `block: 'nearest'` scrolls the minimum distance (or not
+         * at all if it is already visible) — a gentle guide, never a hijack.
+         * Reduced motion swaps the smooth glide for an instant jump.
+         */
+        scrollToNextUnanswered(afterKey) {
+            const index = SYSTEMS.findIndex((s) => s.key === afterKey);
+            const next = SYSTEMS.slice(index + 1).find(
+                (s) => this.state.questionnaire.systems[s.key] === undefined,
+            );
+            if (!next) return;
+            // Outside Alpine (the Node test runner) there is no $nextTick and
+            // no DOM — the nudge is purely cosmetic, so just skip it.
+            if (typeof this.$nextTick !== 'function') return;
+            this.$nextTick(() => {
+                document.querySelector(`[data-system-card="${next.key}"]`)?.scrollIntoView({
+                    block: 'nearest',
+                    behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+                });
+            });
         },
 
         /** A system's answer: true (Yes) | false (No) | undefined (unanswered). */
@@ -1279,11 +1304,27 @@ export function kioskMachine() {
          * transactional write is FR-KSK-12, a later week). On success the kiosk
          * advances to the Complete screen (FR-KSK-13).
          */
+        /**
+         * Motion pass (§7): the Review screen shows a "Saving your visit…"
+         * overlay while status is 'sending'. A fast server would flash it for
+         * ~50 ms — worse than nothing — so we keep it up for a minimum of
+         * 400 ms (skipped under reduced motion). The wait happens AFTER the
+         * response, so it never delays data that isn't ready anyway.
+         */
+        holdSubmitOverlay(startedAt) {
+            const MIN_OVERLAY_MS = 400;
+            if (prefersReducedMotion()) return Promise.resolve();
+            const left = MIN_OVERLAY_MS - (Date.now() - startedAt);
+            return left > 0 ? new Promise((resolve) => setTimeout(resolve, left)) : Promise.resolve();
+        },
+
         async submitToClinic() {
             if (this.state.submit.status === 'sending') return;
             this.state.submit = { status: 'sending', error: '' };
+            const startedAt = Date.now();
             try {
                 const { response, data } = await this.kioskPost(this.$refs.root.dataset.submitUrl, this.buildSubmission());
+                await this.holdSubmitOverlay(startedAt);
                 if (response.ok && data.ok) {
                     this.state.submit = { status: 'idle', error: '', reference: data.reference ?? null };
                     this.go('complete');
@@ -1295,6 +1336,7 @@ export function kioskMachine() {
                     reference: null,
                 };
             } catch {
+                await this.holdSubmitOverlay(startedAt);
                 this.state.submit = {
                     status: 'error',
                     error: 'Network problem submitting. Please try again.',

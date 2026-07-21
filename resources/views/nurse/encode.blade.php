@@ -46,10 +46,6 @@
         'ps_neurological' => 'nervous',
     ];
 
-    // Saved categories for the multi-select (D-23), old() first after a
-    // validation bounce, then the saved child rows in read-only mode.
-    $savedCategories = old('case_categories', $record?->categoryNames() ?? []);
-
     // The 9 body systems, column → label. Mirrors SYSTEMS in
     // resources/js/kiosk/state-machine.js — keep the two lists in step.
     $systems = [
@@ -88,7 +84,7 @@
 {{-- Re-submit flash (FR-NRS-04) — a Save on an already-encoded visit lands
      here with a friendly note instead of a second record. --}}
 @if (session('status'))
-    <div class="mb-5 rounded-xl border border-hp-peach bg-hp-peach/30 px-4 py-3 text-sm text-hp-slate">
+    <div data-hp-flash class="mb-5 rounded-xl border border-hp-peach bg-hp-peach/30 px-4 py-3 text-sm text-hp-slate">
         {{ session('status') }}
     </div>
 @endif
@@ -261,29 +257,6 @@
                 @enderror
             </div>
 
-            {{-- Medical Case Categories — multi-select (D-23): a case can span
-                 several systems; each checked category counts once in the
-                 Director's cases-per-category analytics. The kiosk's
-                 vision/hearing answers (left column) are decision support for
-                 the "Eyes, Ears, Nose & Throat Disorders" pick. --}}
-            <div>
-                <span class="text-sm font-semibold text-hp-slate">Medical Case Categories</span>
-                <p class="mt-0.5 text-xs text-hp-slate/50">Optional — tick every system the case involves.</p>
-                <div class="mt-1.5 space-y-1">
-                    @foreach (\App\Models\ClearanceRecord::CASE_CATEGORIES as $category)
-                        <label class="flex items-center gap-2 {{ $readOnly ? 'cursor-not-allowed' : 'cursor-pointer' }}">
-                            <input type="checkbox" name="case_categories[]" value="{{ $category }}"
-                                   class="accent-hp-orange"
-                                   @checked(in_array($category, $savedCategories, true)) @disabled($readOnly)>
-                            <span class="text-sm text-hp-slate/70">{{ $category }}</span>
-                        </label>
-                    @endforeach
-                </div>
-                @error('case_categories.*')
-                    <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
-                @enderror
-            </div>
-
             {{-- Purpose — the four locked values plus the form's "Others,
                  Specify" line, extracted into <x-hp.purpose-fieldset> (shared
                  with student booking). The enclosing x-data seeds `purpose` and
@@ -395,7 +368,14 @@
                                  formtarget="hp-print-frame">
                         Preview &amp; Print
                     </x-hp.button>
-                    <x-hp.button type="submit" variant="primary" class="w-full">Save &amp; Close</x-hp.button>
+                    {{-- data-pending-label: spinner + disable while the save
+                         navigates (§5.6) — belt-and-braces double-submit
+                         protection on top of the controller's one-shot guard.
+                         The print buttons above are exempt automatically:
+                         their formtarget posts into the iframe, and
+                         page-motion.js keys off the SUBMITTER's target. --}}
+                    <x-hp.button type="submit" variant="primary" class="w-full"
+                                 data-pending-label="Saving…">Save &amp; Close</x-hp.button>
                 @endif
             </div>
         </form>

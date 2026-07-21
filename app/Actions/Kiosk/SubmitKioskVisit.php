@@ -53,7 +53,13 @@ final class SubmitKioskVisit
                 'appointment_id' => $this->todaysAppointmentId((int) $data['studentUserId']), // null = walk-in (BR-10)
                 'login_method' => $data['loginMethod'],
                 'status' => 'captured', // until the nurse encodes (BR-11)
-                'privacy_consent_at' => $data['privacyConsentAt'],
+                // Consent is captured seconds earlier in the same session; the
+                // client asserts it by sending privacyConsentAt (KioskSubmitRequest
+                // requires its presence), but the STORED timestamp is stamped
+                // server-side. /kiosk/submit is public, so a client-supplied date is
+                // forgeable/back-datable — this legal audit field must not be trusted
+                // from the browser (FR-KSK-04). Same trust rule as identity + flags.
+                'privacy_consent_at' => now(),
                 'checked_in_at' => now(),
             ]);
 
@@ -97,27 +103,52 @@ final class SubmitKioskVisit
      */
     private function studentCollegeId(int $studentId): int
     {
-        return (int) StudentProfile::where('user_id', $studentId)->value('college_id');
+        $collegeId = StudentProfile::where('user_id', $studentId)->value('college_id');
+
+        // Fail loudly rather than (int)-casting a missing value to 0: if the
+        // profile row vanished between scan/login and submit (mid-session admin
+        // change), college_id=0 would either violate the FK (500) or, worse, save
+        // a visit mis-attributed to a non-existent college that no Director scope
+        // filter ever matches. Every bound student must still have a college here.
+        if ($collegeId === null) {
+            throw new \RuntimeException("Student {$studentId} has no college profile at kiosk submit.");
+        }
+
+        return (int) $collegeId;
     }
 
     /**
-     * Today's non-cancelled MEDICAL appointment for this student, or null
-     * (walk-in, BR-10). Dental is scheduling-only (Decision D-3) and never
-     * enters the kiosk loop, so a dental-only same-day booking is a walk-in —
-     * the same medical-only rule the Walk-in Check (FR-KSK-03a) gates on.
-     * Walk-ins are first-class — they flow through the queue identically.
+     * Today's non-cancelled appointment for this student, or null (walk-in,
+     * BR-10). D-33 (amends D-3): dental appointments now link too, so the
+     * nurse-encode step completes them and dental visits get a college
+     * snapshot. Medical is tried first — when BOTH are booked today the
+     * medical appointment wins the link and the dental one stays `scheduled`
+     * (D-33 edge rule). Walk-ins are first-class — they flow through the
+     * queue identically.
      */
     private function todaysAppointmentId(int $studentId): ?int
     {
-        $id = Appointment::query()
-            ->where('student_id', $studentId)
-            ->where('service_type', 'medical')
-            ->whereDate('scheduled_date', Carbon::today())
-            ->where('status', '!=', 'cancelled')
-            ->orderBy('id')
-            ->value('id');
+        foreach (['medical', 'dental'] as $serviceType) {
+            $id = Appointment::query()
+                ->where('student_id', $studentId)
+                ->where('service_type', $serviceType)
+                ->whereDate('scheduled_date', Carbon::today())
+                // Only an OPEN appointment may be linked. Matching "!= cancelled"
+                // also caught 'completed', so a student returning to the kiosk after
+                // a nurse already encoded their morning visit would re-link the same,
+                // already-completed appointment — the nurse then completes it twice
+                // and one appointment yields two counted visits. A second visit with
+                // no open appointment is a walk-in (appointment_id null, BR-10).
+                ->where('status', 'scheduled')
+                ->orderBy('id')
+                ->value('id');
 
-        return $id === null ? null : (int) $id;
+            if ($id !== null) {
+                return (int) $id;
+            }
+        }
+
+        return null;
     }
 
     /** BMI = weight(kg) ÷ height(m)², 1 decimal — matches the kiosk display (FR-KSK-09). */

@@ -1,4 +1,4 @@
-{{--
+﻿{{--
     Six auto-advancing OTP boxes + submit button, posting `otp` to $action.
     Same Alpine UX as registration Step 3 / student email verify. The submit
     button stays disabled until all 6 digits are present (UX only — the server
@@ -46,7 +46,8 @@
     {{-- Hidden field carries the joined 6-digit string to the server --}}
     <input type="hidden" name="otp" :value="code">
 
-    <div class="mb-5 flex justify-center gap-[10px]">
+    {{-- A rejected code shakes the whole box row once (§5.7). --}}
+    <div class="mb-5 flex justify-center gap-[10px] {{ $errors->has('otp') ? 'hp-anim-shake' : '' }}">
         @for ($i = 0; $i < 6; $i++)
             <input
                 type="text"
@@ -60,18 +61,20 @@
                 @keydown="onKeydown({{ $i }}, $event)"
                 @paste="onPaste($event)"
                 class="h-[58px] w-[46px] rounded-[10px] border-2 text-center text-[24px] font-bold
-                       transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-hp-orange/30
+                       transition-all duration-hp-fast focus:outline-none focus:ring-2 focus:ring-hp-orange/30
                        [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none
                        [&::-webkit-outer-spin-button]:appearance-none"
+                {{-- hp-anim-pop (§5.7): each box pops once as its digit lands. --}}
                 :class="digits[{{ $i }}]
-                    ? 'border-hp-orange bg-hp-peach text-hp-orange'
+                    ? 'border-hp-orange bg-hp-peach text-hp-orange hp-anim-pop'
                     : 'border-hp-slate/[22%] bg-white text-hp-slate'"
                 {{ $i === 0 ? 'autofocus' : '' }}
             />
         @endfor
     </div>
 
-    <x-hp.button type="submit" variant="primary" size="lg" class="w-full" x-bind:disabled="!ready">
+    <x-hp.button type="submit" variant="primary" size="lg" class="w-full" x-bind:disabled="!ready"
+                 data-pending-label="Verifying…">
         {{ $buttonLabel }}
     </x-hp.button>
 </form>

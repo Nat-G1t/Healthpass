@@ -97,6 +97,7 @@
                 variant="primary"
                 size="sm"
                 x-bind:disabled="!agreed"
+                data-pending-label="Please wait…"
                 class="shrink-0 whitespace-nowrap sm:px-8 sm:py-[13px] sm:text-[15px]"
             >
                 Continue →

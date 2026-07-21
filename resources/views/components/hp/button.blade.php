@@ -23,11 +23,23 @@
     };
 @endphp
 
+{{--
+    Motion (docs/ui-motion-inventory.md, Global table):
+    - active:scale-[0.97] gives every button iOS-style press feedback
+      (transform + colors transition at the --hp-dur-fast token).
+    - Opt-in pending state: pass data-pending-label="Saving…" on a SUBMIT
+      button and shared/page-motion.js will disable it and swap in a spinner
+      while its form navigates. This doubles as double-submit protection —
+      the disabled button can't be clicked again mid-request. Skip it on
+      forms that target an iframe (print preview/reprint): those never
+      navigate, so the button would stay stuck disabled.
+--}}
 <button
     type="{{ $type }}"
     {{ $attributes->merge([
         'class' => "inline-flex items-center justify-center gap-2 rounded-full font-semibold
-                    transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2
+                    transition-[color,background-color,border-color,transform] duration-hp-fast ease-hp-out
+                    active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2
                     focus-visible:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed
                     {$variantClasses} {$sizeClasses}",
     ]) }}

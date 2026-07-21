@@ -1,4 +1,4 @@
-{{-- Questionnaire (FR-KSK-10): a 2-column grid of nine body-system cards, each
+﻿{{-- Questionnaire (FR-KSK-10): a 2-column grid of nine body-system cards, each
      answered Yes/No, plus a full-width pregnancy question whose "Yes" reveals an
      inline month calendar for the Last Menstrual Period (future dates disabled,
      LMP required when pregnant). The nine cards are rendered from `systemList`
@@ -8,7 +8,10 @@
      Two columns (was three on the old landscape panel) so each card and its
      Yes/No targets stay big on the 1080×1920 portrait screen; the middle area
      scrolls if the LMP calendar is open. --}}
-<section class="kiosk-screen" x-show="state.screen === 'questionnaire'" x-cloak>
+<section class="kiosk-screen" x-show="state.screen === 'questionnaire'" x-cloak
+         x-transition:enter="transition ease-hp-out duration-hp-base"
+         x-transition:enter-start="opacity-0 translate-y-1"
+         x-transition:enter-end="opacity-100 translate-y-0">
     <div class="flex h-full w-full flex-col px-8 py-8">
 
         {{-- Header --}}
@@ -22,8 +25,11 @@
         <div class="mt-5 flex-1 overflow-y-auto">
             {{-- ── 2-column grid of nine system cards ───────────────────────── --}}
             <div class="grid grid-cols-2 gap-3">
+                {{-- data-system-card lets setSystem() gently scroll the NEXT
+                     unanswered card into view; hp-anim-pop lands on whichever
+                     answer was just picked (§7). --}}
                 <template x-for="sys in systemList" :key="sys.key">
-                    <div class="flex flex-col gap-2.5 rounded-xl bg-hp-white p-4 shadow-sm">
+                    <div class="flex flex-col gap-2.5 rounded-xl bg-hp-white p-4 shadow-sm" :data-system-card="sys.key">
                         <p class="text-base font-semibold leading-tight text-hp-slate" x-text="sys.label"></p>
                         <div class="grid grid-cols-2 gap-2.5">
                             {{-- Yes = a reported issue → orange (matches the flag colour). --}}
@@ -32,7 +38,7 @@
                                 @click="setSystem(sys.key, true)"
                                 class="rounded-lg py-3 text-base font-semibold transition"
                                 :class="systemAnswer(sys.key) === true
-                                    ? 'bg-hp-orange text-hp-white shadow-sm'
+                                    ? 'bg-hp-orange text-hp-white shadow-sm hp-anim-pop'
                                     : 'bg-hp-bg text-hp-slate/70 hover:bg-hp-peach/30'"
                             >Yes</button>
                             {{-- No = all clear → green. --}}
@@ -41,7 +47,7 @@
                                 @click="setSystem(sys.key, false)"
                                 class="rounded-lg py-3 text-base font-semibold transition"
                                 :class="systemAnswer(sys.key) === false
-                                    ? 'bg-emerald-500 text-hp-white shadow-sm'
+                                    ? 'bg-emerald-500 text-hp-white shadow-sm hp-anim-pop'
                                     : 'bg-hp-bg text-hp-slate/70 hover:bg-emerald-50'"
                             >No</button>
                         </div>
@@ -62,7 +68,7 @@
                             @click="setPregnant(true)"
                             class="rounded-lg px-8 py-3 text-base font-semibold transition"
                             :class="state.questionnaire.isPregnant === true
-                                ? 'bg-hp-orange text-hp-white shadow-sm'
+                                ? 'bg-hp-orange text-hp-white shadow-sm hp-anim-pop'
                                 : 'bg-hp-bg text-hp-slate/70 hover:bg-hp-peach/30'"
                         >Yes</button>
                         <button
@@ -70,14 +76,18 @@
                             @click="setPregnant(false)"
                             class="rounded-lg px-8 py-3 text-base font-semibold transition"
                             :class="state.questionnaire.isPregnant === false
-                                ? 'bg-emerald-500 text-hp-white shadow-sm'
+                                ? 'bg-emerald-500 text-hp-white shadow-sm hp-anim-pop'
                                 : 'bg-hp-bg text-hp-slate/70 hover:bg-emerald-50'"
                         >No</button>
                     </div>
                 </div>
 
                 {{-- Inline LMP calendar — only when pregnant = Yes (FR-KSK-10). --}}
-                <div x-show="state.questionnaire.isPregnant === true" x-cloak class="mt-4 border-t border-hp-slate/10 pt-4">
+                <div x-show="state.questionnaire.isPregnant === true" x-cloak
+                     x-transition:enter="transition ease-hp-out duration-hp-base"
+                     x-transition:enter-start="opacity-0 translate-y-1"
+                     x-transition:enter-end="opacity-100 translate-y-0"
+                     class="mt-4 border-t border-hp-slate/10 pt-4">
                     <div class="mx-auto w-full max-w-[22rem]">
                         {{-- Month header with prev / next (next blocked at current month). --}}
                         <div class="flex items-center justify-between">

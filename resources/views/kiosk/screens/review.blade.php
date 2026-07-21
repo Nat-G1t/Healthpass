@@ -1,4 +1,4 @@
-{{-- Review (FR-KSK-11): two cards — Vital Signs and Questionnaire — then
+﻿{{-- Review (FR-KSK-11): two cards — Vital Signs and Questionnaire — then
      "Submit to Clinic →". Flagged vitals show in orange with a ⚑; those flags
      are DISPLAY-TIME ONLY, computed client-side from the thresholds published
      into the page from config (tempFlagged / bpFlagged / bmiFlagged, the same
@@ -9,7 +9,10 @@
      The two cards STACK vertically (was side-by-side on the old landscape
      panel) — the 1080×1920 portrait screen has the height for both; the
      middle area scrolls as one column if anything overflows. --}}
-<section class="kiosk-screen" x-show="state.screen === 'review'" x-cloak>
+<section class="kiosk-screen" x-show="state.screen === 'review'" x-cloak
+         x-transition:enter="transition ease-hp-out duration-hp-base"
+         x-transition:enter-start="opacity-0 translate-y-1"
+         x-transition:enter-end="opacity-100 translate-y-0">
     <div class="flex h-full w-full flex-col px-8 py-8">
 
         {{-- Header --}}
@@ -25,7 +28,9 @@
             {{-- ── Vital Signs card (flagged items orange + ⚑) ──────────────── --}}
             <div class="rounded-2xl bg-hp-white p-5 shadow-sm">
                 <p class="text-sm font-semibold uppercase tracking-wider text-hp-slate/50">Vital Signs</p>
-                <div class="mt-2 flex flex-col divide-y divide-hp-slate/10">
+                {{-- hp-stagger (§7): summary rows fade up in sequence each time
+                     the Review screen is shown (delays cap after 8 children). --}}
+                <div class="hp-stagger mt-2 flex flex-col divide-y divide-hp-slate/10">
                     {{-- Height — no flag. --}}
                     <div class="flex items-center justify-between py-2.5">
                         <span class="text-base text-hp-slate/70">Height</span>
@@ -99,8 +104,10 @@
             </div>
         </div>
 
-        {{-- Submit error (network / server). --}}
-        <p x-show="state.submit.status === 'error'" x-cloak class="mt-2 text-center text-base font-medium text-red-600" x-text="state.submit.error"></p>
+        {{-- Submit error (network / server) — fades in with one shake (§7). --}}
+        <p x-show="state.submit.status === 'error'" x-cloak
+           class="hp-anim-shake mt-2 text-center text-base font-medium text-red-600"
+           x-text="state.submit.error"></p>
 
         {{-- ── Footer: back to questionnaire + submit to clinic ─────────────── --}}
         <div class="mt-4 flex items-center justify-between">
@@ -116,6 +123,21 @@
                 class="rounded-2xl bg-hp-orange px-9 py-4 text-lg font-semibold text-hp-white shadow-sm transition hover:brightness-95 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
                 x-text="state.submit.status === 'sending' ? 'Submitting…' : 'Submit to Clinic →'"
             ></button>
+        </div>
+
+        {{-- Submit pending overlay (§7): covers the screen while the visit is
+             being written. submitToClinic() holds it ≥400 ms so a fast server
+             never makes it strobe. Neutral wording — celebrates nothing. --}}
+        <div x-show="state.submit.status === 'sending'" x-cloak
+             x-transition:enter="transition ease-hp-out duration-hp-fast"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             class="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 bg-hp-bg/90">
+            <svg class="h-10 w-10 animate-spin text-hp-orange" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" opacity="0.25"/>
+                <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+            </svg>
+            <p class="text-lg font-semibold text-hp-slate">Saving your visit…</p>
         </div>
     </div>
 </section>

@@ -1,4 +1,4 @@
-<x-register.wizard-shell :step="2" maxWidth="max-w-[560px]">
+﻿<x-register.wizard-shell :step="2" maxWidth="max-w-[560px]">
 
     <h2 class="mb-[18px] text-[15px] font-bold text-hp-slate">Step 2 — Personal Information</h2>
 
@@ -192,7 +192,7 @@
                     max="{{ now()->subDay()->toDateString() }}"
                     required
                     class="rounded-lg border border-hp-slate/25 px-3 py-2 text-sm text-hp-slate
-                           transition-colors duration-150 focus:border-hp-orange focus:ring-1
+                           transition-colors duration-hp-fast focus:border-hp-orange focus:ring-1
                            focus:ring-hp-orange focus:outline-none"
                 >
                 {{-- Age badge (shows once a date is picked) --}}
@@ -256,7 +256,7 @@
                 placeholder="House/Unit No., Street, Barangay, City/Municipality, Province"
                 required
                 class="w-full rounded-lg border border-hp-slate/25 px-3 py-2 text-sm text-hp-slate
-                       placeholder-hp-slate/40 transition-colors duration-150 resize-none
+                       placeholder-hp-slate/40 transition-colors duration-hp-fast resize-none
                        focus:border-hp-orange focus:ring-1 focus:ring-hp-orange focus:outline-none"
             >{{ old('address') }}</textarea>
             @error('address')
@@ -319,7 +319,7 @@
                       transition-colors hover:bg-hp-slate/5">
                 ← Back
             </a>
-            <x-hp.button type="submit" variant="primary" size="sm" x-bind:disabled="!ready" class="shrink-0 whitespace-nowrap sm:px-8 sm:py-[13px] sm:text-[15px]">
+            <x-hp.button type="submit" variant="primary" size="sm" x-bind:disabled="!ready" data-pending-label="Please wait…" class="shrink-0 whitespace-nowrap sm:px-8 sm:py-[13px] sm:text-[15px]">
                 Continue →
             </x-hp.button>
         </div>

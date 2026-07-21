@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Nurse;
 use App\Http\Controllers\Controller;
 use App\Models\ClinicVisit;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 
@@ -29,11 +30,43 @@ use Illuminate\View\View;
 class QueueController extends Controller
 {
     /** Server-rendered queue (initial paint). */
-    public function index(): View
+    public function index(Request $request): View
     {
         $visits = ClinicVisit::liveQueue()->get();
 
-        return view('nurse.queue', compact('visits'));
+        // "Reverse-stack" ghost row (motion pass §6.1b): after Save & Close the
+        // visit is already `encoded`, so it is no longer in the queue query by
+        // the time the nurse lands back here — its row would just be silently
+        // gone. EncodeController flashes the id for exactly one request; we
+        // re-fetch that visit and hand it to the view separately so it can be
+        // rendered once, in its original position, marked `data-leaving`, and
+        // the front-end animates it out (fade + rows sliding up).
+        //
+        // Fail-safe: an unknown id, or one that is not actually encoded, simply
+        // yields no ghost — never an error.
+        $ghost = null;
+        $ghostIndex = 0;
+        $encodedId = $request->session()->get('encoded_visit_id');
+        if ($encodedId !== null) {
+            $ghost = ClinicVisit::query()
+                ->where('status', 'encoded')
+                ->with(['student:id,name', 'college:id,name', 'vitalSigns'])
+                ->find($encodedId);
+        }
+        if ($ghost !== null) {
+            // Original FCFS slot: how many still-waiting visits checked in
+            // before the ghost did (same ordering as scopeLiveQueue).
+            $ghostAnchor = $ghost->checked_in_at ?? $ghost->created_at;
+            $ghostIndex = $visits
+                ->takeWhile(function (ClinicVisit $visit) use ($ghostAnchor, $ghost): bool {
+                    $anchor = $visit->checked_in_at ?? $visit->created_at;
+                    return $anchor < $ghostAnchor
+                        || ($anchor == $ghostAnchor && $visit->id < $ghost->id);
+                })
+                ->count();
+        }
+
+        return view('nurse.queue', compact('visits', 'ghost', 'ghostIndex'));
     }
 
     /**

@@ -1,8 +1,11 @@
-{{-- Identity Confirm (FR-KSK-03): large initials avatar, "Identity Verified ✓",
+﻿{{-- Identity Confirm (FR-KSK-03): large initials avatar, "Identity Verified ✓",
      greeting with first name, and college/course/year/student number. The
      identity object is set by either QR scan or email login (arriveAtIdentity).
      "That's me" → consent; "Not you?" → full reset to Welcome (FR-KSK-13). --}}
-<section class="kiosk-screen" x-show="state.screen === 'identity'" x-cloak>
+<section class="kiosk-screen" x-show="state.screen === 'identity'" x-cloak
+         x-transition:enter="transition ease-hp-out duration-hp-base"
+         x-transition:enter-start="opacity-0 translate-y-1"
+         x-transition:enter-end="opacity-100 translate-y-0">
     <div class="flex w-full flex-col items-center justify-center px-10 pb-8 text-center" x-show="state.identity">
         <p class="inline-flex items-center gap-2 text-base font-semibold text-green-600">
             <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">

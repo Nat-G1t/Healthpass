@@ -7,10 +7,14 @@
 <div
     x-show="state.exit.open"
     x-cloak
+    x-transition:enter="transition ease-hp-out duration-hp-fast"
+    x-transition:enter-start="opacity-0"
+    x-transition:enter-end="opacity-100"
     class="absolute inset-0 z-40 flex items-center justify-center bg-hp-slate/40 backdrop-blur-sm"
     @click.self="closeExit()"
 >
-    <div class="flex max-h-full w-full max-w-2xl flex-col items-center gap-4 overflow-hidden rounded-2xl bg-hp-bg px-8 py-6 shadow-xl">
+    {{-- Panel rises like a sheet each time the prompt opens (§7). --}}
+    <div class="hp-anim-sheet-up flex max-h-full w-full max-w-2xl flex-col items-center gap-4 overflow-hidden rounded-2xl bg-hp-bg px-8 py-6 shadow-xl">
         {{-- ── Header ──────────────────────────────────────────────────────── --}}
         <div class="flex w-full items-center justify-between">
             <button
@@ -74,8 +78,10 @@
             </div>
         </div>
 
-        {{-- Inline error (spans both fields) --}}
-        <p class="min-h-[1.25rem] w-full text-center text-base font-medium text-red-600" x-text="state.exit.error"></p>
+        {{-- Inline error (spans both fields) — shakes once per new error (§7). --}}
+        <p class="min-h-[1.25rem] w-full text-center text-base font-medium text-red-600"
+           :class="state.exit.error ? 'hp-anim-shake' : ''"
+           x-text="state.exit.error"></p>
 
         @include('kiosk.partials.credential-keyboard')
     </div>

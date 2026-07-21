@@ -1,6 +1,11 @@
 @props([
     'visit',
     'isNext' => false,
+    {{-- Ghost mode (motion pass §6.1b): the just-encoded visit rendered ONE
+         last time so the front-end can animate it out. Marked data-leaving,
+         never NEXT, and its action button becomes a static "Encoded ✓" chip —
+         it is scenery, not a live queue entry. --}}
+    'leaving' => false,
 ])
 
 {{--
@@ -31,7 +36,7 @@
     $normal  = 'text-hp-slate/70';
 @endphp
 
-<tr data-visit-id="{{ $visit->id }}" @if ($isNext) data-next @endif>
+<tr data-visit-id="{{ $visit->id }}" @if ($isNext && ! $leaving) data-next @endif @if ($leaving) data-leaving @endif>
 
     {{-- Student: avatar + name; Next tag on the top row, reference line otherwise --}}
     <td class="py-4 pl-4 pr-6 whitespace-nowrap">
@@ -99,14 +104,21 @@
          live-queue.js copies these class strings verbatim — keep in step. --}}
     @php
         $btnBase = 'inline-flex items-center justify-center gap-2 rounded-full font-semibold
-                    transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2
+                    transition-[color,background-color,border-color,transform] duration-hp-fast ease-hp-out
+                    active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2
                     focus-visible:ring-offset-1 px-4 py-1.5 text-xs';
     @endphp
     <td class="py-4 pr-4 text-right whitespace-nowrap">
-        <span class="queue-btn-next"><a href="{{ route('nurse.visits.encode', $visit) }}"
-            class="{{ $btnBase }} bg-hp-orange text-white hover:bg-orange-500 focus-visible:ring-hp-orange">Encode Result</a></span>
-        <span class="queue-btn-rest"><a href="{{ route('nurse.visits.encode', $visit) }}"
-            class="{{ $btnBase }} bg-transparent text-hp-slate border-[1.5px] border-hp-slate/30 hover:bg-hp-slate/8 focus-visible:ring-hp-slate">Encode Result</a></span>
+        @if ($leaving)
+            {{-- Not a link on purpose: the ghost is about to animate away. --}}
+            <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-4 py-1.5
+                         text-xs font-semibold text-emerald-600">Encoded ✓</span>
+        @else
+            <span class="queue-btn-next"><a href="{{ route('nurse.visits.encode', $visit) }}"
+                class="{{ $btnBase }} bg-hp-orange text-white hover:bg-orange-500 focus-visible:ring-hp-orange">Encode Result</a></span>
+            <span class="queue-btn-rest"><a href="{{ route('nurse.visits.encode', $visit) }}"
+                class="{{ $btnBase }} bg-transparent text-hp-slate border-[1.5px] border-hp-slate/30 hover:bg-hp-slate/8 focus-visible:ring-hp-slate">Encode Result</a></span>
+        @endif
     </td>
 
 </tr>

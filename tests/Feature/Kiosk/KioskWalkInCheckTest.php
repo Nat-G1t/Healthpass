@@ -22,7 +22,7 @@ use Tests\TestCase;
  * to pick which screen to show. These tests assert that boolean for the scan
  * endpoint (login shares the exact same payload builder).
  *
- * Dental still never LINKS at submit (Decision D-3 / BR-10) — that is covered in
+ * Dental now also LINKS at submit (D-33, amending D-3) — that is covered in
  * KioskSubmitTest; here we only assert the UI gate.
  */
 class KioskWalkInCheckTest extends TestCase
@@ -92,7 +92,7 @@ class KioskWalkInCheckTest extends TestCase
         ]);
 
         // A dental booking today also suppresses the notice (the student has
-        // SOMETHING scheduled). Dental still won't link at submit (D-3).
+        // SOMETHING scheduled). It also links at submit now (D-33).
         $this->assertTrue($this->scan($profile)['hasAppointmentToday']);
     }
 

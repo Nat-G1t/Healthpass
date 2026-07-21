@@ -1,7 +1,7 @@
-<x-layout.sidebar title="College Admin Dashboard">
+﻿<x-layout.sidebar title="College Admin Dashboard">
 
     @if (session('error'))
-        <div class="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div data-hp-flash data-flash-sticky class="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {{ session('error') }}
         </div>
     @endif
@@ -20,13 +20,15 @@
     </div>
 
     {{-- ── Stat cards (FR-ADM-01) ───────────────────────────────────────── --}}
-    <div class="mb-6 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+    {{-- hp-stagger + data-hp-countup: cards fade up in sequence, stats count
+         up from 0 on first paint (§6.2). --}}
+    <div class="hp-stagger mb-6 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
 
         <x-hp.card>
             <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
                 Registered Students
             </p>
-            <p class="mt-3 text-3xl font-bold leading-none text-hp-slate">{{ $stats['students'] }}</p>
+            <p class="mt-3 text-3xl font-bold leading-none text-hp-slate" data-hp-countup>{{ $stats['students'] }}</p>
             <p class="mt-2 text-xs text-hp-slate/50">in {{ $college->code }}</p>
         </x-hp.card>
 
@@ -34,7 +36,7 @@
             <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
                 Total Batches
             </p>
-            <p class="mt-3 text-3xl font-bold leading-none text-hp-slate">{{ $stats['batches'] }}</p>
+            <p class="mt-3 text-3xl font-bold leading-none text-hp-slate" data-hp-countup>{{ $stats['batches'] }}</p>
             <p class="mt-2 text-xs text-hp-slate/50">all time</p>
         </x-hp.card>
 
@@ -42,7 +44,7 @@
             <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
                 Pending Approval
             </p>
-            <p class="mt-3 text-3xl font-bold leading-none text-hp-slate">{{ $stats['pending'] }}</p>
+            <p class="mt-3 text-3xl font-bold leading-none text-hp-slate" data-hp-countup>{{ $stats['pending'] }}</p>
             <p class="mt-2 text-xs text-hp-slate/50">awaiting the Director</p>
         </x-hp.card>
 
@@ -50,7 +52,7 @@
             <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
                 Approved
             </p>
-            <p class="mt-3 text-3xl font-bold leading-none text-hp-slate">{{ $stats['approved'] }}</p>
+            <p class="mt-3 text-3xl font-bold leading-none text-hp-slate" data-hp-countup>{{ $stats['approved'] }}</p>
             <p class="mt-2 text-xs text-hp-slate/50">scheduled batches</p>
         </x-hp.card>
 

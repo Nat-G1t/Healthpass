@@ -1,4 +1,4 @@
-{{-- Email login (FR-KSK-02): email + password with an on-screen QWERTY keyboard.
+﻿{{-- Email login (FR-KSK-02): email + password with an on-screen QWERTY keyboard.
      Typing routes to whichever field is focused; password has an eye toggle;
      "← Cancel" returns to Welcome. The keyboard LAYOUT lives in a small nested
      x-data here (it's pure presentation); all behaviour is in the kiosk
@@ -7,7 +7,10 @@
      Layout note: the 1080×1920 portrait panel has generous height, so the two
      fields are STACKED full-width above the keyboard, and the whole column is
      vertically centred. --}}
-<section class="kiosk-screen" x-show="state.screen === 'email_login'" x-cloak>
+<section class="kiosk-screen" x-show="state.screen === 'email_login'" x-cloak
+         x-transition:enter="transition ease-hp-out duration-hp-base"
+         x-transition:enter-start="opacity-0 translate-y-1"
+         x-transition:enter-end="opacity-100 translate-y-0">
     <div class="flex h-full w-full flex-col items-center justify-center gap-4 px-8 py-6">
         {{-- ── Header ──────────────────────────────────────────────────────── --}}
         <div class="flex w-full max-w-2xl items-center justify-between">
@@ -77,8 +80,11 @@
             </div>
         </div>
 
-        {{-- Inline error (spans both fields) --}}
-        <p class="min-h-[1rem] w-full max-w-2xl text-center text-sm font-medium text-red-600" x-text="state.login.error"></p>
+        {{-- Inline error (spans both fields) — shakes once per new error; the
+             class re-applies because typing clears the error first (§7). --}}
+        <p class="min-h-[1rem] w-full max-w-2xl text-center text-sm font-medium text-red-600"
+           :class="state.login.error ? 'hp-anim-shake' : ''"
+           x-text="state.login.error"></p>
 
         {{-- ── On-screen QWERTY keyboard (shared with the staff-exit prompt) ── --}}
         @include('kiosk.partials.credential-keyboard')

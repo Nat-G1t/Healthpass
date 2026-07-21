@@ -1,4 +1,4 @@
-<x-layout.sidebar title="New Batch Request">
+﻿<x-layout.sidebar title="New Batch Request">
 
 {{-- ── Page header ────────────────────────────────────────────────────────── --}}
 <div class="mb-6">
@@ -9,7 +9,7 @@
 </div>
 
 @if (session('status'))
-    <div class="mb-6 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+    <div data-hp-flash class="mb-6 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
         {{ session('status') }}
     </div>
 @endif
@@ -177,7 +177,7 @@ function batchForm() {
 
             {{-- Submit — disabled until reason valid + ≥1 student (FR-ADM-03) --}}
             <x-hp.card>
-                <x-hp.button type="submit" class="w-full" x-bind:disabled="!canSubmit">
+                <x-hp.button type="submit" class="w-full" x-bind:disabled="!canSubmit" data-pending-label="Submitting…">
                     Submit Batch Request
                 </x-hp.button>
                 <p class="mt-2 text-center text-xs text-hp-slate/50"
@@ -233,7 +233,7 @@ function batchForm() {
                         <input type="search" x-model="query"
                                placeholder="Search by name or student number…"
                                class="w-full rounded-lg border border-hp-slate/25 py-2 pl-9 pr-3 text-sm text-hp-slate
-                                      placeholder-hp-slate/40 transition-colors duration-150
+                                      placeholder-hp-slate/40 transition-colors duration-hp-fast
                                       focus:border-hp-orange focus:ring-1 focus:ring-hp-orange focus:outline-none">
                     </div>
 

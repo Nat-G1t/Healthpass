@@ -121,6 +121,11 @@
     @include('partials.favicon')
 </head>
 <body class="font-sans antialiased">
+    {{-- Loading splash: on the Pi (localhost) it never appears — load beats
+         the 200 ms delay — but the internet deployment also serves /kiosk
+         over HTTPS, where a slow connection would otherwise show the dark
+         pre-paint background. --}}
+    <x-hp.splash />
     <div
         x-data="kiosk()"
         x-ref="root"

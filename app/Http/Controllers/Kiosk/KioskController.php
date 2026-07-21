@@ -83,6 +83,10 @@ final class KioskController extends Controller
         // Bind identity to the SERVER session (see submit() for why). The kiosk
         // stays public — this is NOT a Laravel login, just a kiosk-scoped key
         // the submit endpoint trusts instead of the (spoofable) request body.
+        // Rotate the session id on this identity change so a session fixed before
+        // the scan can't ride the newly-bound identity (regenerate keeps the CSRF
+        // token, so the long-lived kiosk page's baked token stays valid).
+        $request->session()->regenerate();
         $request->session()->put([
             'kiosk.student_id' => $profile->user_id,
             'kiosk.login_method' => 'qr',
@@ -164,7 +168,9 @@ final class KioskController extends Controller
         // Bind identity to the SERVER session (see submit()). Same kiosk-scoped
         // key the QR path sets — the two flows converge here so submit trusts
         // the session, never the request body, regardless of how the student
-        // signed in.
+        // signed in. Rotate the session id on this identity change (session-
+        // fixation defense; regenerate keeps the CSRF token).
+        $request->session()->regenerate();
         $request->session()->put([
             'kiosk.student_id' => $user->studentProfile->user_id,
             'kiosk.login_method' => 'email',
@@ -285,6 +291,13 @@ final class KioskController extends Controller
             return $invalid;
         }
 
+        // Drop any kiosk identity a student left bound (an abandoned session that
+        // never hit reset()) BEFORE we authenticate the nurse — regenerate()
+        // preserves session data, so without this a stale kiosk.student_id would
+        // survive into the nurse's authenticated session and a later /kiosk/submit
+        // could mint a visit for the wrong student (FR-KSK-13).
+        $request->session()->forget(['kiosk.student_id', 'kiosk.login_method']);
+
         // Establish a real authenticated session (the kiosk routes run in the web
         // group, so a session is available) and regenerate the id to prevent
         // session fixation from the long-lived public kiosk session.
@@ -336,9 +349,10 @@ final class KioskController extends Controller
      * nothing booked today), the kiosk shows the "No Scheduled Clearance
      * Today" screen; when true, it goes straight to Privacy Consent.
      *
-     * Dental is still scheduling-only (Decision D-3): it suppresses this notice
-     * but does NOT link at submit — a dental-only student proceeds through the
-     * medical vitals flow and is recorded as a walk-in (appointment_id NULL).
+     * Dental counts here AND links at submit (D-33, amending D-3): a
+     * dental-only student proceeds through the same vitals flow and their
+     * dental appointment is linked to the visit, medical taking priority
+     * when both are booked today.
      */
     private function hasAppointmentToday(int $studentId): bool
     {

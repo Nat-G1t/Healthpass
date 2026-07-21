@@ -190,7 +190,7 @@ class KioskAccessTest extends TestCase
 
     // ── Loopback config switch (B) ───────────────────────────────────────────
 
-    /** With allow_loopback=true (default), loopback reaches the kiosk. */
+    /** With allow_loopback=true (the Pi-local shape), loopback reaches the kiosk. */
     public function test_loopback_allowed_when_allow_loopback_true(): void
     {
         config(['healthpass.kiosk.allow_loopback' => true]);

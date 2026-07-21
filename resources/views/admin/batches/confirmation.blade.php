@@ -1,4 +1,4 @@
-<x-layout.sidebar title="Batch Request Submitted">
+﻿<x-layout.sidebar title="Batch Request Submitted">
 
 {{-- ── Page header ──────────────────────────────────────────────────────────── --}}
 <div class="mb-7">
@@ -9,10 +9,11 @@
 </div>
 
 {{-- ── Success banner ───────────────────────────────────────────────────────── --}}
-<div class="mb-6 flex items-center gap-3 rounded-xl border border-hp-peach bg-hp-peach/20 px-4 py-3">
+<div class="hp-anim-fade-up mb-6 flex items-center gap-3 rounded-xl border border-hp-peach bg-hp-peach/20 px-4 py-3">
     <svg class="h-5 w-5 shrink-0 text-hp-orange" fill="none" viewBox="0 0 24 24"
          stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round"
+        <path stroke-linecap="round" stroke-linejoin="round" pathLength="48"
+              class="hp-anim-check-draw"
               d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
     </svg>
     <p class="text-sm font-semibold text-hp-orange">
@@ -119,7 +120,7 @@
     <a href="{{ route('admin.batches.index') }}"
        class="inline-flex w-full items-center justify-center gap-2 rounded-full bg-hp-orange
               px-6 py-2.5 text-sm font-semibold text-white transition-colors
-              duration-150 hover:bg-orange-500 sm:w-auto">
+              duration-hp-fast hover:bg-orange-500 sm:w-auto">
         View Tracking
     </a>
 

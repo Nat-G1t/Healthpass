@@ -1,4 +1,4 @@
-<x-layout.sidebar title="Verify New Email">
+﻿<x-layout.sidebar title="Verify New Email">
 
 <div class="mx-auto max-w-md">
 
@@ -22,7 +22,7 @@
 
         {{-- Resend success flash --}}
         @if (session('status'))
-            <div class="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+            <div data-hp-flash class="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
                 {{ session('status') }}
             </div>
         @endif
@@ -87,7 +87,7 @@
                         @keydown="onKeydown({{ $i }}, $event)"
                         @paste="onPaste($event)"
                         class="h-[58px] w-[46px] rounded-[10px] border-2 text-center text-[24px] font-bold
-                               transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-hp-orange/30
+                               transition-all duration-hp-fast focus:outline-none focus:ring-2 focus:ring-hp-orange/30
                                [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none
                                [&::-webkit-outer-spin-button]:appearance-none"
                         :class="digits[{{ $i }}]
@@ -98,7 +98,7 @@
                 @endfor
             </div>
 
-            <x-hp.button type="submit" variant="primary" size="lg" class="w-full" x-bind:disabled="!ready">
+            <x-hp.button type="submit" variant="primary" size="lg" class="w-full" x-bind:disabled="!ready" data-pending-label="Verifying…">
                 Verify &amp; Update Email
             </x-hp.button>
         </form>

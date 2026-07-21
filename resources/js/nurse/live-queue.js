@@ -9,16 +9,31 @@
  *
  * Rows are keyed by visit id. buildRow() mirrors the server-rendered markup in
  * resources/views/components/nurse/queue-row.blade.php — keep the two in step.
+ *
+ * Motion (docs/ui-motion-inventory.md, Nurse table): every queue change is
+ * animated — arrivals fade up with a peach highlight, departures collapse
+ * (fade + rows sliding up, FLIP), NEXT promotion pops its tag, and the count
+ * counts up/down. The flagship "reverse-stack": returning from Save & Close,
+ * the server renders the just-encoded visit once as a `data-leaving` ghost
+ * row; after a short hold we collapse it so the nurse SEES the queue advance.
+ * Rows mid-collapse keep `data-leaving`, and the reconciler ignores them
+ * completely — the poll can never double-remove or resurrect one.
  */
 
+import { collapseRow, countUp, prefersReducedMotion } from '../shared/motion.js';
+
 const POLL_MS = 4000;
+
+// How long the nurse's eye gets to land on the ghost row before it collapses.
+const GHOST_HOLD_MS = 600;
 
 // Button / badge class strings are copied verbatim from the x-hp.button and
 // x-hp.badge Blade components so appended rows match the server-rendered ones.
 // (Tailwind already emits these classes because the Blade sources use them.)
 const BTN_BASE =
     'inline-flex items-center justify-center gap-2 rounded-full font-semibold ' +
-    'transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 ' +
+    'transition-[color,background-color,border-color,transform] duration-hp-fast ease-hp-out ' +
+    'active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 ' +
     'focus-visible:ring-offset-1 px-4 py-1.5 text-xs';
 const BTN_PRIMARY = 'bg-hp-orange text-white hover:bg-orange-500 focus-visible:ring-hp-orange';
 const BTN_GHOST =
@@ -102,8 +117,20 @@ function buildRow(visit) {
 
 /** Set/clear the single attribute that drives the whole NEXT-row look. */
 function setNext(row, isNext) {
+    const wasNext = row.hasAttribute('data-next');
     if (isNext) {
         row.setAttribute('data-next', '');
+        // Promotion moment: the td background-color transition (queue.blade
+        // CSS) fades the peach band in; one subtle pop on the Next tag marks
+        // the hand-off. Remove-reflow-add restarts the one-shot animation.
+        if (!wasNext) {
+            const tag = row.querySelector('.queue-next-tag');
+            if (tag) {
+                tag.classList.remove('hp-anim-pop');
+                void tag.offsetWidth; // force reflow so the animation restarts
+                tag.classList.add('hp-anim-pop');
+            }
+        }
     } else {
         row.removeAttribute('data-next');
     }
@@ -115,6 +142,27 @@ function setTime(row, timeHuman) {
     if (cell) cell.textContent = timeHuman ?? '—';
 }
 
+/**
+ * Show/hide the empty state vs. the table. Rows still animating out
+ * (`data-leaving`) count as present, so the table never vanishes mid-collapse;
+ * when the queue truly empties, the empty state fades in.
+ */
+function syncEmptyState() {
+    const body = document.querySelector('[data-queue-body]');
+    if (!body) return;
+    const hasRows = currentCount > 0 || body.querySelector('tr[data-leaving]') !== null;
+
+    const empty = document.querySelector('[data-queue-empty]');
+    if (empty && !hasRows && empty.classList.contains('hidden')) {
+        // Becoming visible now — fade it up (remove/reflow/add restarts it).
+        empty.classList.remove('hp-anim-fade-up');
+        void empty.offsetWidth;
+        empty.classList.add('hp-anim-fade-up');
+    }
+    empty?.classList.toggle('hidden', hasRows);
+    document.querySelector('[data-queue-table]')?.classList.toggle('hidden', !hasRows);
+}
+
 /** Reconcile the table body with the feed, keying rows by visit id. */
 function render(data) {
     const body = document.querySelector('[data-queue-body]');
@@ -123,37 +171,67 @@ function render(data) {
     const visits = data.visits ?? [];
     const incomingIds = new Set(visits.map((v) => String(v.id)));
 
-    // Drop rows that have left the queue (encoded / gone).
+    // Rows that have left the queue (encoded / gone) collapse out: fade, then
+    // the rows below slide up into the gap. Marking them data-leaving FIRST
+    // takes them out of this reconciler's world — a later poll tick skips
+    // them, so a row can never be double-removed mid-animation.
     body.querySelectorAll('tr[data-visit-id]').forEach((row) => {
-        if (!incomingIds.has(row.dataset.visitId)) row.remove();
+        if (row.hasAttribute('data-leaving')) return; // already on its way out
+        if (!incomingIds.has(row.dataset.visitId)) {
+            row.setAttribute('data-leaving', '');
+            collapseRow(row, { onDone: syncEmptyState });
+        }
     });
 
-    // Upsert in server (FCFS) order. appendChild moves an existing node or
-    // inserts a new one, so this both reorders and appends without flicker.
+    // Upsert in server (FCFS) order, moving a row ONLY when it is out of
+    // place. `cursor` walks the desired order; data-leaving rows are ignored
+    // (they keep their visual slot until their collapse finishes) — this is
+    // why a wholesale appendChild sweep is no longer used: it would shuffle
+    // rows past a mid-collapse ghost.
+    let cursor = null;
     visits.forEach((visit, index) => {
-        let row = body.querySelector(`tr[data-visit-id="${visit.id}"]`);
-        if (!row) row = buildRow(visit);
+        let row = body.querySelector(`tr[data-visit-id="${visit.id}"]:not([data-leaving])`);
+        const isNew = row === null;
+        if (isNew) row = buildRow(visit);
+
+        let expected = cursor ? cursor.nextElementSibling : body.firstElementChild;
+        while (expected && expected.hasAttribute('data-leaving')) {
+            expected = expected.nextElementSibling;
+        }
+        if (expected !== row) body.insertBefore(row, expected);
+        cursor = row;
+
         setNext(row, index === 0);
         setTime(row, visit.time_human);
-        body.appendChild(row);
+
+        // New arrival (§6.1a): fade-up + peach highlight fading over ~1.5 s.
+        if (isNew && !prefersReducedMotion()) row.classList.add('queue-row-new');
     });
 
-    currentCount = data.count ?? visits.length;
-    document.querySelector('[data-queue-empty]')?.classList.toggle('hidden', currentCount > 0);
-    document.querySelector('[data-queue-table]')?.classList.toggle('hidden', currentCount === 0);
+    const newCount = data.count ?? visits.length;
+    if (newCount !== currentCount) {
+        currentCount = newCount;
+        const countEl = document.querySelector('[data-queue-count]');
+        if (countEl) countUp(countEl, newCount);
+    }
+    syncEmptyState();
 
     lastUpdatedAt = Date.now();
     updateSubtitle();
 }
 
-/** "{n} students waiting · updated Xs ago" — refreshed every second. */
+/**
+ * "{n} students waiting · updated Xs ago" — refreshed every second. The count
+ * lives in its own span (animated by countUp in render); this ticker only
+ * rewrites the text AFTER the number, so the two never fight.
+ */
 function updateSubtitle() {
-    const el = document.querySelector('[data-queue-subtitle]');
-    if (!el) return;
+    const rest = document.querySelector('[data-queue-subtitle-rest]');
+    if (!rest) return;
     const seconds = Math.floor((Date.now() - lastUpdatedAt) / 1000);
     const ago = seconds < 1 ? 'just now' : `${seconds}s ago`;
     const noun = currentCount === 1 ? 'student' : 'students';
-    el.textContent = `${currentCount} ${noun} waiting · updated ${ago}`;
+    rest.textContent = `${noun} waiting · updated ${ago}`;
 }
 
 async function poll(feedUrl) {
@@ -174,7 +252,25 @@ function init() {
     if (!root) return;
 
     const feedUrl = root.dataset.feedUrl;
-    currentCount = document.querySelectorAll('[data-queue-body] tr[data-visit-id]').length;
+    // The ghost row is scenery, not a waiting student — exclude it from the count.
+    currentCount = document.querySelectorAll(
+        '[data-queue-body] tr[data-visit-id]:not([data-leaving])',
+    ).length;
+
+    // FLAGSHIP reverse-stack (§6.1b): the server rendered the just-encoded
+    // visit as a data-leaving ghost. Hold ~600 ms so the nurse's eye lands on
+    // "Encoded ✓", then collapse it — the rows below visibly close ranks.
+    // Under reduced motion collapseRow removes it instantly, so skip the hold
+    // too. Done well before the first 4 s poll tick, and the reconciler
+    // ignores data-leaving rows anyway, so the poll can neither double-remove
+    // nor resurrect it.
+    const ghost = document.querySelector('[data-queue-body] tr[data-leaving]');
+    if (ghost) {
+        setTimeout(
+            () => collapseRow(ghost, { onDone: syncEmptyState }),
+            prefersReducedMotion() ? 0 : GHOST_HOLD_MS,
+        );
+    }
 
     setInterval(() => poll(feedUrl), POLL_MS);
     setInterval(updateSubtitle, 1000);

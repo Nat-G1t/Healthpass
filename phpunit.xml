@@ -25,6 +25,11 @@
         <env name="CACHE_STORE" value="array"/>
         <env name="DB_CONNECTION" value="sqlite"/>
         <env name="DB_DATABASE" value=":memory:"/>
+        <!-- Kiosk flow tests run from loopback (REMOTE_ADDR 127.0.0.1); trust it
+             here like the Pi does (scripts/pi/pi.env.example) so the KioskAccess
+             network gate lets them through. The production default is false
+             (fail-safe); KioskAccessTest overrides this per-test with config(). -->
+        <env name="HEALTHPASS_KIOSK_ALLOW_LOOPBACK" value="true"/>
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>

@@ -4,25 +4,25 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Director;
 
+use App\Models\Appointment;
 use App\Models\ClearanceRecord;
 use App\Models\ClinicVisit;
 use App\Models\College;
 use App\Models\StudentProfile;
 use App\Models\User;
+use App\Models\VitalSigns;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * Director Analytics — Medical Cases by College (FR-ANL-02) and the
- * Summary of Medical Cases matrix (FR-ANL-03):
- *  - the PRD acceptance dataset (3 Respiratory in CCS, 2 in CEA) produces
- *    exactly those bars and matrix cells, all colleges present;
- *  - encoded records only (FR-ANL-07);
- *  - one count per record × category (D-23);
- *  - grouped by the capture-time college snapshot, so a transfer never
- *    re-attributes a past case (FR-STU-09, D-17);
- *  - matrix columns in the FR-ANL-03 fixed order; uncategorized encoded
- *    records excluded from cells but surfaced in a footnote.
+ * Director Analytics after the D-32 rescope rebuild (FR-ANL-09..13 + the
+ * amended FR-ANL-04). Every aggregate gets an exact-count test — the
+ * SQLite suite is what catches raw-SQL portability drift:
+ *
+ *  - visits count from CAPTURE (FR-ANL-07 as rewritten): captured and
+ *    encoded medical visits alike, plus COMPLETED dental appointments
+ *    (D-33) — scheduled ones never count;
+ *  - the month + college filters scope every card except the trend.
  */
 class AnalyticsPageTest extends TestCase
 {
@@ -30,70 +30,101 @@ class AnalyticsPageTest extends TestCase
 
     private College $ccs;
 
-    private College $cea;
-
-    private College $cbs;
+    private College $coe;
 
     private User $director;
 
     private User $nurse;
-
-    private User $student;
 
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->ccs = College::create(['code' => 'CCS', 'name' => 'College of Computing Studies']);
-        $this->cea = College::create(['code' => 'CEA', 'name' => 'College of Engineering and Architecture']);
-        $this->cbs = College::create(['code' => 'CBS', 'name' => 'College of Business Studies']);
+        $this->coe = College::create(['code' => 'COE', 'name' => 'College of Education']);
 
         $this->director = User::factory()->create(['role' => 'director']);
         $this->nurse = User::factory()->create(['role' => 'nurse']);
-        $this->student = User::factory()->create(['role' => 'student']);
+    }
+
+    /** A student user whose profile has the given college and sex. */
+    private function makeStudent(College $college, string $sex = 'M'): User
+    {
+        $student = User::factory()->create(['role' => 'student']);
+        StudentProfile::factory()
+            ->forCollege($college)
+            ->create(['user_id' => $student->id, 'sex' => $sex]);
+
+        return $student;
     }
 
     /**
-     * Persist one visit + clearance with the given case categories, frozen
-     * to $college (the capture-time snapshot column, not the profile).
+     * Persist one medical visit (with clearance record when encoded),
+     * frozen to $college's capture-time snapshot, plus its 1:1 vitals row
+     * (every kiosk visit has one).
+     *
+     * @param  array  $vitals  Overrides for the vital_signs columns.
      */
-    private function makeCase(College $college, array $categories, string $visitStatus = 'encoded', ?User $student = null, ?string $checkedInAt = null): ClearanceRecord
-    {
+    private function makeVisit(
+        User $student,
+        College $college,
+        string $checkedInAt,
+        string $visitStatus = 'encoded',
+        array $vitals = [],
+        ?int $appointmentId = null,
+    ): ClinicVisit {
         static $seq = 7000;
 
         $visit = ClinicVisit::create([
             'reference_no' => 'HP-2026-'.$seq++,
-            'student_id' => ($student ?? $this->student)->id,
+            'student_id' => $student->id,
             'college_id' => $college->id,
+            'appointment_id' => $appointmentId,
             'login_method' => 'qr',
             'status' => $visitStatus,
-            'checked_in_at' => $checkedInAt ? now()->parse($checkedInAt) : now(),
+            'checked_in_at' => now()->parse($checkedInAt),
         ]);
 
-        $record = ClearanceRecord::create([
+        VitalSigns::create([
             'clinic_visit_id' => $visit->id,
-            'encoded_by' => $this->nurse->id,
-            'result' => 'Fit',
-            'encoded_at' => now(),
+            'height_cm' => 170.0,
+            'weight_kg' => 63.5,
+            'bmi' => 22.0,
+            'temperature_c' => 36.5,
+            'heart_rate_bpm' => 75,
+            'bp_systolic' => 110,
+            'bp_diastolic' => 70,
+            'entry_method' => 'manual',
+            'is_bmi_flagged' => false,
+            'is_temp_flagged' => false,
+            'is_bp_flagged' => false,
+            ...$vitals,
         ]);
 
-        foreach ($categories as $category) {
-            $record->caseCategories()->create(['case_category' => $category]);
+        if ($visitStatus === 'encoded') {
+            ClearanceRecord::create([
+                'clinic_visit_id' => $visit->id,
+                'encoded_by' => $this->nurse->id,
+                'result' => 'Fit',
+                'encoded_at' => now(),
+            ]);
         }
 
-        return $record;
+        return $visit;
     }
 
-    /** The dataset values for one category, in the chart's college order. */
-    private function seriesFor(array $chart, string $category): array
+    /** A dental appointment on $date in the given status. */
+    private function makeDental(User $student, string $date, string $status = 'completed'): Appointment
     {
-        foreach ($chart['datasets'] as $dataset) {
-            if ($dataset['label'] === $category) {
-                return $dataset['data'];
-            }
-        }
+        return Appointment::factory()
+            ->dental()
+            ->onDate($date)
+            ->create(['student_id' => $student->id, 'status' => $status]);
+    }
 
-        $this->fail("No dataset for category {$category}");
+    private function page(string $query = ''): \Illuminate\Testing\TestResponse
+    {
+        return $this->actingAs($this->director)->get('/director/analytics'.$query);
     }
 
     public function test_guests_and_other_roles_cannot_open_analytics(): void
@@ -104,308 +135,267 @@ class AnalyticsPageTest extends TestCase
         $this->actingAs($this->nurse)->get('/director/analytics')->assertRedirect();
     }
 
-    public function test_prd_acceptance_dataset_produces_exactly_those_bars(): void
+    public function test_page_renders_with_no_data_at_all(): void
     {
-        // AC: 3 Respiratory System cases in CCS, 2 in CEA.
-        $this->makeCase($this->ccs, ['Respiratory System']);
-        $this->makeCase($this->ccs, ['Respiratory System']);
-        $this->makeCase($this->ccs, ['Respiratory System']);
-        $this->makeCase($this->cea, ['Respiratory System']);
-        $this->makeCase($this->cea, ['Respiratory System']);
-
-        $response = $this->actingAs($this->director)
-            ->get('/director/analytics')
+        $this->page()
             ->assertOk()
-            ->assertSee('Medical Cases by College')
-            ->assertSee('total cases');
-
-        $chart = $response->viewData('chart');
-
-        // Sorted by volume descending; zero-case CBS still gets a row.
-        $this->assertSame(['CCS', 'CEA', 'CBS'], $chart['labels']);
-        $this->assertSame([3, 2, 0], $this->seriesFor($chart, 'Respiratory System'));
-        $this->assertSame(5, $response->viewData('totalCases'));
-
-        // One dataset per medical system (all 8), the others all zero.
-        $this->assertCount(count(ClearanceRecord::CASE_CATEGORIES), $chart['datasets']);
-        $this->assertSame([0, 0, 0], $this->seriesFor($chart, 'Cardiovascular System'));
+            ->assertSee('Clinic Visits by College')
+            ->assertSee('Vital-Sign Flags')
+            ->assertSee('Students Screened by Sex')
+            ->assertSee('BMI Distribution')
+            ->assertSee('No visits recorded');
     }
 
-    public function test_multi_category_case_counts_once_in_each_system(): void
+    public function test_visits_by_college_splits_medical_and_dental_with_zero_rows(): void
     {
-        // D-23: one record spanning two systems → one count in each.
-        $this->makeCase($this->ccs, ['Cardiovascular System', 'Respiratory System']);
+        // FR-ANL-09, May 2026: CCS gets 2 medical (one still CAPTURED —
+        // it counts, FR-ANL-07) + 1 completed dental. COE gets nothing but
+        // must still appear as a zero row. A scheduled dental in May and a
+        // completed dental in June must not enter May's card.
+        $ccsStudent = $this->makeStudent($this->ccs);
+        $this->makeVisit($ccsStudent, $this->ccs, '2026-05-05');
+        $this->makeVisit($ccsStudent, $this->ccs, '2026-05-12', visitStatus: 'captured');
+        $this->makeDental($ccsStudent, '2026-05-20');
+        $this->makeDental($ccsStudent, '2026-05-25', status: 'scheduled');
+        $this->makeDental($ccsStudent, '2026-06-02');
 
-        $response = $this->actingAs($this->director)->get('/director/analytics');
-        $chart = $response->viewData('chart');
+        $response = $this->page('?month=2026-05')->assertOk();
 
-        $this->assertSame(1, $this->seriesFor($chart, 'Cardiovascular System')[0]);
-        $this->assertSame(1, $this->seriesFor($chart, 'Respiratory System')[0]);
-        $this->assertSame(2, $response->viewData('totalCases'));
+        $this->assertSame([
+            ['code' => 'CCS', 'medical' => 2, 'dental' => 1, 'total' => 3],
+            ['code' => 'COE', 'medical' => 0, 'dental' => 0, 'total' => 0],
+        ], $response->viewData('collegeRows'));
+
+        $this->assertSame(3, $response->viewData('totalVisits'));
+        $this->assertSame(2, $response->viewData('totalMedical'));
+        $this->assertSame(1, $response->viewData('totalDental'));
     }
 
-    public function test_unencoded_visits_and_uncategorized_records_count_nothing(): void
+    public function test_purpose_buckets_including_walk_in_not_specified(): void
     {
-        // FR-ANL-07: a not-yet-encoded visit never enters case statistics —
-        // even if a categorized record somehow existed for it.
-        $this->makeCase($this->ccs, ['Respiratory System'], visitStatus: 'captured');
+        // 2 OJT-purposed visits, 1 appointment with NO purpose and 1 with
+        // no appointment at all — both land in "Walk-in / not specified".
+        $student = $this->makeStudent($this->ccs);
 
-        // Encoded but no case category → contributes nothing (FR-ANL-03 rule).
-        $this->makeCase($this->cea, []);
+        $ojt = fn () => Appointment::factory()
+            ->withPurpose('On-the-job Training')
+            ->onDate('2026-05-05')
+            ->create(['student_id' => $student->id, 'status' => 'completed']);
+        $this->makeVisit($student, $this->ccs, '2026-05-05', appointmentId: $ojt()->id);
+        $this->makeVisit($student, $this->ccs, '2026-05-06', appointmentId: $ojt()->id);
 
-        $response = $this->actingAs($this->director)->get('/director/analytics');
+        $purposeless = Appointment::factory()
+            ->medical()
+            ->onDate('2026-05-07')
+            ->create(['student_id' => $student->id, 'status' => 'completed']);
+        $this->makeVisit($student, $this->ccs, '2026-05-07', appointmentId: $purposeless->id);
+        $this->makeVisit($student, $this->ccs, '2026-05-08'); // true walk-in
 
-        $this->assertSame(0, $response->viewData('totalCases'));
+        $response = $this->page('?month=2026-05')->assertOk();
+
+        // Sorted by count desc; the 2–2 tie breaks alphabetically.
+        $this->assertSame([
+            ['label' => 'On-the-job Training', 'count' => 2],
+            ['label' => 'Walk-in / not specified', 'count' => 2],
+        ], $response->viewData('purposeRows'));
     }
 
-    public function test_matrix_shows_prd_acceptance_cells_in_fixed_college_order(): void
+    public function test_flag_counts_and_rates_include_captured_visits(): void
     {
-        // AC: 3 Respiratory System cases in CCS, 2 in CEA.
-        $this->makeCase($this->ccs, ['Respiratory System']);
-        $this->makeCase($this->ccs, ['Respiratory System']);
-        $this->makeCase($this->ccs, ['Respiratory System']);
-        $this->makeCase($this->cea, ['Respiratory System']);
-        $this->makeCase($this->cea, ['Respiratory System']);
+        // 4 screenings in May: one BP-flagged and still CAPTURED (counts
+        // immediately, FR-ANL-07/10), one temp-flagged, two clean.
+        // Rates are % of the month's 4 screenings, one decimal.
+        $student = $this->makeStudent($this->ccs);
+        $this->makeVisit($student, $this->ccs, '2026-05-03', visitStatus: 'captured', vitals: [
+            'bp_systolic' => 150, 'bp_diastolic' => 95, 'is_bp_flagged' => true,
+        ]);
+        $this->makeVisit($student, $this->ccs, '2026-05-04', vitals: [
+            'temperature_c' => 38.1, 'is_temp_flagged' => true,
+        ]);
+        $this->makeVisit($student, $this->ccs, '2026-05-05');
+        $this->makeVisit($student, $this->ccs, '2026-05-06');
 
-        $response = $this->actingAs($this->director)
-            ->get('/director/analytics')
-            ->assertOk()
-            ->assertSee('Summary of Medical Cases')
-            ->assertSee('Rows = medical system');
+        $response = $this->page('?month=2026-05')->assertOk();
 
-        // FR-ANL-03 fixed column order (…CEA, CBS, …CCS…), NOT the chart's
-        // volume-descending order — only the three seeded colleges exist here.
-        $matrixCodes = $response->viewData('matrixColleges')->pluck('code')->all();
-        $this->assertSame(['CEA', 'CBS', 'CCS'], $matrixCodes);
+        $this->assertSame(4, $response->viewData('screenings'));
 
-        // Exactly those cells: cells and column totals come from the same
-        // $counts/$totals the chart uses; the TOTAL column is categoryTotals.
-        $counts = $response->viewData('counts');
-        $this->assertSame(3, $counts[$this->ccs->id]['Respiratory System']);
-        $this->assertSame(2, $counts[$this->cea->id]['Respiratory System']);
-        $this->assertArrayNotHasKey($this->cbs->id, $counts);
+        $tiles = collect($response->viewData('flagTiles'))
+            ->map(fn (array $tile) => [$tile['label'], $tile['count'], $tile['rate']])
+            ->all();
 
+        $this->assertSame([
+            ['High Blood Pressure', 1, 25.0],
+            ['Fever', 1, 25.0],
+            ['Abnormal BMI', 0, 0.0],
+        ], $tiles);
+    }
+
+    public function test_flag_rates_round_to_one_decimal(): void
+    {
+        $student = $this->makeStudent($this->ccs);
+        $this->makeVisit($student, $this->ccs, '2026-05-03', vitals: ['is_bp_flagged' => true]);
+        $this->makeVisit($student, $this->ccs, '2026-05-04');
+        $this->makeVisit($student, $this->ccs, '2026-05-05');
+
+        $tiles = $this->page('?month=2026-05')->viewData('flagTiles');
+
+        $this->assertSame(33.3, $tiles[0]['rate']); // 1 of 3 screenings
+    }
+
+    public function test_trend_covers_all_months_and_ignores_both_filters(): void
+    {
+        // Medical: Jan ×2, Feb ×1. Dental completed: Feb ×2, Mar ×1 (a
+        // dental-only month). Scheduled dental never enters the series.
+        $ccsStudent = $this->makeStudent($this->ccs);
+        $coeStudent = $this->makeStudent($this->coe);
+        $this->makeVisit($ccsStudent, $this->ccs, '2026-01-10');
+        $this->makeVisit($coeStudent, $this->coe, '2026-01-20');
+        $this->makeVisit($ccsStudent, $this->ccs, '2026-02-05');
+        $this->makeDental($ccsStudent, '2026-02-10');
+        $this->makeDental($ccsStudent, '2026-02-15');
+        $this->makeDental($ccsStudent, '2026-03-01');
+        $this->makeDental($ccsStudent, '2026-03-20', status: 'scheduled');
+
+        $expected = function ($response): void {
+            $trend = $response->viewData('trend');
+            $this->assertSame(['Jan', 'Feb', 'Mar'], $trend['labels']);
+            $this->assertSame([2, 1, 0], $trend['datasets'][0]['data']); // medical
+            $this->assertSame([0, 2, 1], $trend['datasets'][1]['data']); // dental
+        };
+
+        // The same series regardless of the selected month AND college —
+        // the trend ignores both filters by design (FR-ANL-11/13).
+        $expected($this->page('?month=2026-01')->assertOk());
+        $expected($this->page('?month=2026-02&college='.$this->ccs->id)->assertOk());
+    }
+
+    public function test_bmi_buckets_split_on_the_rule_boundaries(): void
+    {
+        // 17.0 under · 18.5 + 24.9 normal · 25.0 + 29.9 overweight · 30.0 obese
+        $student = $this->makeStudent($this->ccs);
+        foreach ([17.0, 18.5, 24.9, 25.0, 29.9, 30.0] as $bmi) {
+            $this->makeVisit($student, $this->ccs, '2026-05-10', vitals: ['bmi' => $bmi]);
+        }
+
+        $response = $this->page('?month=2026-05')->assertOk();
+
+        $this->assertSame(6, $response->viewData('bmiTotal'));
         $this->assertSame(
-            ['Respiratory System' => 5],
-            $response->viewData('categoryTotals'),
+            [1, 2, 2, 1],
+            array_column($response->viewData('bmiRows'), 'count'),
         );
     }
 
-    public function test_matrix_grand_total_matches_the_by_sex_donut_source(): void
+    public function test_donut_counts_captured_visits_by_profile_sex(): void
     {
-        // The FR-ANL-04 donut will count ClinicVisit::encoded() rows — the
-        // same shared scope the matrix query starts from. On this dataset
-        // (every record has exactly one category) the two totals coincide.
-        // They diverge BY DESIGN per the PRD AC once records carry multiple
-        // categories or no category — the donut counts people screened, the
-        // matrix counts record × category pairs.
-        $this->makeCase($this->ccs, ['Respiratory System']);
-        $this->makeCase($this->ccs, ['Respiratory System']);
-        $this->makeCase($this->ccs, ['Respiratory System']);
-        $this->makeCase($this->cea, ['Respiratory System']);
-        $this->makeCase($this->cea, ['Respiratory System']);
+        // FR-ANL-04 as amended: people screened = ALL captured kiosk
+        // visits — the encoded-only rule is retired (FR-ANL-07).
+        $male = $this->makeStudent($this->ccs, 'M');
+        $female = $this->makeStudent($this->ccs, 'F');
+        $this->makeVisit($male, $this->ccs, '2026-05-03');
+        $this->makeVisit($male, $this->ccs, '2026-05-04');
+        $this->makeVisit($male, $this->ccs, '2026-05-05', visitStatus: 'captured');
+        $this->makeVisit($female, $this->ccs, '2026-05-06');
 
-        $response = $this->actingAs($this->director)->get('/director/analytics');
-
-        $this->assertSame(5, $response->viewData('totalCases'));
-        $this->assertSame(5, ClinicVisit::encoded()->count());
-    }
-
-    public function test_matrix_footnotes_encoded_records_without_category(): void
-    {
-        // Encoded, no category → excluded from cells, counted in the footnote.
-        $this->makeCase($this->cea, []);
-        // Captured (un-encoded) → invisible everywhere, footnote included.
-        $this->makeCase($this->ccs, ['Respiratory System'], visitStatus: 'captured');
-
-        $response = $this->actingAs($this->director)
-            ->get('/director/analytics')
-            ->assertSee('1 encoded without category');
-
-        $this->assertSame(1, $response->viewData('uncategorizedCount'));
-        $this->assertSame(0, $response->viewData('totalCases'));
-    }
-
-    public function test_matrix_footnote_hidden_when_every_record_has_a_category(): void
-    {
-        $this->makeCase($this->ccs, ['Respiratory System']);
-
-        $this->actingAs($this->director)
-            ->get('/director/analytics')
-            ->assertDontSee('encoded without category');
-    }
-
-    /** A student user whose profile has the given sex. */
-    private function makeStudentOfSex(string $sex): User
-    {
-        $student = User::factory()->create(['role' => 'student']);
-        StudentProfile::factory()
-            ->forCollege($this->ccs)
-            ->create(['user_id' => $student->id, 'sex' => $sex]);
-
-        return $student;
-    }
-
-    public function test_by_sex_donut_counts_encoded_visits_by_profile_sex(): void
-    {
-        // FR-ANL-04: 3 male + 1 female encoded visits; a captured visit
-        // never enters the donut (FR-ANL-07), whatever the sex.
-        $male = $this->makeStudentOfSex('M');
-        $female = $this->makeStudentOfSex('F');
-
-        $this->makeCase($this->ccs, ['Respiratory System'], student: $male);
-        $this->makeCase($this->ccs, [], student: $male);
-        $this->makeCase($this->cea, [], student: $male);
-        $this->makeCase($this->ccs, ['Alimentary System'], student: $female);
-        $this->makeCase($this->ccs, ['Respiratory System'], visitStatus: 'captured', student: $female);
-
-        $response = $this->actingAs($this->director)
-            ->get('/director/analytics')
-            ->assertOk()
-            ->assertSee('Screened Students by Sex');
+        $response = $this->page('?month=2026-05')->assertOk();
 
         $bySex = $response->viewData('bySex');
         $this->assertSame(['Male', 3, 75], [$bySex[0]['label'], $bySex[0]['count'], $bySex[0]['percent']]);
         $this->assertSame(['Female', 1, 25], [$bySex[1]['label'], $bySex[1]['count'], $bySex[1]['percent']]);
-
         $this->assertSame(4, $response->viewData('totalScreened'));
         $this->assertSame([3, 1], $response->viewData('donut')['datasets'][0]['data']);
     }
 
-    public function test_donut_shares_the_encoded_scope_but_counts_people_not_cases(): void
+    public function test_month_filter_scopes_every_card_except_the_trend(): void
     {
-        // PRD §4.9 AC: the donut counts people screened (one per encoded
-        // visit), the matrix counts record × category pairs — same
-        // encoded() base scope, intentionally different totals.
-        $male = $this->makeStudentOfSex('M');
+        $student = $this->makeStudent($this->ccs);
+        $this->makeVisit($student, $this->ccs, '2026-04-10', vitals: ['is_bp_flagged' => true, 'bmi' => 31.0, 'is_bmi_flagged' => true]);
+        $this->makeVisit($student, $this->ccs, '2026-05-10');
+        $this->makeDental($student, '2026-04-15');
 
-        // One person, two systems (D-23): donut 1, matrix 2.
-        $this->makeCase($this->ccs, ['Cardiovascular System', 'Respiratory System'], student: $male);
+        $april = $this->page('?month=2026-04')->assertOk();
+        $this->assertSame(2, $april->viewData('totalVisits')); // 1 medical + 1 dental
+        $this->assertSame(1, $april->viewData('screenings'));
+        $this->assertSame(1, $april->viewData('flagTiles')[0]['count']);
+        $this->assertSame(1, $april->viewData('totalScreened'));
+        $this->assertSame([0, 0, 0, 1], array_column($april->viewData('bmiRows'), 'count'));
 
-        $response = $this->actingAs($this->director)->get('/director/analytics');
-        $this->assertSame(1, $response->viewData('totalScreened'));
-        $this->assertSame(2, $response->viewData('totalCases'));
-
-        // One more person, no category: donut counts them, matrix doesn't.
-        $this->makeCase($this->ccs, [], student: $male);
-
-        $response = $this->actingAs($this->director)->get('/director/analytics');
-        $this->assertSame(2, $response->viewData('totalScreened'));
-        $this->assertSame(ClinicVisit::encoded()->count(), $response->viewData('totalScreened'));
-        $this->assertSame(2, $response->viewData('totalCases'));
-        $this->assertSame(1, $response->viewData('uncategorizedCount'));
+        $may = $this->page('?month=2026-05')->assertOk();
+        $this->assertSame(1, $may->viewData('totalVisits'));
+        $this->assertSame(0, $may->viewData('flagTiles')[0]['count']);
+        $this->assertSame([0, 1, 0, 0], array_column($may->viewData('bmiRows'), 'count'));
     }
 
-    public function test_cases_by_system_chart_splits_each_bar_by_sex(): void
+    public function test_college_filter_scopes_every_card_except_the_trend(): void
     {
-        // FR-ANL-08 with the by-sex split: 2 male + 1 female Respiratory,
-        // plus a female multi-category case adding one Respiratory AND one
-        // Cardiovascular count (D-23). A captured visit counts nothing
-        // (FR-ANL-07).
-        $male = $this->makeStudentOfSex('M');
-        $female = $this->makeStudentOfSex('F');
+        // Same month, two colleges. The medical side scopes on the
+        // capture-time snapshot; the dental side on the student's CURRENT
+        // college (FR-ANL-09 stated limitation).
+        $ccsStudent = $this->makeStudent($this->ccs, 'M');
+        $coeStudent = $this->makeStudent($this->coe, 'F');
+        $this->makeVisit($ccsStudent, $this->ccs, '2026-05-05', vitals: ['is_bp_flagged' => true]);
+        $this->makeVisit($coeStudent, $this->coe, '2026-05-06');
+        $this->makeDental($ccsStudent, '2026-05-10');
+        $this->makeDental($coeStudent, '2026-05-11');
 
-        $this->makeCase($this->ccs, ['Respiratory System'], student: $male);
-        $this->makeCase($this->cea, ['Respiratory System'], student: $male);
-        $this->makeCase($this->ccs, ['Respiratory System'], student: $female);
-        $this->makeCase($this->ccs, ['Respiratory System', 'Cardiovascular System'], student: $female);
-        $this->makeCase($this->ccs, ['Respiratory System'], visitStatus: 'captured', student: $male);
+        $response = $this->page('?month=2026-05&college='.$this->ccs->id)->assertOk();
 
-        $response = $this->actingAs($this->director)
-            ->get('/director/analytics')
-            ->assertOk()
-            ->assertSee('Cases by Medical System');
-
-        $chart = $response->viewData('systemChart');
-
-        // Sorted by total volume descending, all 8 systems present.
-        $this->assertCount(8, $chart['labels']);
-        $this->assertSame(['Respiratory System', 'Cardiovascular System'], array_slice($chart['labels'], 0, 2));
-        $this->assertSame([4, 1, 0], array_slice($chart['totals'], 0, 3));
-
-        // Male segment first, Female second — Respiratory splits 2/2,
-        // Cardiovascular 0/1.
-        [$maleSet, $femaleSet] = $chart['datasets'];
-        $this->assertSame('Male', $maleSet['label']);
-        $this->assertSame('Female', $femaleSet['label']);
-        $this->assertSame([2, 0], array_slice($maleSet['data'], 0, 2));
-        $this->assertSame([2, 1], array_slice($femaleSet['data'], 0, 2));
-
-        // Colors follow the CATEGORY through the sort (Respiratory = the
-        // college chart's navy), Female = its 50% white tint.
-        $this->assertSame('#1E3A8A', $maleSet['backgroundColor'][0]);
-        $this->assertSame('#8E9CC4', $femaleSet['backgroundColor'][0]);
-
-        // Same counting rules as the matrix: bar totals sum to its total.
-        $this->assertSame($response->viewData('totalCases'), array_sum($chart['totals']));
+        $this->assertSame($this->ccs->id, $response->viewData('selectedCollegeId'));
+        $this->assertSame([
+            ['code' => 'CCS', 'medical' => 1, 'dental' => 1, 'total' => 2],
+        ], $response->viewData('collegeRows'));
+        $this->assertSame(1, $response->viewData('screenings'));
+        $this->assertSame(1, $response->viewData('flagTiles')[0]['count']);
+        $this->assertSame([1, 0], $response->viewData('donut')['datasets'][0]['data']);
+        $this->assertSame(1, $response->viewData('bmiTotal'));
     }
 
-    public function test_month_picker_scopes_the_whole_page_to_the_selected_month(): void
+    public function test_invalid_month_and_college_fall_back_gracefully(): void
     {
-        // Two Respiratory cases in December, one in November — different
-        // students so the by-sex donut is scoped too.
-        $dec = $this->makeStudentOfSex('M');
-        $nov = $this->makeStudentOfSex('F');
-        $this->makeCase($this->ccs, ['Respiratory System'], student: $dec, checkedInAt: '2026-12-03');
-        $this->makeCase($this->ccs, ['Respiratory System'], student: $dec, checkedInAt: '2026-12-20');
-        $this->makeCase($this->cea, ['Respiratory System'], student: $nov, checkedInAt: '2026-11-15');
+        // FR-ANL-13: unknown formats/ids degrade to the defaults — never
+        // a 500 or a validation error on this read-only page.
+        $student = $this->makeStudent($this->ccs);
+        $this->makeVisit($student, $this->ccs, '2026-05-10');
 
-        // December: chart, matrix, and donut all show only the two Dec cases.
-        $december = $this->actingAs($this->director)
-            ->get('/director/analytics?month=2026-12')
-            ->assertOk();
-        $this->assertSame(2, $december->viewData('totalCases'));
-        $this->assertSame(2, $december->viewData('counts')[$this->ccs->id]['Respiratory System']);
-        $this->assertSame(2, $december->viewData('totalScreened'));
-        $this->assertSame('2026-12', $december->viewData('selectedMonth'));
+        $response = $this->page('?month=banana&college=999')->assertOk();
 
-        // November: only the one CEA case.
-        $november = $this->actingAs($this->director)
-            ->get('/director/analytics?month=2026-11')
-            ->assertOk();
-        $this->assertSame(1, $november->viewData('totalCases'));
-        $this->assertSame(1, $november->viewData('counts')[$this->cea->id]['Respiratory System']);
-        $this->assertSame(1, $november->viewData('totalScreened'));
+        $this->assertSame('2026-05', $response->viewData('selectedMonth'));
+        $this->assertNull($response->viewData('selectedCollegeId'));
+        $this->assertSame(1, $response->viewData('totalVisits'));
     }
 
-    public function test_no_month_param_defaults_to_the_newest_month_with_data(): void
+    public function test_month_picker_lists_visit_and_dental_months_newest_first(): void
     {
-        $this->makeCase($this->ccs, ['Respiratory System'], checkedInAt: '2026-10-05');
-        $this->makeCase($this->ccs, ['Respiratory System'], checkedInAt: '2026-12-05');
+        // A dental-only month belongs in the picker too (FR-ANL-13) —
+        // and the newest month with ANY data is the default scope.
+        $student = $this->makeStudent($this->ccs);
+        $this->makeVisit($student, $this->ccs, '2026-03-10');
+        $this->makeDental($student, '2026-06-05');
 
-        $response = $this->actingAs($this->director)
-            ->get('/director/analytics')
-            ->assertOk();
+        $response = $this->page()->assertOk();
 
-        // Newest month with data (December) is the default view.
-        $this->assertSame('2026-12', $response->viewData('selectedMonth'));
-        $this->assertSame(1, $response->viewData('totalCases'));
-
-        // The picker lists both months, newest first.
         $this->assertSame(
             [
-                ['value' => '2026-12', 'label' => 'December 2026'],
-                ['value' => '2026-10', 'label' => 'October 2026'],
+                ['value' => '2026-06', 'label' => 'June 2026'],
+                ['value' => '2026-03', 'label' => 'March 2026'],
             ],
             $response->viewData('availableMonths'),
         );
+        $this->assertSame('2026-06', $response->viewData('selectedMonth'));
     }
 
-    public function test_college_snapshot_wins_over_current_profile_college(): void
+    public function test_removed_medical_cases_views_are_gone(): void
     {
-        // D-17: the case was captured under CEA; the student has since
-        // transferred to CCS. The bar must stay with CEA.
-        StudentProfile::factory()
-            ->forCollege($this->ccs)
-            ->create(['user_id' => $this->student->id]);
+        // D-32: no cases chart/matrix on the page, and the print + CSV
+        // export routes no longer exist.
+        $this->page()
+            ->assertOk()
+            ->assertDontSee('Medical Cases by College')
+            ->assertDontSee('Summary of Medical Cases')
+            ->assertDontSee('Preview &amp; Print', false)
+            ->assertDontSee('Export CSV');
 
-        $this->makeCase($this->cea, ['Alimentary System']);
-
-        $chart = $this->actingAs($this->director)
-            ->get('/director/analytics')
-            ->viewData('chart');
-
-        $this->assertSame(['CEA', 'CBS', 'CCS'], $chart['labels']);
-        $this->assertSame([1, 0, 0], $this->seriesFor($chart, 'Alimentary System'));
+        $this->page('/summary-print')->assertNotFound();
+        $this->actingAs($this->director)->get('/director/anomalies/export')->assertNotFound();
     }
 }

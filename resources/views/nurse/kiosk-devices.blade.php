@@ -11,7 +11,7 @@
 
 {{-- Success / status flash (enroll, revoke). --}}
 @if (session('status'))
-    <div class="mb-5 rounded-lg border border-hp-orange/30 bg-hp-peach/40 px-4 py-3 text-sm font-medium text-hp-slate">
+    <div data-hp-flash class="mb-5 rounded-lg border border-hp-orange/30 bg-hp-peach/40 px-4 py-3 text-sm font-medium text-hp-slate">
         {{ session('status') }}
     </div>
 @endif
@@ -75,7 +75,7 @@
             <x-hp.input label="Device name" name="name" type="text"
                         placeholder="e.g. Clinic Pi (front desk)" maxlength="80" required
                         :error="$errors->first('name')" />
-            <x-hp.button type="submit" variant="primary" size="md" class="w-full">
+            <x-hp.button type="submit" variant="primary" size="md" class="w-full" data-pending-label="Enrolling…">
                 Enable Kiosk Mode on this device
             </x-hp.button>
         </form>
@@ -139,7 +139,7 @@
                                               onsubmit="return confirm('Revoke this device? That terminal will lose kiosk access immediately.')">
                                             @csrf
                                             @method('DELETE')
-                                            <x-hp.button type="submit" variant="danger" size="sm">Revoke</x-hp.button>
+                                            <x-hp.button type="submit" variant="danger" size="sm" data-pending-label="Revoking…">Revoke</x-hp.button>
                                         </form>
                                     @endunless
                                 </td>

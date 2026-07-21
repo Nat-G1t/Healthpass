@@ -51,7 +51,7 @@
             The passwords don't match yet.
         </p>
 
-        <x-hp.button type="submit" variant="primary" size="lg" class="mt-0.5 w-full" x-bind:disabled="!ready">
+        <x-hp.button type="submit" variant="primary" size="lg" class="mt-0.5 w-full" x-bind:disabled="!ready" data-pending-label="Saving…">
             Change Password
         </x-hp.button>
     </form>

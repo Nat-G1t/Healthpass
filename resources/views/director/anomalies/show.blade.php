@@ -63,12 +63,6 @@
                         </dd>
                     </div>
                     <div class="flex justify-between gap-4">
-                        <dt class="text-hp-slate/50">Case categories</dt>
-                        <dd class="text-right text-hp-slate">
-                            {{ $visit->clearanceRecord->caseCategories->pluck('case_category')->implode(', ') ?: '—' }}
-                        </dd>
-                    </div>
-                    <div class="flex justify-between gap-4">
                         <dt class="text-hp-slate/50">Encoded</dt>
                         <dd class="text-hp-slate">{{ $visit->clearanceRecord->encoded_at?->format('M j, Y · g:i A') ?? '—' }}</dd>
                     </div>

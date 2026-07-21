@@ -1,14 +1,14 @@
-<x-layout.sidebar title="Flagged Anomalies">
+﻿<x-layout.sidebar title="Flagged Anomalies">
 
     {{-- ── Stat cards (FR-ANL-05): one per flag type ─────────────────────
          Subtitles quote the thresholds from config/healthpass.php (BR-13:
          one source — kiosk badges, queue flags, and this screen agree). --}}
-    <div class="mb-6 grid grid-cols-1 gap-5 sm:grid-cols-3">
+    <div class="hp-stagger mb-6 grid grid-cols-1 gap-5 sm:grid-cols-3">
         <x-hp.card class="border-l-4 border-l-hp-orange">
             <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
                 High Blood Pressure
             </p>
-            <p class="mt-3 text-3xl font-bold leading-none text-hp-slate">{{ $stats['bp'] }}</p>
+            <p class="mt-3 text-3xl font-bold leading-none text-hp-slate" data-hp-countup>{{ $stats['bp'] }}</p>
             <p class="mt-2 text-xs text-hp-slate/50">
                 {{ config('healthpass.thresholds.bp_systolic') }}/{{ config('healthpass.thresholds.bp_diastolic') }} mmHg or higher
             </p>
@@ -18,7 +18,7 @@
             <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
                 Fever
             </p>
-            <p class="mt-3 text-3xl font-bold leading-none text-hp-slate">{{ $stats['temp'] }}</p>
+            <p class="mt-3 text-3xl font-bold leading-none text-hp-slate" data-hp-countup>{{ $stats['temp'] }}</p>
             <p class="mt-2 text-xs text-hp-slate/50">
                 above {{ config('healthpass.thresholds.temperature_max') }}&deg;C
             </p>
@@ -28,7 +28,7 @@
             <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
                 Abnormal BMI
             </p>
-            <p class="mt-3 text-3xl font-bold leading-none text-hp-slate">{{ $stats['bmi'] }}</p>
+            <p class="mt-3 text-3xl font-bold leading-none text-hp-slate" data-hp-countup>{{ $stats['bmi'] }}</p>
             <p class="mt-2 text-xs text-hp-slate/50">
                 BMI of {{ config('healthpass.thresholds.bmi_obese') }} or higher
             </p>
@@ -46,11 +46,6 @@
                 </p>
             </div>
             <div class="flex items-center gap-3">
-                {{-- CSV export (FR-ANL-06): same flagged rows, one line per tripped flag --}}
-                <a href="{{ route('director.anomalies.export') }}"
-                   class="inline-flex items-center rounded-full border-[1.5px] border-hp-slate/30 px-4 py-1.5 text-xs font-semibold text-hp-slate transition-colors duration-150 hover:bg-hp-slate/8">
-                    Export CSV
-                </a>
                 <x-hp.badge :variant="$visits->isNotEmpty() ? 'flagged' : 'neutral'">
                     {{ $visits->count() }} flagged
                 </x-hp.badge>
@@ -80,7 +75,6 @@
                             <th class="px-3 py-2 font-semibold">College</th>
                             <th class="px-3 py-2 font-semibold">Flag</th>
                             <th class="px-3 py-2 font-semibold">Value</th>
-                            <th class="px-3 py-2 font-semibold">Category</th>
                             <th class="py-2 pl-3 font-semibold"><span class="sr-only">View</span></th>
                         </tr>
                     </thead>
@@ -105,14 +99,6 @@
                                             <span>{{ $flag['value'] }}</span>
                                         @endforeach
                                     </div>
-                                </td>
-                                <td class="px-3 py-3 text-xs">
-                                    @if ($visit->status === 'captured')
-                                        {{-- Not yet encoded — in the nurse queue (FR-ANL-07) --}}
-                                        <x-hp.badge variant="pending">Pending</x-hp.badge>
-                                    @else
-                                        {{ $visit->clearanceRecord?->caseCategories->pluck('case_category')->implode(', ') ?: '—' }}
-                                    @endif
                                 </td>
                                 <td class="py-3 pl-3 text-right">
                                     <a href="{{ route('director.anomalies.show', $visit) }}"

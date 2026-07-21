@@ -1,4 +1,4 @@
-<x-layout.sidebar title="Kiosk Tutorial">
+﻿<x-layout.sidebar title="Kiosk Tutorial">
 
 {{--
     FR-STU-11 — Kiosk Tutorial. One page, seven steps, driven by a single
@@ -75,7 +75,12 @@
 >
 
     {{-- ── Step 1: landing ─────────────────────────────────────────────────── --}}
-    <div x-show="state.step === 1">
+    {{-- Enter-only transitions (§6.2): each step fades up as it appears; no
+         leave transition, so two steps are never visible stacked. --}}
+    <div x-show="state.step === 1"
+         x-transition:enter="transition ease-hp-out duration-hp-base"
+         x-transition:enter-start="opacity-0 translate-y-3"
+         x-transition:enter-end="opacity-100 translate-y-0">
         <x-hp.card class="py-12 text-center sm:py-16">
             <div class="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-hp-peach">
                 <svg class="h-8 w-8 text-hp-orange" fill="none" viewBox="0 0 24 24"
@@ -103,7 +108,10 @@
 
     {{-- ── Steps 2–7: shared layout — media placeholder + instructions ────── --}}
     @foreach ($steps as $n => $step)
-        <div x-show="state.step === {{ $n }}" x-cloak>
+        <div x-show="state.step === {{ $n }}" x-cloak
+             x-transition:enter="transition ease-hp-out duration-hp-base"
+             x-transition:enter-start="opacity-0 translate-y-3"
+             x-transition:enter-end="opacity-100 translate-y-0">
             <x-hp.card>
 
                 {{-- Progress: "Step N of 6" + dots --}}
@@ -170,7 +178,7 @@
                         <a href="{{ route('student.dashboard') }}"
                            class="inline-flex items-center justify-center gap-2 rounded-full bg-hp-orange
                                   px-6 py-2.5 text-sm font-semibold text-white transition-colors
-                                  duration-150 hover:bg-orange-500">
+                                  duration-hp-fast hover:bg-orange-500">
                             Done — Back to Dashboard
                         </a>
                     @endif

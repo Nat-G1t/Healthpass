@@ -11,6 +11,168 @@
     --hp-peach:  #FFCAA0;
     --hp-orange: #FF8C2A;
     --hp-slate:  #4B5563;
+
+    /* ── Motion tokens (see docs/ui-motion-inventory.md) ──────────────────────
+       Single source of truth for every animation duration/easing in the app.
+       Mirrored as Tailwind theme extensions in tailwind.config.js — never
+       hardcode a duration or cubic-bezier in a view. */
+    --hp-dur-fast: 150ms;   /* hovers, presses, small fades            */
+    --hp-dur-base: 250ms;   /* most enters: rows, dropdowns, screens   */
+    --hp-dur-slow: 400ms;   /* page-level: splash fade, modals, sheets */
+    --hp-ease-out:    cubic-bezier(0.25, 1, 0.5, 1);   /* default decelerate (enters)  */
+    --hp-ease-spring: cubic-bezier(0.32, 0.72, 0, 1);  /* iOS sheet feel (modals)      */
+    --hp-ease-in:     cubic-bezier(0.55, 0, 1, 0.45);  /* exits — faster than enters   */
+}
+
+/* ── Reduced motion — global kill switch ─────────────────────────────────────
+   When the OS asks for less motion, every animation/transition collapses to
+   effectively instant. JS-driven animations additionally check
+   prefersReducedMotion() in resources/js/shared/motion.js. */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* ── Motion keyframes ────────────────────────────────────────────────────────
+   transform/opacity only (compositor-friendly — the kiosk runs on a Pi 4). */
+@keyframes hp-fade-up {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes hp-fade {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+@keyframes hp-scale-in {
+    from { opacity: 0; transform: scale(0.96); }
+    to   { opacity: 1; transform: scale(1); }
+}
+@keyframes hp-sheet-up {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+/* Validation errors: ±6 px, 3 oscillations, ~350 ms. */
+@keyframes hp-shake {
+    0%, 100%      { transform: translateX(0); }
+    17%, 50%, 83% { transform: translateX(-6px); }
+    33%, 67%      { transform: translateX(6px); }
+}
+/* Skeleton gradient sweep — animates transform, not background-position. */
+@keyframes hp-shimmer {
+    from { transform: translateX(-100%); }
+    to   { transform: translateX(100%); }
+}
+/* Selection ticks: quick overshoot-and-settle. */
+@keyframes hp-pop {
+    0%   { transform: scale(1); }
+    50%  { transform: scale(1.06); }
+    100% { transform: scale(1); }
+}
+/* SVG success checkmark draw-in — pair with stroke-dasharray on the path. */
+@keyframes hp-check-draw {
+    from { stroke-dashoffset: 48; }
+    to   { stroke-dashoffset: 0; }
+}
+
+/* ── Motion utility classes (hp-anim-*) ──────────────────────────────────────
+   One-shot entrance animations for Blade. `both` fill keeps the element at its
+   final state and hides it before a delayed start (staggers). */
+@layer utilities {
+    .hp-anim-fade-up  { animation: hp-fade-up var(--hp-dur-base) var(--hp-ease-out) both; }
+    .hp-anim-fade     { animation: hp-fade var(--hp-dur-base) var(--hp-ease-out) both; }
+    .hp-anim-scale-in { animation: hp-scale-in var(--hp-dur-base) var(--hp-ease-out) both; }
+    .hp-anim-sheet-up { animation: hp-sheet-up var(--hp-dur-slow) var(--hp-ease-spring) both; }
+    .hp-anim-shake    { animation: hp-shake 350ms var(--hp-ease-out); }
+    .hp-anim-pop      { animation: hp-pop 200ms var(--hp-ease-out); }
+
+    /* Success checkmark draw-in. Put this on an SVG <path pathLength="48">:
+       pathLength normalises any path to 48 units so one keyframe fits every
+       icon size. The tiny delay lets the surrounding card land first. */
+    .hp-anim-check-draw {
+        stroke-dasharray: 48;
+        animation: hp-check-draw var(--hp-dur-slow) var(--hp-ease-out) 150ms both;
+    }
+
+    /* Page-content entrance (§5.5): soft landing for the <main> container on
+       every navigation, even in browsers without View Transitions. NO fill
+       mode on purpose — a retained transform (even identity) would turn the
+       container into a containing block and break position:fixed descendants
+       (modals, overlays) for the life of the page. */
+    .hp-page-enter { animation: hp-fade-up var(--hp-dur-base) var(--hp-ease-out); }
+
+    /* Stagger children: each child fades up 40 ms after the previous, capped
+       after 8 items (children 9+ share the 8th delay) so long lists never
+       crawl in. Apply to the PARENT; first paint only — never on poll updates. */
+    .hp-stagger > * { animation: hp-fade-up var(--hp-dur-base) var(--hp-ease-out) both; animation-delay: 280ms; }
+    .hp-stagger > *:nth-child(1) { animation-delay: 0ms; }
+    .hp-stagger > *:nth-child(2) { animation-delay: 40ms; }
+    .hp-stagger > *:nth-child(3) { animation-delay: 80ms; }
+    .hp-stagger > *:nth-child(4) { animation-delay: 120ms; }
+    .hp-stagger > *:nth-child(5) { animation-delay: 160ms; }
+    .hp-stagger > *:nth-child(6) { animation-delay: 200ms; }
+    .hp-stagger > *:nth-child(7) { animation-delay: 240ms; }
+}
+
+/* ── Cross-page transitions — View Transitions API (§5.5) ────────────────────
+   Progressive enhancement: supporting browsers crossfade whole navigations;
+   everyone else just navigates instantly. No JS, no polyfill. */
+@view-transition { navigation: auto; }
+::view-transition-old(root) { animation: hp-fade var(--hp-dur-fast) var(--hp-ease-in) both reverse; }
+::view-transition-new(root) { animation: hp-fade var(--hp-dur-base) var(--hp-ease-out) both; }
+
+/* ── Top navigation progress bar (§5.3) ──────────────────────────────────────
+   A 3 px orange bar under the top edge. JS (shared/page-motion.js) adds
+   `.is-running` on same-origin navigations; the width transition has a long
+   tail so it visibly slows as it approaches 85% — the next page's own load
+   finishes the story. scaleX (not width) keeps it compositor-only. */
+.hp-progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--hp-orange);
+    transform: scaleX(0);
+    transform-origin: left;
+    opacity: 0;
+    z-index: 100;
+    pointer-events: none;
+    transition: transform 8s var(--hp-ease-out), opacity var(--hp-dur-fast) var(--hp-ease-out);
+}
+.hp-progress.is-running {
+    transform: scaleX(0.85);
+    opacity: 1;
+}
+
+/* ── Skeleton shimmer blocks (§5.4) — see components/hp/skeleton.blade.php ── */
+.hp-skeleton {
+    position: relative;
+    overflow: hidden;
+    border-radius: 0.5rem;
+    background: rgb(75 85 99 / 0.08); /* hp-slate at 8% */
+}
+.hp-skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.6), transparent);
+    animation: hp-shimmer 1.4s var(--hp-ease-out) infinite;
+}
+
+/* ── Flash / status banners (§5.7) — see shared/page-motion.js ──────────────
+   Banners marked data-hp-flash enter with a fade-up; informational ones are
+   auto-dismissed by JS after ~5 s via .is-dismissed (errors stay). */
+[data-hp-flash] { animation: hp-fade-up var(--hp-dur-base) var(--hp-ease-out) both; }
+[data-hp-flash].is-dismissed {
+    /* Drop the (filling) enter animation first — a fill-mode animation would
+       otherwise keep overriding opacity and the fade-out could never win. */
+    animation: none;
+    opacity: 0;
+    transition: opacity var(--hp-dur-slow) var(--hp-ease-in);
 }
 
 /* ── Base ───────────────────────────────────────────────────────────────────── */

@@ -16,10 +16,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Register — HealthPass</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @include('partials.favicon')
 </head>
 <body class="flex min-h-full flex-col items-center bg-hp-bg p-6">
+
+    <x-hp.splash />
 
     {{-- Logo (md size, no subtitle — matches prototype) --}}
     <div class="mb-[22px]">
@@ -30,7 +34,7 @@
     <div class="mb-[22px] flex w-full {{ $maxWidth }} gap-[6px]">
         @foreach ($steps as $n => $label)
             <div class="flex flex-1 flex-col text-center">
-                <div class="mb-[5px] h-1 rounded-sm transition-colors duration-300
+                <div class="mb-[5px] h-1 rounded-sm transition-colors duration-hp-base ease-hp-out
                             {{ $n <= $step ? 'bg-hp-orange' : 'bg-hp-slate/[18%]' }}"></div>
                 <span class="text-[10px] leading-none
                              {{ $n === $step ? 'font-bold text-hp-orange' : 'font-normal text-hp-slate/[45%]' }}">
@@ -40,8 +44,9 @@
         @endforeach
     </div>
 
-    {{-- Step card --}}
-    <x-hp.card class="w-full {{ $maxWidth }}">
+    {{-- Step card — each wizard step page lands with a soft fade-up, which
+         together with the previous page's exit reads as a step crossfade. --}}
+    <x-hp.card class="hp-page-enter w-full {{ $maxWidth }}">
         {{ $slot }}
     </x-hp.card>
 
