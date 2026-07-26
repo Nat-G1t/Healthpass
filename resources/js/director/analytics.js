@@ -41,8 +41,49 @@ Chart.defaults.animation = window.matchMedia('(prefers-reduced-motion: reduce)')
     ? false
     : { duration: 600, easing: 'easeOutQuart' };
 
-const INK = '#4B5563';
-const GRID = 'rgba(75, 85, 99, .12)';
+/**
+ * Read an --hp-* colour token from app.css. They are stored as bare "R G B"
+ * channel triplets (see the token block in resources/css/app.css), which is
+ * what lets us tack an alpha on here.
+ */
+const token = (name, alpha = 1) => {
+    const triplet = getComputedStyle(document.documentElement)
+        .getPropertyValue(name)
+        .trim();
+    return alpha === 1 ? `rgb(${triplet})` : `rgb(${triplet} / ${alpha})`;
+};
+
+/**
+ * Theme-dependent chart colours (D-38). Chart.js bakes colours into its config
+ * when the chart is constructed, so dark mode needs two things: read these
+ * from the CSS tokens instead of hardcoding hex, and recompute + re-apply them
+ * when the theme is toggled without a page reload.
+ *
+ * `surface` is the hairline gap drawn between stacked bar segments and
+ * doughnut slices — it must match the CARD behind the chart (it was a literal
+ * #FFFFFF, which drew white scratches across the marks in dark mode).
+ */
+const palette = () => ({
+    ink:     token('--hp-slate'),
+    tick:    token('--hp-slate', 0.6),
+    grid:    token('--hp-slate', 0.15),
+    surface: token('--hp-white'),
+});
+
+let C = palette();
+
+// Charts that need re-colouring when the theme flips, each with a callback
+// that knows its own colour slots.
+const themed = [];
+const onThemeChange = (chart, retheme) => themed.push({ chart, retheme });
+
+window.addEventListener('hp:themechange', () => {
+    C = palette();
+    themed.forEach(({ chart, retheme }) => {
+        retheme(chart);
+        chart.update('none'); // 'none' = re-render without replaying the entrance animation
+    });
+});
 
 /** Parse the JSON payload the controller ships on a data attribute. */
 const chartData = (host) => JSON.parse(host.dataset.chart);
@@ -61,7 +102,7 @@ if (collegeHost) {
 
             ctx.save();
             ctx.font = "600 11px 'Poppins', sans-serif";
-            ctx.fillStyle = INK;
+            ctx.fillStyle = C.ink; // read at DRAW time, so it follows the theme
             ctx.textBaseline = 'middle';
 
             lastMeta.data.forEach((bar, i) => {
@@ -72,7 +113,7 @@ if (collegeHost) {
         },
     };
 
-    new Chart(collegeHost.querySelector('canvas'), {
+    const collegeChart = new Chart(collegeHost.querySelector('canvas'), {
         type: 'bar',
         data: chartData(collegeHost),
         options: {
@@ -85,7 +126,7 @@ if (collegeHost) {
                     // Thin marks with a hairline surface gap between the
                     // Medical and Dental segments of each stack.
                     barThickness: 16,
-                    borderColor: '#FFFFFF',
+                    borderColor: C.surface,
                     borderWidth: 1,
                     borderRadius: 3,
                 },
@@ -97,12 +138,17 @@ if (collegeHost) {
                     stacked: true,
                     grid: { display: false },
                     border: { display: false },
-                    ticks: { color: INK, font: { size: 11, weight: 600 } },
+                    ticks: { color: C.ink, font: { size: 11, weight: 600 } },
                 },
             },
             plugins: { legend: { display: false } },
         },
         plugins: [rowTotals],
+    });
+
+    onThemeChange(collegeChart, (chart) => {
+        chart.options.datasets.bar.borderColor = C.surface;
+        chart.options.scales.y.ticks.color = C.ink;
     });
 }
 
@@ -119,7 +165,7 @@ if (trendHost) {
             const { ctx } = chart;
             ctx.save();
             ctx.font = "700 11px 'Poppins', sans-serif";
-            ctx.fillStyle = INK;
+            ctx.fillStyle = C.ink; // read at DRAW time, so it follows the theme
             ctx.textAlign = 'center';
 
             const placed = [];
@@ -142,7 +188,7 @@ if (trendHost) {
 
     const trendData = chartData(trendHost);
 
-    new Chart(trendHost.querySelector('canvas'), {
+    const trendChart = new Chart(trendHost.querySelector('canvas'), {
         type: 'line',
         data: {
             labels: trendData.labels,
@@ -153,7 +199,7 @@ if (trendHost) {
                 pointHoverRadius: 5,
                 pointHitRadius: 10,       // hit target bigger than the mark
                 pointBackgroundColor: dataset.borderColor,
-                pointBorderColor: '#FFFFFF',
+                pointBorderColor: C.surface,
                 pointBorderWidth: 1.5,
             })),
         },
@@ -166,18 +212,25 @@ if (trendHost) {
                 x: {
                     grid: { display: false },
                     border: { display: false },
-                    ticks: { color: 'rgba(75, 85, 99, .5)', font: { size: 11 } },
+                    ticks: { color: C.tick, font: { size: 11 } },
                 },
                 y: {
                     beginAtZero: true,
-                    grid: { color: GRID },
+                    grid: { color: C.grid },
                     border: { display: false },
-                    ticks: { color: 'rgba(75, 85, 99, .5)', font: { size: 10 }, maxTicksLimit: 5 },
+                    ticks: { color: C.tick, font: { size: 10 }, maxTicksLimit: 5 },
                 },
             },
             plugins: { legend: { display: false } },
         },
         plugins: [latestPointLabels],
+    });
+
+    onThemeChange(trendChart, (chart) => {
+        chart.options.scales.x.ticks.color = C.tick;
+        chart.options.scales.y.ticks.color = C.tick;
+        chart.options.scales.y.grid.color = C.grid;
+        chart.data.datasets.forEach((ds) => { ds.pointBorderColor = C.surface; });
     });
 }
 
@@ -187,14 +240,14 @@ const donutHost = document.querySelector('[data-by-sex]');
 if (donutHost) {
     const donutData = chartData(donutHost);
 
-    new Chart(donutHost.querySelector('canvas'), {
+    const donutChart = new Chart(donutHost.querySelector('canvas'), {
         type: 'doughnut',
         data: {
             labels: donutData.labels,
             datasets: donutData.datasets.map((dataset) => ({
                 ...dataset,
                 // 2px surface gap between the slices.
-                borderColor: '#FFFFFF',
+                borderColor: C.surface,
                 borderWidth: 2,
             })),
         },
@@ -210,5 +263,9 @@ if (donutHost) {
                 legend: { display: false },
             },
         },
+    });
+
+    onThemeChange(donutChart, (chart) => {
+        chart.data.datasets.forEach((ds) => { ds.borderColor = C.surface; });
     });
 }

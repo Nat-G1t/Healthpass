@@ -4,13 +4,28 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── HealthPass design tokens ──────────────────────────────────────────────── */
+/* ── HealthPass design tokens ──────────────────────────────────────────────────
+   Colour tokens are stored as bare "R G B" channel triplets, NOT hex. That is
+   what lets Tailwind generate an alpha variant of every token: the config maps
+   `hp-slate` to `rgb(var(--hp-slate) / <alpha-value>)`, so `text-hp-slate/50`
+   still works and now follows the theme too.
+
+   Consequence: in plain CSS you must WRAP a colour token in rgb() —
+   `color: rgb(var(--hp-slate))`, never `color: var(--hp-slate)`.
+
+   Dark theme (D-38): the same token NAMES are re-pointed in the `.dark` block
+   below, so ~300 existing `text-hp-slate/NN` / `border-hp-slate/NN` utilities
+   across the views flip theme without being touched. */
 :root {
-    --hp-white:  #FFFFFF;
-    --hp-bg:     #F6F2ED;
-    --hp-peach:  #FFCAA0;
-    --hp-orange: #FF8C2A;
-    --hp-slate:  #4B5563;
+    --hp-white:  255 255 255;  /* #FFFFFF — cards / raised surfaces      */
+    --hp-bg:     246 242 237;  /* #F6F2ED — page background              */
+    --hp-peach:  255 202 160;  /* #FFCAA0 — selected chip / badge surface */
+    --hp-orange: 255 140 42;   /* #FF8C2A — brand primary                */
+    --hp-slate:   75  85  99;  /* #4B5563 — primary text (+alpha = muted, borders) */
+
+    /* Skeleton highlight sweep — a light wash in light theme; in dark a
+       near-white at 60% would blow out, so the dark block dims it. */
+    --hp-shimmer: 255 255 255 / 0.6;
 
     /* ── Motion tokens (see docs/ui-motion-inventory.md) ──────────────────────
        Single source of truth for every animation duration/easing in the app.
@@ -22,6 +37,58 @@
     --hp-ease-out:    cubic-bezier(0.25, 1, 0.5, 1);   /* default decelerate (enters)  */
     --hp-ease-spring: cubic-bezier(0.32, 0.72, 0, 1);  /* iOS sheet feel (modals)      */
     --hp-ease-in:     cubic-bezier(0.55, 0, 1, 0.45);  /* exits — faster than enters   */
+}
+
+/* ── Dark theme (D-38 / FR-UI-04) ─────────────────────────────────────────────
+   Re-points the SAME token names — nothing else in the app needs to know a
+   dark theme exists. `<html>` carries both `.dark` (what Tailwind's `dark:`
+   variant keys on) and `data-theme="dark"` (a stable hook for plain CSS);
+   both are written before first paint by partials/theme-init.blade.php.
+
+   The kiosk is deliberately excluded (D-26 + D-38): its Blade document never
+   includes theme-init, so it never gets these classes and stays permanently
+   light on the clinic panel. Print output is forced light further down.
+
+   Measured contrast (WCAG 2.1, verified — not estimated):
+     text  #F3F4F6 on card #1A1D24 ......... 13.0:1  AA/AAA body
+     text  #F3F4F6 on bg   #0F1115 ......... 14.6:1  AA/AAA body
+     text/60 (muted copy) on card ..........  6.3:1  AA body
+     orange #FF8C2A on card #1A1D24 ........  7.3:1  AA/AAA body
+     orange #FF8C2A on chip #3B2A17 ........  5.9:1  AA body
+   NOTE: the brief assumed orange-on-card was ~3.3:1 and would fail AA for
+   body copy. It measures 7.3:1 — orange is SAFE for small text in dark, so
+   no separate "lighter orange" token was needed. What actually failed was
+   orange on PEACH (1.55:1), which is why --hp-peach becomes a dark amber
+   chip surface here instead of staying a light peach. */
+.dark,
+[data-theme="dark"] {
+    --hp-white:   26  29  36;  /* #1A1D24 — cards / sidebar / header / inputs */
+    --hp-bg:      15  17  21;  /* #0F1115 — page background                   */
+    --hp-peach:   59  42  23;  /* #3B2A17 — dark amber chip (was light peach) */
+    --hp-orange: 255 140  42;  /* #FF8C2A — brand primary, unchanged          */
+    --hp-slate:  243 244 246;  /* #F3F4F6 — primary text; alphas = muted/borders */
+
+    --hp-shimmer: 243 244 246 / 0.10;
+}
+
+/* ── Theme cross-fade ────────────────────────────────────────────────────────
+   The colour transition is applied ONLY while a manual toggle is in flight:
+   the toggle adds `.hp-theming` to <html>, then removes it one --hp-dur-base
+   later. Making it permanent would fade every page-load and navigation too,
+   which reads as sluggish rather than smooth.
+
+   Deliberately NOT `!important`: the prefers-reduced-motion kill switch below
+   sets `transition-duration: 0.01ms !important` on `*`, and an !important
+   declaration here would out-specify it and bypass the user's OS setting. */
+.hp-theming,
+.hp-theming *,
+.hp-theming *::before,
+.hp-theming *::after {
+    transition: background-color var(--hp-dur-base) var(--hp-ease-out),
+                border-color     var(--hp-dur-base) var(--hp-ease-out),
+                color            var(--hp-dur-base) var(--hp-ease-out),
+                fill             var(--hp-dur-base) var(--hp-ease-out),
+                stroke           var(--hp-dur-base) var(--hp-ease-out);
 }
 
 /* ── Reduced motion — global kill switch ─────────────────────────────────────
@@ -134,7 +201,7 @@
     left: 0;
     right: 0;
     height: 3px;
-    background: var(--hp-orange);
+    background: rgb(var(--hp-orange));
     transform: scaleX(0);
     transform-origin: left;
     opacity: 0;
@@ -152,14 +219,14 @@
     position: relative;
     overflow: hidden;
     border-radius: 0.5rem;
-    background: rgb(75 85 99 / 0.08); /* hp-slate at 8% */
+    background: rgb(var(--hp-slate) / 0.08);
 }
 .hp-skeleton::after {
     content: '';
     position: absolute;
     inset: 0;
     transform: translateX(-100%);
-    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.6), transparent);
+    background: linear-gradient(90deg, transparent, rgb(var(--hp-shimmer)), transparent);
     animation: hp-shimmer 1.4s var(--hp-ease-out) infinite;
 }
 
@@ -179,8 +246,27 @@
 @layer base {
     body {
         font-family: 'Poppins', sans-serif;
-        color: var(--hp-slate);
-        background-color: var(--hp-bg);
+        color: rgb(var(--hp-slate));
+        background-color: rgb(var(--hp-bg));
+    }
+
+    /* ── Form controls follow the surface token (D-38) ───────────────────────
+       @tailwindcss/forms paints EVERY control `background-color: #fff` in its
+       own base layer. That is invisible in the light theme (a white field on a
+       white card) but in dark it pinned a hard white box behind text that
+       follows --hp-slate — i.e. near-white on white, unreadable as soon as you
+       typed. Re-point it at the surface token here, at the same layer the
+       plugin sets it, so every control is fixed once instead of per-component.
+
+       Utilities still win (they live in a later layer), so an explicit
+       `bg-transparent` / `disabled:bg-hp-slate/5` on a field is unaffected.
+       Checkboxes and radios are excluded on purpose: the plugin paints those
+       from `currentColor` when checked, which is why the codebase styles them
+       with text-hp-orange rather than accent-*. */
+    input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not([type='submit']):not([type='button']):not([type='reset']):not([type='color']),
+    textarea,
+    select {
+        background-color: rgb(var(--hp-white));
     }
 }
 
@@ -196,6 +282,35 @@
     background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-    background-color: rgba(75, 85, 99, 0.28); /* slate at ~28% — visible but subtle */
+    background-color: rgb(var(--hp-slate) / 0.28); /* slate at ~28% — visible but subtle */
     border-radius: 9999px;
+}
+
+/* ── Print: always light, whatever the screen theme is (D-38) ────────────────
+   Two separate guarantees, because there are two ways clearance output reaches
+   a printer:
+     1. nurse/print.blade.php is a STANDALONE document — it loads no Vite
+        bundle and hardcodes `background:#fff`, so it is already immune. It is
+        rendered into an iframe, and an iframe document does not inherit the
+        parent's <html> classes, so `.dark` can never reach it.
+     2. Any app page sent straight to the printer with Ctrl+P while dark is
+        active — that IS this block's job. Re-pointing the tokens back to their
+        light values flips every hp-* utility on the page in one place, and the
+        body rule catches the `@layer base` background/colour. */
+@media print {
+    :root,
+    .dark,
+    [data-theme="dark"] {
+        --hp-white:  255 255 255;
+        --hp-bg:     255 255 255;  /* white, not #F6F2ED — don't waste toner */
+        --hp-peach:  255 202 160;
+        --hp-orange: 255 140 42;
+        --hp-slate:   75  85  99;
+    }
+
+    .dark body,
+    [data-theme="dark"] body {
+        background-color: #FFFFFF !important;
+        color: rgb(75 85 99) !important;
+    }
 }

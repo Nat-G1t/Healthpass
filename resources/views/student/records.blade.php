@@ -58,7 +58,7 @@ function recordsPageData() {
 {{-- ── Page header ─────────────────────────────────────────────────────────── --}}
 <div class="mb-7">
     <h2 class="text-xl font-semibold text-hp-slate">My Records</h2>
-    <p class="mt-0.5 text-sm text-hp-slate/50">Your clinic visit history and clearance results</p>
+    <p class="mt-0.5 text-sm text-hp-slate/50 dark:text-hp-slate/60">Your clinic visit history and clearance results</p>
 </div>
 
 <div x-data="recordsPageData()">
@@ -72,7 +72,7 @@ function recordsPageData() {
 
             <div class="flex flex-col items-center justify-center py-10 text-center">
                 <div class="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-hp-bg">
-                    <svg class="h-6 w-6 text-hp-slate/30" fill="none" viewBox="0 0 24 24"
+                    <svg class="h-6 w-6 text-hp-slate/30 dark:text-hp-slate/55" fill="none" viewBox="0 0 24 24"
                          stroke="currentColor" stroke-width="1.5">
                         <path stroke-linecap="round" stroke-linejoin="round"
                               d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586
@@ -80,7 +80,7 @@ function recordsPageData() {
                     </svg>
                 </div>
                 <p class="text-sm font-medium text-hp-slate">No clinic visits yet</p>
-                <p class="mt-0.5 text-xs text-hp-slate/50">
+                <p class="mt-0.5 text-xs text-hp-slate/50 dark:text-hp-slate/60">
                     Your records will appear here after your first kiosk visit
                 </p>
             </div>
@@ -101,9 +101,9 @@ function recordsPageData() {
                 <div class="rounded-xl border border-hp-slate/10 p-4">
                     <div class="flex items-start justify-between gap-3">
                         <div class="min-w-0">
-                            <p class="text-xs text-hp-slate/50">{{ $date }}</p>
+                            <p class="text-xs text-hp-slate/50 dark:text-hp-slate/60">{{ $date }}</p>
                             <p class="mt-0.5 text-sm font-medium text-hp-orange">{{ $service }}</p>
-                            <p class="mt-1 font-mono text-xs text-hp-slate/35">{{ $visit->reference_no }}</p>
+                            <p class="mt-1 font-mono text-xs text-hp-slate/35 dark:text-hp-slate/55">{{ $visit->reference_no }}</p>
                         </div>
                         <div class="flex shrink-0 flex-col items-end gap-2">
                             @if ($isEncoded)
@@ -118,7 +118,7 @@ function recordsPageData() {
                                 </button>
                             @else
                                 <x-hp.badge variant="pending">Pending</x-hp.badge>
-                                <span class="text-xs text-hp-slate/30">—</span>
+                                <span class="text-xs text-hp-slate/30 dark:text-hp-slate/55">—</span>
                             @endif
                         </div>
                     </div>
@@ -132,15 +132,15 @@ function recordsPageData() {
                     <thead>
                         <tr class="border-b border-hp-slate/15">
                             <th class="pb-3 pr-6 text-[11px] font-semibold uppercase
-                                       tracking-widest text-hp-slate/40 font-normal">Date</th>
+                                       tracking-widest text-hp-slate/40 dark:text-hp-slate/55 font-normal">Date</th>
                             <th class="pb-3 pr-6 text-[11px] font-semibold uppercase
-                                       tracking-widest text-hp-slate/40 font-normal">Service</th>
+                                       tracking-widest text-hp-slate/40 dark:text-hp-slate/55 font-normal">Service</th>
                             <th class="pb-3 pr-6 text-[11px] font-semibold uppercase
-                                       tracking-widest text-hp-slate/40 font-normal">Result</th>
+                                       tracking-widest text-hp-slate/40 dark:text-hp-slate/55 font-normal">Result</th>
                             <th class="pb-3 pr-6 text-[11px] font-semibold uppercase
-                                       tracking-widest text-hp-slate/40 font-normal">Reference No.</th>
+                                       tracking-widest text-hp-slate/40 dark:text-hp-slate/55 font-normal">Reference No.</th>
                             <th class="pb-3 text-[11px] font-semibold uppercase
-                                       tracking-widest text-hp-slate/40 font-normal text-right">Action</th>
+                                       tracking-widest text-hp-slate/40 dark:text-hp-slate/55 font-normal text-right">Action</th>
                         </tr>
                     </thead>
                     <tbody class="hp-stagger divide-y divide-hp-slate/10">
@@ -168,7 +168,7 @@ function recordsPageData() {
                                     <x-hp.badge variant="pending">Pending</x-hp.badge>
                                 @endif
                             </td>
-                            <td class="py-4 pr-6 font-mono text-xs text-hp-slate/40 whitespace-nowrap">
+                            <td class="py-4 pr-6 font-mono text-xs text-hp-slate/40 dark:text-hp-slate/55 whitespace-nowrap">
                                 {{ $visit->reference_no }}
                             </td>
                             <td class="py-4 text-right whitespace-nowrap">
@@ -180,7 +180,7 @@ function recordsPageData() {
                                         View
                                     </button>
                                 @else
-                                    <span class="text-xs text-hp-slate/30">—</span>
+                                    <span class="text-xs text-hp-slate/30 dark:text-hp-slate/55">—</span>
                                 @endif
                             </td>
                         </tr>
@@ -205,11 +205,11 @@ function recordsPageData() {
 
         <div @click.outside="open = false"
              class="w-full max-w-3xl max-h-[90vh] overflow-y-auto
-                    rounded-2xl bg-white shadow-xl">
+                    rounded-2xl bg-hp-white shadow-xl">
 
             {{-- Modal header --}}
             <div class="sticky top-0 flex items-start justify-between gap-4
-                        rounded-t-2xl border-b border-hp-slate/10 bg-white px-6 py-4">
+                        rounded-t-2xl border-b border-hp-slate/10 bg-hp-white px-6 py-4">
                 <div>
                     <div class="flex flex-wrap items-center gap-2">
                         <h3 class="text-sm font-semibold text-hp-slate"
@@ -224,12 +224,12 @@ function recordsPageData() {
                             </span>
                         </template>
                     </div>
-                    <p class="mt-0.5 text-xs text-hp-slate/50"
+                    <p class="mt-0.5 text-xs text-hp-slate/50 dark:text-hp-slate/60"
                        x-text="rec ? rec.service + ' · Encoded ' + rec.encoded_at : ''"></p>
                 </div>
                 <button type="button" @click="open = false"
                         class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center
-                               rounded-full text-hp-slate/40 transition-colors
+                               rounded-full text-hp-slate/40 dark:text-hp-slate/55 transition-colors
                                hover:bg-hp-slate/10 hover:text-hp-slate focus:outline-none">
                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24"
                          stroke="currentColor" stroke-width="2">
@@ -247,24 +247,24 @@ function recordsPageData() {
                     {{-- Left: Vitals + case category --}}
                     <div class="p-6">
                         <p class="mb-4 text-[11px] font-semibold uppercase
-                                  tracking-widest text-hp-slate/40">Vital Signs</p>
+                                  tracking-widest text-hp-slate/40 dark:text-hp-slate/55">Vital Signs</p>
 
                         <dl class="space-y-3">
 
                             <div class="flex items-center justify-between">
-                                <dt class="text-sm text-hp-slate/55">Height</dt>
+                                <dt class="text-sm text-hp-slate/55 dark:text-hp-slate/65">Height</dt>
                                 <dd class="text-sm font-medium text-hp-slate"
                                     x-text="rec.vitals.height_cm + ' cm'"></dd>
                             </div>
 
                             <div class="flex items-center justify-between">
-                                <dt class="text-sm text-hp-slate/55">Weight</dt>
+                                <dt class="text-sm text-hp-slate/55 dark:text-hp-slate/65">Weight</dt>
                                 <dd class="text-sm font-medium text-hp-slate"
                                     x-text="rec.vitals.weight_kg + ' kg'"></dd>
                             </div>
 
                             <div class="flex items-center justify-between">
-                                <dt class="text-sm text-hp-slate/55">BMI</dt>
+                                <dt class="text-sm text-hp-slate/55 dark:text-hp-slate/65">BMI</dt>
                                 <dd class="flex items-center gap-2">
                                     <span class="text-sm font-medium text-hp-slate"
                                           x-text="rec.vitals.bmi"></span>
@@ -277,7 +277,7 @@ function recordsPageData() {
                             </div>
 
                             <div class="flex items-center justify-between">
-                                <dt class="text-sm text-hp-slate/55">Temperature</dt>
+                                <dt class="text-sm text-hp-slate/55 dark:text-hp-slate/65">Temperature</dt>
                                 <dd class="flex items-center gap-2">
                                     <span class="text-sm font-medium text-hp-slate"
                                           x-text="rec.vitals.temperature_c + ' °C'"></span>
@@ -290,13 +290,13 @@ function recordsPageData() {
                             </div>
 
                             <div class="flex items-center justify-between">
-                                <dt class="text-sm text-hp-slate/55">Heart Rate</dt>
+                                <dt class="text-sm text-hp-slate/55 dark:text-hp-slate/65">Heart Rate</dt>
                                 <dd class="text-sm font-medium text-hp-slate"
                                     x-text="rec.vitals.heart_rate_bpm + ' bpm'"></dd>
                             </div>
 
                             <div class="flex items-center justify-between">
-                                <dt class="text-sm text-hp-slate/55">Blood Pressure</dt>
+                                <dt class="text-sm text-hp-slate/55 dark:text-hp-slate/65">Blood Pressure</dt>
                                 <dd class="flex items-center gap-2">
                                     <span class="text-sm font-medium text-hp-slate"
                                           x-text="rec.vitals.bp_systolic + '/' + rec.vitals.bp_diastolic + ' mmHg'"></span>
@@ -314,7 +314,7 @@ function recordsPageData() {
                     {{-- Right: 9-system questionnaire --}}
                     <div class="p-6">
                         <p class="mb-4 text-[11px] font-semibold uppercase
-                                  tracking-widest text-hp-slate/40">Questionnaire</p>
+                                  tracking-widest text-hp-slate/40 dark:text-hp-slate/55">Questionnaire</p>
 
                         <dl class="space-y-3">
                             <template x-for="q in [
@@ -329,7 +329,7 @@ function recordsPageData() {
                                 {key: 'nervous',     label: 'Nervous System'}
                             ]" :key="q.key">
                                 <div class="flex items-center justify-between">
-                                    <dt class="text-sm text-hp-slate/55" x-text="q.label"></dt>
+                                    <dt class="text-sm text-hp-slate/55 dark:text-hp-slate/65" x-text="q.label"></dt>
                                     <dd>
                                         <span class="inline-flex items-center rounded-full
                                                      px-2.5 py-0.5 text-[11px] font-semibold

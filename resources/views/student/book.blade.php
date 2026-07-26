@@ -3,7 +3,7 @@
 {{-- ── Page header ────────────────────────────────────────────────────────── --}}
 <div class="mb-7">
     <h2 class="text-xl font-semibold text-hp-slate">Book an Appointment</h2>
-    <p class="mt-0.5 text-sm text-hp-slate/50">Choose a service and a date to get started.</p>
+    <p class="mt-0.5 text-sm text-hp-slate/50 dark:text-hp-slate/60">Choose a service and a date to get started.</p>
 </div>
 
 {{--
@@ -243,7 +243,7 @@ function bookCalendar() {
 
     {{-- ── Step 1: Service Picker ──────────────────────────────────────────── --}}
     <x-hp.card class="mb-5">
-        <p class="mb-4 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+        <p class="mb-4 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">
             Step 1 — Select a Service
         </p>
 
@@ -254,11 +254,11 @@ function bookCalendar() {
                 @click="selectedService = 'medical'"
                 class="rounded-xl border-2 p-5 text-left transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-hp-orange"
                 :class="selectedService === 'medical'
-                    ? 'border-hp-orange bg-orange-50'
+                    ? 'border-hp-orange bg-orange-50 dark:bg-hp-peach/50'
                     : 'border-transparent bg-hp-bg hover:border-hp-orange/30'">
 
                 <div class="mb-3 flex h-10 w-10 items-center justify-center rounded-xl transition-colors"
-                     :class="selectedService === 'medical' ? 'bg-hp-orange' : 'bg-white'">
+                     :class="selectedService === 'medical' ? 'bg-hp-orange' : 'bg-hp-white'">
                     <svg class="h-5 w-5 transition-colors"
                          :class="selectedService === 'medical' ? 'text-white' : 'text-hp-orange'"
                          fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75">
@@ -268,7 +268,7 @@ function bookCalendar() {
                 </div>
 
                 <p class="font-semibold text-hp-slate">Medical Clearance</p>
-                <p class="mt-0.5 text-xs text-hp-slate/50">Full clearance — vitals + screening</p>
+                <p class="mt-0.5 text-xs text-hp-slate/50 dark:text-hp-slate/60">Full clearance — vitals + screening</p>
 
                 <div class="mt-3 flex items-center gap-1"
                      :class="selectedService === 'medical' ? 'text-hp-orange' : 'invisible'">
@@ -286,11 +286,11 @@ function bookCalendar() {
                 @click="selectedService = 'dental'"
                 class="rounded-xl border-2 p-5 text-left transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-hp-orange"
                 :class="selectedService === 'dental'
-                    ? 'border-hp-orange bg-orange-50'
+                    ? 'border-hp-orange bg-orange-50 dark:bg-hp-peach/50'
                     : 'border-transparent bg-hp-bg hover:border-hp-orange/30'">
 
                 <div class="mb-3 flex h-10 w-10 items-center justify-center rounded-xl transition-colors"
-                     :class="selectedService === 'dental' ? 'bg-hp-orange' : 'bg-white'">
+                     :class="selectedService === 'dental' ? 'bg-hp-orange' : 'bg-hp-white'">
                     <svg class="h-5 w-5 transition-colors"
                          :class="selectedService === 'dental' ? 'text-white' : 'text-hp-orange'"
                          fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75">
@@ -300,7 +300,7 @@ function bookCalendar() {
                 </div>
 
                 <p class="font-semibold text-hp-slate">Dental Check</p>
-                <p class="mt-0.5 text-xs text-hp-slate/50">Scheduling only — no vitals required</p>
+                <p class="mt-0.5 text-xs text-hp-slate/50 dark:text-hp-slate/60">Scheduling only — no vitals required</p>
 
                 <div class="mt-3 flex items-center gap-1"
                      :class="selectedService === 'dental' ? 'text-hp-orange' : 'invisible'">
@@ -318,7 +318,7 @@ function bookCalendar() {
 
     {{-- ── Step 2: Calendar ─────────────────────────────────────────────────── --}}
     <x-hp.card class="mb-6">
-        <p class="mb-5 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+        <p class="mb-5 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">
             Step 2 — Pick a Date
         </p>
 
@@ -327,7 +327,7 @@ function bookCalendar() {
             <button type="button" @click="prevMonth()"
                 :disabled="!canGoBack"
                 :class="!canGoBack
-                    ? 'text-hp-slate/20 cursor-not-allowed'
+                    ? 'text-hp-slate/20 dark:text-hp-slate/50 cursor-not-allowed'
                     : 'text-hp-slate hover:bg-hp-bg hover:text-hp-orange'"
                 class="flex h-8 w-8 items-center justify-center rounded-lg transition-colors">
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24"
@@ -352,7 +352,7 @@ function bookCalendar() {
 
             {{-- Loading overlay shown while fetching next-month availability --}}
             <div x-show="loading" x-cloak
-                 class="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-white/70 backdrop-blur-[1px]">
+                 class="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-hp-white/70 backdrop-blur-[1px]">
                 <svg class="h-5 w-5 animate-spin text-hp-orange" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10"
                             stroke="currentColor" stroke-width="4"/>
@@ -364,7 +364,7 @@ function bookCalendar() {
             {{-- Day-of-week header --}}
             <div class="grid grid-cols-7">
                 @foreach(['Su','Mo','Tu','We','Th','Fr','Sa'] as $lbl)
-                <div class="flex h-8 items-center justify-center text-[11px] font-semibold uppercase tracking-wider text-hp-slate/35">
+                <div class="flex h-8 items-center justify-center text-[11px] font-semibold uppercase tracking-wider text-hp-slate/35 dark:text-hp-slate/55">
                     {{ $lbl }}
                 </div>
                 @endforeach
@@ -392,11 +392,11 @@ function bookCalendar() {
                                     !cell.blank && selectedDate === cell.dateStr,
                                 'ring-2 ring-hp-orange font-semibold':
                                     !cell.blank && cell.isToday && !cell.isDisabled && selectedDate !== cell.dateStr,
-                                'bg-hp-bg text-hp-slate/40 cursor-default':
+                                'bg-hp-bg text-hp-slate/40 dark:text-hp-slate/55 cursor-default':
                                     !cell.blank && cell.isFull,
-                                'text-hp-slate/25 cursor-pointer':
+                                'text-hp-slate/25 dark:text-hp-slate/50 cursor-pointer':
                                     !cell.blank && cell.isCutoff,
-                                'text-hp-slate/25 cursor-not-allowed':
+                                'text-hp-slate/25 dark:text-hp-slate/50 cursor-not-allowed':
                                     !cell.blank && cell.isDisabled && !cell.isFull && !cell.isCutoff,
                                 'text-hp-slate hover:bg-hp-peach/50 hover:text-hp-orange cursor-pointer':
                                     !cell.blank && !cell.isDisabled && selectedDate !== cell.dateStr,
@@ -414,19 +414,19 @@ function bookCalendar() {
 
         {{-- Legend --}}
         <div class="mt-4 flex flex-wrap gap-x-5 gap-y-2 border-t border-hp-slate/10 pt-4">
-            <span class="flex items-center gap-1.5 text-xs text-hp-slate/50">
+            <span class="flex items-center gap-1.5 text-xs text-hp-slate/50 dark:text-hp-slate/60">
                 <span class="h-3 w-3 rounded-full bg-hp-orange"></span> Selected
             </span>
-            <span class="flex items-center gap-1.5 text-xs text-hp-slate/50">
-                <span class="h-3 w-3 rounded-full border-2 border-hp-orange bg-white"></span> Today
+            <span class="flex items-center gap-1.5 text-xs text-hp-slate/50 dark:text-hp-slate/60">
+                <span class="h-3 w-3 rounded-full border-2 border-hp-orange bg-hp-white"></span> Today
             </span>
-            <span class="flex items-center gap-1.5 text-xs text-hp-slate/50">
+            <span class="flex items-center gap-1.5 text-xs text-hp-slate/50 dark:text-hp-slate/60">
                 <span class="h-3 w-3 rounded-full border border-hp-slate/20 bg-hp-bg"></span> Full
             </span>
-            <span class="flex items-center gap-1.5 text-xs text-hp-slate/50">
-                <span class="h-3 w-3 rounded-full border border-hp-slate/20 bg-white"></span> Available
+            <span class="flex items-center gap-1.5 text-xs text-hp-slate/50 dark:text-hp-slate/60">
+                <span class="h-3 w-3 rounded-full border border-hp-slate/20 bg-hp-white"></span> Available
             </span>
-            <span class="flex items-center gap-1.5 text-xs text-hp-slate/50">
+            <span class="flex items-center gap-1.5 text-xs text-hp-slate/50 dark:text-hp-slate/60">
                 <span class="h-3 w-3 rounded-full border border-hp-slate/10 bg-transparent opacity-40"></span> Unavailable
             </span>
         </div>
@@ -440,7 +440,7 @@ function bookCalendar() {
          bookCalendar() supplies the `purpose`/`purposeOther` the fieldset binds. --}}
     <div x-show="selectedService === 'medical'" x-cloak>
         <x-hp.card class="mb-6">
-            <p class="mb-4 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+            <p class="mb-4 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">
                 Step 3 — Purpose of Medical Clearance
             </p>
             <x-hp.purpose-fieldset placeholderOption="— Select a purpose —" />
@@ -453,7 +453,7 @@ function bookCalendar() {
         :disabled="!canBook"
         class="w-full rounded-full py-3.5 text-sm font-semibold text-white transition-all focus:outline-none"
         :class="!canBook
-            ? 'cursor-not-allowed bg-hp-slate/20 text-hp-slate/40'
+            ? 'cursor-not-allowed bg-hp-slate/20 text-hp-slate/40 dark:text-hp-slate/55'
             : 'cursor-pointer bg-hp-orange shadow-sm hover:bg-orange-500'">
         <span x-show="!submitting">Confirm Booking</span>
         <span x-show="submitting" x-cloak class="flex items-center justify-center gap-2">
@@ -468,7 +468,7 @@ function bookCalendar() {
     </button>
 
     <p x-show="!canBook && !submitting" x-cloak
-       class="mt-2 text-center text-xs text-hp-slate/40">
+       class="mt-2 text-center text-xs text-hp-slate/40 dark:text-hp-slate/55">
         <span x-show="selectedService === 'medical'">Select a service, its purpose, and a date to continue</span>
         <span x-show="selectedService !== 'medical'">Select a service and a date to continue</span>
     </p>
@@ -479,7 +479,7 @@ function bookCalendar() {
 <div x-show="confirmModal" x-cloak
      class="fixed inset-0 z-50 flex items-center justify-center p-4"
      style="background-color: rgba(75,85,99,0.45);">
-    <div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl"
+    <div class="w-full max-w-sm rounded-2xl bg-hp-white p-6 shadow-xl"
          @click.outside="confirmModal = false">
 
         <div class="mb-3 flex items-center gap-3">
@@ -504,7 +504,7 @@ function bookCalendar() {
         <p x-show="selectedService === 'medical'" x-cloak class="mt-1 text-sm text-hp-slate/70">
             Purpose: <span class="font-semibold text-hp-slate" x-text="purposeSummary"></span>
         </p>
-        <p class="mt-1 text-xs text-hp-slate/50">Clinic hours: 7:00 AM – 5:00 PM</p>
+        <p class="mt-1 text-xs text-hp-slate/50 dark:text-hp-slate/60">Clinic hours: 7:00 AM – 5:00 PM</p>
 
         <div class="mt-5 flex gap-3">
             <button type="button"
@@ -531,11 +531,11 @@ function bookCalendar() {
 <div x-show="errorModal" x-cloak
      class="fixed inset-0 z-50 flex items-center justify-center p-4"
      style="background-color: rgba(75,85,99,0.45);">
-    <div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+    <div class="w-full max-w-sm rounded-2xl bg-hp-white p-6 shadow-xl">
 
         <div class="mb-3 flex items-center gap-3">
-            <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-50">
-                <svg class="h-4 w-4 text-red-500" fill="none" viewBox="0 0 24 24"
+            <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-50 dark:bg-red-500/10">
+                <svg class="h-4 w-4 text-red-500 dark:text-red-400" fill="none" viewBox="0 0 24 24"
                      stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round"
                           d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667
@@ -564,7 +564,7 @@ function bookCalendar() {
 <div x-show="cutoffModal" x-cloak
      class="fixed inset-0 z-50 flex items-center justify-center p-4"
      style="background-color: rgba(75,85,99,0.45);">
-    <div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl"
+    <div class="w-full max-w-sm rounded-2xl bg-hp-white p-6 shadow-xl"
          @click.outside="cutoffModal = false">
 
         <div class="mb-3 flex items-center gap-3">

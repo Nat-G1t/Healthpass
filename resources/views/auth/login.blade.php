@@ -7,12 +7,19 @@
     <title>Sign In — HealthPass</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    @include('partials.theme-init')
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @include('partials.favicon')
 </head>
 <body class="min-h-full bg-hp-bg">
 
 <x-hp.splash />
+
+{{-- Theme toggle (D-38) — floats over the two-panel layout; a visitor whose
+     OS is dark must be able to switch before they have an account. --}}
+<div class="fixed right-4 top-4 z-10">
+    <x-hp.theme-toggle />
+</div>
 
 {{-- Two-panel layout (FR-AUTH-08): login card left, illustration right, curved
      divider between. Below md (768px) the right panel is hidden and the left
@@ -38,7 +45,7 @@
 
         {{-- Error / status flash --}}
         @if (session('status'))
-            <div data-hp-flash class="mb-4 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
+            <div data-hp-flash class="mb-4 rounded-lg bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/30 px-4 py-3 text-sm text-green-700 dark:text-green-300">
                 {{ session('status') }}
             </div>
         @endif
@@ -112,11 +119,16 @@
          resolution; the panel's off-white bg matches the image's own cream
          backdrop so there's no visible box edge. --}}
     <div class="hidden items-center justify-center bg-hp-bg p-10 md:flex md:w-1/2">
+        {{-- dark:opacity-75 — the artwork has a baked-in cream backdrop, so at
+             full strength it becomes a glaring half-screen block at night and
+             a hard edge appears where it used to blend into the panel. Fading
+             it over the dark panel restores the "no visible box edge" intent
+             above and keeps the illustration decorative. (D-38) --}}
         <img
             src="{{ asset('images/login-illustration.png') }}"
             alt=""
             aria-hidden="true"
-            class="max-h-full max-w-full object-contain"
+            class="max-h-full max-w-full object-contain dark:opacity-75"
         >
     </div>{{-- /right panel --}}
 

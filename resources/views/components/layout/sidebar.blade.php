@@ -82,6 +82,10 @@
         }
     </script>
 
+    {{-- Same pre-paint trick for the light/dark theme (D-38). Must stay in
+         <head>, before @vite, or dark reloads flash light first. --}}
+    @include('partials.theme-init')
+
     <style>
         /* Sidebar width is a CSS variable so the rail and the main column
            always stay in step on desktop. */
@@ -178,11 +182,11 @@
     <div x-show="mobileOpen" x-cloak
          x-transition.opacity
          @click="mobileOpen = false"
-         class="fixed inset-0 z-40 bg-hp-slate/40 lg:hidden"
+         class="fixed inset-0 z-40 bg-hp-slate/40 dark:bg-black/60 lg:hidden"
          aria-hidden="true"></div>
 
     {{-- ── Sidebar ──────────────────────────────────────────────────────── --}}
-    <aside class="hp-sidebar fixed inset-y-0 left-0 flex flex-col bg-white border-r border-hp-slate/10"
+    <aside class="hp-sidebar fixed inset-y-0 left-0 flex flex-col bg-hp-white border-r border-hp-slate/10"
            :class="{ 'is-open': mobileOpen }">
 
         {{-- Top strip — keeps the 56px alignment line with the header.
@@ -258,14 +262,14 @@
                 </div>
                 <div class="hp-user-meta min-w-0 flex-1">
                     <p class="truncate text-sm font-semibold text-hp-slate leading-tight">{{ $user?->name }}</p>
-                    <p class="text-[11px] text-hp-slate/50 leading-tight">{{ $roleLabel }}</p>
+                    <p class="text-[11px] text-hp-slate/50 dark:text-hp-slate/60 leading-tight">{{ $roleLabel }}</p>
                 </div>
                 {{-- Logout — opens a confirmation modal before submitting --}}
                 <x-logout-confirm>
                     <x-slot:trigger>
                         <button type="button" title="Log out"
                                 @click="open = true"
-                                class="text-hp-slate/40 hover:text-hp-slate transition-colors">
+                                class="text-hp-slate/40 dark:text-hp-slate/55 hover:text-hp-slate transition-colors">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
                                  stroke="currentColor" stroke-width="2"
                                  stroke-linecap="round" stroke-linejoin="round">
@@ -289,7 +293,7 @@
     <div class="hp-main-col flex min-w-0 flex-1 flex-col min-h-full">
 
         {{-- Header bar — burger (phones only), HealthPass logo, then page title --}}
-        <header class="sticky top-0 z-20 flex h-14 items-center gap-3 bg-white border-b border-hp-slate/10 px-4 sm:px-6">
+        <header class="sticky top-0 z-20 flex h-14 items-center gap-3 bg-hp-white border-b border-hp-slate/10 px-4 sm:px-6">
 
             {{-- Phones: open the drawer --}}
             <button
@@ -320,6 +324,10 @@
                  long page title used to push the header past a 360px
                  viewport and drag the whole page sideways. --}}
             <h1 class="min-w-0 flex-1 truncate text-sm font-semibold text-hp-slate">{{ $title }}</h1>
+
+            {{-- Theme toggle — pinned to the top-right of the sticky header, so
+                 it is reachable from every page that uses this layout (D-38). --}}
+            <x-hp.theme-toggle />
         </header>
 
         {{-- Main content — hp-page-enter gives every navigation a soft landing

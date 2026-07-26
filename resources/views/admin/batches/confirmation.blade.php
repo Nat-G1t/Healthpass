@@ -3,7 +3,7 @@
 {{-- ── Page header ──────────────────────────────────────────────────────────── --}}
 <div class="mb-7">
     <h2 class="text-xl font-semibold text-hp-slate">Batch Request Submitted</h2>
-    <p class="mt-0.5 text-sm text-hp-slate/50">
+    <p class="mt-0.5 text-sm text-hp-slate/50 dark:text-hp-slate/60">
         Your request is now waiting for the Clinic Director's review.
     </p>
 </div>
@@ -23,7 +23,7 @@
 
 {{-- ── Batch detail card (FR-ADM-04) ────────────────────────────────────────── --}}
 <x-hp.card class="mb-6">
-    <p class="mb-5 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+    <p class="mb-5 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">
         Batch Details
     </p>
 
@@ -31,7 +31,7 @@
 
         {{-- Batch ID --}}
         <div class="flex items-start justify-between gap-4">
-            <dt class="text-sm text-hp-slate/50">Batch ID</dt>
+            <dt class="text-sm text-hp-slate/50 dark:text-hp-slate/60">Batch ID</dt>
             <dd class="text-right">
                 <span class="font-mono text-sm font-semibold tracking-wider text-hp-orange">
                     {{ $batch->reference_no }}
@@ -43,7 +43,7 @@
 
         {{-- Status --}}
         <div class="flex items-center justify-between gap-4">
-            <dt class="text-sm text-hp-slate/50">Status</dt>
+            <dt class="text-sm text-hp-slate/50 dark:text-hp-slate/60">Status</dt>
             <dd>
                 <x-hp.badge :variant="$batch->status">{{ $batch->statusLabel() }}</x-hp.badge>
             </dd>
@@ -51,7 +51,7 @@
 
         {{-- Reason --}}
         <div class="flex items-start justify-between gap-4">
-            <dt class="text-sm text-hp-slate/50">Reason</dt>
+            <dt class="text-sm text-hp-slate/50 dark:text-hp-slate/60">Reason</dt>
             <dd class="text-right text-sm font-semibold text-hp-slate">
                 {{ $batch->reasonText() }}
             </dd>
@@ -59,7 +59,7 @@
 
         {{-- Service --}}
         <div class="flex items-center justify-between gap-4">
-            <dt class="text-sm text-hp-slate/50">Service</dt>
+            <dt class="text-sm text-hp-slate/50 dark:text-hp-slate/60">Service</dt>
             <dd>
                 <x-hp.badge variant="positive">
                     {{ $batch->service_type === 'medical' ? 'Medical Clearance' : 'Dental Check' }}
@@ -69,7 +69,7 @@
 
         {{-- Students --}}
         <div class="flex items-center justify-between gap-4">
-            <dt class="text-sm text-hp-slate/50">Students</dt>
+            <dt class="text-sm text-hp-slate/50 dark:text-hp-slate/60">Students</dt>
             <dd class="text-sm font-semibold text-hp-slate">
                 {{ $batch->batch_request_students_count }}
             </dd>
@@ -77,7 +77,7 @@
 
         {{-- Requested clinic date (D-29) --}}
         <div class="flex items-center justify-between gap-4">
-            <dt class="text-sm text-hp-slate/50">Requested Date</dt>
+            <dt class="text-sm text-hp-slate/50 dark:text-hp-slate/60">Requested Date</dt>
             <dd class="text-sm font-semibold text-hp-slate">
                 {{ $batch->requested_date?->format('l, F j, Y') ?? '—' }}
             </dd>
@@ -85,7 +85,7 @@
 
         {{-- Submitted date --}}
         <div class="flex items-center justify-between gap-4">
-            <dt class="text-sm text-hp-slate/50">Submitted</dt>
+            <dt class="text-sm text-hp-slate/50 dark:text-hp-slate/60">Submitted</dt>
             <dd class="text-sm font-semibold text-hp-slate">
                 {{ $batch->created_at->format('l, F j, Y') }}
             </dd>

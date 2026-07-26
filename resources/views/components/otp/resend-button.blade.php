@@ -10,7 +10,7 @@
 @props(['action', 'remaining' => 0])
 
 <div
-    class="mt-5 text-center text-[12px] text-hp-slate/50"
+    class="mt-5 text-center text-[12px] text-hp-slate/50 dark:text-hp-slate/60"
     x-data="{
         remaining: {{ (int) $remaining }},
         init() {
@@ -28,7 +28,7 @@
             type="submit"
             :disabled="remaining > 0"
             class="ml-1 font-semibold text-hp-orange underline-offset-2 hover:underline
-                   disabled:cursor-not-allowed disabled:text-hp-slate/40 disabled:no-underline"
+                   disabled:cursor-not-allowed disabled:text-hp-slate/40 disabled:dark:text-hp-slate/55 disabled:no-underline"
             x-text="remaining > 0 ? `Resend in ${remaining}s` : 'Resend'"
         >Resend</button>
     </form>

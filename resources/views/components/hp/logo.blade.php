@@ -26,7 +26,10 @@
     </svg>
 
     {{-- Wordmark --}}
+    {{-- "Health" uses the slate TOKEN (not a hardcoded hex) so the wordmark
+         stays legible when the theme flips; "Pass" is brand orange, which is
+         identical in both themes. (D-38) --}}
     <span class="font-bold leading-none {{ $textSize }}" style="font-family: 'Poppins', sans-serif;">
-        <span style="color: #4B5563;">Health</span><span style="color: #FF8C2A;">Pass</span>
+        <span class="text-hp-slate">Health</span><span class="text-hp-orange">Pass</span>
     </span>
 </div>

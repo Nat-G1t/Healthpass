@@ -3,13 +3,13 @@
 {{-- ── Page header ────────────────────────────────────────────────────────── --}}
 <div class="mb-6">
     <h2 class="text-xl font-semibold text-hp-slate">New Batch Request</h2>
-    <p class="mt-0.5 text-sm text-hp-slate/50">
+    <p class="mt-0.5 text-sm text-hp-slate/50 dark:text-hp-slate/60">
         Request medical or dental clearances for a group of {{ $college->code }} students.
     </p>
 </div>
 
 @if (session('status'))
-    <div data-hp-flash class="mb-6 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+    <div data-hp-flash class="mb-6 rounded-lg border border-green-200 dark:border-green-500/30 bg-green-50 dark:bg-green-500/10 px-4 py-3 text-sm text-green-700 dark:text-green-300">
         {{ session('status') }}
     </div>
 @endif
@@ -123,7 +123,7 @@ function batchForm() {
                             @endforeach
                         </x-hp.select>
                         @error('reason')
-                            <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+                            <p class="mt-1 text-xs text-red-600 dark:text-red-400">{{ $message }}</p>
                         @enderror
                     </div>
 
@@ -133,7 +133,7 @@ function batchForm() {
                                        x-model="reasonDetail" rows="3" maxlength="500"
                                        placeholder="Describe the reason for this batch request" />
                         @error('reason_detail')
-                            <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+                            <p class="mt-1 text-xs text-red-600 dark:text-red-400">{{ $message }}</p>
                         @enderror
                     </div>
 
@@ -153,7 +153,7 @@ function batchForm() {
                             @endforeach
                         </div>
                         @error('service_type')
-                            <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+                            <p class="mt-1 text-xs text-red-600 dark:text-red-400">{{ $message }}</p>
                         @enderror
                     </div>
 
@@ -164,12 +164,12 @@ function batchForm() {
                         <x-hp.input label="Requested clinic date" type="date"
                                     name="requested_date" x-model="requestedDate"
                                     min="{{ now()->toDateString() }}" required />
-                        <p class="mt-1 text-xs text-hp-slate/50">
+                        <p class="mt-1 text-xs text-hp-slate/50 dark:text-hp-slate/60">
                             When should these students visit the clinic? The
                             Director may adjust this if the clinic is full that day.
                         </p>
                         @error('requested_date')
-                            <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+                            <p class="mt-1 text-xs text-red-600 dark:text-red-400">{{ $message }}</p>
                         @enderror
                     </div>
                 </div>
@@ -180,7 +180,7 @@ function batchForm() {
                 <x-hp.button type="submit" class="w-full" x-bind:disabled="!canSubmit" data-pending-label="Submitting…">
                     Submit Batch Request
                 </x-hp.button>
-                <p class="mt-2 text-center text-xs text-hp-slate/50"
+                <p class="mt-2 text-center text-xs text-hp-slate/50 dark:text-hp-slate/60"
                    x-show="!canSubmit" x-cloak>
                     Choose a reason and select at least one student to submit.
                 </p>
@@ -194,7 +194,7 @@ function batchForm() {
                 <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
                     <h3 class="text-sm font-semibold text-hp-slate">
                         Select Students
-                        <span class="ml-1 font-normal text-hp-slate/50">
+                        <span class="ml-1 font-normal text-hp-slate/50 dark:text-hp-slate/60">
                             (<span x-text="selected.length"></span> of {{ $students->count() }} selected)
                         </span>
                     </h3>
@@ -209,23 +209,23 @@ function batchForm() {
                 </div>
 
                 @error('students')
-                    <p class="mb-3 text-xs text-red-600">{{ $message }}</p>
+                    <p class="mb-3 text-xs text-red-600 dark:text-red-400">{{ $message }}</p>
                 @enderror
                 @error('students.*')
-                    <p class="mb-3 text-xs text-red-600">{{ $message }}</p>
+                    <p class="mb-3 text-xs text-red-600 dark:text-red-400">{{ $message }}</p>
                 @enderror
 
                 @if ($students->isEmpty())
                     <div class="flex flex-col items-center py-10 text-center">
                         <p class="text-sm font-medium text-hp-slate">No students registered in {{ $college->code }} yet</p>
-                        <p class="mt-0.5 text-xs text-hp-slate/50">
+                        <p class="mt-0.5 text-xs text-hp-slate/50 dark:text-hp-slate/60">
                             Students appear here once they register and are assigned to your college.
                         </p>
                     </div>
                 @else
                     {{-- Live search by name or student number --}}
                     <div class="relative mb-3">
-                        <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-hp-slate/40"
+                        <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-hp-slate/40 dark:text-hp-slate/55"
                              fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round"
                                   d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
@@ -233,14 +233,14 @@ function batchForm() {
                         <input type="search" x-model="query"
                                placeholder="Search by name or student number…"
                                class="w-full rounded-lg border border-hp-slate/25 py-2 pl-9 pr-3 text-sm text-hp-slate
-                                      placeholder-hp-slate/40 transition-colors duration-hp-fast
+                                      placeholder-hp-slate/40 dark:placeholder-hp-slate/55 transition-colors duration-hp-fast
                                       focus:border-hp-orange focus:ring-1 focus:ring-hp-orange focus:outline-none">
                     </div>
 
                     <div class="max-h-[30rem] overflow-y-auto rounded-lg border border-hp-slate/10">
                         <table class="w-full text-left text-sm">
-                            <thead class="sticky top-0 bg-white">
-                                <tr class="border-b border-hp-slate/10 text-[11px] uppercase tracking-widest text-hp-slate/40">
+                            <thead class="sticky top-0 bg-hp-white">
+                                <tr class="border-b border-hp-slate/10 text-[11px] uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">
                                     <th class="w-10 py-2.5 pl-4"></th>
                                     <th class="py-2.5 pr-4 font-semibold">Student No.</th>
                                     <th class="py-2.5 pr-4 font-semibold">Name</th>
@@ -270,12 +270,12 @@ function batchForm() {
                             </tbody>
                         </table>
 
-                        <p class="px-4 py-3 text-center text-xs text-hp-slate/50"
+                        <p class="px-4 py-3 text-center text-xs text-hp-slate/50 dark:text-hp-slate/60"
                            x-show="filtered.length === 0" x-cloak>
                             No students match "<span x-text="query"></span>".
                         </p>
                         {{-- Render cap note — Select All still covers ALL matches --}}
-                        <p class="border-t border-hp-slate/10 px-4 py-2.5 text-center text-xs text-hp-slate/50"
+                        <p class="border-t border-hp-slate/10 px-4 py-2.5 text-center text-xs text-hp-slate/50 dark:text-hp-slate/60"
                            x-show="hiddenMatchCount > 0" x-cloak>
                             Showing the first <span x-text="maxRenderRows"></span> of
                             <span x-text="filtered.length"></span> matches — refine your search.

@@ -20,7 +20,7 @@
         @if ($selectId) id="{{ $selectId }}" @endif
         {{ $attributes->merge([
             'class' => 'w-full rounded-lg border border-hp-slate/25 px-3 py-2 text-sm text-hp-slate
-                        transition-colors duration-150 bg-white
+                        transition-colors duration-150 bg-hp-white
                         focus:border-hp-orange focus:ring-1 focus:ring-hp-orange focus:outline-none
                         disabled:bg-hp-slate/5 disabled:cursor-not-allowed',
         ]) }}
@@ -29,6 +29,6 @@
     </select>
 
     @if ($error)
-        <p class="text-xs text-red-600">{{ $error }}</p>
+        <p class="text-xs text-red-600 dark:text-red-400">{{ $error }}</p>
     @endif
 </div>

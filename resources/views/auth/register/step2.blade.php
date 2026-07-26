@@ -31,7 +31,7 @@
         @csrf
 
         {{-- ── Personal Details ────────────────────────────────────────────── --}}
-        <p class="mb-3 text-xs font-bold uppercase tracking-widest text-hp-slate/40">
+        <p class="mb-3 text-xs font-bold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">
             Personal Details
         </p>
 
@@ -133,7 +133,7 @@
                 </label>
             </div>
             @error('sex')
-                <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+                <p class="mt-1 text-xs text-red-600 dark:text-red-400">{{ $message }}</p>
             @enderror
         </div>
 
@@ -205,7 +205,7 @@
                 </span>
             </div>
             @error('date_of_birth')
-                <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+                <p class="mt-1 text-xs text-red-600 dark:text-red-400">{{ $message }}</p>
             @enderror
         </div>
 
@@ -256,17 +256,17 @@
                 placeholder="House/Unit No., Street, Barangay, City/Municipality, Province"
                 required
                 class="w-full rounded-lg border border-hp-slate/25 px-3 py-2 text-sm text-hp-slate
-                       placeholder-hp-slate/40 transition-colors duration-hp-fast resize-none
+                       placeholder-hp-slate/40 dark:placeholder-hp-slate/55 transition-colors duration-hp-fast resize-none
                        focus:border-hp-orange focus:ring-1 focus:ring-hp-orange focus:outline-none"
             >{{ old('address') }}</textarea>
             @error('address')
-                <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+                <p class="mt-1 text-xs text-red-600 dark:text-red-400">{{ $message }}</p>
             @enderror
         </div>
 
         {{-- ── Account Credentials ──────────────────────────────────────────── --}}
         <div class="mb-3 border-t border-hp-slate/10 pt-5">
-            <p class="mb-3 text-xs font-bold uppercase tracking-widest text-hp-slate/40">
+            <p class="mb-3 text-xs font-bold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">
                 Account Credentials
             </p>
         </div>

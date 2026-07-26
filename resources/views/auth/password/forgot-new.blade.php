@@ -47,7 +47,7 @@
             x-model="confirm"
         />
 
-        <p class="text-xs text-hp-slate/45" x-show="confirm.length > 0 && fresh !== confirm" x-cloak>
+        <p class="text-xs text-hp-slate/45 dark:text-hp-slate/60" x-show="confirm.length > 0 && fresh !== confirm" x-cloak>
             The passwords don't match yet.
         </p>
 

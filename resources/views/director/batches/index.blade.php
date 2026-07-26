@@ -13,7 +13,7 @@
     {{-- ── Page header ─────────────────────────────────────────────────── --}}
     <div class="mb-6">
         <h2 class="text-xl font-semibold text-hp-slate">Batch Approvals</h2>
-        <p class="mt-0.5 text-sm text-hp-slate/50">
+        <p class="mt-0.5 text-sm text-hp-slate/50 dark:text-hp-slate/60">
             Batch requests from all colleges, awaiting your review.
         </p>
     </div>
@@ -25,7 +25,7 @@
         </div>
     @endif
     @if (session('error'))
-        <div data-hp-flash data-flash-sticky class="mb-6 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div data-hp-flash data-flash-sticky class="mb-6 rounded-lg border border-red-300 dark:border-red-500/40 bg-red-50 dark:bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">
             {{ session('error') }}
         </div>
     @endif
@@ -35,14 +35,14 @@
         @if ($batchRequests->isEmpty())
             <div class="flex flex-col items-center py-10 text-center">
                 <div class="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-hp-bg">
-                    <svg class="h-6 w-6 text-hp-slate/30" fill="none" viewBox="0 0 24 24"
+                    <svg class="h-6 w-6 text-hp-slate/30 dark:text-hp-slate/55" fill="none" viewBox="0 0 24 24"
                          stroke="currentColor" stroke-width="1.5">
                         <path stroke-linecap="round" stroke-linejoin="round"
                               d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
                 </div>
                 <p class="text-sm font-medium text-hp-slate">No batch requests yet</p>
-                <p class="mt-0.5 text-xs text-hp-slate/50">
+                <p class="mt-0.5 text-xs text-hp-slate/50 dark:text-hp-slate/60">
                     College admins' submissions will appear here for review.
                 </p>
             </div>
@@ -50,7 +50,7 @@
             <div class="overflow-x-auto">
                 <table class="w-full text-left text-sm">
                     <thead>
-                        <tr class="border-b border-hp-slate/10 text-[11px] uppercase tracking-widest text-hp-slate/40">
+                        <tr class="border-b border-hp-slate/10 text-[11px] uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">
                             <th class="py-2.5 pr-4 font-semibold">Batch ID</th>
                             <th class="py-2.5 pr-4 font-semibold">College</th>
                             <th class="py-2.5 pr-4 font-semibold">Reason</th>
@@ -140,7 +140,7 @@
                 x-transition:leave="ease-hp-in duration-hp-fast"
                 x-transition:leave-start="opacity-100"
                 x-transition:leave-end="opacity-0"
-                class="absolute inset-0 bg-hp-slate/50"
+                class="absolute inset-0 bg-hp-slate/50 dark:bg-black/60"
                 aria-hidden="true"
             ></div>
 
@@ -153,7 +153,7 @@
                 x-transition:leave="ease-hp-in duration-hp-base"
                 x-transition:leave-start="opacity-100 translate-y-0"
                 x-transition:leave-end="opacity-0 translate-y-6"
-                class="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+                class="relative w-full max-w-md rounded-2xl bg-hp-white p-6 shadow-xl"
             >
                 <h2 id="approve-batch-title" class="text-lg font-semibold text-hp-slate">
                     Approve <span x-text="batch?.ref"></span>?
@@ -170,7 +170,7 @@
 
                 {{-- The requested date went stale while the batch sat pending --}}
                 <p x-show="requestedDatePassed" x-cloak
-                   class="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+                   class="mt-3 rounded-lg border border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
                     &#9888; The requested date (<span x-text="requestedLabel"></span>) has
                     already passed — pick a new date, ideally with the college admin.
                 </p>
@@ -181,7 +181,7 @@
                 <form method="POST" :action="batch?.url" @submit="submitting = true" class="mt-5">
                     @csrf
 
-                    <label for="approve-date" class="block text-xs font-semibold uppercase tracking-widest text-hp-slate/40">
+                    <label for="approve-date" class="block text-xs font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">
                         Appointment date
                     </label>
                     {{-- Pre-filled with the admin's requested date, or today when
@@ -201,7 +201,7 @@
 
                     {{-- Capacity warning (FR-DIRA-06) — warn, never block --}}
                     <p x-show="isAtCapacity" x-cloak
-                       class="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+                       class="mt-3 rounded-lg border border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
                         &#9888; This date already has <strong x-text="booked"></strong> of
                         <strong x-text="capacity"></strong> appointments booked. Approving will
                         still schedule every student, but the clinic will be over its daily capacity.

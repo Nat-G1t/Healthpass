@@ -67,7 +67,7 @@
                 {{-- hp-anim-pop (§5.7): each box pops once as its digit lands. --}}
                 :class="digits[{{ $i }}]
                     ? 'border-hp-orange bg-hp-peach text-hp-orange hp-anim-pop'
-                    : 'border-hp-slate/[22%] bg-white text-hp-slate'"
+                    : 'border-hp-slate/[22%] bg-hp-white text-hp-slate'"
                 {{ $i === 0 ? 'autofocus' : '' }}
             />
         @endfor

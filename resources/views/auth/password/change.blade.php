@@ -19,12 +19,12 @@
 
         {{-- Success / failure flashes --}}
         @if (session('status'))
-            <div data-hp-flash class="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+            <div data-hp-flash class="mb-4 rounded-lg border border-green-200 dark:border-green-500/30 bg-green-50 dark:bg-green-500/10 px-4 py-3 text-sm text-green-700 dark:text-green-300">
                 {{ session('status') }}
             </div>
         @endif
         @if (session('error'))
-            <div data-hp-flash data-flash-sticky class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div data-hp-flash data-flash-sticky class="mb-4 rounded-lg border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">
                 {{ session('error') }}
             </div>
         @endif
@@ -86,7 +86,7 @@
                 x-model="confirm"
             />
 
-            <p class="text-xs text-hp-slate/45" x-show="confirm.length > 0 && fresh !== confirm" x-cloak>
+            <p class="text-xs text-hp-slate/45 dark:text-hp-slate/60" x-show="confirm.length > 0 && fresh !== confirm" x-cloak>
                 The new passwords don't match yet.
             </p>
 

@@ -26,7 +26,7 @@
         $token = session('new_device_token');
         $provisionUrl = route('kiosk.index').'?device_token='.$token;
     @endphp
-    <x-hp.card class="mb-6 border-hp-orange/40 bg-white"
+    <x-hp.card class="mb-6 border-hp-orange/40 bg-hp-white"
                x-data="{ copied: false }">
         <div class="flex items-start gap-3">
             <div class="mt-0.5 shrink-0 text-hp-orange">
@@ -96,14 +96,14 @@
         <h3 class="mb-4 text-sm font-semibold text-hp-slate">Enrolled devices</h3>
 
         @if ($devices->isEmpty())
-            <p class="py-8 text-center text-sm text-hp-slate/50">
+            <p class="py-8 text-center text-sm text-hp-slate/50 dark:text-hp-slate/60">
                 No devices enrolled yet. Enable Kiosk Mode on a terminal to add one.
             </p>
         @else
             <div class="overflow-x-auto">
                 <table class="w-full text-left text-sm">
                     <thead>
-                        <tr class="text-[12px] font-semibold uppercase tracking-wide text-hp-slate/50">
+                        <tr class="text-[12px] font-semibold uppercase tracking-wide text-hp-slate/50 dark:text-hp-slate/60">
                             <th class="pb-2 pr-4">Device</th>
                             <th class="pb-2 pr-4">Enrolled by</th>
                             <th class="pb-2 pr-4">Status</th>
@@ -115,7 +115,7 @@
                             <tr class="border-t border-hp-slate/10">
                                 <td class="py-3 pr-4">
                                     <div class="font-medium">{{ $device->name }}</div>
-                                    <div class="text-[12px] text-hp-slate/50">
+                                    <div class="text-[12px] text-hp-slate/50 dark:text-hp-slate/60">
                                         {{ $device->created_at?->format('M j, Y') }}
                                     </div>
                                 </td>

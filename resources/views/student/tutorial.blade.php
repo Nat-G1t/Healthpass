@@ -116,7 +116,7 @@
 
                 {{-- Progress: "Step N of 6" + dots --}}
                 <div class="mb-5 flex items-center justify-between">
-                    <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+                    <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">
                         Step {{ $n - 1 }} of {{ count($steps) }}
                     </p>
                     <div class="flex items-center gap-1.5" aria-hidden="true">
@@ -131,7 +131,7 @@
                     {{-- GIF placeholder (real footage recorded on hardware later) --}}
                     <div class="flex aspect-video w-full flex-col items-center justify-center gap-3
                                 rounded-xl border-2 border-dashed border-hp-peach bg-hp-peach/20">
-                        <div class="flex h-14 w-14 items-center justify-center rounded-full bg-white shadow-sm">
+                        <div class="flex h-14 w-14 items-center justify-center rounded-full bg-hp-white shadow-sm">
                             <svg class="ml-1 h-7 w-7 text-hp-orange" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M8 5v14l11-7z"/>
                             </svg>

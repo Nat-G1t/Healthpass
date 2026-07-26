@@ -48,7 +48,13 @@
         .kiosk-panel {
             position: absolute;
             inset: 0;
-            background: var(--hp-bg);
+            {{-- rgb() wrapper is required: the --hp-* colour tokens are stored
+                 as bare "R G B" channel triplets so Tailwind can derive alpha
+                 variants from them (see resources/css/app.css). A bare
+                 var(--hp-bg) here is not a valid <color> and the panel renders
+                 transparent. The kiosk still resolves the LIGHT values — it
+                 never gets the .dark class (D-38). --}}
+            background: rgb(var(--hp-bg));
             overflow: hidden;
         }
 
@@ -116,7 +122,7 @@
             padding: 5px 8px;
             cursor: pointer;
         }
-        .kiosk-devbar button:hover { background: var(--hp-orange); }
+        .kiosk-devbar button:hover { background: rgb(var(--hp-orange)); }
     </style>
     @include('partials.favicon')
 </head>

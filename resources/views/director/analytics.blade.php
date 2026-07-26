@@ -34,7 +34,7 @@
             @endforeach
         </select>
 
-        <p class="text-[11px] text-hp-slate/40">
+        <p class="text-[11px] text-hp-slate/40 dark:text-hp-slate/55">
             Month + college scope every card below · the trend always shows the whole year
         </p>
     </form>
@@ -44,30 +44,30 @@
         <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div>
                 <h3 class="text-sm font-semibold text-hp-slate">Clinic Visits by College</h3>
-                <p class="mt-1 text-xs text-hp-slate/50">
+                <p class="mt-1 text-xs text-hp-slate/50 dark:text-hp-slate/60">
                     Visits per college, split by service type — sorted by volume.
                 </p>
-                <p class="text-xs text-hp-slate/50">
+                <p class="text-xs text-hp-slate/50 dark:text-hp-slate/60">
                     Medical = kiosk check-ins · Dental = completed appointments (scheduling-only, no vitals).
                 </p>
             </div>
             <p class="text-3xl font-bold leading-none text-hp-orange">
                 {{ $totalVisits }}
-                <span class="ml-1 text-sm font-medium text-hp-slate/50">visits in {{ $selectedMonthLabel }}</span>
+                <span class="ml-1 text-sm font-medium text-hp-slate/50 dark:text-hp-slate/60">visits in {{ $selectedMonthLabel }}</span>
             </p>
         </div>
 
         @if ($totalVisits === 0)
             <div class="flex flex-col items-center py-10 text-center">
                 <p class="text-sm font-medium text-hp-slate/60">No visits recorded for this month yet</p>
-                <p class="mt-1 text-xs text-hp-slate/40">
+                <p class="mt-1 text-xs text-hp-slate/40 dark:text-hp-slate/55">
                     The chart fills in as students check in at the kiosk or complete dental appointments.
                 </p>
             </div>
         @else
             {{-- Server-rendered legend (identity never rides on color alone —
                  the table toggle below repeats the same numbers). --}}
-            <div class="mb-3 flex gap-4 text-xs text-hp-slate/50">
+            <div class="mb-3 flex gap-4 text-xs text-hp-slate/50 dark:text-hp-slate/60">
                 <span class="flex items-center gap-1.5">
                     <span class="h-2.5 w-2.5 rounded-sm" style="background:#FF8C2A"></span> Medical
                 </span>
@@ -88,11 +88,11 @@
             {{-- "View as table" (FR-ANL-09) — also the contrast relief for
                  the orange series (dataviz: sub-3:1 fill needs a table). --}}
             <details class="mt-3">
-                <summary class="cursor-pointer text-xs font-semibold text-hp-slate/50">View as table</summary>
+                <summary class="cursor-pointer text-xs font-semibold text-hp-slate/50 dark:text-hp-slate/60">View as table</summary>
                 <div class="mt-3 overflow-x-auto">
                     <table class="min-w-[420px] text-xs text-hp-slate">
                         <thead>
-                            <tr class="border-b border-hp-slate/10 text-hp-slate/50">
+                            <tr class="border-b border-hp-slate/10 text-hp-slate/50 dark:text-hp-slate/60">
                                 <th class="px-3 py-1.5 text-left font-semibold">College</th>
                                 <th class="px-3 py-1.5 text-right font-semibold">Medical</th>
                                 <th class="px-3 py-1.5 text-right font-semibold">Dental</th>
@@ -127,16 +127,16 @@
              value labels; walk-ins get their own bucket. --}}
         <div class="mt-6 border-t border-hp-slate/10 pt-4">
             <h4 class="text-xs font-semibold text-hp-slate">Visits by Purpose</h4>
-            <p class="mb-3 mt-0.5 text-xs text-hp-slate/50">
+            <p class="mb-3 mt-0.5 text-xs text-hp-slate/50 dark:text-hp-slate/60">
                 Why students booked — from the linked appointment's purpose. Walk-ins have no appointment.
             </p>
             @if (empty($purposeRows))
-                <p class="py-3 text-center text-xs text-hp-slate/40">No medical visits recorded for this month yet.</p>
+                <p class="py-3 text-center text-xs text-hp-slate/40 dark:text-hp-slate/55">No medical visits recorded for this month yet.</p>
             @else
                 <div class="space-y-1.5">
                     @foreach ($purposeRows as $row)
                         <div class="grid grid-cols-[12rem_1fr_2.6rem] items-center gap-2.5">
-                            <span class="text-right text-xs text-hp-slate/50">{{ $row['label'] }}</span>
+                            <span class="text-right text-xs text-hp-slate/50 dark:text-hp-slate/60">{{ $row['label'] }}</span>
                             <div class="h-3 rounded-r"
                                  style="background:#64748B; width: {{ $purposeMax > 0 ? round($row['count'] / $purposeMax * 100, 1) : 0 }}%"></div>
                             <span class="text-xs font-semibold tabular-nums text-hp-slate">{{ $row['count'] }}</span>
@@ -151,10 +151,10 @@
     <x-hp.card class="mb-5">
         <div class="mb-4">
             <h3 class="text-sm font-semibold text-hp-slate">Vital-Sign Flags</h3>
-            <p class="mt-1 text-xs text-hp-slate/50">
+            <p class="mt-1 text-xs text-hp-slate/50 dark:text-hp-slate/60">
                 Which vitals get flagged most, from all captured kiosk screenings in scope.
             </p>
-            <p class="text-xs text-hp-slate/50">
+            <p class="text-xs text-hp-slate/50 dark:text-hp-slate/60">
                 Rate = share of the {{ $screenings }} screenings this month.
             </p>
         </div>
@@ -162,24 +162,24 @@
         @if ($screenings === 0)
             <div class="flex flex-col items-center py-10 text-center">
                 <p class="text-sm font-medium text-hp-slate/60">No visits recorded for this month yet</p>
-                <p class="mt-1 text-xs text-hp-slate/40">Flag tiles fill in as kiosk screenings are captured.</p>
+                <p class="mt-1 text-xs text-hp-slate/40 dark:text-hp-slate/55">Flag tiles fill in as kiosk screenings are captured.</p>
             </div>
         @else
             <div class="grid gap-3.5 sm:grid-cols-3">
                 @foreach ($flagTiles as $tile)
                     <div class="rounded-xl border border-hp-slate/10 px-4 py-4">
-                        <p class="text-[11px] font-semibold uppercase tracking-wider text-hp-slate/50">{{ $tile['label'] }}</p>
+                        <p class="text-[11px] font-semibold uppercase tracking-wider text-hp-slate/50 dark:text-hp-slate/60">{{ $tile['label'] }}</p>
                         <p class="mt-1 text-3xl font-bold tabular-nums text-hp-slate">{{ $tile['count'] }}</p>
-                        <span class="mt-1.5 inline-block rounded-full bg-hp-orange/15 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
+                        <span class="mt-1.5 inline-block rounded-full bg-hp-orange/15 px-2.5 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-300">
                             {{ number_format($tile['rate'], 1) }}% of screenings
                         </span>
-                        <p class="mt-1.5 text-[11px] text-hp-slate/40">{{ $tile['sub'] }}</p>
+                        <p class="mt-1.5 text-[11px] text-hp-slate/40 dark:text-hp-slate/55">{{ $tile['sub'] }}</p>
                     </div>
                 @endforeach
             </div>
         @endif
 
-        <p class="mt-3.5 text-xs text-hp-slate/50">
+        <p class="mt-3.5 text-xs text-hp-slate/50 dark:text-hp-slate/60">
             Row-level detail lives on the <span class="font-semibold">Flagged Anomalies</span> screen.
         </p>
     </x-hp.card>
@@ -190,7 +190,7 @@
         {{-- Visits per Month (FR-ANL-11) — ignores both filters by design. --}}
         <x-hp.card class="lg:col-span-3">
             <h3 class="text-sm font-semibold text-hp-slate">Visits per Month</h3>
-            <p class="mt-1 text-xs text-hp-slate/50">
+            <p class="mt-1 text-xs text-hp-slate/50 dark:text-hp-slate/60">
                 Medical screenings and completed dental appointments across all months with data —
                 the whole-year, all-college view (ignores the filters above by design).
             </p>
@@ -198,13 +198,13 @@
             @if ($trendMonthCount === 0)
                 <div class="flex flex-col items-center py-10 text-center">
                     <p class="text-sm font-medium text-hp-slate/60">No visits recorded yet</p>
-                    <p class="mt-1 text-xs text-hp-slate/40">The trend appears once visits span a month.</p>
+                    <p class="mt-1 text-xs text-hp-slate/40 dark:text-hp-slate/55">The trend appears once visits span a month.</p>
                 </div>
             @else
                 {{-- Legend required: two series (FR-ANL-11). Server-rendered
                      to match the bar card; latest points are direct-labeled
                      by the chart itself. --}}
-                <div class="mt-3 flex gap-4 text-xs text-hp-slate/50">
+                <div class="mt-3 flex gap-4 text-xs text-hp-slate/50 dark:text-hp-slate/60">
                     <span class="flex items-center gap-1.5">
                         <span class="h-2.5 w-2.5 rounded-sm" style="background:#FF8C2A"></span> Medical screenings
                     </span>
@@ -222,14 +222,14 @@
         {{-- Students Screened by Sex (FR-ANL-04 as amended by D-32). --}}
         <x-hp.card class="lg:col-span-2">
             <h3 class="text-sm font-semibold text-hp-slate">Students Screened by Sex</h3>
-            <p class="mt-1 text-xs text-hp-slate/50">
+            <p class="mt-1 text-xs text-hp-slate/50 dark:text-hp-slate/60">
                 Captured kiosk visits, counted once per visit. Follows both filters.
             </p>
 
             @if ($totalScreened === 0)
                 <div class="flex flex-col items-center py-10 text-center">
                     <p class="text-sm font-medium text-hp-slate/60">No visits recorded for this month yet</p>
-                    <p class="mt-1 text-xs text-hp-slate/40">The donut fills in as students are screened at the kiosk.</p>
+                    <p class="mt-1 text-xs text-hp-slate/40 dark:text-hp-slate/55">The donut fills in as students are screened at the kiosk.</p>
                 </div>
             @else
                 <div class="mt-5 flex flex-wrap items-center justify-center gap-7">
@@ -239,7 +239,7 @@
                         <canvas role="img" aria-label="Donut chart: students screened by sex. The same counts are in the legend beside it."></canvas>
                         <div class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
                             <p class="text-2xl font-bold leading-none text-hp-slate">{{ $totalScreened }}</p>
-                            <p class="mt-1 text-[10px] font-semibold uppercase tracking-widest text-hp-slate/40">screened</p>
+                            <p class="mt-1 text-[10px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">screened</p>
                         </div>
                     </div>
 
@@ -266,7 +266,7 @@
     {{-- ── BMI Distribution (FR-ANL-12) — last card, per the mockup ─────── --}}
     <x-hp.card>
         <h3 class="text-sm font-semibold text-hp-slate">BMI Distribution</h3>
-        <p class="mb-3.5 mt-1 text-xs text-hp-slate/50">
+        <p class="mb-3.5 mt-1 text-xs text-hp-slate/50 dark:text-hp-slate/60">
             Where screened students fall across BMI categories — rule-based buckets of captured
             vitals, descriptive only. Follows both filters.
         </p>
@@ -274,13 +274,13 @@
         @if ($bmiTotal === 0)
             <div class="flex flex-col items-center py-10 text-center">
                 <p class="text-sm font-medium text-hp-slate/60">No visits recorded for this month yet</p>
-                <p class="mt-1 text-xs text-hp-slate/40">Buckets fill in as kiosk screenings are captured.</p>
+                <p class="mt-1 text-xs text-hp-slate/40 dark:text-hp-slate/55">Buckets fill in as kiosk screenings are captured.</p>
             </div>
         @else
             <div class="space-y-1.5">
                 @foreach ($bmiRows as $row)
                     <div class="grid grid-cols-[12rem_1fr_2.6rem] items-center gap-2.5">
-                        <span class="text-right text-xs text-hp-slate/50">{{ $row['label'] }}</span>
+                        <span class="text-right text-xs text-hp-slate/50 dark:text-hp-slate/60">{{ $row['label'] }}</span>
                         <div class="h-3 rounded-r"
                              style="background:#FF8C2A; opacity: {{ $row['opacity'] }}; width: {{ $bmiMax > 0 ? round($row['count'] / $bmiMax * 100, 1) : 0 }}%"></div>
                         <span class="text-xs font-semibold tabular-nums text-hp-slate">{{ $row['count'] }}</span>
@@ -293,7 +293,7 @@
     {{-- Reload overlay: shown the moment a filter changes, torn down when
          the fresh page paints — a visible loading beat between filters. --}}
     <div id="analytics-loading"
-         class="fixed inset-0 z-50 hidden items-center justify-center bg-white/70 backdrop-blur-sm">
+         class="fixed inset-0 z-50 hidden items-center justify-center bg-hp-white/70 backdrop-blur-sm">
         <svg class="h-10 w-10 animate-spin text-hp-orange" viewBox="0 0 24 24" fill="none">
             <circle class="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
             <path class="opacity-90" fill="currentColor"

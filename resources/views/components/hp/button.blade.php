@@ -8,9 +8,12 @@
     $variantClasses = match ($variant) {
         'primary' => 'bg-hp-orange text-white hover:bg-orange-500 focus-visible:ring-hp-orange',
         'ghost'   => 'bg-transparent text-hp-slate border-[1.5px] border-hp-slate/30 hover:bg-hp-slate/8 focus-visible:ring-hp-slate',
-        'soft'    => 'bg-hp-peach text-hp-orange hover:bg-orange-100 focus-visible:ring-hp-orange',
+        // dark hover override: --hp-peach is a DARK amber chip in dark mode, so
+        // the light `orange-100` hover would flash a near-white pill under the
+        // orange label (~2.3:1). Lift the chip instead of lightening it.
+        'soft'    => 'bg-hp-peach text-hp-orange hover:bg-orange-100 dark:hover:bg-hp-peach/70 focus-visible:ring-hp-orange',
         'muted'   => 'bg-hp-slate/10 text-hp-slate hover:bg-hp-slate/20 focus-visible:ring-hp-slate',
-        'danger'  => 'bg-transparent text-red-500 border-[1.5px] border-red-300 hover:bg-red-50 focus-visible:ring-red-500',
+        'danger'  => 'bg-transparent text-red-500 dark:text-red-400 border-[1.5px] border-red-300 dark:border-red-500/40 hover:bg-red-50 hover:dark:bg-red-500/10 focus-visible:ring-red-500',
         default   => '',
     };
 

@@ -3,7 +3,7 @@
 {{-- ── Page header ──────────────────────────────────────────────────────────── --}}
 <div class="mb-7">
     <h2 class="text-xl font-semibold text-hp-slate">Booking Confirmed</h2>
-    <p class="mt-0.5 text-sm text-hp-slate/50">Your appointment has been scheduled.</p>
+    <p class="mt-0.5 text-sm text-hp-slate/50 dark:text-hp-slate/60">Your appointment has been scheduled.</p>
 </div>
 
 {{-- ── Success banner — the check draws itself in (§6.2 success moment) ────── --}}
@@ -21,7 +21,7 @@
 
 {{-- ── Appointment detail card ──────────────────────────────────────────────── --}}
 <x-hp.card class="mb-6">
-    <p class="mb-5 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+    <p class="mb-5 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">
         Appointment Details
     </p>
 
@@ -29,7 +29,7 @@
 
         {{-- Reference number --}}
         <div class="flex items-start justify-between gap-4">
-            <dt class="text-sm text-hp-slate/50">Reference No.</dt>
+            <dt class="text-sm text-hp-slate/50 dark:text-hp-slate/60">Reference No.</dt>
             <dd class="text-right">
                 {{-- Reference reveal: fades up a beat after the page lands. --}}
                 <span class="hp-anim-fade-up font-mono text-sm font-semibold tracking-wider text-hp-orange"
@@ -43,7 +43,7 @@
 
         {{-- Service --}}
         <div class="flex items-center justify-between gap-4">
-            <dt class="text-sm text-hp-slate/50">Service</dt>
+            <dt class="text-sm text-hp-slate/50 dark:text-hp-slate/60">Service</dt>
             <dd>
                 <x-hp.badge variant="positive">
                     {{ $appointment->service_type === 'medical' ? 'Medical Clearance' : 'Dental Check' }}
@@ -53,7 +53,7 @@
 
         {{-- Date --}}
         <div class="flex items-center justify-between gap-4">
-            <dt class="text-sm text-hp-slate/50">Date</dt>
+            <dt class="text-sm text-hp-slate/50 dark:text-hp-slate/60">Date</dt>
             <dd class="text-sm font-semibold text-hp-slate">
                 {{ $appointment->scheduled_date->format('l, F j, Y') }}
             </dd>
@@ -61,7 +61,7 @@
 
         {{-- Clinic hours --}}
         <div class="flex items-center justify-between gap-4">
-            <dt class="text-sm text-hp-slate/50">Clinic Hours</dt>
+            <dt class="text-sm text-hp-slate/50 dark:text-hp-slate/60">Clinic Hours</dt>
             <dd class="text-sm text-hp-slate">
                 {{
                     \Carbon\Carbon::parse($clinicHours['open'])->format('g:i A')
@@ -73,7 +73,7 @@
 
         {{-- Status --}}
         <div class="flex items-center justify-between gap-4">
-            <dt class="text-sm text-hp-slate/50">Status</dt>
+            <dt class="text-sm text-hp-slate/50 dark:text-hp-slate/60">Status</dt>
             <dd>
                 <x-hp.badge variant="neutral">Scheduled</x-hp.badge>
             </dd>
@@ -117,8 +117,8 @@
             <button type="button" @click="confirming = true"
                 x-show="!confirming"
                 class="inline-flex w-full items-center justify-center gap-1.5 rounded-full border
-                       border-red-200 px-5 py-2.5 text-sm font-semibold text-red-500
-                       transition-colors hover:bg-red-50 sm:w-auto">
+                       border-red-200 dark:border-red-500/30 px-5 py-2.5 text-sm font-semibold text-red-500 dark:text-red-400
+                       transition-colors hover:bg-red-50 hover:dark:bg-red-500/10 sm:w-auto">
                 Cancel Appointment
             </button>
 
@@ -135,7 +135,7 @@
                     </button>
                 </form>
                 <button type="button" @click="confirming = false"
-                        class="text-xs font-semibold text-hp-slate/50 hover:text-hp-slate">
+                        class="text-xs font-semibold text-hp-slate/50 dark:text-hp-slate/60 hover:text-hp-slate">
                     Keep it
                 </button>
             </div>
@@ -155,9 +155,9 @@
          role="dialog" aria-modal="true" aria-labelledby="tutorial-prompt-title">
 
         {{-- Backdrop — clicking it dismisses, same as "Maybe later" --}}
-        <div class="absolute inset-0 bg-hp-slate/40" @click="open = false"></div>
+        <div class="absolute inset-0 bg-hp-slate/40 dark:bg-black/60" @click="open = false"></div>
 
-        <div class="relative w-full max-w-sm rounded-xl bg-white p-6 text-center shadow-xl">
+        <div class="relative w-full max-w-sm rounded-xl bg-hp-white p-6 text-center shadow-xl">
             <div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-hp-peach">
                 <svg class="h-6 w-6 text-hp-orange" fill="none" viewBox="0 0 24 24"
                      stroke="currentColor" stroke-width="2">
@@ -182,7 +182,7 @@
                     View tutorial
                 </a>
                 <button type="button" @click="open = false"
-                        class="rounded-full px-6 py-2 text-sm font-semibold text-hp-slate/50
+                        class="rounded-full px-6 py-2 text-sm font-semibold text-hp-slate/50 dark:text-hp-slate/60
                                transition-colors hover:text-hp-slate">
                     Maybe later
                 </button>

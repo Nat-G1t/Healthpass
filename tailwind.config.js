@@ -17,17 +17,30 @@ export default {
         hoverOnlyWhenSupported: true,
     },
 
+    // Dark mode is opt-in by CLASS, not by the OS media query: the user's
+    // manual choice has to be able to override `prefers-color-scheme`.
+    // `partials/theme-init.blade.php` puts `.dark` on <html> before first
+    // paint; `dark:` utilities key off that class. (D-38)
+    darkMode: 'class',
+
     theme: {
         extend: {
             fontFamily: {
                 sans: ['Poppins', ...defaultTheme.fontFamily.sans],
             },
+            // ── Colour tokens — resolve through the CSS vars in app.css ──────
+            // `<alpha-value>` is the placeholder Tailwind substitutes when you
+            // write an opacity modifier, so `text-hp-slate/50` compiles to
+            // `rgb(var(--hp-slate) / 0.5)`. This is why app.css stores the
+            // tokens as bare "R G B" triplets instead of hex — and it is what
+            // makes a single `.dark` block re-theme every existing hp-*
+            // utility without editing the views. (D-38)
             colors: {
-                'hp-white':  '#FFFFFF',
-                'hp-bg':     '#F6F2ED',
-                'hp-peach':  '#FFCAA0',
-                'hp-orange': '#FF8C2A',
-                'hp-slate':  '#4B5563',
+                'hp-white':  'rgb(var(--hp-white)  / <alpha-value>)',
+                'hp-bg':     'rgb(var(--hp-bg)     / <alpha-value>)',
+                'hp-peach':  'rgb(var(--hp-peach)  / <alpha-value>)',
+                'hp-orange': 'rgb(var(--hp-orange) / <alpha-value>)',
+                'hp-slate':  'rgb(var(--hp-slate)  / <alpha-value>)',
             },
 
             // ── Motion tokens — mirrors the --hp-* CSS vars in app.css ───────

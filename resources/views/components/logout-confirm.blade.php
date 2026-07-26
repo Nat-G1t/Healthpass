@@ -52,7 +52,7 @@
                 x-transition:leave="ease-hp-in duration-hp-fast"
                 x-transition:leave-start="opacity-100"
                 x-transition:leave-end="opacity-0"
-                class="absolute inset-0 bg-hp-slate/50"
+                class="absolute inset-0 bg-hp-slate/50 dark:bg-black/60"
                 aria-hidden="true"
             ></div>
 
@@ -65,7 +65,7 @@
                 x-transition:leave="ease-hp-in duration-hp-base"
                 x-transition:leave-start="opacity-100 translate-y-0"
                 x-transition:leave-end="opacity-0 translate-y-6"
-                class="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl"
+                class="relative w-full max-w-sm rounded-2xl bg-hp-white p-6 shadow-xl"
             >
                 <h2 id="{{ $titleId }}" class="text-lg font-semibold text-hp-slate">Log out?</h2>
                 <p class="mt-1.5 text-sm text-hp-slate/70">

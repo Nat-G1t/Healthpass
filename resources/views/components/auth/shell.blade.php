@@ -14,12 +14,20 @@
     <title>{{ $title }} — HealthPass</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    @include('partials.theme-init')
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @include('partials.favicon')
 </head>
 <body class="min-h-full bg-hp-bg">
 
 <x-hp.splash />
+
+{{-- Guest pages have no app header, so the toggle floats in the corner —
+     without it a visitor whose OS is dark could never get back to light
+     before logging in (D-38). --}}
+<div class="fixed right-4 top-4 z-10">
+    <x-hp.theme-toggle />
+</div>
 
 <div class="flex min-h-screen items-center justify-center p-6">
     <div class="hp-page-enter w-full max-w-[420px]">
