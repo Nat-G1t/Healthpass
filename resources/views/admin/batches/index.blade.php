@@ -34,32 +34,19 @@
             </p>
         </div>
     @else
-        <div class="overflow-x-auto">
-            <table class="w-full text-left text-sm">
-                <thead>
-                    <tr class="border-b border-hp-slate/10 text-[11px] uppercase tracking-widest text-hp-slate/40">
-                        <th class="py-2.5 pr-4 font-semibold">Batch ID</th>
-                        <th class="py-2.5 pr-4 font-semibold">Reason</th>
-                        <th class="py-2.5 pr-4 font-semibold">Students</th>
-                        <th class="py-2.5 pr-4 font-semibold">Submitted</th>
-                        <th class="py-2.5 font-semibold">Status</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-hp-slate/10">
-                    @foreach ($batchRequests as $batch)
-                        <tr class="text-hp-slate">
-                            <td class="py-3 pr-4 font-medium">{{ $batch->reference_no }}</td>
-                            <td class="py-3 pr-4">{{ Str::limit($batch->reasonText(), 60) }}</td>
-                            <td class="py-3 pr-4">{{ $batch->batch_request_students_count }}</td>
-                            <td class="py-3 pr-4 text-hp-slate/60">{{ $batch->created_at->format('M j, Y') }}</td>
-                            <td class="py-3">
-                                <x-hp.badge :variant="$batch->status">{{ $batch->statusLabel() }}</x-hp.badge>
-                            </td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table>
-        </div>
+        <x-hp.table :headers="['Batch ID', 'Reason', 'Students', 'Submitted', 'Status']">
+            @foreach ($batchRequests as $batch)
+                <x-hp.table-row>
+                    <x-hp.table-cell label="Batch ID" class="font-medium">{{ $batch->reference_no }}</x-hp.table-cell>
+                    <x-hp.table-cell label="Reason">{{ Str::limit($batch->reasonText(), 60) }}</x-hp.table-cell>
+                    <x-hp.table-cell label="Students">{{ $batch->batch_request_students_count }}</x-hp.table-cell>
+                    <x-hp.table-cell label="Submitted" class="text-hp-slate/60">{{ $batch->created_at->format('M j, Y') }}</x-hp.table-cell>
+                    <x-hp.table-cell label="Status">
+                        <x-hp.badge :variant="$batch->status">{{ $batch->statusLabel() }}</x-hp.badge>
+                    </x-hp.table-cell>
+                </x-hp.table-row>
+            @endforeach
+        </x-hp.table>
     @endif
 </x-hp.card>
 

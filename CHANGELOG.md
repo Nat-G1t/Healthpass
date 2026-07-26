@@ -2,6 +2,19 @@
 
 ## [Unreleased](https://github.com/laravel/laravel/compare/v12.12.1...12.x)
 
+### Fixed
+
+* Mobile layout of the College Admin pages (FR-ADM-01 / FR-ADM-05). The
+  Dashboard and Batch Tracking tables no longer scroll the page sideways on a
+  phone — a new `<x-hp.table>` / `<x-hp.table-row>` / `<x-hp.table-cell>`
+  component set re-flows each row into a stacked label/value card below `md`
+  and renders the unchanged table at `md`+. Status badges keep long labels
+  ("Pending Director Approval") inside the pill, and the sidebar drawer is
+  sized to `100dvh` so its Log out footer is reachable without scrolling.
+  Verified at 360×800 and 390×844 with no horizontal page scroll; desktop
+  tables and the collapsible rail are unchanged. See
+  `docs/qa/mobile-checklist.md`.
+
 ## [v12.12.1](https://github.com/laravel/laravel/compare/v12.12.0...v12.12.1) - 2026-03-10
 
 * [12.x] Makes imports consistent by [@nunomaduro](https://github.com/nunomaduro) in https://github.com/laravel/laravel/pull/6760

@@ -79,40 +79,25 @@
                 </p>
             </div>
         @else
-            <div class="overflow-x-auto">
-                <table class="w-full text-left text-sm">
-                    <thead>
-                        <tr class="border-b border-hp-slate/10 text-[11px] uppercase tracking-widest text-hp-slate/40">
-                            <th class="py-2.5 pr-4 font-semibold">Reference No.</th>
-                            <th class="py-2.5 pr-4 font-semibold">Purpose</th>
-                            <th class="py-2.5 pr-4 font-semibold">Service</th>
-                            <th class="py-2.5 pr-4 font-semibold">Students</th>
-                            <th class="py-2.5 pr-4 font-semibold">Scheduled Date</th>
-                            <th class="py-2.5 pr-4 font-semibold">Status</th>
-                            <th class="py-2.5 font-semibold">Submitted</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-hp-slate/10">
-                        @foreach ($batchRequests as $batch)
-                            <tr class="text-hp-slate">
-                                <td class="py-3 pr-4 font-medium">{{ $batch->reference_no }}</td>
-                                <td class="py-3 pr-4">{{ ucfirst($batch->reason) }}</td>
-                                <td class="py-3 pr-4">{{ ucfirst($batch->service_type) }}</td>
-                                <td class="py-3 pr-4">{{ $batch->batch_request_students_count }}</td>
-                                <td class="py-3 pr-4">
-                                    {{ $batch->scheduled_date?->format('M j, Y') ?? '—' }}
-                                </td>
-                                <td class="py-3 pr-4">
-                                    <x-hp.badge :variant="$batch->status">
-                                        {{ ucfirst($batch->status) }}
-                                    </x-hp.badge>
-                                </td>
-                                <td class="py-3 text-hp-slate/60">{{ $batch->created_at->format('M j, Y') }}</td>
-                            </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-            </div>
+            <x-hp.table :headers="['Reference No.', 'Purpose', 'Service', 'Students', 'Scheduled Date', 'Status', 'Submitted']">
+                @foreach ($batchRequests as $batch)
+                    <x-hp.table-row>
+                        <x-hp.table-cell label="Reference No." class="font-medium">{{ $batch->reference_no }}</x-hp.table-cell>
+                        <x-hp.table-cell label="Purpose">{{ ucfirst($batch->reason) }}</x-hp.table-cell>
+                        <x-hp.table-cell label="Service">{{ ucfirst($batch->service_type) }}</x-hp.table-cell>
+                        <x-hp.table-cell label="Students">{{ $batch->batch_request_students_count }}</x-hp.table-cell>
+                        <x-hp.table-cell label="Scheduled Date">
+                            {{ $batch->scheduled_date?->format('M j, Y') ?? '—' }}
+                        </x-hp.table-cell>
+                        <x-hp.table-cell label="Status">
+                            <x-hp.badge :variant="$batch->status">
+                                {{ ucfirst($batch->status) }}
+                            </x-hp.badge>
+                        </x-hp.table-cell>
+                        <x-hp.table-cell label="Submitted" class="text-hp-slate/60">{{ $batch->created_at->format('M j, Y') }}</x-hp.table-cell>
+                    </x-hp.table-row>
+                @endforeach
+            </x-hp.table>
         @endif
     </x-hp.card>
 

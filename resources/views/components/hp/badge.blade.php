@@ -19,8 +19,14 @@
     };
 @endphp
 
+{{--
+    `max-w-full` + `break-words` keep long labels — the longest real one is
+    BatchRequest::statusLabel()'s "Pending Director Approval" — inside the
+    pill: it wraps and the pill grows instead of the text spilling out of it.
+    `leading-tight` (not `leading-none`) gives those wrapped lines room.
+--}}
 <span {{ $attributes->merge([
-    'class' => "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold leading-none {$classes}",
+    'class' => "inline-flex max-w-full items-center justify-center rounded-full px-2.5 py-0.5 text-center text-[11px] font-semibold leading-tight break-words {$classes}",
 ]) }}>
     {{ $slot }}
 </span>

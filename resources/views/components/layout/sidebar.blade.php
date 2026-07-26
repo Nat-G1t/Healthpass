@@ -87,11 +87,25 @@
            always stay in step on desktop. */
         :root { --hp-sidebar-w: 220px; }
 
+        /* Mobile browsers report 100% / 100vh as the LARGE viewport — the
+           height the page would have with the URL bar hidden. The shell was
+           therefore taller than what is actually on screen, which is why the
+           drawer's pinned footer (the Log out button) ended up below the fold
+           and had to be scrolled to. 100dvh tracks the *dynamic* viewport, so
+           the shell is always exactly as tall as the visible area. On desktop
+           dvh === vh, so the rail is unaffected. */
+        html.h-full, body.h-full { height: 100dvh; }
+
         /* ── Mobile-first: the sidebar is an off-canvas DRAWER ──────────────
            It floats above the page and slides in from the left. Content keeps
            the full screen width (padding-left: 0) so nothing gets squeezed. */
         .hp-sidebar {
             width: 256px;
+            /* Explicit height (not just inset-y-0) for the same dvh reason:
+               with top/height set, the over-constrained `bottom` is ignored,
+               so the footer lands on the last visible pixel row. */
+            height: 100vh;
+            height: 100dvh;
             transform: translateX(-100%);
             transition: transform 200ms ease, width 180ms ease;
             z-index: 50;
@@ -267,7 +281,12 @@
     </aside>
 
     {{-- ── Right column ─────────────────────────────────────────────────── --}}
-    <div class="hp-main-col flex flex-1 flex-col min-h-full">
+    {{-- min-w-0: this column is a flex item, and a flex item's default
+         min-width is `auto` — it refuses to shrink below the widest thing
+         inside it. That is what let a wide table stretch the whole shell past
+         a 360px phone and drag the page sideways. With min-w-0 the column is
+         pinned to the viewport and content wraps inside it instead. --}}
+    <div class="hp-main-col flex min-w-0 flex-1 flex-col min-h-full">
 
         {{-- Header bar — burger (phones only), HealthPass logo, then page title --}}
         <header class="sticky top-0 z-20 flex h-14 items-center gap-3 bg-white border-b border-hp-slate/10 px-4 sm:px-6">
@@ -296,7 +315,11 @@
 
             <span class="h-5 w-px shrink-0 bg-hp-slate/15"></span>
 
-            <h1 class="truncate text-sm font-semibold text-hp-slate">{{ $title }}</h1>
+            {{-- min-w-0 is what makes `truncate` actually work here: a flex
+                 item won't shrink below its content width without it, so a
+                 long page title used to push the header past a 360px
+                 viewport and drag the whole page sideways. --}}
+            <h1 class="min-w-0 flex-1 truncate text-sm font-semibold text-hp-slate">{{ $title }}</h1>
         </header>
 
         {{-- Main content — hp-page-enter gives every navigation a soft landing
