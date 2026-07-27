@@ -1,5 +1,26 @@
 ﻿<x-layout.sidebar title="Batch Tracking">
 
+@php
+    // D-36: the Reason column only exists once something has been rejected —
+    // an all-approved list shouldn't carry a column of em dashes.
+    $hasRejected = $batchRequests->contains(fn ($batch) => $batch->status === 'rejected');
+    $headers = ['Batch ID', 'Reason', 'Students', 'Submitted', 'Status'];
+
+    // Named "Rejection Reason", not "Reason": the list already has a Reason
+    // column (the batch's own reason) and two identical headers would be
+    // ambiguous on desktop and in the mobile cards' labels alike.
+    if ($hasRejected) {
+        $headers[] = 'Rejection Reason';
+    }
+@endphp
+
+{{--
+    One page-level Alpine component holds the rejection-reason modal's state:
+    `detail` is null (closed) or the { ref, reason, reviewer, reviewedAt } of
+    the row whose View button was clicked.
+--}}
+<div x-data="{ detail: null }">
+
 {{-- ── Page header ────────────────────────────────────────────────────────── --}}
 <div class="mb-6 flex flex-wrap items-end justify-between gap-3">
     <div>
@@ -34,7 +55,7 @@
             </p>
         </div>
     @else
-        <x-hp.table :headers="['Batch ID', 'Reason', 'Students', 'Submitted', 'Status']">
+        <x-hp.table :headers="$headers">
             @foreach ($batchRequests as $batch)
                 <x-hp.table-row>
                     <x-hp.table-cell label="Batch ID" class="font-medium">{{ $batch->reference_no }}</x-hp.table-cell>
@@ -44,10 +65,102 @@
                     <x-hp.table-cell label="Status">
                         <x-hp.badge :variant="$batch->status">{{ $batch->statusLabel() }}</x-hp.badge>
                     </x-hp.table-cell>
+
+                    {{-- D-36: why the Director turned this batch down. The cell
+                         exists on every row so the desktop table stays aligned;
+                         non-rejected rows just carry an em dash. --}}
+                    @if ($hasRejected)
+                        <x-hp.table-cell label="Rejection Reason">
+                            @if ($batch->status === 'rejected' && $batch->rejection_reason !== null)
+                                {{-- Plain <button> (not <x-hp.button>): the payload is
+                                     built with Js::from(), and Blade output isn't
+                                     compiled inside a component tag's attribute. --}}
+                                <button type="button"
+                                    @click="detail = {{ Illuminate\Support\Js::from([
+                                        'ref' => $batch->reference_no,
+                                        'reason' => $batch->rejection_reason,
+                                        'reviewer' => $batch->reviewer?->name,
+                                        'reviewedAt' => $batch->reviewed_at?->format('M j, Y g:i A'),
+                                    ]) }}"
+                                    class="inline-flex items-center justify-center gap-2 rounded-full
+                                           border-[1.5px] border-hp-slate/30 px-4 py-1 text-xs font-semibold
+                                           text-hp-slate transition-colors duration-hp-fast hover:bg-hp-slate/10
+                                           focus-visible:outline-none focus-visible:ring-2
+                                           focus-visible:ring-hp-slate focus-visible:ring-offset-1">
+                                    View
+                                </button>
+                            @else
+                                <span class="text-hp-slate/50 dark:text-hp-slate/60">&mdash;</span>
+                            @endif
+                        </x-hp.table-cell>
+                    @endif
                 </x-hp.table-row>
             @endforeach
         </x-hp.table>
     @endif
 </x-hp.card>
+
+{{-- ── Rejection reason modal (FR-ADM-05, D-36) ───────────────────────────── --}}
+{{-- Teleported to <body> so no ancestor's overflow/stacking clips the
+     full-screen backdrop (same pattern as <x-logout-confirm>). --}}
+<template x-teleport="body">
+    <div
+        x-show="detail !== null"
+        x-cloak
+        @keydown.escape.window="detail = null"
+        class="fixed inset-0 z-[60] flex items-center justify-center px-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="rejection-reason-title"
+    >
+        {{-- Backdrop — click outside to dismiss --}}
+        <div
+            x-show="detail !== null"
+            @click="detail = null"
+            x-transition:enter="ease-hp-out duration-hp-base"
+            x-transition:enter-start="opacity-0"
+            x-transition:enter-end="opacity-100"
+            x-transition:leave="ease-hp-in duration-hp-fast"
+            x-transition:leave-start="opacity-100"
+            x-transition:leave-end="opacity-0"
+            class="absolute inset-0 bg-hp-slate/50 dark:bg-black/60"
+            aria-hidden="true"
+        ></div>
+
+        {{-- Panel --}}
+        <div
+            x-show="detail !== null"
+            x-transition:enter="ease-hp-spring duration-hp-slow"
+            x-transition:enter-start="opacity-0 translate-y-6"
+            x-transition:enter-end="opacity-100 translate-y-0"
+            x-transition:leave="ease-hp-in duration-hp-base"
+            x-transition:leave-start="opacity-100 translate-y-0"
+            x-transition:leave-end="opacity-0 translate-y-6"
+            class="relative w-full max-w-md rounded-2xl bg-hp-white p-6 shadow-xl"
+        >
+            <h2 id="rejection-reason-title" class="text-lg font-semibold text-hp-slate">
+                Why <span x-text="detail?.ref"></span> was rejected
+            </h2>
+
+            {{-- x-text sets textContent, so Director-written free text is never
+                 parsed as markup (the server side of this is Js::from above). --}}
+            <p class="mt-4 whitespace-pre-line rounded-lg bg-hp-bg px-4 py-3 text-sm text-hp-slate"
+               x-text="detail?.reason"></p>
+
+            <p class="mt-3 text-xs text-hp-slate/50 dark:text-hp-slate/60">
+                Reviewed by <span class="font-semibold" x-text="detail?.reviewer ?? 'the Clinic Director'"></span>
+                <span x-show="detail?.reviewedAt" x-cloak>
+                    on <span x-text="detail?.reviewedAt"></span>
+                </span>
+            </p>
+
+            <div class="mt-6 flex justify-end">
+                <x-hp.button variant="muted" @click="detail = null">Close</x-hp.button>
+            </div>
+        </div>
+    </div>
+</template>
+
+</div>
 
 </x-layout.sidebar>

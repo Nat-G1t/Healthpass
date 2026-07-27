@@ -52,6 +52,7 @@ class BatchRequest extends Model
         'requested_date',
         'scheduled_date',
         'status',
+        'rejection_reason',
         'reviewed_by',
         'reviewed_at',
     ];
@@ -71,6 +72,19 @@ class BatchRequest extends Model
     public function statusLabel(): string
     {
         return self::STATUS_LABELS[$this->status] ?? ucfirst($this->status);
+    }
+
+    /**
+     * D-36: the requested clinic date sat unreviewed until it passed.
+     *
+     * Approval is confirm-only, so there is no date left to confirm — the
+     * Director must reject and ask the college to resubmit. One rule, called
+     * from both the approve endpoint (on the locked row) and the Approvals
+     * page (to disable the button), so the two can never disagree.
+     */
+    public function hasStaleRequestedDate(): bool
+    {
+        return $this->requested_date !== null && $this->requested_date->lt(today());
     }
 
     /** Human-readable reason: the label, or the admin's own text for "others". */

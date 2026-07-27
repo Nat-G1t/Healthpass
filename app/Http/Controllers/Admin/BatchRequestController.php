@@ -30,12 +30,17 @@ class BatchRequestController extends Controller
     /**
      * Batch Tracking (FR-ADM-05): the college's requests, newest first.
      * Same scoped query shape as the dashboard table.
+     *
+     * `reviewer` is eager-loaded for the D-36 rejection-reason modal (who
+     * rejected it); with() means one extra query for the whole list instead
+     * of one per rejected row.
      */
     public function index(): View
     {
         $college = $this->managedCollege();
 
         $batchRequests = $college->batchRequests()
+            ->with('reviewer:id,name')
             ->withCount('batchRequestStudents')
             ->latest()
             ->get();

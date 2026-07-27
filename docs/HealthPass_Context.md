@@ -153,7 +153,7 @@ Director analytics and flagged anomalies update from encoded records
 - A reason is required. If reason = `others`, a detail textarea is required.
 - At least one student must be selected.
 - **Director approval generates one appointment per listed student automatically** — it appears in each student's appointment list and they proceed directly to the kiosk.
-- Rejection generates no appointments; batch status flips to Rejected.
+- Rejection generates no appointments; batch status flips to Rejected and the Director's written reason is stored (required, D-36).
 - Batch reasons: graduation clearance, OJT/practicum, general enrollment, scholarship, sports/athletics, field trip/educational tour, others.
 
 ### Visit linkage
@@ -404,8 +404,8 @@ questionnaire item that prints.
 - Full-width card with header "College Batch Requests" + description.
 - Each batch as a row: Batch ID (orange, 700) + status badge, college name (600), reason (italic, in quotes), count + submitted date.
 - **Pending rows only** show: "Reject" (ghost sm) + "Approve" (primary sm) buttons.
-- **On Approve**: the Director selects an appointment date (date picker, default today; weekends/past dates disallowed — Decision D-5). In one DB transaction: set `batch_requests.status` → `Approved`, stamp `reviewed_by`/`reviewed_at` and `batch_requests.scheduled_date`, **auto-create one `appointments` record per student listed in `batch_request_students`** (service = batch request's service type, date = the selected date, `source` = `batch`), and update each `batch_request_students.appointment_id`.
-- **On Reject**: update `batch_requests.status` → `Rejected`. No appointments created.
+- **On Approve** (confirm-only since **Decision D-36**, superseding D-29's adjust clause): the modal shows the College Admin's `requested_date` **read-only** — there is no date picker. In one DB transaction: set `batch_requests.status` → `Approved`, stamp `reviewed_by`/`reviewed_at` and `batch_requests.scheduled_date` **= the `requested_date` read from the LOCKED row** (never from the request body), **auto-create one `appointments` record per student listed in `batch_request_students`** (service = batch request's service type, date = the requested date, `source` = `batch`), and update each `batch_request_students.appointment_id`. Two kinds of batch cannot be approved at all — one whose `requested_date` is NULL (pre-D-29), and one whose `requested_date` has already passed (confirm-only can't move it, and a cohort must never be scheduled into the past). For both, Approve is disabled with a one-line notice **and** the endpoint refuses the POST; the Director rejects with a reason instead. A batch requested for today is still confirmable.
+- **On Reject** (D-36): a **written reason is required** (10–500 chars, `RejectBatchRequest`). Update `batch_requests.status` → `Rejected` and store `batch_requests.rejection_reason`. No appointments created. This is also the escape hatch when the Director can't take the requested date — "date unavailable, please resubmit for &lt;X&gt;" — since the date can no longer be adjusted at approval. The College Admin reads the reason on Batch Tracking.
 - Approved/rejected rows show "✓ Approved" or "✕ Rejected" static text (no action buttons).
 
 #### Analytics (`director-analytics`) — rescoped by D-32 (v1.11)
@@ -588,8 +588,9 @@ reason                enum('graduation','ojt','enrollment','scholarship','sports
 reason_detail         text NULL             -- used when reason = 'others'
 service_type          enum('medical','dental')
 requested_date        date NULL             -- admin-proposed clinic date, set at submission (D-29); NULL only on pre-D-29 batches
-scheduled_date        date NULL             -- FINAL appointment date, Director-confirmed at approval (D-5, amended by D-29)
+scheduled_date        date NULL             -- FINAL appointment date, stamped at approval; = requested_date since D-36 (D-5, amended by D-29/D-36)
 status                enum('pending','approved','rejected') DEFAULT 'pending'
+rejection_reason      text NULL             -- Director's written reason, required on reject (10-500 chars, D-36); NULL on pending/approved and on pre-D-36 rejections
 reviewed_by           bigint NULL FK → users.id   -- director who acted
 reviewed_at           timestamp NULL
 created_at, updated_at
@@ -772,7 +773,7 @@ clinic_visits ──|| vital_signs          (1:1)
 1. **Week-1 hardware spike**: validate Web Serial + BP monitor serial output before buying hardware.
 2. **Paper/scope mismatch**: the capstone paper still frames the system as AI-powered. The documentation team must revise the title and chapter scope to match the no-AI, scheduling + digital clearance system. This is a parallel workstream with its own deadline.
 3. **Decided (PRD D-4)** — clinic day capacity is a config value in `config/healthpass.php`; only the initial number remains to be set with clinic staff input.
-4. **Decided (PRD D-5, amended by D-29)** — the College Admin proposes the clinic date at batch submission (`batch_requests.requested_date`); the Director confirms or adjusts it at approval, stamping the final date into `batch_requests.scheduled_date`.
+4. **Decided (PRD D-5, amended by D-29, then D-36)** — the College Admin proposes the clinic date at batch submission (`batch_requests.requested_date`); the Director **confirms it** at approval, which copies it into `batch_requests.scheduled_date`. Since **D-36** the Director cannot adjust it: the pushback path is rejecting with a written reason so the college resubmits.
 ---
 
 *End of HealthPass context document.*

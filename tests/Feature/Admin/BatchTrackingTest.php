@@ -15,7 +15,8 @@ use Tests\TestCase;
 /**
  * Batch Tracking page (FR-ADM-05, FR-ADM-06): the college's requests with
  * Batch ID, truncated reason, student count, submitted date and a status
- * badge — pending shown as "Pending Director Approval".
+ * badge — pending shown as "Pending Director Approval" — plus the D-36
+ * Rejection Reason column, which appears only when a rejected row exists.
  */
 class BatchTrackingTest extends TestCase
 {
@@ -115,6 +116,100 @@ class BatchTrackingTest extends TestCase
             ->assertOk()
             ->assertSee(Str::limit($detail, 60))
             ->assertDontSee($detail);
+    }
+
+    // ── D-36: rejection reason column + modal ────────────────────────────────
+
+    public function test_the_rejection_reason_column_is_absent_when_nothing_is_rejected(): void
+    {
+        $this->makeBatch($this->ccs);
+        $this->makeBatch($this->ccs, ['status' => 'approved']);
+
+        $this->actingAs($this->admin)
+            ->get('/admin/batches')
+            ->assertOk()
+            ->assertDontSee('Rejection Reason');
+    }
+
+    public function test_a_rejected_row_shows_its_reason_with_the_reviewing_director(): void
+    {
+        $director = User::factory()->create(['role' => 'director', 'name' => 'Dr. Reyes']);
+        $reviewedAt = now()->subDay();
+        // Deliberately plain ASCII: the payload goes through Js::from(), whose
+        // json_encode escapes non-ASCII to \uXXXX, so a literal em dash here
+        // would never appear verbatim in the HTML.
+        $reason = 'Date unavailable, the clinic is closed that week for inventory.';
+
+        $this->makeBatch($this->ccs, [
+            'status' => 'rejected',
+            'rejection_reason' => $reason,
+            'reviewed_by' => $director->id,
+            'reviewed_at' => $reviewedAt,
+        ]);
+
+        $this->actingAs($this->admin)
+            ->get('/admin/batches')
+            ->assertOk()
+            ->assertSee('Rejection Reason')
+            ->assertSee('View')
+            ->assertSee($reason, false)          // inside the Js::from() payload
+            ->assertSee('Dr. Reyes', false)
+            ->assertSee($reviewedAt->format('M j, Y g:i A'), false);
+    }
+
+    /**
+     * The column header renders once a rejected row exists, but non-rejected
+     * rows in the same list still get an em dash rather than a View button.
+     */
+    public function test_non_rejected_rows_show_an_em_dash_in_the_reason_column(): void
+    {
+        $this->makeBatch($this->ccs, [
+            'status' => 'rejected',
+            'rejection_reason' => 'Date unavailable, please resubmit.',
+        ]);
+        $this->makeBatch($this->ccs, ['status' => 'approved']);
+
+        $content = $this->actingAs($this->admin)
+            ->get('/admin/batches')
+            ->assertOk()
+            ->getContent();
+
+        // One View trigger for the one rejected row; the approved row gets a dash.
+        $this->assertSame(1, substr_count($content, 'detail = JSON.parse'));
+        $this->assertStringContainsString('&mdash;', $content);
+    }
+
+    /** The reason is Director-written free text — it must be escaped on output. */
+    public function test_a_reason_containing_markup_is_escaped(): void
+    {
+        $this->makeBatch($this->ccs, [
+            'status' => 'rejected',
+            'rejection_reason' => '<script>alert(1)</script> please resubmit',
+        ]);
+
+        $content = $this->actingAs($this->admin)
+            ->get('/admin/batches')
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringNotContainsString('<script>alert(1)</script>', $content);
+    }
+
+    /** FR-ADM-06: another college's rejection reason is never readable. */
+    public function test_an_admin_cannot_see_another_colleges_rejection_reason(): void
+    {
+        $secret = 'CEA cohort rejected, their paperwork is incomplete.';
+
+        $this->makeBatch($this->cea, [
+            'status' => 'rejected',
+            'rejection_reason' => $secret,
+        ]);
+
+        $this->actingAs($this->admin)
+            ->get('/admin/batches')
+            ->assertOk()
+            ->assertDontSee($secret, false)
+            ->assertDontSee('Rejection Reason');
     }
 
     public function test_tracking_is_refused_for_other_roles_and_guests(): void

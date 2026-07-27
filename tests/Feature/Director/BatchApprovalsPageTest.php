@@ -72,30 +72,63 @@ class BatchApprovalsPageTest extends TestCase
 
     public function test_pending_rows_have_decision_buttons_and_decided_rows_are_static(): void
     {
-        $pending = $this->makeBatch($this->ccs);
-        $approved = $this->makeBatch($this->ccs, ['status' => 'approved']);
-        $rejected = $this->makeBatch($this->cea, ['status' => 'rejected']);
+        $this->makeBatch($this->ccs, ['requested_date' => now()->addDays(5)->toDateString()]);
+        $this->makeBatch($this->ccs, ['status' => 'approved']);
+        $this->makeBatch($this->cea, ['status' => 'rejected']);
 
         $response = $this->actingAs($this->director)
             ->get('/director/batches')
             ->assertOk()
-            // Pending row: reject is a plain form action.
-            ->assertSee("/director/batches/{$pending->id}/reject")
             // Decided rows show static text (FR-DIRA-05)…
             ->assertSee('✓ Approved')
             ->assertSee('✕ Rejected');
 
-        // The approve trigger appears exactly ONCE — only the pending row has
-        // one. (Its URL sits inside a Js::from() payload whose slash escaping
-        // is an implementation detail, so we count trigger CALLS — the
-        // 'openApprove(JSON.parse' shape — not the plain function name, which
-        // also occurs in the page's Alpine component definition.)
-        $this->assertSame(1, substr_count($response->getContent(), 'openApprove(JSON.parse'));
+        // …and expose NO decision trigger: each appears exactly ONCE, for the
+        // single pending row. (Both URLs sit inside Js::from() payloads whose
+        // slash escaping is an implementation detail, so we count trigger
+        // CALLS — the 'openX(JSON.parse' shape — not the plain function names,
+        // which also occur in the page's Alpine component definition.)
+        $content = $response->getContent();
+        $this->assertSame(1, substr_count($content, 'openApprove(JSON.parse'));
+        $this->assertSame(1, substr_count($content, 'openReject(JSON.parse'));
+    }
 
-        // …decided rows expose NO reject endpoint either (FR-DIRA-05).
-        foreach ([$approved, $rejected] as $decided) {
-            $response->assertDontSee("/director/batches/{$decided->id}/reject");
-        }
+    /**
+     * D-36: a pre-D-29 batch has no requested_date, so there is nothing to
+     * confirm — Approve is disabled and the Director is told to reject with
+     * a resubmit reason. Reject stays available.
+     */
+    public function test_a_batch_without_a_requested_date_cannot_be_approved_from_the_page(): void
+    {
+        $this->makeBatch($this->ccs); // no requested_date
+
+        $response = $this->actingAs($this->director)
+            ->get('/director/batches')
+            ->assertOk()
+            ->assertSee('predates the requested-date field');
+
+        $content = $response->getContent();
+        $this->assertSame(0, substr_count($content, 'openApprove(JSON.parse'));
+        $this->assertSame(1, substr_count($content, 'openReject(JSON.parse'));
+    }
+
+    /**
+     * D-36: same treatment for a batch whose requested date passed while it
+     * sat pending — confirm-only can't move it, so Approve is disabled and
+     * the notice points at reject-and-resubmit.
+     */
+    public function test_a_batch_with_a_stale_requested_date_cannot_be_approved_from_the_page(): void
+    {
+        $this->makeBatch($this->ccs, ['requested_date' => now()->subDay()->toDateString()]);
+
+        $response = $this->actingAs($this->director)
+            ->get('/director/batches')
+            ->assertOk()
+            ->assertSee('The requested date has already passed');
+
+        $content = $response->getContent();
+        $this->assertSame(0, substr_count($content, 'openApprove(JSON.parse'));
+        $this->assertSame(1, substr_count($content, 'openReject(JSON.parse'));
     }
 
     public function test_rows_show_the_admins_requested_date_or_a_dash(): void

@@ -16,10 +16,13 @@ use RuntimeException;
 use Tests\TestCase;
 
 /**
- * Director batch Approve (FR-DIRA-02/03/05/06, BR-08): one transaction that
- * flips the batch to approved, stamps the reviewer fields + scheduled_date,
- * fans out one appointment per listed student, and back-writes each new
- * appointment_id onto its batch_request_students row.
+ * Director batch Approve (FR-DIRA-02/03/05/06, BR-08, D-36): one transaction
+ * that flips the batch to approved, stamps the reviewer fields +
+ * scheduled_date, fans out one appointment per listed student, and
+ * back-writes each new appointment_id onto its batch_request_students row.
+ *
+ * D-36 made approval confirm-only: the date is always the College Admin's
+ * `requested_date`, read off the locked row — never the request body.
  */
 class BatchApprovalDecisionTest extends TestCase
 {
@@ -44,7 +47,11 @@ class BatchApprovalDecisionTest extends TestCase
         ]);
     }
 
-    /** A pending batch with $studentCount student pivot rows attached. */
+    /**
+     * A pending batch with $studentCount student pivot rows attached.
+     * `requested_date` is set by default — since D-36 it is what approval
+     * confirms, so a batch without one is the exception, not the norm.
+     */
     private function makeBatchWithStudents(int $studentCount, array $overrides = []): BatchRequest
     {
         static $seq = 700;
@@ -55,6 +62,7 @@ class BatchApprovalDecisionTest extends TestCase
             'requested_by' => $this->admin->id,
             'reason' => 'ojt',
             'service_type' => 'medical',
+            'requested_date' => now()->addDays(7)->toDateString(),
         ], $overrides));
 
         User::factory()->count($studentCount)->create()->each(
@@ -67,22 +75,20 @@ class BatchApprovalDecisionTest extends TestCase
         return $batch;
     }
 
-    private function approve(BatchRequest $batch, ?string $date = null): TestResponse
+    /** D-36: the approve endpoint takes no input; $body only exists to prove it. */
+    private function approve(BatchRequest $batch, array $body = []): TestResponse
     {
-        return $this->actingAs($this->director)->post(
-            "/director/batches/{$batch->id}/approve",
-            ['scheduled_date' => $date ?? now()->addDays(7)->toDateString()],
-        );
+        return $this->actingAs($this->director)->post("/director/batches/{$batch->id}/approve", $body);
     }
 
     public function test_approving_a_25_student_batch_creates_exactly_25_linked_appointments(): void
     {
-        $batch = $this->makeBatchWithStudents(25);
         $date = now()->addDays(7)->toDateString();
+        $batch = $this->makeBatchWithStudents(25, ['requested_date' => $date]);
 
-        $this->approve($batch, $date)->assertRedirect('/director/batches');
+        $this->approve($batch)->assertRedirect('/director/batches');
 
-        // Batch flipped + reviewer stamps + Director-chosen date (FR-DIRA-02).
+        // Batch flipped + reviewer stamps + the requested date (FR-DIRA-02, D-36).
         $batch->refresh();
         $this->assertSame('approved', $batch->status);
         $this->assertSame($this->director->id, $batch->reviewed_by);
@@ -153,8 +159,7 @@ class BatchApprovalDecisionTest extends TestCase
 
         // Double-click / replayed POST: the in-transaction status re-check
         // must make the second request a no-op (FR-DIRA-05).
-        $this->approve($batch, now()->addDays(9)->toDateString())
-            ->assertRedirect('/director/batches');
+        $this->approve($batch)->assertRedirect('/director/batches');
 
         $this->assertDatabaseCount('appointments', 3);
 
@@ -193,21 +198,115 @@ class BatchApprovalDecisionTest extends TestCase
         }
     }
 
-    public function test_past_or_missing_dates_are_rejected(): void
+    /**
+     * D-36: approval is confirm-only. A client that posts its own
+     * `scheduled_date` — the field the pre-D-36 modal used to send — must not
+     * be able to move the cohort off the date the college asked for.
+     */
+    public function test_an_injected_scheduled_date_is_ignored(): void
     {
-        $batch = $this->makeBatchWithStudents(2);
+        $requested = now()->addDays(7)->toDateString();
+        $injected = now()->addDays(40)->toDateString();
 
-        $this->actingAs($this->director)
-            ->from('/director/batches')
-            ->post("/director/batches/{$batch->id}/approve", ['scheduled_date' => now()->subDay()->toDateString()])
-            ->assertSessionHasErrors('scheduled_date');
+        $batch = $this->makeBatchWithStudents(3, ['requested_date' => $requested]);
 
-        $this->actingAs($this->director)
-            ->from('/director/batches')
-            ->post("/director/batches/{$batch->id}/approve", [])
-            ->assertSessionHasErrors('scheduled_date');
+        $this->approve($batch, ['scheduled_date' => $injected])
+            ->assertRedirect('/director/batches');
+
+        $batch->refresh();
+        $this->assertSame('approved', $batch->status);
+        $this->assertSame($requested, $batch->scheduled_date->toDateString());
+
+        foreach ($batch->batchRequestStudents()->with('appointment')->get() as $pivot) {
+            $this->assertSame($requested, $pivot->appointment->scheduled_date->toDateString());
+        }
+    }
+
+    /**
+     * D-36: a batch submitted before D-29 has no requested_date, so there is
+     * nothing to confirm — approval is refused outright and the Director is
+     * pointed at reject-with-a-reason instead.
+     */
+    public function test_a_batch_without_a_requested_date_cannot_be_approved(): void
+    {
+        $batch = $this->makeBatchWithStudents(4, ['requested_date' => null]);
+
+        $this->approve($batch)
+            ->assertRedirect('/director/batches')
+            ->assertSessionHas('error');
+
+        $batch->refresh();
+        $this->assertSame('pending', $batch->status);
+        $this->assertNull($batch->scheduled_date);
+        $this->assertNull($batch->reviewed_by);
+        $this->assertNull($batch->reviewed_at);
+        $this->assertDatabaseCount('appointments', 0);
+    }
+
+    /**
+     * D-36: a batch can sit pending until its requested date passes. Approval
+     * is confirm-only, so there is no date left to confirm and approving would
+     * schedule the cohort in the past — refused, reject-and-resubmit instead.
+     */
+    public function test_a_batch_whose_requested_date_has_passed_cannot_be_approved(): void
+    {
+        $batch = $this->makeBatchWithStudents(3, [
+            'requested_date' => now()->subDay()->toDateString(),
+        ]);
+
+        $this->approve($batch)
+            ->assertRedirect('/director/batches')
+            ->assertSessionHas('error');
+
+        $batch->refresh();
+        $this->assertSame('pending', $batch->status);
+        $this->assertNull($batch->scheduled_date);
+        $this->assertNull($batch->reviewed_by);
+        $this->assertNull($batch->reviewed_at);
+        $this->assertDatabaseCount('appointments', 0);
+    }
+
+    /** The boundary: TODAY is still confirmable — only past dates are stale. */
+    public function test_a_batch_requested_for_today_can_still_be_approved(): void
+    {
+        $today = now()->toDateString();
+        $batch = $this->makeBatchWithStudents(2, ['requested_date' => $today]);
+
+        $this->approve($batch)->assertRedirect('/director/batches');
+
+        $batch->refresh();
+        $this->assertSame('approved', $batch->status);
+        $this->assertSame($today, $batch->scheduled_date->toDateString());
+        $this->assertDatabaseCount('appointments', 2);
+    }
+
+    /** A posted date cannot rescue a batch that has no requested date (D-36). */
+    public function test_a_batch_without_a_requested_date_cannot_be_approved_by_posting_one(): void
+    {
+        $batch = $this->makeBatchWithStudents(2, ['requested_date' => null]);
+
+        $this->approve($batch, ['scheduled_date' => now()->addDays(7)->toDateString()])
+            ->assertRedirect('/director/batches')
+            ->assertSessionHas('error');
 
         $this->assertSame('pending', $batch->fresh()->status);
+        $this->assertNull($batch->fresh()->scheduled_date);
+        $this->assertDatabaseCount('appointments', 0);
+    }
+
+    /** …and it cannot rescue a stale one either (D-36). */
+    public function test_a_stale_batch_cannot_be_approved_by_posting_a_future_date(): void
+    {
+        $batch = $this->makeBatchWithStudents(2, [
+            'requested_date' => now()->subWeek()->toDateString(),
+        ]);
+
+        $this->approve($batch, ['scheduled_date' => now()->addDays(7)->toDateString()])
+            ->assertRedirect('/director/batches')
+            ->assertSessionHas('error');
+
+        $this->assertSame('pending', $batch->fresh()->status);
+        $this->assertNull($batch->fresh()->scheduled_date);
         $this->assertDatabaseCount('appointments', 0);
     }
 
@@ -217,7 +316,7 @@ class BatchApprovalDecisionTest extends TestCase
 
         foreach (['student', 'nurse', 'college_admin'] as $role) {
             $this->actingAs(User::factory()->create(['role' => $role]))
-                ->post("/director/batches/{$batch->id}/approve", ['scheduled_date' => now()->toDateString()])
+                ->post("/director/batches/{$batch->id}/approve")
                 ->assertRedirect();
         }
 

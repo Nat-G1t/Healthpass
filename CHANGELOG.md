@@ -2,7 +2,49 @@
 
 ## [Unreleased](https://github.com/laravel/laravel/compare/v12.12.1...12.x)
 
+### Changed
+
+* **Batch approval is now confirm-only** (D-36, FR-DIRA-02 — **supersedes the
+  "the Director may adjust the date" clause of D-29**). The Director's approve
+  modal no longer has a date picker: it shows the College Admin's requested
+  clinic date read-only, and the batch is approved on that date. The date is
+  read from the `batch_requests` row **locked inside the approval transaction**,
+  never from the request — `ApproveBatchRequest` now accepts no input at all, so
+  a `scheduled_date` posted by a client is ignored.
+  Two kinds of batch **cannot be confirm-approved at all**, because neither
+  leaves a date to confirm — Approve is disabled on the row with a one-line
+  notice *and* the endpoint refuses the POST, so the UI is never the gate:
+  batches submitted before D-29, which have no requested date (reject with
+  "predates the requested-date field — please resubmit"), and batches whose
+  **requested date passed while they sat pending**, where approving would
+  schedule the cohort in the past. A batch requested for *today* is still
+  confirmable; the staleness rule lives in one place,
+  `BatchRequest::hasStaleRequestedDate()`, used by both the view and the
+  endpoint's locked-row check.
+  When a Director can't take the requested date, the move is now to **reject
+  with a reason** ("date unavailable, please resubmit for …") rather than
+  silently shifting the cohort — the original request survives, the objection is
+  on the record, and the college resubmits for a date it has agreed to. The
+  FR-DIRA-06 capacity **warning** is unchanged: approval still never blocks on
+  the daily cap.
+
 ### Added
+
+* **Rejecting a batch now requires a written reason** (D-36, FR-DIRA-04).
+  New nullable `batch_requests.rejection_reason` (TEXT — nullable because
+  rejections made before this change have none). The reason is required,
+  10–500 characters, validated server-side by the new
+  `App\Http\Requests\Director\RejectBatchRequest`; the reject modal's live
+  character counter and disabled-until-valid submit are convenience only. The
+  existing `lockForUpdate()` + already-decided no-op guard is untouched, so a
+  replayed reject still no-ops and cannot overwrite a reason already on record.
+* **College admins can read why a batch was rejected** (D-36, FR-ADM-05). Batch
+  Tracking grows a **Rejection Reason** column beside Status, rendered only when
+  the list actually contains a rejected row; that row gets a View button opening
+  a modal with the reason, the reviewing Director's name and the review
+  timestamp, and every other row shows an em dash. The reason is Director-written
+  free text, so it is escaped on output and set via `x-text`, never raw HTML.
+  Works in both the desktop table and the mobile stacked-card rendering.
 
 * Site-wide **light/dark theme** for the web app (D-38, FR-UI-04 / NFR-10). A
   toggle sits in the top-right of the sticky header on every page that uses the

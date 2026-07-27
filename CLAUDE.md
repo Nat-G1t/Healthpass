@@ -182,9 +182,16 @@ npm run dev                       # terminal 2
 - **Manual vitals entry is a first-class kiosk path**, sensors are
   progressive enhancement. Every reading records `entry_method`.
 - Clinic capacity is a config value; batch clinic dates are
-  admin-requested and Director-confirmed at approval (the Director may
-  adjust — D-29); dental is scheduling-only, except that kiosk submit now
-  links today's dental appointment so it can be completed (D-33).
+  admin-requested and **confirm-only** at approval — **the Director cannot
+  adjust the date (D-36, supersedes that clause of D-29)**. Approval reads
+  `requested_date` off the locked row, never the request body. A batch can't
+  be approved at all when `requested_date` is NULL **or has already passed**
+  (`BatchRequest::hasStaleRequestedDate()` — today still counts as valid).
+  The pushback path is
+  **reject with a written reason** (required, 10–500 chars), which the
+  College Admin reads on Batch Tracking. Dental is scheduling-only, except
+  that kiosk submit now links today's dental appointment so it can be
+  completed (D-33).
 - Printed clearance must match official form DHVSU-QSP-OSS-004-FO002-R03.
 
 ## Database
