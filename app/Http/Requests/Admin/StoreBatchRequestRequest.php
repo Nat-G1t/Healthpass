@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Http\Requests\Admin;
 
 use App\Models\BatchRequest;
+use App\Services\ClinicScheduleService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 /**
  * Validates a New Batch Request submission (FR-ADM-02/03, BR-06, BR-07).
@@ -54,8 +56,12 @@ class StoreBatchRequestRequest extends FormRequest
             ],
             'service_type' => ['required', 'in:medical,dental'],
             // D-29: the admin proposes the clinic date (they know the
-            // cohort's event); the Director confirms/adjusts at approval.
+            // cohort's event); the Director confirms it at approval (D-36).
             'requested_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:today'],
+            // D-37: and the START hour of the batch's span. The span itself is
+            // never posted — the server computes it from the student count, so
+            // a client cannot claim fewer hours than the cohort needs.
+            'requested_time' => ['required', Rule::in($this->schedule()->slots())],
             // BR-07: at least one student per batch.
             'students' => ['required', 'array', 'min:1'],
             'students.*' => [
@@ -77,11 +83,94 @@ class StoreBatchRequestRequest extends FormRequest
             'requested_date.required' => 'Please pick the date your students should visit the clinic.',
             'requested_date.date_format' => 'Invalid requested date.',
             'requested_date.after_or_equal' => 'The requested date cannot be in the past.',
+            'requested_time.required' => 'Please pick the hour the batch should start.',
+            'requested_time.in' => 'That start time is not part of clinic hours.',
             'students.required' => 'Select at least one student for this batch.',
             'students.min' => 'Select at least one student for this batch.',
             'students.*.distinct' => 'A student was selected more than once.',
             'students.*.exists' => 'One of the selected students is not in your college.',
             'students.*.integer' => 'One of the selected students is invalid.',
         ];
+    }
+
+    /** The slot grid + capacity rules (D-37), shared with every other caller. */
+    private function schedule(): ClinicScheduleService
+    {
+        return app(ClinicScheduleService::class);
+    }
+
+    /**
+     * D-37 span rules. Runs only once the basic rules pass, so the student
+     * count and the start hour are both trustworthy by this point.
+     *
+     * The same three checks are re-run under a row lock at write time
+     * (BatchRequestController::store) — this read is unlocked and races with a
+     * self-booking taking the last seat in one of the batch's hours, exactly
+     * as the student booking Form Request does.
+     */
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            if ($validator->errors()->isNotEmpty()) {
+                return;
+            }
+
+            $schedule = $this->schedule();
+            $startSlot = $this->input('requested_time');
+            $date = $this->input('requested_date');
+            $studentCount = count((array) $this->input('students', []));
+
+            // (1) A cohort bigger than the whole clinic day can never fit.
+            if ($studentCount > $schedule->maxBatchSize()) {
+                $validator->errors()->add('students', sprintf(
+                    'A batch of %d students cannot fit in one clinic day — the clinic takes at most %d (%d per hour × %d hours). Please split it across two dates.',
+                    $studentCount,
+                    $schedule->maxBatchSize(),
+                    $schedule->hourlyCapacity(),
+                    count($schedule->slots()),
+                ));
+
+                return;
+            }
+
+            // (2) BR-23: the start hour must not have gone by already. Only the
+            // START needs checking — the span runs forwards, so if its first
+            // hour is still open none of the later ones can have elapsed.
+            if ($schedule->isSlotElapsed($date, $startSlot)) {
+                $validator->errors()->add('requested_time', $schedule->slotElapsedMessage($startSlot));
+
+                return;
+            }
+
+            // (3) The span must end by closing time.
+            $span = $schedule->spanForStudents($startSlot, $studentCount);
+
+            if ($span === []) {
+                $validator->errors()->add('requested_time', sprintf(
+                    '%d students need %d clinic hour(s). Starting at %s would run past %s — please choose an earlier start time.',
+                    $studentCount,
+                    $schedule->blocksFor($studentCount),
+                    $schedule->startLabel($startSlot),
+                    $schedule->startLabel(sprintf('%02d:00:00', (int) substr((string) config('healthpass.clinic_hours.close'), 0, 2))),
+                ));
+
+                return;
+            }
+
+            // (4) Every hour in the span must have room. Name the offending
+            // hour — "full" alone doesn't tell the admin what to move away from.
+            $fullSlots = $schedule->fullSlotsIn($date, $span);
+
+            if ($fullSlots !== []) {
+                $validator->errors()->add('requested_time', sprintf(
+                    'This batch would run %s, but the %s slot is already fully booked. Please choose a different start time or date.',
+                    $schedule->spanLabel($span),
+                    implode(' and the ', array_map(
+                        fn (string $slot): string => $schedule->label($slot),
+                        $fullSlots,
+                    )),
+                ));
+            }
+        });
     }
 }

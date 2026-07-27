@@ -6,6 +6,7 @@ namespace App\Http\Requests\Student;
 
 use App\Models\Appointment;
 use App\Models\ClearanceRecord;
+use App\Services\ClinicScheduleService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -49,6 +50,14 @@ class StoreAppointmentRequest extends FormRequest
         return [
             'service' => ['required', 'in:medical,dental'],
             'date' => ['required', 'date_format:Y-m-d', 'after_or_equal:today'],
+            // D-37: every new booking sits in a one-hour clinic slot. The value
+            // must be one of the slots DERIVED from clinic_hours — the server
+            // never accepts an arbitrary time. (Pre-D-37 rows keep NULL; only
+            // new bookings are required to carry a slot.)
+            'time' => [
+                'required',
+                Rule::in($this->schedule()->slots()),
+            ],
             // D-28: purpose is required for a medical clearance (something WILL
             // be printed) and forbidden-by-normalization for dental. The value
             // must come from the locked list plus the "Others" line; the server
@@ -75,10 +84,21 @@ class StoreAppointmentRequest extends FormRequest
             'date.required' => 'Please pick a date.',
             'date.date_format' => 'Invalid date format.',
             'date.after_or_equal' => 'The booking date cannot be in the past.',
+            'time.required' => 'Please pick a time slot.',
+            'time.in' => 'That time slot is not part of clinic hours.',
             'purpose.required_if' => 'Please choose the purpose of your medical clearance.',
             'purpose.in' => 'Invalid purpose.',
             'purpose_other.required_if' => 'Please specify the event for an "Others" purpose.',
         ];
+    }
+
+    /**
+     * The slot grid + capacity rules (D-37). Resolved from the container rather
+     * than constructed, so the whole app shares one definition of "the clinic day".
+     */
+    private function schedule(): ClinicScheduleService
+    {
+        return app(ClinicScheduleService::class);
     }
 
     public function withValidator(Validator $validator): void
@@ -104,17 +124,36 @@ class StoreAppointmentRequest extends FormRequest
                 return;
             }
 
-            // BR-02: capacity re-check at write time (prevents race-condition over-bookings).
-            $capacity = (int) config('healthpass.daily_capacity');
-            $booked = Appointment::whereDate('scheduled_date', $date)
-                ->where('status', '!=', 'cancelled')
-                ->count();
+            // BR-02: outer daily cap. Counts legacy NULL-time rows too, which is
+            // why it is still checked separately from the per-slot cap below.
+            $schedule = $this->schedule();
 
-            if ($booked >= $capacity) {
+            if ($schedule->bookedOnDate($date) >= $schedule->dailyCapacity()) {
                 $validator->errors()->add(
                     'date',
                     'This day is fully booked. Please select a different date.'
                 );
+
+                return;
+            }
+
+            $slot = $this->input('time');
+
+            // BR-23: an hour that has already ended cannot be booked today.
+            // Checked against the server clock only — the browser's is never
+            // trusted, same rule as the BR-20 cutoff. Unlike the capacity check
+            // below this needs no locked re-check: no concurrent request can
+            // change whether an hour has ended, so there is nothing to race.
+            if ($schedule->isSlotElapsed($date, $slot)) {
+                $validator->errors()->add('time', $schedule->slotElapsedMessage($slot));
+
+                return;
+            }
+
+            // D-37: per-slot cap. Medical and dental share this counter — an
+            // appointment of either service occupies one of the hour's 12 seats.
+            if ($schedule->bookedInSlot($date, $slot) >= $schedule->hourlyCapacity()) {
+                $validator->errors()->add('time', $schedule->slotFullMessage($slot));
 
                 return;
             }

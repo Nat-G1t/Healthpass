@@ -9,6 +9,7 @@ use App\Http\Requests\Director\ApproveBatchRequest;
 use App\Http\Requests\Director\RejectBatchRequest;
 use App\Models\Appointment;
 use App\Models\BatchRequest;
+use App\Services\ClinicScheduleService;
 use App\Services\ReferenceNumberService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -22,9 +23,10 @@ use Illuminate\View\View;
  * Unlike the /admin pages there is NO college scope here — the Director
  * reviews every college's requests on one screen (FR-DIRA-01).
  *
- * capacity() feeds the approve modal's warning line (FR-DIRA-06): the
- * Director is WARNED when the requested date is at/over the daily cap, but
- * never blocked — an approved cohort may exceed the self-booking capacity.
+ * capacity() feeds the approve modal (FR-DIRA-06): since D-37 an hour in the
+ * batch's span that is already at the hourly cap BLOCKS approval outright —
+ * the old warn-but-allow behaviour is gone. The modal disables its submit and
+ * the endpoint refuses the POST; the UI is never the gate.
  *
  * approve() is the real decision flow (FR-DIRA-02, BR-08): one DB
  * transaction that flips the batch, stamps the reviewer fields, fans out
@@ -36,6 +38,8 @@ use Illuminate\View\View;
  */
 class BatchApprovalController extends Controller
 {
+    public function __construct(private readonly ClinicScheduleService $schedule) {}
+
     /** All colleges' batch requests, newest first (FR-DIRA-01). */
     public function index(): View
     {
@@ -48,23 +52,44 @@ class BatchApprovalController extends Controller
     }
 
     /**
-     * JSON: non-cancelled appointment count on one date vs the daily cap.
-     * Polled by the approve modal whenever the Director picks a date.
+     * JSON: how full one date — and, since D-37, one batch's hour span — is.
+     * Polled by the approve modal when it opens.
+     *
+     * `time` + `blocks` are the batch's stored span. When they are supplied the
+     * response also carries `full_slots`: the hours in that span already at the
+     * hourly cap. A non-empty list is what makes the modal refuse to submit
+     * (FR-DIRA-06 is a HARD BLOCK since D-37) — but this endpoint only informs
+     * the UI; approve() re-checks under lock and is the real gate.
      */
     public function capacity(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'date' => ['required', 'date_format:Y-m-d'],
+            'time' => ['nullable', 'string'],
+            'blocks' => ['nullable', 'integer', 'min:1', 'max:24'],
         ]);
 
         // Same counting rule as self-booking (BR-02): cancelled slots are free.
-        $booked = Appointment::whereDate('scheduled_date', $validated['date'])
-            ->where('status', '!=', 'cancelled')
-            ->count();
+        $booked = $this->schedule->bookedOnDate($validated['date']);
+
+        $span = isset($validated['time'], $validated['blocks'])
+            ? $this->schedule->span($validated['time'], (int) $validated['blocks'])
+            : [];
 
         return response()->json([
             'booked' => $booked,
-            'capacity' => (int) config('healthpass.daily_capacity'),
+            'capacity' => $this->schedule->dailyCapacity(),
+            'hourly_capacity' => $this->schedule->hourlyCapacity(),
+            'span_label' => $this->schedule->spanLabel($span),
+            'full_slots' => array_map(
+                fn (string $slot): string => $this->schedule->label($slot),
+                $this->schedule->fullSlotsIn($validated['date'], $span),
+            ),
+            // BR-23: hours of the span that have already ended (today only).
+            'elapsed_slots' => array_map(
+                fn (string $slot): string => $this->schedule->label($slot),
+                $this->schedule->elapsedSlotsIn($validated['date'], $span),
+            ),
         ]);
     }
 
@@ -96,8 +121,22 @@ class BatchApprovalController extends Controller
      * (The modal also disables the submit button on first click, but the
      * server never relies on that.)
      *
-     * Capacity is deliberately not checked here (FR-DIRA-06): batch
-     * approval may exceed the daily cap; the modal only warns.
+     * D-37 — CAPACITY IS NOW A HARD BLOCK (amending FR-DIRA-06, which used to
+     * warn and allow). If ANY hour in the batch's span has reached the hourly
+     * cap, approval is refused: an over-full hour means more students in the
+     * clinic at once than it can process, which a "warning" cannot undo once
+     * the appointments exist. Combined with D-36's confirm-only approval, a
+     * batch whose slots filled up while it sat pending has exactly one
+     * outcome — rejection and resubmission for a new date or start hour. That
+     * is the intended workflow, not a bug: the alternatives are approving into
+     * a clinic that cannot serve the cohort, or letting the Director silently
+     * move the date, which D-36 removed on audit-trail grounds.
+     *
+     * BR-23 closes the matching hole in TIME. D-36 deliberately still allows a
+     * batch requested for *today* to be approved, but between submission and
+     * review those hours can simply end — approving a 7 AM cohort at 2 PM
+     * would mint appointments for a time that has been and gone. Any elapsed
+     * hour in the span is refused on the same reject-and-resubmit terms.
      */
     public function approve(
         ApproveBatchRequest $request,
@@ -106,8 +145,10 @@ class BatchApprovalController extends Controller
     ): RedirectResponse {
         $director = $request->user();
 
-        // 'approved' | 'already_decided' | 'no_requested_date' | 'stale_requested_date'
-        $outcome = DB::transaction(function () use ($batch, $director, $refService): string {
+        // 'approved' | 'already_decided' | 'no_requested_date'
+        // | 'stale_requested_date' | 'no_requested_time'
+        // | ['span_elapsed'|'span_full', <offending hour label>]
+        $outcome = DB::transaction(function () use ($batch, $director, $refService): string|array {
             $locked = BatchRequest::whereKey($batch->id)->lockForUpdate()->firstOrFail();
 
             // A decided batch cannot be re-decided (FR-DIRA-05).
@@ -126,7 +167,35 @@ class BatchApprovalController extends Controller
                 return 'stale_requested_date';
             }
 
+            // D-37: a pre-D-37 batch has no hour span to confirm, exactly as a
+            // pre-D-29 batch had no date — reject-and-resubmit.
+            $span = $locked->requestedSpan();
+
+            if ($span === []) {
+                return 'no_requested_time';
+            }
+
             $scheduledDate = $locked->requested_date->toDateString();
+
+            // BR-23: refuse if any hour of the span has already gone by. Only
+            // reachable for a batch requested for TODAY (a past date is caught
+            // by the staleness rule above), which is exactly the case D-36
+            // still allows through: submitted for today, reviewed after those
+            // hours ended. Fanning out here would create appointments at times
+            // that have already passed.
+            $elapsedHours = $locked->elapsedSpanHours();
+
+            if ($elapsedHours !== []) {
+                return ['span_elapsed', $this->schedule->label($elapsedHours[0])];
+            }
+
+            // D-37 hard block. Read under the same lock as the write, so an
+            // hour cannot fill between the check and the fan-out.
+            $fullSlots = $this->schedule->fullSlotsIn($scheduledDate, $span, lock: true);
+
+            if ($fullSlots !== []) {
+                return ['span_full', $this->schedule->label($fullSlots[0])];
+            }
 
             $locked->update([
                 'status' => 'approved',
@@ -137,12 +206,21 @@ class BatchApprovalController extends Controller
 
             // BR-08 fan-out. Downstream these are indistinguishable from
             // self-booked appointments (FR-DIRA-03) apart from source/creator.
-            foreach ($locked->batchRequestStudents as $pivotRow) {
+            //
+            // D-37: students are spread across the span, hourly_capacity per
+            // hour, in pivot-row id order — a deterministic assignment, so
+            // re-running the same batch would always produce the same roster
+            // per hour. The last block takes whatever remainder is left.
+            $perHour = $this->schedule->hourlyCapacity();
+            $pivotRows = $locked->batchRequestStudents()->orderBy('id')->get();
+
+            foreach ($pivotRows->values() as $index => $pivotRow) {
                 $appointment = Appointment::create([
                     'reference_no' => $refService->generateAppointmentRef(),
                     'student_id' => $pivotRow->student_id,
                     'service_type' => $locked->service_type,
                     'scheduled_date' => $scheduledDate,
+                    'scheduled_time' => $span[intdiv($index, $perHour)],
                     'status' => 'scheduled',
                     'source' => 'batch',
                     'batch_request_id' => $locked->id,
@@ -154,6 +232,18 @@ class BatchApprovalController extends Controller
 
             return 'approved';
         });
+
+        // Both span refusals carry the offending hour's label alongside the reason.
+        if (is_array($outcome)) {
+            [$reason, $hourLabel] = $outcome;
+
+            $why = $reason === 'span_elapsed'
+                ? "the {$hourLabel} slot in its span has already passed"
+                : "the {$hourLabel} slot in its span is already fully booked";
+
+            return redirect()->route('director.batches.index')
+                ->with('error', "{$batch->reference_no} cannot be approved — {$why}. Reject it with a reason so the college can resubmit for another date or start time.");
+        }
 
         if ($outcome === 'already_decided') {
             return redirect()->route('director.batches.index')
@@ -170,6 +260,11 @@ class BatchApprovalController extends Controller
 
             return redirect()->route('director.batches.index')
                 ->with('error', "{$batch->reference_no} was requested for {$requested}, which has already passed — reject it with a reason asking the college to resubmit for a new date.");
+        }
+
+        if ($outcome === 'no_requested_time') {
+            return redirect()->route('director.batches.index')
+                ->with('error', "{$batch->reference_no} has no clinic hour span to confirm — reject it with the reason “predates the hourly-slot change — please resubmit”.");
         }
 
         $studentCount = $batch->batchRequestStudents()->count();

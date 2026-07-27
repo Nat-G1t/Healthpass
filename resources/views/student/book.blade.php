@@ -17,6 +17,15 @@ function bookCalendar() {
     return {
         selectedService: null,
         selectedDate:    null,
+        // D-37: the one-hour clinic slot. The option list comes from the
+        // server (derived from clinic_hours), and its per-slot remaining
+        // counts are refreshed from the availability endpoint on every date
+        // pick — a client that picks a full hour is still refused server-side.
+        selectedTime:    null,
+        slots:           @json($slots),
+        slotCapacity:    {{ $slotCapacity }},
+        slotAvailability: {},   // slot value => { remaining, full }
+        slotsLoading:    false,
         // D-28: purpose of the medical clearance, chosen here so the printed
         // form auto-populates. Empty for dental (server nulls it anyway).
         purpose:         '',
@@ -57,9 +66,38 @@ function bookCalendar() {
             return this.purpose !== this.purposeOthers || this.purposeOther.trim() !== '';
         },
 
-        /** All three steps satisfied and not mid-submit — enables Confirm Booking. */
+        /** All steps satisfied and not mid-submit — enables Confirm Booking. */
         get canBook() {
-            return !!this.selectedService && !!this.selectedDate && this.purposeReady && !this.submitting;
+            return !!this.selectedService && !!this.selectedDate && !!this.selectedTime
+                && this.purposeReady && !this.submitting;
+        },
+
+        /** Seats left in a slot; 0 until the availability fetch answers. */
+        remainingFor(slot) {
+            const row = this.slotAvailability[slot];
+            return row ? row.remaining : this.slotCapacity;
+        },
+
+        isSlotFull(slot) {
+            const row = this.slotAvailability[slot];
+            return row ? row.full : false;
+        },
+
+        /** BR-23: the hour already ended today. Decided server-side. */
+        isSlotElapsed(slot) {
+            const row = this.slotAvailability[slot];
+            return row ? row.elapsed : false;
+        },
+
+        /** The only thing the picker disables on. */
+        isSlotAvailable(slot) {
+            const row = this.slotAvailability[slot];
+            return row ? row.available : true;
+        },
+
+        /** "7:00 AM – 8:00 AM" for the confirm modal. */
+        get timeLabel() {
+            return this.slots.find(s => s.value === this.selectedTime)?.label ?? '';
         },
 
         /** Human-readable purpose for the confirm modal (Others shows the event). */
@@ -105,10 +143,13 @@ function bookCalendar() {
                 const dow          = date.getDay();
                 const isPast       = date < today;
                 const isBlockedDay = !this.bookingDays.includes(dow);
-                const isFull       = this.fullDays.includes(d);
                 // Same-day closing cutoff (BR-20). cutoffDays is decided server-side
                 // (never from this browser clock) — today only, and only after closing.
                 const isCutoff     = this.cutoffDays.includes(d);
+                // A cutoff day can also arrive as "full" (BR-23 greys today out
+                // once no hour is left, and past closing that is always true).
+                // Let cutoff win so the cell keeps its explain-why click.
+                const isFull       = this.fullDays.includes(d) && !isCutoff;
                 const isDisabled   = isPast || isBlockedDay || isFull || isCutoff;
                 const mm           = String(this.currentMonth).padStart(2, '0');
                 const dd           = String(d).padStart(2, '0');
@@ -127,15 +168,29 @@ function bookCalendar() {
             if (!this.canGoBack) return;
             if (this.currentMonth === 1) { this.currentYear--; this.currentMonth = 12; }
             else { this.currentMonth--; }
-            this.selectedDate = null;
+            this.clearDate();
             this.fetchAvailability();
         },
 
         nextMonth() {
             if (this.currentMonth === 12) { this.currentYear++; this.currentMonth = 1; }
             else { this.currentMonth++; }
-            this.selectedDate = null;
+            this.clearDate();
             this.fetchAvailability();
+        },
+
+        clearDate() {
+            this.selectedDate     = null;
+            this.selectedTime     = null;
+            this.slotAvailability = {};
+        },
+
+        /** A new date means a new set of hours — refetch, and drop the old pick. */
+        selectDate(dateStr) {
+            this.selectedDate     = dateStr;
+            this.selectedTime     = null;
+            this.slotAvailability = {};
+            this.fetchSlots();
         },
 
         async fetchAvailability() {
@@ -148,6 +203,44 @@ function bookCalendar() {
                 this.fullDays = data.full_days;
             } finally {
                 this.loading = false;
+            }
+        },
+
+        /** Per-slot remaining capacity for the selected date (D-37). */
+        async fetchSlots() {
+            const date = this.selectedDate;
+            if (!date) return;
+
+            this.slotsLoading = true;
+            try {
+                const r = await fetch(
+                    `/student/appointments/availability?year=${this.currentYear}` +
+                    `&month=${this.currentMonth}&date=${date}`
+                );
+                const data = await r.json();
+
+                // Ignore a stale answer if the student moved on to another date.
+                if (date !== this.selectedDate) return;
+
+                this.slotAvailability = Object.fromEntries(
+                    (data.slots ?? []).map(s => [s.value, {
+                        remaining: s.remaining, full: s.full,
+                        elapsed: s.elapsed, available: s.available,
+                    }])
+                );
+
+                // The hour may have filled up — or simply ended (BR-23) —
+                // while it was selected. Drop a pick that is no longer valid
+                // rather than letting Confirm submit something the server
+                // will reject.
+                if (this.selectedTime && !this.isSlotAvailable(this.selectedTime)) {
+                    this.selectedTime = null;
+                }
+            } catch {
+                // Leave the counts blank — the server is still the real gate.
+                this.slotAvailability = {};
+            } finally {
+                this.slotsLoading = false;
             }
         },
 
@@ -173,6 +266,7 @@ function bookCalendar() {
                     _token:        token,
                     service:       this.selectedService,
                     date:          this.selectedDate,
+                    time:          this.selectedTime,   // D-37
                     // Sent for every booking; the server drops purpose for dental
                     // and clears purpose_other unless "Others" was chosen (D-28).
                     purpose:       this.purpose,
@@ -192,6 +286,7 @@ function bookCalendar() {
 
                 if (response.status === 422) {
                     const message = data.errors?.date?.[0]
+                        ?? data.errors?.time?.[0]
                         ?? data.errors?.service?.[0]
                         ?? data.errors?.purpose?.[0]
                         ?? data.errors?.purpose_other?.[0]
@@ -224,10 +319,15 @@ function bookCalendar() {
             }
         },
 
-        /** Close the error modal without losing selected service / date / calendar month. */
+        /**
+         * Close the error modal without losing selected service / date / calendar
+         * month. The slot counts are refetched because the most likely reason we
+         * got here is that somebody else took the hour (D-37).
+         */
         closeErrorModal() {
             this.errorModal   = false;
             this.errorMessage = '';
+            this.fetchSlots();
         },
     };
 }
@@ -240,6 +340,7 @@ function bookCalendar() {
     @csrf
     <input type="hidden" name="service" :value="selectedService">
     <input type="hidden" name="date"    :value="selectedDate">
+    <input type="hidden" name="time"    :value="selectedTime">
 
     {{-- ── Step 1: Service Picker ──────────────────────────────────────────── --}}
     <x-hp.card class="mb-5">
@@ -382,7 +483,7 @@ function bookCalendar() {
                             :disabled="cell.isDisabled && !cell.isCutoff"
                             @click="cell.isCutoff
                                         ? (cutoffModal = true)
-                                        : (!cell.isDisabled && (selectedDate = cell.dateStr))"
+                                        : (!cell.isDisabled && selectDate(cell.dateStr))"
                             class="relative flex h-10 w-10 flex-col items-center justify-center rounded-full
                                    text-[13px] transition-colors focus:outline-none"
                             :class="{
@@ -432,7 +533,60 @@ function bookCalendar() {
         </div>
     </x-hp.card>
 
-    {{-- ── Step 3: Purpose of Medical Clearance (D-28) ──────────────────────────
+    {{-- ── Step 3: Time Slot (D-37) ──────────────────────────────────────────
+         The clinic day is ten one-hour slots holding 12 students each. The
+         option list is rendered from $slots (derived server-side from
+         clinic_hours) and the remaining counts come from the availability
+         endpoint; a full hour is disabled here AND refused server-side. --}}
+    <div x-show="selectedDate" x-cloak>
+        <x-hp.card class="mb-6">
+            <p class="mb-1 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">
+                Step 3 — Pick a Time
+            </p>
+            <p class="mb-4 text-xs text-hp-slate/50 dark:text-hp-slate/60">
+                Each hour takes up to {{ $slotCapacity }} students.
+                <span x-show="slotsLoading" x-cloak>Checking availability…</span>
+            </p>
+
+            <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+                <template x-for="slot in slots" :key="slot.value">
+                    <button type="button"
+                        :disabled="!isSlotAvailable(slot.value)"
+                        @click="selectedTime = slot.value"
+                        class="rounded-xl border-2 px-2 py-3 text-center transition-colors
+                               focus:outline-none focus-visible:ring-2 focus-visible:ring-hp-orange"
+                        :class="{
+                            'border-hp-orange bg-orange-50 dark:bg-hp-peach/50 hp-anim-pop':
+                                selectedTime === slot.value,
+                            'border-transparent bg-hp-bg text-hp-slate/30 dark:text-hp-slate/55 cursor-not-allowed':
+                                !isSlotAvailable(slot.value),
+                            'border-transparent bg-hp-bg hover:border-hp-orange/30 cursor-pointer':
+                                isSlotAvailable(slot.value) && selectedTime !== slot.value,
+                        }">
+                        <span class="block text-sm font-semibold"
+                              :class="isSlotAvailable(slot.value) ? 'text-hp-slate' : 'text-hp-slate/40 dark:text-hp-slate/55'"
+                              x-text="slot.label"></span>
+                        <span x-show="isSlotAvailable(slot.value)"
+                              class="mt-0.5 block text-[11px] text-hp-slate/50 dark:text-hp-slate/60">
+                            <span x-text="remainingFor(slot.value)"></span> left
+                        </span>
+                        {{-- BR-23: "Past" and "Full" are different problems —
+                             say which one the student is looking at. --}}
+                        <span x-show="isSlotElapsed(slot.value)" x-cloak
+                              class="mt-0.5 block text-[10px] font-bold uppercase tracking-wide">
+                            Past
+                        </span>
+                        <span x-show="isSlotFull(slot.value) && !isSlotElapsed(slot.value)" x-cloak
+                              class="mt-0.5 block text-[10px] font-bold uppercase tracking-wide">
+                            Full
+                        </span>
+                    </button>
+                </template>
+            </div>
+        </x-hp.card>
+    </div>
+
+    {{-- ── Step 4: Purpose of Medical Clearance (D-28) ──────────────────────────
          A medical clearance prints an official form that names its purpose, so
          the student chooses it here (shared <x-hp.purpose-fieldset>, same
          dropdown as nurse encode). Dental is scheduling-only — no clearance form
@@ -441,7 +595,7 @@ function bookCalendar() {
     <div x-show="selectedService === 'medical'" x-cloak>
         <x-hp.card class="mb-6">
             <p class="mb-4 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">
-                Step 3 — Purpose of Medical Clearance
+                Step 4 — Purpose of Medical Clearance
             </p>
             <x-hp.purpose-fieldset placeholderOption="— Select a purpose —" />
         </x-hp.card>
@@ -469,8 +623,8 @@ function bookCalendar() {
 
     <p x-show="!canBook && !submitting" x-cloak
        class="mt-2 text-center text-xs text-hp-slate/40 dark:text-hp-slate/55">
-        <span x-show="selectedService === 'medical'">Select a service, its purpose, and a date to continue</span>
-        <span x-show="selectedService !== 'medical'">Select a service and a date to continue</span>
+        <span x-show="selectedService === 'medical'">Select a service, a date, a time and the purpose to continue</span>
+        <span x-show="selectedService !== 'medical'">Select a service, a date and a time to continue</span>
     </p>
 
 </form>
@@ -497,7 +651,9 @@ function bookCalendar() {
             Book
             <span class="font-semibold text-hp-slate" x-text="serviceLabel"></span>
             on
-            <span class="font-semibold text-hp-slate" x-text="formattedDate"></span>?
+            <span class="font-semibold text-hp-slate" x-text="formattedDate"></span>
+            at
+            <span class="font-semibold text-hp-slate" x-text="timeLabel"></span>?
         </p>
         {{-- Purpose is a required dimension of a medical booking (D-28) — echo it
              back so the student confirms the exact choice before committing. --}}
@@ -585,7 +741,7 @@ function bookCalendar() {
 
         <div class="mt-5">
             <button type="button"
-                    @click="cutoffModal = false; selectedDate = null"
+                    @click="cutoffModal = false; clearDate()"
                     class="w-full rounded-full bg-hp-orange py-2.5 text-sm font-semibold
                            text-white transition-colors hover:bg-orange-500">
                 Pick another date

@@ -11,11 +11,13 @@
     Director Batch Approvals (FR-DIRA-01/05/06, D-36).
 
     One page-level Alpine component owns BOTH decision modals: the approve
-    confirmation (which batch, its requested date, the live booked-count for
-    the capacity warning) and the reject dialog (which batch, the typed
+    confirmation (which batch, its requested date, its D-37 hour span, and the
+    live per-hour capacity check) and the reject dialog (which batch, the typed
     reason). Both are confirmations now — D-36 removed the Director's date
     picker, so approving means confirming the College Admin's requested date
-    and pushing back means rejecting with a written reason.
+    and span, and pushing back means rejecting with a written reason. Since
+    D-37 a full hour inside the span BLOCKS approval outright rather than
+    warning about it.
 --}}
 <div x-data="batchApprovals()">
 
@@ -73,6 +75,7 @@
                             <th class="py-2.5 pr-4 font-semibold">Reason</th>
                             <th class="py-2.5 pr-4 font-semibold">Students</th>
                             <th class="py-2.5 pr-4 font-semibold">Requested Date</th>
+                            <th class="py-2.5 pr-4 font-semibold">Clinic Hours</th>
                             <th class="py-2.5 pr-4 font-semibold">Submitted</th>
                             <th class="py-2.5 font-semibold">Action</th>
                         </tr>
@@ -91,6 +94,8 @@
                                 <td class="py-3 pr-4">{{ $batch->batch_request_students_count }}</td>
                                 {{-- Admin-proposed clinic date (D-29); "—" on pre-D-29 batches --}}
                                 <td class="py-3 pr-4">{{ $batch->requested_date?->format('M j, Y') ?? '—' }}</td>
+                                {{-- D-37 hour span; "—" on pre-D-37 batches --}}
+                                <td class="py-3 pr-4">{{ $batch->requestedSpanLabel() }}</td>
                                 <td class="py-3 pr-4 text-hp-slate/60">{{ $batch->created_at->format('M j, Y') }}</td>
                                 <td class="py-3">
                                     @if ($batch->status === 'pending')
@@ -103,7 +108,17 @@
                                             // no date was ever requested, or the one that was
                                             // has passed. Mirrors the server's two refusals.
                                             $isStale = $batch->hasStaleRequestedDate();
-                                            $canApprove = $batch->requested_date !== null && ! $isStale;
+                                            // D-37 adds a third case with nothing to confirm:
+                                            // a batch submitted before the hourly-slot change
+                                            // has no hour span. Same reject-and-resubmit path.
+                                            $hasNoSpan = $batch->requestedSpan() === [];
+                                            // BR-23: requested for today, but some of
+                                            // its hours ended while it sat pending.
+                                            $elapsedHours = $batch->elapsedSpanHours();
+                                            $canApprove = $batch->requested_date !== null
+                                                && ! $isStale
+                                                && ! $hasNoSpan
+                                                && $elapsedHours === [];
                                         @endphp
 
                                         <div class="flex items-center gap-2">
@@ -120,6 +135,9 @@
                                                         'ref' => $batch->reference_no,
                                                         'students' => $batch->batch_request_students_count,
                                                         'requested' => $batch->requested_date->toDateString(),
+                                                        'time' => $batch->requested_time,
+                                                        'blocks' => (int) $batch->requested_blocks,
+                                                        'spanLabel' => $batch->requestedSpanLabel(),
                                                         'url' => route('director.batches.approve', $batch),
                                                     ]) }})"
                                                     class="inline-flex items-center justify-center gap-2 rounded-full
@@ -152,9 +170,16 @@
                                                 @if ($isStale)
                                                     The requested date has already passed — reject it with a reason
                                                     asking the college to resubmit for a new date.
-                                                @else
+                                                @elseif ($batch->requested_date === null)
                                                     This batch predates the requested-date field — reject it with the reason
                                                     &ldquo;predates the requested-date field — please resubmit&rdquo;.
+                                                @elseif ($elapsedHours !== [])
+                                                    The {{ app(App\Services\ClinicScheduleService::class)->label($elapsedHours[0]) }}
+                                                    slot in this batch&rsquo;s span has already passed today — reject it with a
+                                                    reason asking the college to resubmit for a later time.
+                                                @else
+                                                    This batch has no clinic hour span — reject it with the reason
+                                                    &ldquo;predates the hourly-slot change — please resubmit&rdquo;.
                                                 @endif
                                             </p>
                                         @endif
@@ -230,6 +255,13 @@
                         Requested clinic date
                     </p>
                     <p class="mt-1 text-base font-semibold text-hp-slate" x-text="requestedLabel"></p>
+
+                    {{-- D-37: the hour span, read-only for the same reason the
+                         date is — the Director confirms it or rejects. --}}
+                    <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">
+                        Clinic hours
+                    </p>
+                    <p class="mt-1 text-base font-semibold text-hp-slate" x-text="batch?.spanLabel"></p>
                 </div>
 
                 {{-- No stale-date notice here: a batch whose requested date has
@@ -242,17 +274,40 @@
                 <form method="POST" :action="batch?.url" @submit="submitting = true" class="mt-3">
                     @csrf
 
-                    {{-- Capacity warning (FR-DIRA-06) — warn, never block --}}
-                    <p x-show="isAtCapacity" x-cloak
-                       class="mt-3 rounded-lg border border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
-                        &#9888; This date already has <strong x-text="booked"></strong> of
-                        <strong x-text="capacity"></strong> appointments booked. Approving will
-                        still schedule every student, but the clinic will be over its daily capacity.
+                    {{-- Day load, for context. Informational only — the rule
+                         that decides anything is the per-hour block below. --}}
+                    <p x-show="booked !== null" x-cloak
+                       class="mt-3 text-xs text-hp-slate/50 dark:text-hp-slate/60">
+                        This date currently holds <strong x-text="booked"></strong> of
+                        <strong x-text="capacity"></strong> appointments.
+                    </p>
+
+                    {{-- Capacity BLOCK (FR-DIRA-06 as amended by D-37).
+                         This used to be a warning that still let the approval
+                         through. It no longer does: an hour already at the
+                         hourly cap means the clinic cannot process the cohort,
+                         and confirm-only approval (D-36) leaves no way to move
+                         the batch — so the only outcome is reject-and-resubmit. --}}
+                    <p x-show="fullSlots.length > 0" x-cloak
+                       class="mt-3 rounded-lg border border-red-300 dark:border-red-500/40 bg-red-50 dark:bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+                        &#9888; The <strong x-text="fullSlots.join(' and the ')"></strong>
+                        slot in this batch's span is already fully booked, so this batch
+                        cannot be approved. Reject it with a reason so the college can
+                        resubmit for another date or start time.
+                    </p>
+
+                    {{-- BR-23: requested for today, but those hours have ended. --}}
+                    <p x-show="elapsedSlots.length > 0" x-cloak
+                       class="mt-3 rounded-lg border border-red-300 dark:border-red-500/40 bg-red-50 dark:bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+                        &#9888; The <strong x-text="elapsedSlots.join(' and the ')"></strong>
+                        slot in this batch's span has already passed today, so this batch
+                        cannot be approved. Reject it with a reason so the college can
+                        resubmit for a later time.
                     </p>
 
                     <div class="mt-6 flex justify-end gap-3">
                         <x-hp.button variant="muted" @click="close()">Cancel</x-hp.button>
-                        <x-hp.button type="submit" variant="primary" x-bind:disabled="submitting">
+                        <x-hp.button type="submit" variant="primary" x-bind:disabled="submitting || isBlocked">
                             <span x-text="submitting ? 'Approving…' : 'Confirm & Approve'"></span>
                         </x-hp.button>
                     </div>
@@ -350,10 +405,13 @@
     function batchApprovals() {
         return {
             // ── Approve (confirm-only since D-36) ────────────────────────
-            batch: null,                              // { ref, students, requested, url } of the row being approved
+            // { ref, students, requested, time, blocks, spanLabel, url } of the row being approved
+            batch: null,
             submitting: false,                        // disables Approve after first click
             booked: null,                             // null until the capacity fetch answers
             capacity: {{ (int) config('healthpass.daily_capacity') }},
+            fullSlots: [],                            // D-37: hours in the span already at the cap
+            elapsedSlots: [],                         // BR-23: hours in the span that have ended
 
             // ── Reject (reason required since D-36) ─────────────────────
             rejectTarget: null,                       // { ref, url } of the row being rejected
@@ -361,9 +419,11 @@
             rejecting: false,
             reasonMin: {{ $reasonMin }},
 
-            // FR-DIRA-06: warn when the date is AT or OVER the daily cap.
-            get isAtCapacity() {
-                return this.booked !== null && this.booked >= this.capacity;
+            // FR-DIRA-06 (D-37): a full hour anywhere in the span BLOCKS
+            // approval. The server refuses the POST too — this only saves the
+            // Director a round trip.
+            get isBlocked() {
+                return this.fullSlots.length > 0 || this.elapsedSlots.length > 0;
             },
 
             // "Aug 3, 2026" for the modal copy (dates are ISO strings).
@@ -400,15 +460,24 @@
 
             async checkCapacity() {
                 this.booked = null;
+                this.fullSlots = [];
+                this.elapsedSlots = [];
 
                 // D-36: capacity is checked against the admin's requested date,
-                // the only date approval can use.
+                // the only date approval can use — and D-37, against the hours
+                // of that batch's span rather than the whole day.
                 const requestedDate = this.batch?.requested;
                 if (!requestedDate) return;
 
+                const params = new URLSearchParams({
+                    date: requestedDate,
+                    time: this.batch?.time ?? '',
+                    blocks: this.batch?.blocks ?? '',
+                });
+
                 try {
                     const res = await fetch(
-                        `{{ route('director.batches.capacity') }}?date=${requestedDate}`,
+                        `{{ route('director.batches.capacity') }}?${params}`,
                         { headers: { Accept: 'application/json' } },
                     );
                     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -420,8 +489,11 @@
 
                     this.booked = data.booked;
                     this.capacity = data.capacity;
+                    this.fullSlots = data.full_slots ?? [];
+                    this.elapsedSlots = data.elapsed_slots ?? [];
                 } catch (error) {
-                    // Warning simply stays hidden — never block approval on it.
+                    // The block simply stays hidden; approve() re-checks under
+                    // lock and refuses the POST, so nothing slips through.
                     console.error('Capacity check failed', error);
                 }
             },

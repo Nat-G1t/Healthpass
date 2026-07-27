@@ -56,6 +56,8 @@ class BatchRejectDecisionTest extends TestCase
             'reason' => 'ojt',
             'service_type' => 'medical',
             'requested_date' => now()->addDays(7)->toDateString(),
+            'requested_time' => '07:00:00',  // D-37
+            'requested_blocks' => 1,
         ], $overrides));
 
         User::factory()->count($studentCount)->create()->each(

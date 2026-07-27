@@ -71,4 +71,16 @@ class AppointmentFactory extends Factory
     {
         return $this->state(['scheduled_date' => $date]);
     }
+
+    /**
+     * D-37: put the appointment in a one-hour clinic slot ('09:00:00').
+     *
+     * The default is deliberately NULL — that models the pre-D-37 appointments
+     * that belong to no slot, so every test that doesn't opt in also exercises
+     * the legacy path.
+     */
+    public function inSlot(string $slot): static
+    {
+        return $this->state(['scheduled_time' => $slot]);
+    }
 }

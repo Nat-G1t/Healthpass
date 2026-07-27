@@ -2,7 +2,88 @@
 
 ## [Unreleased](https://github.com/laravel/laravel/compare/v12.12.1...12.x)
 
+### Added
+
+* **Appointments now have a time, and capacity is enforced per hour**
+  (D-37 — BR-01/BR-02/BR-04 amended, BR-21/BR-22 added, FR-STU-03/04,
+  FR-ADM-04 and FR-DIRA-02 amended).
+  The clinic day is **ten bookable one-hour slots** — 7–8 AM through 4–5 PM,
+  **the lunch hour included** — derived at runtime from
+  `healthpass.clinic_hours` by the new `App\Services\ClinicScheduleService`,
+  so the grid is never hardcoded in a view. A kiosk session takes at most
+  five minutes, so a slot holds **12** students: `hourly_capacity` = 12 and
+  `daily_capacity` **raised from 40 to 120**. Both stay config values.
+  **Medical and dental share one counter** — a dental appointment consumes an
+  hour-seat exactly like a medical one, because what is being capped is
+  clinic congestion, not kiosk throughput.
+  - **Students** pick a one-hour slot after picking a date. Each slot shows
+    its remaining seats, a full slot is disabled, and a date whose every hour
+    is full is greyed out in the calendar just as a capacity-full day is. The
+    existing availability endpoint was **extended** (no new route) to return
+    per-slot `booked`/`remaining`/`full` for a given date.
+  - **College Admins** pick a **start hour**; the system computes the span as
+    `ceil(students ÷ 12)` contiguous hours and shows it back live — *"30
+    students → 7:00 AM – 10:00 AM (3 slots)"*. Submission is blocked when any
+    hour in the span is full (**the error names the hour**), when the span
+    would run past 5 PM, or when the roster exceeds 120 (which cannot fit in
+    one clinic day). The span **length is always derived server-side**, so a
+    posted `requested_blocks` is inert.
+  - **Directors** confirm the span read-only alongside the date, and the
+    fan-out writes `scheduled_time` onto every generated appointment — 12 per
+    hour in pivot-row id order, the last block taking the remainder.
+  - Capacity is checked in the Form Request **and re-checked under
+    `lockForUpdate()` inside the write transaction**, for both self-booking
+    and batch submission: the Form Request's read is unlocked and races with a
+    concurrent booking for the last seat in an hour. A feature test injects a
+    competing booking at the exact moment that unlocked read returns and
+    asserts only one booking wins.
+  - Schema (flagged): `appointments.scheduled_time` TIME NULL plus
+    `index(scheduled_date, scheduled_time, status)`;
+    `batch_requests.requested_time` TIME NULL and `requested_blocks`
+    TINYINT NULL — span **start + block count, never an end time and never
+    both**. Slot keys are the canonical string `'07:00:00'` everywhere (select
+    value, DB column, WHERE clause), because MySQL TIME and SQLite TEXT
+    round-trip that form identically.
+  - **An hour that has already ended cannot be booked on today** (BR-23). A
+    slot dies when it **ends**, not when it starts: at 12:00 the 11 AM–12 PM
+    hour is gone and 12–1 PM is the earliest still available — which keeps
+    this consistent with BR-20's existing "today is bookable right up to
+    16:59" rule. It binds all three write paths: the **student** slot
+    picker (greyed and labelled "Past", distinct from "Full"), the **College
+    Admin's** batch start hour (only the start needs checking at submission —
+    a span runs forwards), and **Director approval**, where any elapsed hour in
+    the batch's span refuses the approval. The Director case matters because
+    D-36 still permits approving a batch requested for *today*, so its hours
+    can end between submission and review; fanning out then would create
+    appointments for a time already gone. A partially-elapsed span is refused
+    too — some of the cohort would land in the past, and a same-day batch whose
+    span is still ahead approves normally. Only today is
+    affected; a future date has no elapsed hours. Decided on the server clock
+    and shipped to both pages as data, **never computed in the browser**, the
+    same rule BR-20 already follows. A date whose remaining hours have all
+    elapsed greys out in the calendar, which makes BR-20's after-closing case
+    fall out naturally. Deliberately **not** re-checked under lock, unlike
+    capacity: no concurrent request can change whether an hour has ended.
+  - **Pre-D-37 appointments were deliberately not backfilled.** They keep
+    `scheduled_time` NULL, render as "—", are invisible to the per-slot
+    counters, and are still counted by the daily cap — which is why the daily
+    cap was kept alongside the hourly one. Backfilling them to 07:00 would
+    have invented twelve fake bookings in the first hour of every past clinic
+    day.
+
 ### Changed
+
+* **Batch approval capacity is now a HARD BLOCK, not a warning** (D-37,
+  amending FR-DIRA-06). If any one-hour slot in a batch's span has reached the
+  hourly cap when the Director opens *or* submits the approval, approval is
+  refused — the Approve button is disabled with the offending hour named, and
+  the endpoint refuses the POST after re-reading the counts under lock. The
+  Director is directed to reject with a reason so the college can resubmit.
+  **Stated plainly: combined with D-36's confirm-only approval, a batch whose
+  slots filled up between submission and review has exactly one outcome —
+  rejection and resubmission. That is the intended workflow, not a bug.** A
+  batch submitted before D-37 (no `requested_time`) is a third un-approvable
+  case alongside D-36's two, with the same remedy.
 
 * **Batch approval is now confirm-only** (D-36, FR-DIRA-02 — **supersedes the
   "the Director may adjust the date" clause of D-29**). The Director's approve
@@ -20,13 +101,15 @@
   schedule the cohort in the past. A batch requested for *today* is still
   confirmable; the staleness rule lives in one place,
   `BatchRequest::hasStaleRequestedDate()`, used by both the view and the
-  endpoint's locked-row check.
+  endpoint's locked-row check. *(Superseded in part by D-37 above: capacity at
+  approval is no longer a warning, and a batch with no hour span is a third
+  case that cannot be approved.)*
   When a Director can't take the requested date, the move is now to **reject
   with a reason** ("date unavailable, please resubmit for …") rather than
   silently shifting the cohort — the original request survives, the objection is
   on the record, and the college resubmits for a date it has agreed to. The
-  FR-DIRA-06 capacity **warning** is unchanged: approval still never blocks on
-  the daily cap.
+  FR-DIRA-06 capacity **warning** was unchanged by D-36 — **D-37 has since
+  replaced it with a hard block on the batch's hour span** (see above).
 
 ### Added
 

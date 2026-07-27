@@ -59,6 +59,7 @@ class CollegeScopeTest extends TestCase
             'reason' => 'ojt',
             'service_type' => 'medical',
             'requested_date' => now()->addDays(7)->toDateString(),
+            'requested_time' => '07:00:00', // D-37: start hour of the batch span
             'students' => [$this->ownStudent->id],
         ], $overrides);
     }

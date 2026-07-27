@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Student;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Student\StoreAppointmentRequest;
 use App\Models\Appointment;
+use App\Services\ClinicScheduleService;
 use App\Services\ReferenceNumberService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -18,6 +19,8 @@ use Illuminate\View\View;
 
 class BookAppointmentController extends Controller
 {
+    public function __construct(private readonly ClinicScheduleService $schedule) {}
+
     public function show(): View
     {
         $year = (int) now()->format('Y');
@@ -29,22 +32,43 @@ class BookAppointmentController extends Controller
             'fullDays' => $this->fullDaysForMonth($year, $month),
             'cutoffDays' => $this->cutoffDaysForMonth($year, $month),
             'bookingDays' => config('healthpass.booking_days'),
+            // D-37: the slot picker's options come from the config-derived grid,
+            // never from a list typed into the Blade file.
+            'slots' => array_map(fn (string $slot): array => [
+                'value' => $slot,
+                'label' => $this->schedule->label($slot),
+            ], $this->schedule->slots()),
+            'slotCapacity' => $this->schedule->hourlyCapacity(),
         ]);
     }
 
     /**
-     * JSON: day numbers in the given month where non-cancelled count >= daily_capacity.
-     * Consumed by the Alpine calendar on prev/next navigation.
+     * JSON availability for the booking calendar.
+     *
+     * Always: the month's full days and the BR-20 cutoff day.
+     * Additionally, when a `date` is supplied (the student just picked one),
+     * that date's per-slot availability (D-37) — booked, remaining, full — so
+     * the slot picker can grey out the hours that are already at 12. One
+     * endpoint, as required, rather than a second route for slots.
      */
     public function availability(Request $request): JsonResponse
     {
         $year = max(now()->year, min((int) $request->query('year', now()->year), now()->year + 2));
         $month = max(1, min((int) $request->query('month', now()->month), 12));
 
-        return response()->json([
+        $payload = [
             'full_days' => $this->fullDaysForMonth($year, $month),
             'cutoff_days' => $this->cutoffDaysForMonth($year, $month),
-        ]);
+        ];
+
+        $date = (string) $request->query('date', '');
+
+        if ($date !== '' && Carbon::hasFormat($date, 'Y-m-d')) {
+            $payload['slots'] = $this->schedule->slotAvailability($date);
+            $payload['slot_capacity'] = $this->schedule->hourlyCapacity();
+        }
+
+        return response()->json($payload);
     }
 
     /**
@@ -58,25 +82,29 @@ class BookAppointmentController extends Controller
         $userId = $request->user()->id;
         $service = $request->validated('service');
         $date = $request->validated('date');
+        $slot = $request->validated('time');
 
-        $appointment = DB::transaction(function () use ($request, $refService, $userId, $service, $date): Appointment {
-            // The Form Request already checked capacity (BR-02) and the one-active-
-            // per-student-per-date rule (BR-04), but those reads are unlocked and
-            // race with a concurrent booking (two tabs, a double-click, or two
-            // students grabbing the last slot): both pass the check, both insert.
-            // Re-check HERE under a row lock so the read and the insert are one
-            // atomic unit. lockForUpdate() takes range/gap locks on MySQL (and
-            // SQLite serializes write transactions), so the second caller blocks
-            // until the first commits, then sees the up-to-date count/duplicate.
-            $capacity = (int) config('healthpass.daily_capacity');
-            $booked = Appointment::whereDate('scheduled_date', $date)
-                ->where('status', '!=', 'cancelled')
-                ->lockForUpdate()
-                ->count();
-
-            if ($booked >= $capacity) {
+        $appointment = DB::transaction(function () use ($request, $refService, $userId, $service, $date, $slot): Appointment {
+            // The Form Request already checked capacity (BR-02, D-37) and the
+            // one-active-per-student-per-date rule (BR-04), but those reads are
+            // unlocked and race with a concurrent booking (two tabs, a double-click,
+            // or two students grabbing the last seat in the same hour): both pass
+            // the check, both insert. Re-check HERE under a row lock so the read
+            // and the insert are one atomic unit. lockForUpdate() takes range/gap
+            // locks on MySQL (and SQLite serializes write transactions), so the
+            // second caller blocks until the first commits, then sees the
+            // up-to-date count/duplicate.
+            if ($this->schedule->bookedOnDate($date, lock: true) >= $this->schedule->dailyCapacity()) {
                 throw ValidationException::withMessages([
                     'date' => 'This day is fully booked. Please select a different date.',
+                ]);
+            }
+
+            // D-37: the per-slot cap lives inside the SAME locked block — the
+            // 12-seat hour is exactly the resource two students race for.
+            if ($this->schedule->bookedInSlot($date, $slot, lock: true) >= $this->schedule->hourlyCapacity()) {
+                throw ValidationException::withMessages([
+                    'time' => $this->schedule->slotFullMessage($slot),
                 ]);
             }
 
@@ -103,6 +131,7 @@ class BookAppointmentController extends Controller
                 'purpose' => $request->validated('purpose'),
                 'purpose_other' => $request->validated('purpose_other'),
                 'scheduled_date' => $date,
+                'scheduled_time' => $slot, // D-37
                 'status' => 'scheduled',
                 'source' => 'self',
             ]);
@@ -161,30 +190,74 @@ class BookAppointmentController extends Controller
     }
 
     /**
-     * Day numbers (1–31) where non-cancelled appointment count >= daily_capacity.
-     * Implements FR-STU-03 / BR-02.
+     * Day numbers (1–31) the calendar greys out as FULL. FR-STU-03 / BR-02 / D-37.
      *
-     * Groups on the full scheduled_date (not DAY(...)) so the query stays portable —
-     * MySQL in dev, SQLite in the test suite. The day-of-month is derived in PHP.
-     * whereYear/whereMonth are compiled per-driver by Laravel, so they're safe here.
+     * Since D-37 a day is full when EVERY one of its slots is at the hourly cap —
+     * a day with one free hour left is still bookable. The outer daily cap is
+     * kept as a second condition because it is the only one that sees legacy
+     * pre-D-37 rows (scheduled_time NULL), which sit in no slot.
+     *
+     * Portability (CLAUDE.md): one grouped query over the raw
+     * (scheduled_date, scheduled_time) pair — no DAY()/MONTH()/HOUR() in
+     * selectRaw or havingRaw — and the per-day roll-up is done in PHP.
+     * whereYear/whereMonth are compiled per-driver by Laravel, so they're safe.
      *
      * @return int[]
      */
     private function fullDaysForMonth(int $year, int $month): array
     {
-        $capacity = (int) config('healthpass.daily_capacity');
+        $hourlyCapacity = $this->schedule->hourlyCapacity();
+        $dailyCapacity = $this->schedule->dailyCapacity();
+        $slotCount = count($this->schedule->slots());
 
-        return Appointment::query()
+        $rows = Appointment::query()
             ->whereYear('scheduled_date', $year)
             ->whereMonth('scheduled_date', $month)
             ->where('status', '!=', 'cancelled')
-            ->select('scheduled_date', DB::raw('COUNT(*) as cnt'))
-            ->groupBy('scheduled_date')
-            ->having('cnt', '>=', $capacity)
-            ->pluck('scheduled_date')
-            ->map(fn ($date) => Carbon::parse($date)->day)
-            ->values()
-            ->all();
+            ->select('scheduled_date', 'scheduled_time', DB::raw('COUNT(*) as cnt'))
+            ->groupBy('scheduled_date', 'scheduled_time')
+            ->get();
+
+        $fullSlotsPerDay = [];
+        $totalPerDay = [];
+
+        foreach ($rows as $row) {
+            $day = Carbon::parse($row->scheduled_date)->day;
+            $count = (int) $row->cnt;
+
+            $totalPerDay[$day] = ($totalPerDay[$day] ?? 0) + $count;
+
+            if ($row->scheduled_time !== null && $count >= $hourlyCapacity) {
+                $fullSlotsPerDay[$day] = ($fullSlotsPerDay[$day] ?? 0) + 1;
+            }
+        }
+
+        $fullDays = [];
+
+        foreach ($totalPerDay as $day => $total) {
+            $everySlotFull = $slotCount > 0 && ($fullSlotsPerDay[$day] ?? 0) >= $slotCount;
+
+            if ($everySlotFull || $total >= $dailyCapacity) {
+                $fullDays[] = $day;
+            }
+        }
+
+        // BR-23: TODAY is also unavailable once no hour is left to book — every
+        // slot has either filled up or already ended. Only today can have
+        // elapsed hours, so no other day needs this check (and a day with zero
+        // appointments never reaches the loop above, which is exactly the
+        // late-afternoon case that matters here).
+        $today = today();
+
+        if ($year === $today->year && $month === $today->month
+            && ! in_array($today->day, $fullDays, true)
+            && ! $this->schedule->hasAvailableSlot($today->toDateString())) {
+            $fullDays[] = $today->day;
+        }
+
+        sort($fullDays);
+
+        return $fullDays;
     }
 
     /**

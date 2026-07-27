@@ -71,6 +71,8 @@
                 </p>
                 <p class="mt-0.5 text-sm text-hp-slate/60">
                     {{ $nextAppointment->scheduled_date->format('F Y') }}
+                    {{-- D-37 slot; "—" on pre-D-37 appointments --}}
+                    <span class="font-semibold text-hp-slate">· {{ $nextAppointment->timeLabel() }}</span>
                 </p>
                 <div class="mt-3 flex flex-wrap gap-1.5">
                     <x-hp.badge variant="neutral">

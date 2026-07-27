@@ -9,6 +9,7 @@ use App\Models\BatchRequest;
 use App\Models\College;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 /**
@@ -53,6 +54,11 @@ class BatchApprovalsPageTest extends TestCase
             'requested_by' => $this->admin->id,
             'reason' => 'ojt',
             'service_type' => 'medical',
+            // D-37: a batch needs an hour span to be approvable, exactly as
+            // D-36 made requested_date necessary. Overridden to null by the
+            // tests that model a pre-D-37 batch.
+            'requested_time' => '07:00:00',
+            'requested_blocks' => 1,
         ], $overrides));
     }
 
@@ -131,6 +137,106 @@ class BatchApprovalsPageTest extends TestCase
         $this->assertSame(1, substr_count($content, 'openReject(JSON.parse'));
     }
 
+    /**
+     * D-37: a batch submitted before the hourly-slot change has no hour span,
+     * which is the same "nothing to confirm" situation as a missing date.
+     */
+    public function test_a_batch_without_a_requested_time_cannot_be_approved_from_the_page(): void
+    {
+        $this->makeBatch($this->ccs, [
+            'requested_date' => now()->addDays(5)->toDateString(),
+            'requested_time' => null,
+            'requested_blocks' => null,
+        ]);
+
+        $response = $this->actingAs($this->director)
+            ->get('/director/batches')
+            ->assertOk()
+            ->assertSee('predates the hourly-slot change');
+
+        $content = $response->getContent();
+        $this->assertSame(0, substr_count($content, 'openApprove(JSON.parse'));
+        $this->assertSame(1, substr_count($content, 'openReject(JSON.parse'));
+    }
+
+    /** BR-23: the page mirrors the endpoint's refusal for a lapsed same-day span. */
+    public function test_a_batch_whose_hours_have_passed_cannot_be_approved_from_the_page(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-27 12:00', 'Asia/Manila'));
+
+        $this->makeBatch($this->ccs, [
+            'requested_date' => today()->toDateString(),
+            'requested_time' => '07:00:00',
+            'requested_blocks' => 2,
+        ]);
+
+        $response = $this->actingAs($this->director)
+            ->get('/director/batches')
+            ->assertOk()
+            ->assertSee('has already passed today');
+
+        $content = $response->getContent();
+        $this->assertSame(0, substr_count($content, 'openApprove(JSON.parse'));
+        $this->assertSame(1, substr_count($content, 'openReject(JSON.parse'));
+    }
+
+    public function test_a_same_day_batch_still_ahead_keeps_its_approve_button(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-27 12:00', 'Asia/Manila'));
+
+        $this->makeBatch($this->ccs, [
+            'requested_date' => today()->toDateString(),
+            'requested_time' => '14:00:00',
+            'requested_blocks' => 2,
+        ]);
+
+        $content = $this->actingAs($this->director)
+            ->get('/director/batches')->assertOk()->getContent();
+
+        $this->assertSame(1, substr_count($content, 'openApprove(JSON.parse'));
+    }
+
+    public function test_capacity_feed_reports_elapsed_hours_inside_a_span(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-27 12:00', 'Asia/Manila'));
+
+        $this->actingAs($this->director)
+            ->getJson('/director/batches/capacity?date='.today()->toDateString().'&time=11:00:00&blocks=3')
+            ->assertOk()
+            ->assertJsonPath('elapsed_slots', ['11:00 AM – 12:00 PM'])
+            ->assertJsonPath('full_slots', []);
+    }
+
+    public function test_rows_show_the_batchs_clinic_hour_span(): void
+    {
+        $this->makeBatch($this->ccs, [
+            'requested_date' => now()->addDays(5)->toDateString(),
+            'requested_time' => '07:00:00',
+            'requested_blocks' => 3,
+        ]);
+
+        $this->actingAs($this->director)
+            ->get('/director/batches')
+            ->assertOk()
+            ->assertSee('7:00 AM – 10:00 AM (3 slots)');
+    }
+
+    public function test_capacity_feed_reports_full_hours_inside_a_span(): void
+    {
+        $date = now()->addDays(3)->toDateString();
+
+        Appointment::factory()->count(12)->inSlot('08:00:00')->create([
+            'scheduled_date' => $date,
+            'status' => 'scheduled',
+        ]);
+
+        $this->actingAs($this->director)
+            ->getJson("/director/batches/capacity?date={$date}&time=07:00:00&blocks=3")
+            ->assertOk()
+            ->assertJsonPath('full_slots', ['8:00 AM – 9:00 AM'])
+            ->assertJsonPath('span_label', '7:00 AM – 10:00 AM (3 slots)');
+    }
+
     public function test_rows_show_the_admins_requested_date_or_a_dash(): void
     {
         $requestedDate = now()->addDays(5);
@@ -156,7 +262,10 @@ class BatchApprovalsPageTest extends TestCase
         $this->actingAs($this->director)
             ->getJson('/director/batches/capacity?date='.$date)
             ->assertOk()
-            ->assertExactJson(['booked' => 3, 'capacity' => 3]);
+            ->assertJsonPath('booked', 3)
+            ->assertJsonPath('capacity', 3)
+            // D-37: no span asked for → nothing to report as full.
+            ->assertJsonPath('full_slots', []);
     }
 
     public function test_capacity_feed_rejects_a_malformed_date(): void

@@ -38,6 +38,18 @@ function batchForm() {
         serviceType:   @js(old('service_type', 'medical')),
         // D-29: the admin proposes the clinic date (defaults to today).
         requestedDate: @js(old('requested_date', now()->toDateString())),
+        // D-37: …and the START hour. The span is computed from the roster size
+        // (ceil(students / hourlyCapacity)) and shown back; the SERVER computes
+        // it again at submission, so this preview is a convenience only.
+        requestedTime: @js(old('requested_time', '')),
+        slots:         @js($slots),
+        // BR-23: hours that have already ended TODAY, computed on the SERVER
+        // clock and shipped with the page. The browser only compares the
+        // picked date against `today` — it never decides what "now" is.
+        today:              @js($today),
+        elapsedSlotsToday:  @js($elapsedSlotsToday),
+        hourlyCapacity: {{ $hourlyCapacity }},
+        maxBatchSize:   {{ $maxBatchSize }},
         reasonOthers:  @js(\App\Models\BatchRequest::REASON_OTHERS),
 
         // ── Student picker ──────────────────────────────────────────────────
@@ -95,8 +107,63 @@ function batchForm() {
             return this.reason !== this.reasonOthers || this.reasonDetail.trim() !== '';
         },
 
+        // ── D-37 span preview ───────────────────────────────────────────────
+        /** BR-23: an hour that has already ended, and only ever on today. */
+        isSlotElapsed(slot) {
+            return this.requestedDate === this.today
+                && this.elapsedSlotsToday.includes(slot);
+        },
+
+        /**
+         * Switching TO today can strand a start hour that has already gone by —
+         * clear it rather than leaving an invalid pick in the select.
+         */
+        onDateChange() {
+            if (this.requestedTime && this.isSlotElapsed(this.requestedTime)) {
+                this.requestedTime = '';
+            }
+        },
+
+        /** How many contiguous hours this cohort needs. */
+        get blocksNeeded() {
+            return Math.ceil(this.selected.length / this.hourlyCapacity);
+        },
+
+        /** The span's slots, or [] when it doesn't fit the clinic day. */
+        get spanSlots() {
+            const start = this.slots.findIndex(s => s.value === this.requestedTime);
+            if (start === -1 || this.blocksNeeded < 1) return [];
+            if (start + this.blocksNeeded > this.slots.length) return [];
+            return this.slots.slice(start, start + this.blocksNeeded);
+        },
+
+        get tooManyStudents() {
+            return this.selected.length > this.maxBatchSize;
+        },
+
+        get spanOverflows() {
+            return !this.tooManyStudents && this.requestedTime !== ''
+                && this.selected.length > 0 && this.spanSlots.length === 0;
+        },
+
+        /** "30 students → 7:00 AM – 10:00 AM (3 slots)" */
+        get spanSummary() {
+            if (this.spanSlots.length === 0) return '';
+            const first = this.spanSlots[0].label.split(' – ')[0];
+            const last  = this.spanSlots[this.spanSlots.length - 1].label.split(' – ')[1];
+            const count = this.spanSlots.length;
+            return `${this.selected.length} student${this.selected.length === 1 ? '' : 's'} → `
+                 + `${first} – ${last} (${count} slot${count === 1 ? '' : 's'})`;
+        },
+
         get canSubmit() {
-            return this.reasonReady && this.requestedDate !== '' && this.selected.length > 0;
+            return this.reasonReady
+                && this.requestedDate !== ''
+                && this.requestedTime !== ''
+                && !this.isSlotElapsed(this.requestedTime)
+                && this.selected.length > 0
+                && !this.tooManyStudents
+                && !this.spanOverflows;
         },
     };
 }
@@ -163,12 +230,59 @@ function batchForm() {
                     <div>
                         <x-hp.input label="Requested clinic date" type="date"
                                     name="requested_date" x-model="requestedDate"
+                                    @change="onDateChange()"
                                     min="{{ now()->toDateString() }}" required />
                         <p class="mt-1 text-xs text-hp-slate/50 dark:text-hp-slate/60">
                             When should these students visit the clinic? The
-                            Director may adjust this if the clinic is full that day.
+                            Director confirms this date or rejects with a reason
+                            — they cannot change it (D-36).
                         </p>
                         @error('requested_date')
+                            <p class="mt-1 text-xs text-red-600 dark:text-red-400">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    {{-- Start hour (D-37). The clinic day is ten one-hour slots
+                         of {{ $hourlyCapacity }} students; the batch occupies as
+                         many contiguous hours as its roster needs. --}}
+                    <div>
+                        {{-- BR-23: an hour that has already ended today is
+                             disabled here and refused server-side. --}}
+                        <x-hp.select label="Start time" name="requested_time" x-model="requestedTime">
+                            <option value="">— Select a start hour —</option>
+                            @foreach ($slots as $slot)
+                                <option value="{{ $slot['value'] }}"
+                                        :disabled="isSlotElapsed(@js($slot['value']))"
+                                        x-text="isSlotElapsed(@js($slot['value']))
+                                            ? '{{ $slot['label'] }} — already passed'
+                                            : '{{ $slot['label'] }}'">{{ $slot['label'] }}</option>
+                            @endforeach
+                        </x-hp.select>
+
+                        <p x-show="requestedTime !== '' && isSlotElapsed(requestedTime)" x-cloak
+                           class="mt-2 rounded-lg border border-red-300 dark:border-red-500/40 bg-red-50 dark:bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">
+                            That hour has already passed today. Please choose a later start hour.
+                        </p>
+
+                        {{-- Live span preview --}}
+                        <p x-show="spanSlots.length > 0 && !isSlotElapsed(requestedTime)" x-cloak
+                           class="mt-2 rounded-lg bg-hp-peach/40 px-3 py-2 text-xs font-semibold text-hp-orange"
+                           x-text="spanSummary"></p>
+
+                        <p x-show="tooManyStudents" x-cloak
+                           class="mt-2 rounded-lg border border-red-300 dark:border-red-500/40 bg-red-50 dark:bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">
+                            <span x-text="selected.length"></span> students cannot fit in one clinic day
+                            (max {{ $maxBatchSize }}). Please split this batch across two dates.
+                        </p>
+
+                        <p x-show="spanOverflows" x-cloak
+                           class="mt-2 rounded-lg border border-red-300 dark:border-red-500/40 bg-red-50 dark:bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">
+                            <span x-text="selected.length"></span> students need
+                            <span x-text="blocksNeeded"></span> clinic hour(s) — starting then would run
+                            past closing time. Please choose an earlier start hour.
+                        </p>
+
+                        @error('requested_time')
                             <p class="mt-1 text-xs text-red-600 dark:text-red-400">{{ $message }}</p>
                         @enderror
                     </div>
@@ -182,7 +296,7 @@ function batchForm() {
                 </x-hp.button>
                 <p class="mt-2 text-center text-xs text-hp-slate/50 dark:text-hp-slate/60"
                    x-show="!canSubmit" x-cloak>
-                    Choose a reason and select at least one student to submit.
+                    Choose a reason, a date, a start hour and at least one student to submit.
                 </p>
             </x-hp.card>
 

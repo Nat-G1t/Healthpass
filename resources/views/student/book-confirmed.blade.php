@@ -59,6 +59,14 @@
             </dd>
         </div>
 
+        {{-- Time slot (D-37). Pre-D-37 appointments have none and show "—". --}}
+        <div class="flex items-center justify-between gap-4">
+            <dt class="text-sm text-hp-slate/50 dark:text-hp-slate/60">Time</dt>
+            <dd class="text-sm font-semibold text-hp-slate">
+                {{ $appointment->timeLabel() }}
+            </dd>
+        </div>
+
         {{-- Clinic hours --}}
         <div class="flex items-center justify-between gap-4">
             <dt class="text-sm text-hp-slate/50 dark:text-hp-slate/60">Clinic Hours</dt>

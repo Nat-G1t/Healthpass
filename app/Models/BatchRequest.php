@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Services\ClinicScheduleService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -50,6 +51,8 @@ class BatchRequest extends Model
         'reason_detail',
         'service_type',
         'requested_date',
+        'requested_time',
+        'requested_blocks',
         'scheduled_date',
         'status',
         'rejection_reason',
@@ -85,6 +88,64 @@ class BatchRequest extends Model
     public function hasStaleRequestedDate(): bool
     {
         return $this->requested_date !== null && $this->requested_date->lt(today());
+    }
+
+    /**
+     * D-37: the batch has no clinic-hour span to confirm.
+     *
+     * True for batches submitted before D-37 (`requested_time` NULL). Exactly
+     * like D-36's NULL `requested_date`, approval is confirm-only and there is
+     * nothing here to confirm, so those batches must be rejected and
+     * resubmitted. One rule, called by both the Approvals page and the approve
+     * endpoint, so the button and the server can never disagree.
+     */
+    public function hasNoRequestedTime(): bool
+    {
+        return $this->requested_time === null || $this->requested_blocks === null;
+    }
+
+    /**
+     * The contiguous clinic slots this batch occupies, or [] when it has none
+     * (pre-D-37) or its stored span no longer fits the configured clinic day.
+     *
+     * @return list<string>
+     */
+    public function requestedSpan(): array
+    {
+        if ($this->hasNoRequestedTime()) {
+            return [];
+        }
+
+        return app(ClinicScheduleService::class)
+            ->span($this->requested_time, (int) $this->requested_blocks);
+    }
+
+    /** "7:00 AM – 10:00 AM (3 slots)", or "—" for a batch with no span. */
+    public function requestedSpanLabel(): string
+    {
+        return app(ClinicScheduleService::class)->spanLabel($this->requestedSpan());
+    }
+
+    /**
+     * BR-23: hours of this batch's span that have already gone by.
+     *
+     * Only ever non-empty for a batch requested for TODAY — a future date has
+     * no elapsed hours, and a strictly past one is already refused by
+     * [[hasStaleRequestedDate]]. Approving into these would create appointments
+     * at times that have been and gone, so it is refused; one rule called by
+     * both the Approvals page and the approve endpoint, so the disabled button
+     * and the server can never disagree.
+     *
+     * @return list<string>
+     */
+    public function elapsedSpanHours(): array
+    {
+        if ($this->requested_date === null) {
+            return [];
+        }
+
+        return app(ClinicScheduleService::class)
+            ->elapsedSlotsIn($this->requested_date->toDateString(), $this->requestedSpan());
     }
 
     /** Human-readable reason: the label, or the admin's own text for "others". */

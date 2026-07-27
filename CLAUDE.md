@@ -134,6 +134,10 @@ npm run dev                       # terminal 2
   Never commit directly to `main`. Small, focused commits.
 - **Reference numbers:** appointments `APT-YYYY-####`, batch requests
   `BR-YYYY-###`, clinic visits / clearances `HP-YYYY-####`
+- **Time slots** are always the canonical string `'H:i:s'` (`'07:00:00'`) —
+  in the `<select>`, in the DB column, and in every WHERE. MySQL TIME and
+  SQLite TEXT round-trip that form identically; mixing in `'07:00'` would
+  pass the SQLite suite and silently miscount on MySQL.
 - **Migrations:** follow the migration order in the PRD data dictionary.
   Never run `migrate:fresh` or other destructive DB commands without
   asking first — seeded data may be in use.
@@ -181,13 +185,33 @@ npm run dev                       # terminal 2
   the 9-system questionnaire and routes to the Nurse queue.
 - **Manual vitals entry is a first-class kiosk path**, sensors are
   progressive enhancement. Every reading records `entry_method`.
-- Clinic capacity is a config value; batch clinic dates are
-  admin-requested and **confirm-only** at approval — **the Director cannot
-  adjust the date (D-36, supersedes that clause of D-29)**. Approval reads
+- **Clinic capacity is TWO config values, never constants in a controller
+  (D-37):** `hourly_capacity` (**12**) and `daily_capacity` (**120**). The
+  clinic day is **ten one-hour slots derived from `clinic_hours`**
+  (7–8 AM … 4–5 PM, **lunch included**) — never hardcode 7–5 in a view; ask
+  `App\Services\ClinicScheduleService`. Every appointment carries a
+  `scheduled_time` slot key in canonical `'H:i:s'` form; **medical and dental
+  share one counter** (the constraint is clinic congestion, not kiosk
+  throughput). A day is full only when **every** slot is at 12. Pre-D-37
+  rows keep `scheduled_time` NULL, render as "—", and are seen by the daily
+  cap only — **never backfill them**.
+- **On today, an hour stops being bookable once it has ENDED (BR-23)** — at
+  12:00 the 11–12 slot is gone, 12–1 is not. Binds the student picker, the
+  College Admin's batch start hour, *and* Director approval (any elapsed hour
+  in the span refuses it — D-36 still allows same-day batches, so their hours
+  can lapse while pending; `BatchRequest::elapsedSpanHours()` is the one
+  definition the page and the endpoint share). Always decided on the **server**
+  clock and shipped to the page as data; never compute "now" in the browser
+  (same rule as BR-20). Not re-checked under lock — elapsed-ness can't race.
+- Batch clinic dates are admin-requested and **confirm-only** at approval —
+  **the Director cannot adjust the date (D-36, supersedes that clause of
+  D-29)** and since D-37 confirms the hour span read-only too. Approval reads
   `requested_date` off the locked row, never the request body. A batch can't
-  be approved at all when `requested_date` is NULL **or has already passed**
-  (`BatchRequest::hasStaleRequestedDate()` — today still counts as valid).
-  The pushback path is
+  be approved at all when `requested_date` is NULL, **has already passed**
+  (`BatchRequest::hasStaleRequestedDate()` — today still counts as valid),
+  it has **no hour span** (pre-D-37), or **any hour in its span is at the
+  hourly cap** — that last one is a **hard block since D-37, replacing
+  FR-DIRA-06's old warn-but-allow**. The pushback path is
   **reject with a written reason** (required, 10–500 chars), which the
   College Admin reads on Batch Tracking. Dental is scheduling-only, except
   that kiosk submit now links today's dental appointment so it can be

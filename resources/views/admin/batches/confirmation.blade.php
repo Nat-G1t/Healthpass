@@ -83,6 +83,14 @@
             </dd>
         </div>
 
+        {{-- Requested clinic hours (D-37) --}}
+        <div class="flex items-center justify-between gap-4">
+            <dt class="text-sm text-hp-slate/50 dark:text-hp-slate/60">Requested Time</dt>
+            <dd class="text-sm font-semibold text-hp-slate">
+                {{ $batch->requestedSpanLabel() }}
+            </dd>
+        </div>
+
         {{-- Submitted date --}}
         <div class="flex items-center justify-between gap-4">
             <dt class="text-sm text-hp-slate/50 dark:text-hp-slate/60">Submitted</dt>

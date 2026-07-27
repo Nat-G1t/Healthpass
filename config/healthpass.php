@@ -2,9 +2,19 @@
 
 return [
 
-    // BR-02, D-4: One global daily slot cap; counted against non-cancelled appointments.
-    // Clinic staff update this value without touching any controller or view.
-    'daily_capacity' => env('HEALTHPASS_DAILY_CAPACITY', 40),
+    // BR-02, D-4/D-37: clinic load caps, counted against non-cancelled appointments.
+    // Clinic staff update these values without touching any controller or view.
+    //
+    // D-37 made the clinic day TEN one-hour booking slots (clinic_hours below,
+    // 7 AM–5 PM, lunch included). A kiosk session takes at most 5 minutes, so a
+    // slot holds 12 students — 12 × 10 = 120 a day. Medical and dental share ONE
+    // counter: what is being capped is clinic congestion, not kiosk throughput.
+    'hourly_capacity' => env('HEALTHPASS_HOURLY_CAPACITY', 12),
+
+    // The outer daily cap. It equals hourly_capacity × the number of slots, and
+    // is still enforced separately because it is the only cap that sees legacy
+    // pre-D-37 appointments (scheduled_time NULL), which belong to no slot.
+    'daily_capacity' => env('HEALTHPASS_DAILY_CAPACITY', 120),
 
     // D-34, hosted internet deploy: the IP address(es) of the reverse proxy /
     // load balancer sitting in front of the app, comma-separated. Laravel only
@@ -30,7 +40,10 @@ return [
         'email_domain' => env('HEALTHPASS_STAFF_EMAIL_DOMAIN', 'healthpass.test'),
     ],
 
-    // BR-01 (updated): Clinic open daily, 7 AM–5 PM.
+    // BR-01 (updated): Clinic open daily, 7 AM–5 PM. Since D-37 this is also the
+    // source of the bookable slot list — App\Services\ClinicScheduleService derives
+    // one one-hour slot per open hour (07:00 … 16:00), so the slot grid is never
+    // hardcoded in a view. Whole hours only.
     'clinic_hours' => [
         'open' => '07:00',
         'close' => '17:00',

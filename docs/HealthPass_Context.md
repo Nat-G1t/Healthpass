@@ -145,6 +145,8 @@ Director analytics and flagged anomalies update from encoded records
 ### Appointments / booking
 - Past dates are unbookable.
 - Each clinic day has a configurable capacity; full days show as unavailable ("FULL").
+- **D-37/BR-23: an hour that has already ended is not bookable today.** A slot dies when it **ends** — at 12:00 the 11 AM–12 PM hour is gone, 12–1 PM is still open. Only today is affected, it is decided on the server clock (never the browser's), and it binds the student picker, the College Admin's batch start hour, and Director approval alike — a batch requested for today whose span hours have ended can no longer be approved, only rejected.
+- **D-37: the day is ten one-hour slots.** Clinic hours (7 AM–5 PM, lunch included) yield ten bookable slots of `hourly_capacity` = **12** each — `daily_capacity` **120**, up from 40. Medical and dental share one counter. A date is FULL when every slot is at 12 (or the daily cap is reached, which is the only counter that sees pre-D-37 appointments).
 - Clinic hours: 7:00 AM–5:00 PM, daily.
 - Service types: Medical Clearance, Dental Check.
 
@@ -284,6 +286,7 @@ Progress steps: Consent → Account Info → Email Verify → Link ID
 #### Book Appointment (`student-book`)
 - **Service picker**: two selectable cards (Medical Clearance 🏥 / Dental Check 🦷). Selected card gets orange border + peach background.
 - **Month calendar**: 7-column grid. Past dates disabled (greyed/transparent). Full days greyed with "FULL" micro-label. Selected day orange fill + white text. Available days: white with slate-14 border.
+- **Time-slot picker (D-37)**: appears once a date is picked. Ten one-hour buttons rendered from the config-derived slot list, each showing seats left; a slot at 12 is disabled and labelled FULL, and on today an hour that has already ended is disabled and labelled PAST (BR-23). The chosen slot is required and is re-checked under a row lock inside the booking transaction.
 - **Purpose of Medical Clearance** (third card, **Medical only** — hidden for Dental, which is scheduling-only): the same locked dropdown as nurse encode (Off Campus Procedure, On-the-job Training, Field Trip/Educational Tour, Sports Activities, **Others, Specify…** → required free-text event, max 120 chars). Shared `<x-hp.purpose-fieldset>` Blade component with encode. Stored on the appointment (`purpose`/`purpose_other`) and carried through to encode + the printed form (D-28).
 - **Clinic hours note**: "7:00 AM – 5:00 PM · Daily · Campus Clinic, Main Building".
 - "Confirm Booking" disabled until a service and date are both selected (and, for Medical, a purpose — Others also needs its specify text; validated server-side, D-28). On click, a confirmation modal opens ("Book {Service} on {date}?" → Yes, book it / Cancel) before the record is created. A same-service-same-date duplicate (BR-04 / FR-STU-05) is surfaced as an in-page modal with a "Choose another date" action — no page reload, selected service and date preserved.
@@ -404,7 +407,7 @@ questionnaire item that prints.
 - Full-width card with header "College Batch Requests" + description.
 - Each batch as a row: Batch ID (orange, 700) + status badge, college name (600), reason (italic, in quotes), count + submitted date.
 - **Pending rows only** show: "Reject" (ghost sm) + "Approve" (primary sm) buttons.
-- **On Approve** (confirm-only since **Decision D-36**, superseding D-29's adjust clause): the modal shows the College Admin's `requested_date` **read-only** — there is no date picker. In one DB transaction: set `batch_requests.status` → `Approved`, stamp `reviewed_by`/`reviewed_at` and `batch_requests.scheduled_date` **= the `requested_date` read from the LOCKED row** (never from the request body), **auto-create one `appointments` record per student listed in `batch_request_students`** (service = batch request's service type, date = the requested date, `source` = `batch`), and update each `batch_request_students.appointment_id`. Two kinds of batch cannot be approved at all — one whose `requested_date` is NULL (pre-D-29), and one whose `requested_date` has already passed (confirm-only can't move it, and a cohort must never be scheduled into the past). For both, Approve is disabled with a one-line notice **and** the endpoint refuses the POST; the Director rejects with a reason instead. A batch requested for today is still confirmable.
+- **On Approve** (confirm-only since **Decision D-36**, superseding D-29's adjust clause): the modal shows the College Admin's `requested_date` **read-only** — there is no date picker. In one DB transaction: set `batch_requests.status` → `Approved`, stamp `reviewed_by`/`reviewed_at` and `batch_requests.scheduled_date` **= the `requested_date` read from the LOCKED row** (never from the request body), **auto-create one `appointments` record per student listed in `batch_request_students`** (service = batch request's service type, date = the requested date, `source` = `batch`), and update each `batch_request_students.appointment_id`. Two kinds of batch cannot be approved at all — one whose `requested_date` is NULL (pre-D-29), and one whose `requested_date` has already passed (confirm-only can't move it, and a cohort must never be scheduled into the past). For both, Approve is disabled with a one-line notice **and** the endpoint refuses the POST; the Director rejects with a reason instead. A batch requested for today is still confirmable. **D-37 adds two things:** the modal also shows the batch's **clinic hour span read-only** (e.g. 7:00 AM – 10:00 AM (3 slots)), and capacity becomes a **hard block** — if any hour in that span has reached the hourly cap of 12 — **or has already ended, for a batch requested for today (BR-23)** — approval is refused in the UI *and* at the endpoint (capacity re-checked under lock), with the Director directed to reject-and-resubmit. A batch with no hour span (`requested_time` NULL, pre-D-37) is a further un-approvable case. The fan-out writes `scheduled_time` onto every generated appointment, 12 per hour in pivot-row id order.
 - **On Reject** (D-36): a **written reason is required** (10–500 chars, `RejectBatchRequest`). Update `batch_requests.status` → `Rejected` and store `batch_requests.rejection_reason`. No appointments created. This is also the escape hatch when the Director can't take the requested date — "date unavailable, please resubmit for &lt;X&gt;" — since the date can no longer be adjusted at approval. The College Admin reads the reason on Batch Tracking.
 - Approved/rejected rows show "✓ Approved" or "✕ Rejected" static text (no action buttons).
 
@@ -571,11 +574,14 @@ service_type          enum('medical','dental')
 purpose               varchar(50) NULL  -- student-chosen clearance purpose at self-booking: four locked values or 'Others'; Rule::in validation is the gate; NULL for dental/batch/pre-D-28 (D-28)
 purpose_other         varchar(120) NULL -- the Others specify-event text; required when purpose='Others' (D-28)
 scheduled_date        date
+scheduled_time        time NULL             -- D-37: the one-hour clinic slot ('07:00:00' .. '16:00:00', canonical 'H:i:s'); REQUIRED on every booking from D-37 onwards, NULL on pre-D-37 rows which were deliberately NOT backfilled (they belong to no slot, render as "—", and are counted only by the daily cap)
 status                enum('scheduled','checked_in','completed','cancelled') DEFAULT 'scheduled'
 source                enum('self','batch')  -- how the appointment was created
 batch_request_id      bigint NULL FK → batch_requests.id
 created_by            bigint NULL FK → users.id
 created_at, updated_at
+-- index(scheduled_date, status)                  -- daily capacity checks + daily appointment lists
+-- index(scheduled_date, scheduled_time, status)  -- D-37: per-slot counts; also serves the daily count as a leftmost prefix
 ```
 
 ### `batch_requests`
@@ -588,6 +594,8 @@ reason                enum('graduation','ojt','enrollment','scholarship','sports
 reason_detail         text NULL             -- used when reason = 'others'
 service_type          enum('medical','dental')
 requested_date        date NULL             -- admin-proposed clinic date, set at submission (D-29); NULL only on pre-D-29 batches
+requested_time        time NULL             -- D-37: admin-chosen START hour of the batch's span (canonical 'H:i:s')
+requested_blocks      tinyint unsigned NULL -- D-37: span LENGTH in whole hours = ceil(students / hourly_capacity), always computed server-side. Start + block count, NEVER an end time and never both: the count is what every consumer loops over, an end time is ambiguous about the last hour, and re-deriving it later could silently shrink an approved span if a student left the roster. Both columns NULL only on pre-D-37 batches, which (like a NULL requested_date under D-36) cannot be approved at all
 scheduled_date        date NULL             -- FINAL appointment date, stamped at approval; = requested_date since D-36 (D-5, amended by D-29/D-36)
 status                enum('pending','approved','rejected') DEFAULT 'pending'
 rejection_reason      text NULL             -- Director's written reason, required on reject (10-500 chars, D-36); NULL on pending/approved and on pre-D-36 rejections
@@ -772,7 +780,7 @@ clinic_visits ──|| vital_signs          (1:1)
 
 1. **Week-1 hardware spike**: validate Web Serial + BP monitor serial output before buying hardware.
 2. **Paper/scope mismatch**: the capstone paper still frames the system as AI-powered. The documentation team must revise the title and chapter scope to match the no-AI, scheduling + digital clearance system. This is a parallel workstream with its own deadline.
-3. **Decided (PRD D-4)** — clinic day capacity is a config value in `config/healthpass.php`; only the initial number remains to be set with clinic staff input.
+3. **Decided (PRD D-4, amended by D-37)** — clinic capacity is **two** config values in `config/healthpass.php`: `hourly_capacity` (12) and `daily_capacity` (120, raised from 40). Both are config, never controller constants.
 4. **Decided (PRD D-5, amended by D-29, then D-36)** — the College Admin proposes the clinic date at batch submission (`batch_requests.requested_date`); the Director **confirms it** at approval, which copies it into `batch_requests.scheduled_date`. Since **D-36** the Director cannot adjust it: the pushback path is rejecting with a written reason so the college resubmits.
 ---
 
