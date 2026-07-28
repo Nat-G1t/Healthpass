@@ -54,6 +54,13 @@ return [
     // self-booking is allowed. Remove an integer to block that weekday clinic-wide.
     'booking_days' => [0, 1, 2, 3, 4, 5, 6],
 
+    // FR-STU-12 (D-39): where the student is told to go, and what to bring, in the
+    // appointment email. Config rather than a string in the Blade because the
+    // clinic can move (the kiosk already moved once — docs/kiosk-network-move.md)
+    // and a room change must not need a code edit. Confirm the real room/building
+    // with the clinic before go-live; the default is deliberately generic.
+    'clinic_location' => env('HEALTHPASS_CLINIC_LOCATION', 'University Clinic, Pampanga State University'),
+
     // BR-20 (pending adviser sign-off): same-day booking cutoff. Once the local clock
     // (Asia/Manila) reaches this hour, TODAY can no longer be self-booked — the clinic is
     // closing. Integer hour, 24h, matches clinic_hours.close ('17:00') above; keep the two

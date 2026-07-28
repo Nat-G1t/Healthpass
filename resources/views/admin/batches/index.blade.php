@@ -58,7 +58,14 @@
         <x-hp.table :headers="$headers">
             @foreach ($batchRequests as $batch)
                 <x-hp.table-row>
-                    <x-hp.table-cell label="Batch ID" class="font-medium">{{ $batch->reference_no }}</x-hp.table-cell>
+                    {{-- D-40: the reference is now the way into the batch roster,
+                         which is where a student's appointment gets withdrawn. --}}
+                    <x-hp.table-cell label="Batch ID" class="font-medium">
+                        <a href="{{ route('admin.batches.show', $batch->id) }}"
+                           class="font-semibold text-hp-orange transition-colors hover:underline">
+                            {{ $batch->reference_no }}
+                        </a>
+                    </x-hp.table-cell>
                     <x-hp.table-cell label="Reason">{{ Str::limit($batch->reasonText(), 60) }}</x-hp.table-cell>
                     <x-hp.table-cell label="Students">{{ $batch->batch_request_students_count }}</x-hp.table-cell>
                     <x-hp.table-cell label="Submitted" class="text-hp-slate/60">{{ $batch->created_at->format('M j, Y') }}</x-hp.table-cell>

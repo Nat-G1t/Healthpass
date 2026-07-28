@@ -236,6 +236,69 @@ App\Models\StudentProfile::where('college_id', $collegeId)
 
 ---
 
+## Reading appointment emails locally (FR-STU-12 / D-39)
+
+`.env` ships `MAIL_MAILER=log`, which is what you want in dev: **nothing is
+actually sent anywhere**, and every message is written in full — headers plus the
+rendered HTML — to `storage/logs/laravel.log`. Leave it that way. Real SMTP is a
+deployment concern (`docs/deployment-hosted.md` §3).
+
+**The catch: the emails are queued jobs, and `QUEUE_CONNECTION=database`.**
+Booking an appointment only writes a row to the `jobs` table. Until a worker runs
+it, nothing reaches the log and it looks like the feature is broken. So:
+
+```
+php artisan serve --port=8080     # terminal 1
+npm run dev                       # terminal 2
+php artisan queue:work            # terminal 3  ← the one people forget
+```
+
+Then book an appointment (or approve a batch as the director) and watch it land:
+
+```powershell
+# Windows / PowerShell — follow the log
+Get-Content storage/logs/laravel.log -Wait -Tail 40
+```
+
+You will see one `Illuminate\Mail\...` entry per student, each containing the
+full HTML body — reference number, date, hour slot, the lot. Searching for the
+reference number is the fastest way to find a specific one:
+
+```powershell
+Select-String -Path storage/logs/laravel.log -Pattern 'APT-2026-0042' -Context 0,60
+```
+
+Other ways to see it, depending on what you are checking:
+
+```bash
+# Render the mail in the browser without sending anything — fastest way to
+# iterate on the Blade. Add temporarily to routes/web.php, then DELETE it.
+Route::get('/dev/mail-preview', fn () => new App\Mail\AppointmentScheduledMail(
+    App\Models\Appointment::latest()->firstOrFail()
+));
+
+# One-off from tinker, no queue worker needed (runs the job inline):
+php artisan tinker
+>>> (new App\Jobs\SendAppointmentScheduledMail(App\Models\Appointment::latest()->first()))->handle();
+
+# See what is waiting / what failed
+php artisan queue:work --once     # drain exactly one job
+php artisan queue:failed
+php artisan queue:retry all
+```
+
+Two gotchas:
+
+- **Restart `queue:work` after editing the job, the Mailable or the Blade.** A
+  worker keeps the old code in memory. This wastes more time than anything else
+  here — if your template change is not showing up, that is why.
+- The test suite pins `QUEUE_CONNECTION=sync` and `MAIL_MAILER=array`
+  (`phpunit.xml`), so tests never need a worker and never write to the log;
+  they assert with `Mail::fake()` / `Queue::fake()` instead. See
+  `tests/Feature/Student/AppointmentEmailTest.php`.
+
+---
+
 ## Booking UX — Day 15 S2
 
 - **Confirm-before-book:** clicking "Confirm Booking" opens an in-page confirmation modal

@@ -651,6 +651,23 @@ Two things to know before you rely on it:
   `http://localhost` — do it once *before* defense day, not during the failure.
 - **The local database is separate.** Restore a fresh dump from the hosted server
   or the fallback demos stale data.
+- **No internet means no email, and that is fine — it is not lost (D-39).**
+  Appointment emails (FR-STU-12) and registration OTPs are **queued jobs**, so
+  the app writes them to the local `jobs` table and returns immediately.
+  Bookings, batch approvals and the whole kiosk flow work normally with the
+  venue's internet down; only the *delivery* stalls. What happens next depends
+  on whether a worker is running on the Pi:
+  - **No `queue:work` on the Pi (the usual fallback setup):** jobs simply pile
+    up in `jobs` and nothing is sent. They are still there afterwards.
+  - **A worker running with no route to the SMTP host:** each job fails its 3
+    attempts (1 min, then 5 min apart) and lands in `failed_jobs`. Recover with
+    `php artisan queue:retry all` once connectivity is back — do **not** re-approve
+    the batch, which would create duplicate appointments.
+
+  Either way the queue **drains on reconnect**, so students booked during an
+  offline demo get their email late rather than never. Registration OTPs are the
+  real casualty: a student cannot complete sign-up while mail is stalled, so use
+  pre-seeded accounts for an offline demo rather than registering live.
 
 **Rehearse this switch end to end at least once.** An untested fallback is not a
 fallback.

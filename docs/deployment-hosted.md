@@ -122,6 +122,84 @@ on `*` rather than let a spoofable app go live. Covered by
 > After any `.env` edit, re-run `php artisan config:cache` — a cached config
 > ignores later `.env` changes.
 
+### SMTP + the queue worker (D-39) — read this or the emails never send
+
+HealthPass sends real email in two places: registration / password OTPs (D-8)
+and the appointment scheduling notice (FR-STU-12). Both need **two** things
+configured, and the second one has no error message when you forget it.
+
+**1. Real SMTP credentials.** `MAIL_MAILER=log` is the dev default and writes
+messages to the log instead of sending them. On the hosted box:
+
+```dotenv
+MAIL_MAILER=smtp
+MAIL_HOST=<provider smtp host>
+MAIL_PORT=587
+MAIL_USERNAME=<provider username>
+MAIL_PASSWORD=<provider password>       # never commit this
+MAIL_SCHEME=tls
+MAIL_FROM_ADDRESS="noreply@<domain>"    # must be an address the provider may send as
+MAIL_FROM_NAME="HealthPass"
+
+HEALTHPASS_CLINIC_LOCATION="University Clinic, <building/room>"
+```
+
+`MAIL_FROM_ADDRESS` has to be an address the provider is authorised to send as
+(SPF/DKIM on the real domain). Get it wrong and mail is accepted, then silently
+spam-filed — which looks identical to working, until a student says they never
+got anything.
+
+**2. A SUPERVISED `queue:work` PROCESS. THIS IS THE ONE THAT BITES.**
+
+`QUEUE_CONNECTION=database`, and every appointment email is a **queued job**
+(D-39). Dispatching a job only writes a row to the `jobs` table. **If no worker
+is running, that row sits there forever. The Director sees "batch approved — 60
+appointment(s) created", every appointment is real and correct, and not one of
+the 60 students is ever emailed. Nothing errors. Nothing is logged. The only
+symptom is a `jobs` table that grows and never drains.**
+
+So the worker is not optional infrastructure — it is part of the feature.
+
+```ini
+# /etc/supervisor/conf.d/healthpass-worker.conf
+[program:healthpass-worker]
+process_name=%(program_name)s_%(process_num)02d
+command=php /var/www/healthpass/artisan queue:work --sleep=3 --tries=3 --max-time=3600
+autostart=true
+autorestart=true
+stopwaitsecs=3600
+user=www-data
+numprocs=1
+redirect_stderr=true
+stdout_logfile=/var/www/healthpass/storage/logs/worker.log
+```
+
+```bash
+sudo supervisorctl reread && sudo supervisorctl update
+sudo supervisorctl start healthpass-worker:*
+sudo supervisorctl status                      # must show RUNNING
+```
+
+Notes:
+
+- **Keep `numprocs=1`.** One worker consumes jobs serially, which is also the
+  app's send-rate ceiling — that is deliberately the only throttle in the system
+  (D-39: no rate-limiting package was added). If the mail provider imposes a
+  per-minute cap, one worker is what keeps you under it. Raising `numprocs`
+  raises the send rate and can trip the provider's limit.
+- **Restart the worker on every deploy.** A worker holds the old code in memory;
+  `php artisan queue:restart` in the deploy script (§8) tells it to exit so
+  supervisor starts a fresh one.
+- A job that fails all 3 attempts lands in `failed_jobs` and logs an
+  `Appointment email failed after all retries` line carrying the appointment
+  reference and student id. Inspect with `php artisan queue:failed`, retry with
+  `php artisan queue:retry all`.
+
+```bash
+php artisan queue:failed          # what did not go out
+php artisan queue:monitor default # depth — a number that only grows means no worker
+```
+
 ---
 
 ## 4. nginx + TLS
@@ -254,8 +332,13 @@ sudo -u www-data php artisan config:cache
 sudo -u www-data php artisan route:cache
 sudo -u www-data php artisan view:cache
 sudo systemctl reload php8.2-fpm
+sudo -u www-data php artisan queue:restart   # workers hold old code in memory (D-39)
 php artisan up
 ```
+
+`queue:restart` asks the running worker to exit cleanly after its current job;
+supervisor then starts a fresh one on the new code. Skip it and appointment
+emails keep rendering from the previous deploy's views until the next reboot.
 
 Back up the database before any deploy that carries a migration:
 
@@ -282,6 +365,14 @@ mysqldump -u healthpass -p healthpass > ~/healthpass-$(date +%F).sql
       accounts reachable**, and logging in as a seeded account lands on the
       change-password screen and refuses to go anywhere else
 - [ ] Registration OTP email actually arrives via real SMTP
+- [ ] **`supervisorctl status` shows `healthpass-worker` RUNNING** — without it
+      every appointment email queues silently and never sends (§3, D-39)
+- [ ] Book one test appointment and approve one small test batch; confirm the
+      emails actually **arrive** (not just that `jobs` emptied), and that the
+      body shows the right date, hour slot and reference number
+- [ ] `HEALTHPASS_CLINIC_LOCATION` set to the real room/building — it is printed
+      in every appointment email
+- [ ] `php artisan queue:failed` is empty
 - [ ] Database backup taken and restore tested
 
 ---
@@ -291,6 +382,9 @@ mysqldump -u healthpass -p healthpass > ~/healthpass-$(date +%F).sql
 | What | Command / path |
 |---|---|
 | Env template | `scripts/hosted.env.example` |
+| Queue worker status | `sudo supervisorctl status healthpass-worker:*` |
+| Undelivered mail | `php artisan queue:failed` |
+| Queue depth (grows = no worker) | `php artisan queue:monitor default` |
 | Trusted-proxy parser | `app/Support/TrustedProxies.php` |
 | Kiosk URL | `https://<domain>/kiosk` |
 | Enroll the Pi | Nurse nav → **Enable Kiosk Mode** → *Kiosk Devices* |

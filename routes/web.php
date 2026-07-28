@@ -117,6 +117,18 @@ Route::middleware(['auth', 'role:college_admin', 'college.scope'])
         Route::get('/batches', [AdminBatchRequestController::class, 'index'])->name('batches.index');
         Route::get('/batches/{batch}/confirmation', [AdminBatchRequestController::class, 'confirmation'])
             ->whereNumber('batch')->name('batches.confirmation');
+        // Batch roster (FR-ADM-07, D-40): the students in one batch and the
+        // appointments approval generated for them. Scoped through
+        // managedCollege() like every other /admin read, so a foreign id 404s.
+        Route::get('/batches/{batch}', [AdminBatchRequestController::class, 'show'])
+            ->whereNumber('batch')->name('batches.show');
+        // Withdraw ONE student's appointment from an approved batch — the other
+        // half of D-39, since a batch student cannot cancel their own. Its own
+        // throttle bucket: authed throttles key on the user id with no path, so
+        // without the 3rd arg this would share a counter with batch-store.
+        Route::delete('/batches/{batch}/appointments/{appointment}', [AdminBatchRequestController::class, 'cancelAppointment'])
+            ->whereNumber('batch')->whereNumber('appointment')
+            ->middleware('throttle:30,1,batch-appt-cancel')->name('batches.appointments.cancel');
     });
 
 // ── Nurse (FR-AUTH-03) ───────────────────────────────────────────────────────

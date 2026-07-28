@@ -4,6 +4,102 @@
 
 ### Added
 
+* **A withdrawn student is now emailed** (D-41 — FR-STU-13).
+  **No schema change.** This closes the last hole in the chain: D-39 emailed
+  students when their college booked them and stopped them cancelling a batch
+  appointment themselves; D-40 gave the College Admin the withdraw action — but
+  **nothing told the student when it fired**, so a cancelled student would still
+  have turned up to a seat that no longer existed.
+  - The notice names the cancelled date, one-hour slot, service and reference,
+    identifies the college that withdrew it, and gives a route back to the
+    college administrator if it was a mistake.
+  - **It points the student at self-booking.** A withdrawn student is an
+    ordinary student again, so they need not wait for their college to arrange
+    another batch — this is what stops a withdrawal quietly becoming a lost
+    clearance. Omitted once the clinic date has passed.
+  - **Only a withdrawal that actually happened emails anyone.** A refusal
+    (already checked in, completed, past-dated, or a duplicate submit) returns
+    before the dispatch; asserted by test.
+  - **A self-booked cancellation deliberately sends nothing** — the student
+    performed that action themselves and an email confirming their own click is
+    noise.
+  - Queued and dispatched **after the withdrawal transaction commits**, on
+    exactly the terms D-39 set, so a mail failure cannot roll back the
+    withdrawal. Carries no clearance outcome, Fit/Unfit, vitals or
+    questionnaire data (FR-STU-08).
+
+* **College Admins can withdraw a student's appointment from an approved
+  batch, and batches now have a roster page** (D-40 — FR-ADM-07).
+  **No schema change.** This closes the gap D-39 opened: that change told batch
+  students to contact their college admin to cancel, but **no such capability
+  existed anywhere in the app** — Batch Tracking showed a student *count* and
+  nothing else, and there was no cancel route on the admin side at all.
+  - **Batch roster page** — clicking a batch reference on Batch Tracking now
+    opens `/admin/batches/{batch}`, listing every student on the batch and,
+    once the Director has approved it, their appointment reference, one-hour
+    slot and status. There was previously no way to see who was in a batch.
+  - **Withdraw one student.** The appointment flips to `cancelled`, and that
+    alone **frees the hour-seat** — every capacity count in the app (daily cap,
+    the D-37 per-hour cap, the calendar's full-day roll-up) already filters
+    `status != 'cancelled'`, so no counter is maintained and none can drift.
+    Covered by a test that fills an hour to capacity, withdraws one student,
+    and books a self-booking student into the freed seat.
+  - **The row is kept, not deleted**, and the pivot's `appointment_id` is
+    retained, so a withdrawn student stays visible in the batch's history
+    rather than becoming indistinguishable from one never submitted.
+  - **Guards:** `scheduled` status only — a `checked_in` or `completed`
+    appointment may already back a `clinic_visits` row, and cancelling it would
+    contradict a real clinic encounter — and not a past date. **Today is still
+    withdrawable**, deliberately unlike the student-side rule, because "phoned
+    in sick this morning" is the commonest reason a seat needs freeing.
+    `Appointment::isAdminCancellable()` is the single rule the view and the
+    endpoint share, re-read under `lockForUpdate()` so a duplicate submit or a
+    race with kiosk check-in cannot slip past the page's unlocked read.
+  - **Scope** follows FR-ADM-06: the batch is fetched through
+    `managedCollege()->batchRequests()` and the appointment must belong to it,
+    so a foreign batch id *or* a foreign appointment id is a plain 404.
+  - Deliberately **one student at a time** — that is the case the appointment
+    email generates. Cancelling a whole approved cohort is not built.
+
+* **Students are emailed when an appointment is created for them**
+  (D-39 — FR-STU-12 added, FR-STU-06 amended). **No schema change.**
+  Until now a student booked into a batch by their College Admin had **no
+  notification of any kind** — the first they would learn of the appointment
+  was failing to turn up for it. Both creation paths now send a scheduling
+  notice: the Director's batch approval fan-out (one email per student) and
+  the student's own booking, so the inbox experience is consistent.
+  - **What the email contains:** name, reference number (`APT-YYYY-####`),
+    service (Medical/Dental), the date and the **one-hour slot** ("9:00 AM –
+    10:00 AM", D-37), the purpose, who booked it (self, or the college by
+    name), the clinic location, what to bring, a Kiosk Tutorial pointer, and
+    cancellation guidance. It is readable without logging in.
+  - **What it deliberately does not contain:** any clearance outcome,
+    Fit/Unfit status, vitals, or questionnaire answers. This is a scheduling
+    notice; results reach the student through My Records after nurse encoding
+    (FR-STU-08).
+  - **Queued, and dispatched only after the transaction commits.** One
+    `App\Mail\AppointmentScheduledMail` sent through one queued job **per
+    student** (`App\Jobs\SendAppointmentScheduledMail`, 3 tries, 60s/300s
+    backoff). Approving a 60-student batch costs the Director 60 INSERTs, not
+    60 SMTP round-trips, and **a mail failure can no longer roll back real
+    appointments** — dispatching inside the transaction would have made an
+    SMTP outage into lost bookings. One job per student rather than one job
+    looping the roster, so a single undeliverable address loses one message
+    instead of 59. The job re-checks the appointment is still `scheduled` at
+    send time, so a student who cancels while the job waits is not then told
+    it is confirmed.
+  - **Rate limiting:** none added, and no package installed. A single
+    `queue:work` process consumes jobs serially, which is itself the send-rate
+    ceiling — documented in `docs/deployment-hosted.md` so nobody "optimises"
+    it by raising `numprocs`.
+  - **⚠ Deployment:** these are queued jobs, so **without a running
+    `php artisan queue:work` nothing is ever sent** — no error, no log line,
+    just a `jobs` table that grows. Supervisor config and a go-live checklist
+    item are in `docs/deployment-hosted.md` §3.
+  - `healthpass.clinic_location` added as a config value (the clinic can move;
+    the kiosk already has). `MAIL_*` guidance added to `.env.example`; the
+    `MAIL_MAILER=log` dev default is unchanged.
+
 * **Appointments now have a time, and capacity is enforced per hour**
   (D-37 — BR-01/BR-02/BR-04 amended, BR-21/BR-22 added, FR-STU-03/04,
   FR-ADM-04 and FR-DIRA-02 amended).
@@ -72,6 +168,36 @@
     day.
 
 ### Changed
+
+* **The two appointment notices now share one queued-job base class**
+  (D-41). `App\Jobs\AppointmentMailJob` holds the retry policy (3 tries,
+  60s/300s backoff), `deleteWhenMissingModels`, recipient resolution from the
+  User record, and PII-free failure logging; `SendAppointmentScheduledMail` and
+  `SendAppointmentWithdrawnMail` each supply only their Mailable, their
+  still-relevant check and a log label. Extracted rather than copy-pasted
+  because the retry policy and the "no PII in logs" rule are exactly what drifts
+  between two near-identical files and then only fails in production.
+  > **Gotcha worth knowing:** the shared `$appointment` property must **not** be
+  > `readonly`. PHP only lets a readonly property be initialized from the class
+  > that declares it, and the queue rehydrates a job onto an instance of the
+  > *subclass* — so a readonly property throws
+  > `Cannot initialize readonly property … from scope` the moment the job
+  > round-trips through the queue.
+
+* **Batch-booked appointments can no longer be cancelled by the student**
+  (D-39 — FR-STU-06 amended). Found while writing the email above: the
+  cancel endpoint guarded ownership, `scheduled` status and a future date, but
+  **not `source`** — so a student could quietly drop out of a cohort their
+  College Admin had booked, leaving the college's roster wrong with nobody
+  told. A batch appointment now belongs to the college that booked it; the
+  dashboard and confirmation views show "Booked by your college — contact your
+  college administrator" in place of the cancel button, and the endpoint
+  returns 403. `Appointment::isSelfCancellable()` is the single rule both
+  read, so the button and the server cannot disagree. Self-booked
+  appointments are unchanged — still cancellable up to the day before.
+  > The College Admin side of this — the roster page and the withdraw action
+  > that makes "contact your college administrator" actually actionable — was
+  > **missing when this shipped and is now covered by D-40 / FR-ADM-07 above.**
 
 * **Batch approval capacity is now a HARD BLOCK, not a warning** (D-37,
   amending FR-DIRA-06). If any one-hour slot in a batch's span has reached the

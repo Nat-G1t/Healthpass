@@ -118,8 +118,10 @@
         Book Another
     </a>
 
-    {{-- FR-STU-06: cancel button (only shown for future dates) --}}
-    @if ($appointment->scheduled_date->gt(today()))
+    {{-- FR-STU-06: cancel button. isSelfCancellable() is the same rule the
+         cancel endpoint enforces (future date, still scheduled, and since D-39
+         not batch-booked) — batch appointments are withdrawn by the college. --}}
+    @if ($appointment->isSelfCancellable())
         <div x-data="{ confirming: false }" class="w-full sm:w-auto">
 
             <button type="button" @click="confirming = true"

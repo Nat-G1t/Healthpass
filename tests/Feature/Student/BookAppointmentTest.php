@@ -815,6 +815,33 @@ class BookAppointmentTest extends TestCase
         ]);
     }
 
+    /**
+     * D-39: a batch appointment belongs to the cohort the College Admin booked,
+     * so only that admin may withdraw it — otherwise a student could silently
+     * drop out of a graduation batch and leave the college's roster wrong. This
+     * is also the statement the FR-STU-12 email makes to batch students, so it
+     * has to be true on the server, not just hidden in the UI.
+     */
+    public function test_student_cannot_cancel_a_batch_booked_appointment(): void
+    {
+        $student = $this->student();
+        $appointment = Appointment::factory()->create([
+            'student_id' => $student->id,
+            'scheduled_date' => $this->futureDate(3),
+            'status' => 'scheduled',
+            'source' => 'batch',
+        ]);
+
+        $this->actingAs($student)
+            ->delete(route('student.appointments.cancel', $appointment))
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('appointments', [
+            'id' => $appointment->id,
+            'status' => 'scheduled',
+        ]);
+    }
+
     public function test_student_cannot_cancel_another_students_appointment(): void
     {
         $owner = $this->student();

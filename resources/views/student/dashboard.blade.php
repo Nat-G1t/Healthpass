@@ -91,12 +91,19 @@
                 <p class="mt-1 text-xs text-hp-slate/40 dark:text-hp-slate/55">{{ $nextAppointment->reference_no }}</p>
             </div>
 
-            @if ($nextAppointment->scheduled_date->gt(today()))
+            {{-- D-39: batch-booked appointments show guidance instead of a button —
+                 only the College Admin who booked the cohort may withdraw one. --}}
+            @if ($nextAppointment->isSelfCancellable())
                 <div class="mt-5">
                     <x-hp.button variant="danger" size="sm" class="w-full" @click="cancelModal = true">
                         Cancel appointment
                     </x-hp.button>
                 </div>
+            @elseif ($nextAppointment->source === 'batch' && $nextAppointment->scheduled_date->gt(today()))
+                <p class="mt-5 text-xs leading-relaxed text-hp-slate/50 dark:text-hp-slate/60">
+                    Booked by your college. Contact your college administrator if you
+                    need this cancelled.
+                </p>
             @endif
         @else
             <div class="mt-4 flex-1 flex flex-col items-center py-4 text-center">
@@ -122,7 +129,7 @@
     </x-hp.card>
 
     {{-- Cancel confirm modal — only rendered when there is a cancellable future appointment. --}}
-    @if ($nextAppointment && $nextAppointment->scheduled_date->gt(today()))
+    @if ($nextAppointment && $nextAppointment->isSelfCancellable())
     <div x-show="cancelModal" x-cloak
          class="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center"
          style="background-color: rgba(75,85,99,0.45);">

@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Student;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Student\StoreAppointmentRequest;
+use App\Jobs\SendAppointmentScheduledMail;
 use App\Models\Appointment;
 use App\Services\ClinicScheduleService;
 use App\Services\ReferenceNumberService;
@@ -137,6 +138,14 @@ class BookAppointmentController extends Controller
             ]);
         });
 
+        // FR-STU-12 (D-39): confirmation email, queued, and only now that the
+        // transaction above has COMMITTED. Dispatching from inside it would let
+        // a mail failure roll back a perfectly good appointment — and would
+        // hand the worker an appointment id that no other connection can see
+        // yet. Nothing below can fail the booking: the dispatch is one INSERT
+        // into `jobs`, and the send itself happens in another process.
+        SendAppointmentScheduledMail::dispatch($appointment);
+
         $confirmUrl = route('student.appointments.confirmed', $appointment);
 
         if ($request->expectsJson()) {
@@ -173,14 +182,22 @@ class BookAppointmentController extends Controller
      *   - appointment must belong to this student
      *   - status must be 'scheduled'
      *   - scheduled date must be strictly after today (cannot cancel on/after the day)
+     *   - source must not be 'batch' (D-39)
+     *
+     * D-39 added that last one. A batch appointment belongs to the cohort the
+     * College Admin booked; a student silently dropping out of it left the
+     * college's roster wrong with nobody informed, so withdrawal is the admin's
+     * call. The last three conditions live together in
+     * Appointment::isSelfCancellable(), which the dashboard and confirmation
+     * views also call to decide whether to draw the button — one rule, so the
+     * button and the server can never disagree.
      */
     public function cancel(Request $request, Appointment $appointment): RedirectResponse
     {
         $user = $request->user();
 
         abort_if($appointment->student_id !== $user->id, 403);
-        abort_if($appointment->status !== 'scheduled', 403);
-        abort_if(! $appointment->scheduled_date->gt(today()), 403);
+        abort_unless($appointment->isSelfCancellable(), 403);
 
         $appointment->update(['status' => 'cancelled']);
 

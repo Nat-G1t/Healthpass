@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Director;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Director\ApproveBatchRequest;
 use App\Http\Requests\Director\RejectBatchRequest;
+use App\Jobs\SendAppointmentScheduledMail;
 use App\Models\Appointment;
 use App\Models\BatchRequest;
 use App\Services\ClinicScheduleService;
@@ -267,7 +268,28 @@ class BatchApprovalController extends Controller
                 ->with('error', "{$batch->reference_no} has no clinic hour span to confirm — reject it with the reason “predates the hourly-slot change — please resubmit”.");
         }
 
-        $studentCount = $batch->batchRequestStudents()->count();
+        // FR-STU-12 (D-39): tell each student their college booked them in.
+        //
+        // Deliberately OUT HERE, after DB::transaction() has returned — i.e.
+        // after the commit. Queueing from inside would mean an SMTP or queue
+        // failure rolling back real appointments, and a worker could pick a job
+        // up before the appointment row was visible to its connection. Any
+        // early return above (already decided, stale date, full or elapsed
+        // hour, or a mid-fan-out exception) never reaches this line, so a batch
+        // that was not approved emails nobody.
+        //
+        // The appointments are re-read rather than carried out of the closure:
+        // approval is terminal (a decided batch can never be re-approved), so
+        // this query can only ever return the rows the fan-out above just made.
+        //
+        // One job per student — a single bad address loses one email, not 59.
+        $appointments = Appointment::where('batch_request_id', $batch->id)->get();
+
+        foreach ($appointments as $appointment) {
+            SendAppointmentScheduledMail::dispatch($appointment);
+        }
+
+        $studentCount = $appointments->count();
 
         return redirect()->route('director.batches.index')
             ->with('status', "{$batch->reference_no} approved — {$studentCount} appointment(s) created.");
