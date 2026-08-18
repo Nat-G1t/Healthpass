@@ -18,6 +18,10 @@ class ClinicVisit extends Model
         'reference_no',
         'student_id',
         'college_id',
+        // CAPTURE-TIME SNAPSHOT of the student's program (D-43), not a live
+        // lookup — see the college() docblock below for why. Nullable: visits
+        // captured before D-43 have none and are never backfilled.
+        'course',
         'appointment_id',
         'login_method',
         'status',

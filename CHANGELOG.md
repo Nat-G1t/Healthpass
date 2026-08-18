@@ -4,6 +4,41 @@
 
 ### Added
 
+* **Senior High School removed; clinic visits now snapshot the student's
+  program** (D-43). **SCHEMA CHANGE: `clinic_visits.course` VARCHAR(120) NULL.**
+  Two consequences of D-42 making programs real data.
+  - **SHS is gone — 12 colleges become 11.** It is not on the PSU main-campus
+    (bicolor) program offerings, so it is not a unit HealthPass serves. Removed
+    from `CollegeSeeder`, its administrator account from `StaffSeeder`, its two
+    students from `StudentSeeder` (demo cohort 30 → 28), and its visit weight
+    from `DemoClinicVisitSeeder`. Seeded college admins drop 12 → 11.
+    `admin.shs@healthpass.test`, `jessa.chua@psu.edu.ph` and
+    `renz.ong@psu.edu.ph` no longer exist — `docs/dev-notes.md` refreshed.
+  - **New `clinic_visits.course`** — the student's program frozen at kiosk
+    submit, beside the `college_id` snapshot D-17 already added.
+    `student_profiles.course` stays live, so without this one program shift
+    would silently restate every past per-program report. **Nullable and never
+    backfilled:** a visit captured before this has no honest answer and renders
+    as "—", the same pattern `appointments.scheduled_time` uses for pre-D-37
+    rows.
+  - `SubmitKioskVisit` reads college and program in **one** query from the
+    **server-side bound student**, never the request body. A missing college
+    still fails loudly — the visit could not be attributed at all — but a
+    missing program stores NULL rather than turning away the person standing at
+    the kiosk.
+  - **Fixed a live bug found on the way.** The app stores `year_level` as a KEY
+    (`'1'`…`'5'`, `'7'`…`'10'`) and validates against that set, but the seeder
+    and factory wrote DISPLAY LABELS (`'3rd Year'`, `'Grade 11'`). Nothing
+    re-validates a profile on read, so every seeded student hit "Please select a
+    valid year level" the first time they saved their own profile — during a
+    demo, most likely. Both now write keys.
+  - **`StudentProfileFactory` drops its hand-written course/year arrays** and
+    reads `config/programs.php`, so the forms, the factory and the seeders share
+    one catalog. Those arrays had already drifted: they put a CAS student on
+    Psychology, a CSSP program.
+  - Nothing reads the new column yet — populating it is the whole job; the
+    per-program reporting comes later.
+
 * **Academic programs are now a validated, college-dependent catalog**
   (D-42 — FR-REG-03, FR-STU-09). **No schema change.** The adviser needs
   monthly clinic reports broken down per academic program, and

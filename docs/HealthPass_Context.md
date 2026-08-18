@@ -92,8 +92,10 @@ Only **students** self-register. `nurse`, `college_admin`, and `director` accoun
 | CIT  | College of Industrial Technology |
 | LAW  | School of Law |
 | GS   | Graduate Studies |
-| SHS  | Senior High School |
 | LHS  | Laboratory High School |
+
+**11 units since D-43** (was 12) — Senior High School is not on the PSU
+main-campus (bicolor) program offerings, so it is not a unit this system serves.
 
 Each college has exactly one College Admin account. The admin's college is stored on their `users` record (`managed_college_id`). All screens, student lists, and batch request data are filtered by this value — it is never settable by the admin themselves.
 
@@ -260,7 +262,7 @@ Progress steps: Consent → Account Info → Email Verify → Link ID
 - Continue disabled until checked. "← Back to Login" link.
 
 **Step 2 — Personal Information (2-column grid)**
-- First Name, Middle Name (optional), Last Name, Student Number, College (dropdown — 12 colleges), Sex (M/F), Course & Year, Date of Birth (+ auto-computed Age badge), Place of Birth, Civil Status (Single/Married/Widowed/Separated), Address, Email, Password.
+- First Name, Middle Name (optional), Last Name, Student Number, College (dropdown — 11 colleges, D-43), Sex (M/F), Course & Year, Date of Birth (+ auto-computed Age badge), Place of Birth, Civil Status (Single/Married/Widowed/Separated), Address, Email, Password.
 
 **Step 3 — Email Verify**
 - 6 OTP boxes (auto-focus hidden input, visual boxes highlight as digits are entered).
@@ -420,7 +422,7 @@ questionnaire item that prints.
 > the kiosk. **No Export/print** — analytics is on-screen only (FR-ANL-06
 > removed). The approved layout is `docs/prototypes/web/director-analytics-rescope.html`.
 - **Filters** (FR-ANL-13): the existing month picker + a new **college dropdown** (default "All colleges"). Both scope every card except the Visits-per-Month trend.
-- **Clinic Visits by College** (FR-ANL-09) — horizontal stacked bar chart, one row per college (all 12, zero-visit rows included), segmented Medical (`#FF8C2A`) / Dental (`#2563EB`), sorted by total visits descending, total-visits headline, "View as table" toggle (college × service type). Medical = kiosk check-ins (`clinic_visits`, capture-time `college_id` snapshot); Dental = completed dental appointments (D-33), grouped by the student's current college (no capture-time snapshot exists for dental — stated limitation). Includes a **Visits by Purpose** mini bar chart from the linked appointment's `purpose`/`purpose_other`; visits with no linked appointment or purpose fall into a "Walk-in / not specified" bucket.
+- **Clinic Visits by College** (FR-ANL-09) — horizontal stacked bar chart, one row per college (all 11 since D-43, zero-visit rows included), segmented Medical (`#FF8C2A`) / Dental (`#2563EB`), sorted by total visits descending, total-visits headline, "View as table" toggle (college × service type). Medical = kiosk check-ins (`clinic_visits`, capture-time `college_id` snapshot); Dental = completed dental appointments (D-33), grouped by the student's current college (no capture-time snapshot exists for dental — stated limitation). Includes a **Visits by Purpose** mini bar chart from the linked appointment's `purpose`/`purpose_other`; visits with no linked appointment or purpose fall into a "Walk-in / not specified" bucket.
 - **Vital-Sign Flags** (FR-ANL-10) — three stat tiles (High BP, Fever, Abnormal BMI), each showing count **and rate** (% of the month's captured screenings). Recomputed server-side from `vital_signs` flags.
 - **Visits per Month** (FR-ANL-11) — line chart across all months with data, **two series**: medical screenings + completed dental appointments. Ignores the page filters by design (whole-year, all-college).
 - **Students Screened by Sex** (FR-ANL-04, retitled from "By-Sex donut") — Chart.js donut, 160px, Male (orange) + Female (peach), centre total, legend with count + %. Counts students screened (captured kiosk visits), so it already fits the system-collected scope; now obeys the college filter too.
@@ -525,7 +527,7 @@ Each vital screen has:
 ### `colleges`
 ```sql
 id              bigint PK
-code            varchar(10) UNIQUE          -- COE, CEA, CBS, CAS, CSSP, CCS, CHTM, CIT, LAW, GS, SHS, LHS
+code            varchar(10) UNIQUE          -- COE, CEA, CBS, CAS, CSSP, CCS, CHTM, CIT, LAW, GS, LHS (11 since D-43 removed SHS; each code is a key of config/programs.php)
 name            varchar(120)
 created_at, updated_at
 ```
@@ -620,6 +622,7 @@ id                    bigint PK
 reference_no          varchar(20) UNIQUE    -- HP-YYYY-####
 student_id            bigint FK → users.id
 college_id            bigint FK → colleges.id   -- SCHEMA ADD: snapshot of the student's college at capture time, so analytics stay transfer-proof (FR-STU-09)
+course                varchar(120) NULL     -- SCHEMA ADD (D-43): snapshot of the student's PROGRAM at capture time, frozen beside college_id above. student_profiles.course stays live, so without this a program shift would restate every past per-program report. NULLABLE and NEVER BACKFILLED — a pre-D-43 visit has no honest answer and renders "—" (the pattern appointments.scheduled_time uses for pre-D-37 rows); a profile with no program also stores NULL rather than blocking the kiosk.
 appointment_id        bigint NULL FK → appointments.id   -- NULL = walk-in
 login_method          enum('qr','email')
 status                enum('captured','encoded') DEFAULT 'captured'

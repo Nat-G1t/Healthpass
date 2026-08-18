@@ -5,15 +5,18 @@ namespace Database\Factories;
 use App\Models\College;
 use App\Models\StudentProfile;
 use App\Models\User;
+use App\Support\Programs;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
 /**
  * @extends Factory<StudentProfile>
  *
- * Generates realistic Philippine-appropriate student profile data.
- * Use forCollege($college) to constrain to college-appropriate
- * courses and year levels. Pair with User::factory() for the parent user.
+ * Generates realistic Philippine-appropriate student profile data. Programs and
+ * year levels come from config/programs.php (D-42), so a factory-made student
+ * is always one the registration and profile-edit forms would accept.
+ * Use forCollege($college) to constrain to a specific college's catalog.
+ * Pair with User::factory() for the parent user.
  *
  * Example (in tests):
  *   StudentProfile::factory()->forCollege($ccs)->count(5)->create();
@@ -40,36 +43,6 @@ class StudentProfileFactory extends Factory
         'Diaz', 'Castro', 'Ramos', 'Tolentino', 'Villanueva', 'Padilla',
         'Aquino', 'Manalo', 'David', 'Fernandez', 'Lim', 'Tan', 'Go',
         'Chua', 'Ong', 'Abalos', 'Pangan',
-    ];
-
-    private static array $courses = [
-        'COE' => ['Bachelor of Secondary Education', 'Bachelor of Elementary Education', 'Bachelor of Physical Education'],
-        'CEA' => ['Bachelor of Science in Civil Engineering', 'Bachelor of Science in Architecture', 'Bachelor of Science in Electrical Engineering'],
-        'CBS' => ['Bachelor of Science in Accountancy', 'Bachelor of Science in Business Administration', 'Bachelor of Science in Marketing Management'],
-        'CAS' => ['Bachelor of Science in Psychology', 'Bachelor of Arts in Communication', 'Bachelor of Science in Biology'],
-        'CSSP' => ['Bachelor of Science in Social Work', 'Bachelor of Arts in Sociology', 'Bachelor of Science in Political Science'],
-        'CCS' => ['Bachelor of Science in Computer Science', 'Bachelor of Science in Information Technology', 'Bachelor of Science in Information Systems'],
-        'CHTM' => ['Bachelor of Science in Hospitality Management', 'Bachelor of Science in Tourism Management'],
-        'CIT' => ['Bachelor of Industrial Technology major in Electronics', 'Bachelor of Industrial Technology major in Computer Technology', 'Bachelor of Industrial Technology major in Automotive Technology'],
-        'LAW' => ['Juris Doctor'],
-        'GS' => ['Master of Science in Computer Science', 'Master of Arts in Education', 'Master of Public Administration'],
-        'SHS' => ['STEM Strand', 'ABM Strand', 'HUMSS Strand'],
-        'LHS' => ['General Secondary Education'],
-    ];
-
-    private static array $yearLevels = [
-        'COE' => ['1st Year', '2nd Year', '3rd Year', '4th Year'],
-        'CEA' => ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year'],
-        'CBS' => ['1st Year', '2nd Year', '3rd Year', '4th Year'],
-        'CAS' => ['1st Year', '2nd Year', '3rd Year', '4th Year'],
-        'CSSP' => ['1st Year', '2nd Year', '3rd Year', '4th Year'],
-        'CCS' => ['1st Year', '2nd Year', '3rd Year', '4th Year'],
-        'CHTM' => ['1st Year', '2nd Year', '3rd Year', '4th Year'],
-        'CIT' => ['1st Year', '2nd Year', '3rd Year', '4th Year'],
-        'LAW' => ['1st Year', '2nd Year', '3rd Year', '4th Year'],
-        'GS' => ['1st Year', '2nd Year'],
-        'SHS' => ['Grade 11', 'Grade 12'],
-        'LHS' => ['Grade 7', 'Grade 8', 'Grade 9', 'Grade 10'],
     ];
 
     private static array $placesOfBirth = [
@@ -99,6 +72,7 @@ class StudentProfileFactory extends Factory
             ? $this->faker->randomElement(self::$maleFirstNames)
             : $this->faker->randomElement(self::$femaleFirstNames);
         $lastName = $this->faker->randomElement(self::$lastNames);
+        $collegeId = (int) (College::inRandomOrder()->value('id') ?? 1);
 
         return [
             // Creates a student user if user_id is not provided via override.
@@ -108,14 +82,14 @@ class StudentProfileFactory extends Factory
                 'email_verified_at' => now(),
                 'status' => 'active',
             ]),
-            'college_id' => College::inRandomOrder()->value('id') ?? 1,
+            'college_id' => $collegeId,
             'student_number' => $this->faker->unique()->numerify('20##3#####'),
             'first_name' => $firstName,
             'middle_name' => $this->faker->randomElement(self::$lastNames),
             'last_name' => $lastName,
             'sex' => $sex,
-            'course' => 'Bachelor of Science in Information Technology',
-            'year_level' => $this->faker->randomElement(['1st Year', '2nd Year', '3rd Year', '4th Year']),
+            'course' => $this->programFor($collegeId),
+            'year_level' => $this->yearLevelFor($collegeId),
             'date_of_birth' => $this->faker->dateTimeBetween('-25 years', '-18 years')->format('Y-m-d'),
             'place_of_birth' => $this->faker->randomElement(self::$placesOfBirth),
             'civil_status' => 'Single',
@@ -126,20 +100,47 @@ class StudentProfileFactory extends Factory
     }
 
     /**
-     * Scope to a specific college: sets college_id and picks a
-     * course + year level appropriate for that college's programs.
+     * Scope to a specific college: sets college_id and picks a program + year
+     * level that college actually offers.
      */
     public function forCollege(College $college): static
     {
-        $courses = self::$courses[$college->code] ?? ['General Studies'];
-        $yearLevels = self::$yearLevels[$college->code] ?? ['1st Year', '2nd Year', '3rd Year', '4th Year'];
+        return $this->state(fn (array $attributes) => [
+            'college_id' => $college->id,
+            'course' => $this->programFor((int) $college->id),
+            'year_level' => $this->yearLevelFor((int) $college->id),
+        ]);
+    }
 
-        return $this->state(function (array $attributes) use ($college, $courses, $yearLevels) {
-            return [
-                'college_id' => $college->id,
-                'course' => $this->faker->randomElement($courses),
-                'year_level' => $this->faker->randomElement($yearLevels),
-            ];
-        });
+    /**
+     * A program that college offers, read from config/programs.php through
+     * App\Support\Programs (D-42).
+     *
+     * The factory used to carry its own hand-written course list, which had
+     * already drifted from what the forms accept — it offered CAS students
+     * "Bachelor of Science in Psychology", a CSSP program. One catalog, one
+     * source. The fallback only fires for a college with no catalog entry.
+     */
+    private function programFor(int $collegeId): string
+    {
+        $programs = Programs::forCollege($collegeId);
+
+        return $programs === []
+            ? 'Bachelor of Science in Information Technology'
+            : $this->faker->randomElement($programs);
+    }
+
+    /**
+     * A year level KEY that college offers — '1'…'5', or '7'…'10' for junior
+     * high. Keys, not the "3rd Year" display labels the factory used to write:
+     * the app stores and validates the key, so a seeded student carrying a label
+     * could not save the profile edit modal at all ("Please select a valid year
+     * level"). The labels live in the config beside the keys (D-42).
+     */
+    private function yearLevelFor(int $collegeId): string
+    {
+        $keys = Programs::yearLevelKeys($collegeId);
+
+        return $keys === [] ? '1' : $this->faker->randomElement($keys);
     }
 }

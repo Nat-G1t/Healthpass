@@ -29,7 +29,7 @@ use Illuminate\Support\Facades\DB;
  *       - HP-2026-9006  Maria Reyes     normal vitals
  *
  * Plus an ANALYTICS SPREAD (HP-2026-9101…) — visits across SIX months
- * (Feb–Jul 2026), all 12 colleges and both sexes, feeding every card of
+ * (Feb–Jul 2026), all 11 colleges and both sexes, feeding every card of
  * the rescoped Director analytics (FR-ANL-09..13, D-32/D-33):
  *
  *   • medical visits with varied purposes (linked APT-2026-9xxx medical
@@ -40,7 +40,9 @@ use Illuminate\Support\Facades\DB;
  *   • a few CAPTURED (un-encoded) July visits — these still count
  *     (FR-ANL-07 as rewritten);
  *   • dental appointments in mixed states: completed ones count toward
- *     the charts (D-33), scheduled ones must not.
+ *     the charts (D-33), scheduled ones must not;
+ *   • every medical visit carries the student's PROGRAM snapshot (D-43),
+ *     so the per-program reporting built in later prompts has data.
  *
  * Fully deterministic — no randomness, so re-seeding a fresh DB always
  * produces the same charts. Reference bands HP-2026-9xxx / APT-2026-9xxx
@@ -55,12 +57,16 @@ class DemoClinicVisitSeeder extends Seeder
     /**
      * Relative visit volume per college. Deliberately uneven so the
      * "sorted by volume" ordering in FR-ANL-09 is visible. Keys must match
-     * colleges.code; values sum to 88 (the round-robin slot count).
+     * colleges.code; values sum to 85 (the round-robin slot count).
+     *
+     * Was 88 across 12 units — Senior High School's 3 went with the unit in
+     * D-43. The strides that walk this list (7, 11 and 31) stay coprime with
+     * 85, so every college is still hit.
      */
     private const COLLEGE_WEIGHTS = [
         'CCS' => 14, 'COE' => 12, 'CEA' => 11, 'CBS' => 9,
         'CAS' => 8, 'CSSP' => 7, 'CHTM' => 6, 'CIT' => 6,
-        'LAW' => 5, 'GS' => 4, 'SHS' => 3, 'LHS' => 3,
+        'LAW' => 5, 'GS' => 4, 'LHS' => 3,
     ];
 
     /**
@@ -114,11 +120,17 @@ class DemoClinicVisitSeeder extends Seeder
         // must freeze it explicitly — without this, a fresh --seed fails.
         $ccs = College::where('code', 'CCS')->firstOrFail();
 
+        // The program snapshot (D-43) — copied off each student's profile, the
+        // way SubmitKioskVisit copies it at a real kiosk submit.
+        $juanCourse = $juan->studentProfile->course;
+        $mariaCourse = $maria->studentProfile->course;
+
         // ── Encoded visit 1 — Juan Santos, Fit ───────────────────────────────
         $v1 = ClinicVisit::create([
             'reference_no' => 'HP-2026-9001',
             'student_id' => $juan->id,
             'college_id' => $ccs->id,
+            'course' => $juanCourse,
             'login_method' => 'qr',
             'status' => 'encoded',
             'privacy_consent_at' => Carbon::parse('2026-01-10 08:55:00'),
@@ -165,6 +177,7 @@ class DemoClinicVisitSeeder extends Seeder
             'reference_no' => 'HP-2026-9002',
             'student_id' => $juan->id,
             'college_id' => $ccs->id,
+            'course' => $juanCourse,
             'login_method' => 'qr',
             'status' => 'encoded',
             'privacy_consent_at' => Carbon::parse('2026-03-05 09:10:00'),
@@ -211,6 +224,7 @@ class DemoClinicVisitSeeder extends Seeder
             'reference_no' => 'HP-2026-9003',
             'student_id' => $maria->id,
             'college_id' => $ccs->id,
+            'course' => $mariaCourse,
             'login_method' => 'qr',
             'status' => 'encoded',
             'privacy_consent_at' => Carbon::parse('2026-02-03 10:50:00'),
@@ -257,6 +271,7 @@ class DemoClinicVisitSeeder extends Seeder
             'reference_no' => 'HP-2026-9004',
             'student_id' => $juan->id,
             'college_id' => $ccs->id,
+            'course' => $juanCourse,
             'login_method' => 'qr',
             'status' => 'captured',
             'privacy_consent_at' => Carbon::parse('2026-06-15 08:40:00'),
@@ -295,6 +310,7 @@ class DemoClinicVisitSeeder extends Seeder
             'reference_no' => 'HP-2026-9005',
             'student_id' => $maria->id,
             'college_id' => $ccs->id,
+            'course' => $mariaCourse,
             'login_method' => 'qr',
             'status' => 'captured',
             'privacy_consent_at' => Carbon::parse('2026-05-10 08:55:00'),
@@ -333,6 +349,7 @@ class DemoClinicVisitSeeder extends Seeder
             'reference_no' => 'HP-2026-9006',
             'student_id' => $maria->id,
             'college_id' => $ccs->id,
+            'course' => $mariaCourse,
             'login_method' => 'qr',
             'status' => 'captured',
             'privacy_consent_at' => Carbon::parse('2026-06-20 08:25:00'),
@@ -397,9 +414,13 @@ class DemoClinicVisitSeeder extends Seeder
             $slots = array_merge($slots, array_fill(0, $weight, $code));
         }
 
+        // studentProfile is eager-loaded because every spread visit copies the
+        // student's program onto its D-43 snapshot — without `with()` that is
+        // one extra query per visit, ~250 of them.
         $studentsByCollege = $colleges->map(
             fn (College $college) => User::where('role', 'student')
                 ->whereHas('studentProfile', fn ($q) => $q->where('college_id', $college->id))
+                ->with('studentProfile:id,user_id,course')
                 ->orderBy('id')
                 ->get()
         );
@@ -562,6 +583,7 @@ class DemoClinicVisitSeeder extends Seeder
             'reference_no' => sprintf('HP-2026-%d', 9101 + $visitSeq),
             'student_id' => $student->id,
             'college_id' => $college->id, // capture-time snapshot (FR-STU-09, D-17)
+            'course' => $student->studentProfile?->course, // program snapshot (D-43)
             'appointment_id' => $appointmentId,
             'login_method' => $visitSeq % 4 === 0 ? 'email' : 'qr',
             'status' => $isCaptured ? 'captured' : 'encoded',

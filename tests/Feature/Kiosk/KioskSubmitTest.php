@@ -390,6 +390,72 @@ class KioskSubmitTest extends TestCase
         $this->assertSame($cea->id, $profile->fresh()->college_id);
     }
 
+    // ── Program snapshot, shift-proof (D-43) ──────────────────────────────────
+
+    public function test_visit_snapshots_the_students_program(): void
+    {
+        $college = College::firstOrCreate(['code' => 'CCS'], ['name' => 'College of Computing Studies']);
+        $profile = StudentProfile::factory()->forCollege($college)->create([
+            'course' => 'Bachelor of Science in Information Systems',
+        ]);
+
+        $this->submit($profile->user->id)->assertOk();
+
+        $this->assertSame(
+            'Bachelor of Science in Information Systems',
+            ClinicVisit::first()->course
+        );
+    }
+
+    /**
+     * The whole point of the snapshot: a program shift must not restate history.
+     * Without this column, one shift would silently rewrite every past monthly
+     * per-program report the student appears in.
+     */
+    public function test_a_later_program_shift_does_not_rewrite_the_snapshot(): void
+    {
+        $college = College::firstOrCreate(['code' => 'CCS'], ['name' => 'College of Computing Studies']);
+        $profile = StudentProfile::factory()->forCollege($college)->create([
+            'course' => 'Bachelor of Science in Information Technology',
+        ]);
+
+        $this->submit($profile->user->id)->assertOk();
+        $visit = ClinicVisit::latest('id')->first();
+
+        // The student shifts program — their LIVE profile changes…
+        $profile->update(['course' => 'Bachelor of Science in Computer Science']);
+
+        // …the captured visit keeps what was true at capture…
+        $this->assertSame('Bachelor of Science in Information Technology', $visit->fresh()->course);
+
+        // …and the NEXT visit snapshots the new program.
+        $this->submit($profile->user->id)->assertOk();
+        $this->assertSame(
+            'Bachelor of Science in Computer Science',
+            ClinicVisit::latest('id')->first()->course
+        );
+
+        $this->assertSame('Bachelor of Science in Computer Science', $profile->fresh()->course);
+    }
+
+    /**
+     * A profile predating the D-42 catalog can carry an empty course. Unlike a
+     * missing college — which fails loudly, since the visit could not be
+     * attributed at all — a missing program is stored as null and reports as
+     * "—". It must never block the student standing at the kiosk.
+     */
+    public function test_student_without_a_program_still_submits_with_a_null_snapshot(): void
+    {
+        $college = College::firstOrCreate(['code' => 'CCS'], ['name' => 'College of Computing Studies']);
+        $profile = StudentProfile::factory()->forCollege($college)->create(['course' => '']);
+
+        $this->submit($profile->user->id)->assertOk()->assertJson(['ok' => true]);
+
+        $visit = ClinicVisit::first();
+        $this->assertNull($visit->course);
+        $this->assertSame($college->id, $visit->college_id);
+    }
+
     // ── entry_method roll-up (FR-KSK-06) ──────────────────────────────────────
 
     public function test_entry_method_rolls_up_mixed(): void

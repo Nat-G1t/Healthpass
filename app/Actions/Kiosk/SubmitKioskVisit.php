@@ -44,12 +44,17 @@ final class SubmitKioskVisit
         // generateVisitRef() locks its sequence row for the life of this
         // transaction, so the reference number and the INSERT are atomic.
         return DB::transaction(function () use ($data, $vitals, $screening, $thresholds, $bmi) {
+            // Freeze the student's college AND program NOW (FR-STU-09 snapshot —
+            // D-17 for the college, D-43 for the program): a later transfer or
+            // program shift must not re-attribute this visit's flags, cases, or
+            // per-program report row.
+            $snapshot = $this->studentSnapshot((int) $data['studentUserId']);
+
             $visit = ClinicVisit::create([
                 'reference_no' => $this->references->generateVisitRef(),
                 'student_id' => $data['studentUserId'],
-                // Freeze the student's college NOW (FR-STU-09 snapshot, D-17): a
-                // later transfer must not re-attribute this visit's flags/cases.
-                'college_id' => $this->studentCollegeId((int) $data['studentUserId']),
+                'college_id' => $snapshot['college_id'],
+                'course' => $snapshot['course'],
                 'appointment_id' => $this->todaysAppointmentId((int) $data['studentUserId']), // null = walk-in (BR-10)
                 'login_method' => $data['loginMethod'],
                 'status' => 'captured', // until the nurse encodes (BR-11)
@@ -98,23 +103,38 @@ final class SubmitKioskVisit
     }
 
     /**
-     * The student's current college id — captured as the visit's frozen snapshot
-     * (FR-STU-09). Always present: every student profile carries a non-null college.
+     * The student's current college and program, read in ONE query and frozen on
+     * the visit as its snapshot (FR-STU-09; D-17 college, D-43 program).
+     *
+     * $studentId is the SERVER-side bound student from the kiosk session, set at
+     * scan/login. /kiosk/submit is public, so nothing here may be sourced from
+     * the request body — that is the same trust rule the flags and the consent
+     * timestamp follow (CLAUDE.md).
+     *
+     * @return array{college_id: int, course: ?string}
      */
-    private function studentCollegeId(int $studentId): int
+    private function studentSnapshot(int $studentId): array
     {
-        $collegeId = StudentProfile::where('user_id', $studentId)->value('college_id');
+        $profile = StudentProfile::where('user_id', $studentId)->first(['college_id', 'course']);
 
         // Fail loudly rather than (int)-casting a missing value to 0: if the
         // profile row vanished between scan/login and submit (mid-session admin
         // change), college_id=0 would either violate the FK (500) or, worse, save
         // a visit mis-attributed to a non-existent college that no Director scope
         // filter ever matches. Every bound student must still have a college here.
-        if ($collegeId === null) {
+        if ($profile === null || $profile->college_id === null) {
             throw new \RuntimeException("Student {$studentId} has no college profile at kiosk submit.");
         }
 
-        return (int) $collegeId;
+        return [
+            'college_id' => (int) $profile->college_id,
+            // A missing program is NOT fatal — unlike the college, it has nothing
+            // to break. Profiles predating the D-42 catalog can carry an empty
+            // course, and a visit without one is still a valid visit; it simply
+            // reports as "—". blank() catches both null and the empty string that
+            // the NOT NULL student_profiles.course column would hold.
+            'course' => blank($profile->course) ? null : $profile->course,
+        ];
     }
 
     /**

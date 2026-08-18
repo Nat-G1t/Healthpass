@@ -32,43 +32,53 @@ Run `php artisan migrate:fresh --seed` to restore this state at any time.
 | Admin — CIT | `admin.cit@healthpass.test` | `password` | College of Industrial Technology |
 | Admin — LAW | `admin.law@healthpass.test` | `password` | School of Law |
 | Admin — GS | `admin.gs@healthpass.test` | `password` | Graduate Studies |
-| Admin — SHS | `admin.shs@healthpass.test` | `password` | Senior High School |
 | Admin — LHS | `admin.lhs@healthpass.test` | `password` | Laboratory High School |
 
-### Student accounts (30 total)
+(11 admins since **D-43** removed Senior High School — `admin.shs@healthpass.test`
+no longer exists.)
 
-| Email | Password | College | Year | Course |
+### Student accounts (28 total)
+
+Every program below is a verbatim entry from `config/programs.php` (D-42) and
+every `year_level` is the storage **key** the app validates against, not a
+display label — the **Year** column shows the label the UI renders for that key.
+Seeded students that carried an off-catalog program or a label year could not
+save their own profile; D-43 fixed both.
+
+| Email | Password | College | Year | Program (`course`) |
 |---|---|---|---|---|
-| `juan.santos@psu.edu.ph` | `password` | CCS | 4th Year | BS Computer Science |
-| `maria.reyes@psu.edu.ph` | `password` | CCS | 3rd Year | BS Information Technology |
-| `carlo.cruz@psu.edu.ph` | `password` | CCS | 2nd Year | BS Information Systems |
-| `angel.garcia@psu.edu.ph` | `password` | CCS | 1st Year | BS Computer Science |
-| `jose.bautista@psu.edu.ph` | `password` | COE | 4th Year | Bachelor of Secondary Education |
+| `juan.santos@psu.edu.ph` | `password` | CCS | 4th Year | Bachelor of Science in Computer Science |
+| `maria.reyes@psu.edu.ph` | `password` | CCS | 3rd Year | Bachelor of Science in Information Technology |
+| `carlo.cruz@psu.edu.ph` | `password` | CCS | 2nd Year | Bachelor of Science in Information Systems |
+| `angel.garcia@psu.edu.ph` | `password` | CCS | 1st Year | Associate in Computer Technology |
+| `jose.bautista@psu.edu.ph` | `password` | COE | 4th Year | Bachelor of Secondary Education major in Mathematics |
 | `sofia.ocampo@psu.edu.ph` | `password` | COE | 2nd Year | Bachelor of Elementary Education |
 | `darwin.mendoza@psu.edu.ph` | `password` | COE | 3rd Year | Bachelor of Physical Education |
-| `marco.torres@psu.edu.ph` | `password` | CEA | 3rd Year | BS Civil Engineering |
-| `kristine.ramirez@psu.edu.ph` | `password` | CEA | 2nd Year | BS Architecture |
-| `paolo.flores@psu.edu.ph` | `password` | CEA | 4th Year | BS Electrical Engineering |
-| `ana.mercado@psu.edu.ph` | `password` | CBS | 3rd Year | BS Accountancy |
-| `kenneth.castillo@psu.edu.ph` | `password` | CBS | 2nd Year | BS Business Administration |
-| `maricel.gonzales@psu.edu.ph` | `password` | CBS | 4th Year | BS Marketing Management |
-| `jayson.diaz@psu.edu.ph` | `password` | CAS | 2nd Year | BS Psychology |
-| `camille.castro@psu.edu.ph` | `password` | CAS | 3rd Year | BA Communication |
-| `erwin.ramos@psu.edu.ph` | `password` | CAS | 1st Year | BS Biology |
-| `tricia.tolentino@psu.edu.ph` | `password` | CSSP | 3rd Year | BS Social Work |
-| `luis.villanueva@psu.edu.ph` | `password` | CSSP | 2nd Year | BA Sociology |
-| `diane.padilla@psu.edu.ph` | `password` | CHTM | 2nd Year | BS Hospitality Management |
-| `bryan.aquino@psu.edu.ph` | `password` | CHTM | 3rd Year | BS Tourism Management |
-| `jennifer.manalo@psu.edu.ph` | `password` | CIT | 2nd Year | BIT Electronics |
-| `rex.david@psu.edu.ph` | `password` | CIT | 3rd Year | BIT Computer Technology |
-| `aldrin.fernandez@psu.edu.ph` | `password` | LAW | 2nd Year | Juris Doctor |
-| `rina.lim@psu.edu.ph` | `password` | LAW | 3rd Year | Juris Doctor |
-| `christian.tan@psu.edu.ph` | `password` | GS | 1st Year | MS Computer Science |
-| `sheila.go@psu.edu.ph` | `password` | GS | 2nd Year | MA Education |
-| `jessa.chua@psu.edu.ph` | `password` | SHS | Grade 12 | STEM Strand |
-| `renz.ong@psu.edu.ph` | `password` | SHS | Grade 11 | ABM Strand |
-| `hazel.abalos@psu.edu.ph` | `password` | LHS | Grade 10 | General Secondary Education |
-| `mark.pangan@psu.edu.ph` | `password` | LHS | Grade 9 | General Secondary Education |
+| `marco.torres@psu.edu.ph` | `password` | CEA | 3rd Year | Bachelor of Science in Civil Engineering |
+| `kristine.ramirez@psu.edu.ph` | `password` | CEA | 5th Year | Bachelor of Science in Architecture |
+| `paolo.flores@psu.edu.ph` | `password` | CEA | 4th Year | Bachelor of Science in Electrical Engineering |
+| `ana.mercado@psu.edu.ph` | `password` | CBS | 3rd Year | Bachelor of Science in Accountancy |
+| `kenneth.castillo@psu.edu.ph` | `password` | CBS | 2nd Year | BSBA major in Business Economics |
+| `maricel.gonzales@psu.edu.ph` | `password` | CBS | 4th Year | BSBA major in Marketing Management |
+| `jayson.diaz@psu.edu.ph` | `password` | CAS | 2nd Year | Bachelor of Science in Environmental Science |
+| `camille.castro@psu.edu.ph` | `password` | CAS | 3rd Year | Bachelor of Science in Statistics |
+| `erwin.ramos@psu.edu.ph` | `password` | CAS | 1st Year | Bachelor of Science in Biology |
+| `tricia.tolentino@psu.edu.ph` | `password` | CSSP | 3rd Year | Bachelor of Science in Social Work |
+| `luis.villanueva@psu.edu.ph` | `password` | CSSP | 2nd Year | Bachelor of Science in Sociology |
+| `diane.padilla@psu.edu.ph` | `password` | CHTM | 2nd Year | Bachelor of Science in Hospitality Management |
+| `bryan.aquino@psu.edu.ph` | `password` | CHTM | 3rd Year | Bachelor of Science in Tourism Management |
+| `jennifer.manalo@psu.edu.ph` | `password` | CIT | 2nd Year | BSIT major in Electronics Technology |
+| `rex.david@psu.edu.ph` | `password` | CIT | 3rd Year | BSIT major in Mechatronics |
+| `aldrin.fernandez@psu.edu.ph` | `password` | LAW | 2nd Year | Juris Doctor (Law) |
+| `rina.lim@psu.edu.ph` | `password` | LAW | 3rd Year | Juris Doctor Bridge Program |
+| `christian.tan@psu.edu.ph` | `password` | GS | 1st Year | Master in Information Technology |
+| `sheila.go@psu.edu.ph` | `password` | GS | 2nd Year | MA in Education major in Educational Management |
+| `hazel.abalos@psu.edu.ph` | `password` | LHS | Grade 10 | Laboratory High School (Grade 7 to 10) |
+| `mark.pangan@psu.edu.ph` | `password` | LHS | Grade 9 | Laboratory High School (Grade 7 to 10) |
+
+(The two Senior High School students — `jessa.chua@` and `renz.ong@` — went with
+the unit in D-43. "BSBA"/"BSIT" above are abbreviated for the table's width; the
+seeder stores the full catalog string.)
 
 ---
 

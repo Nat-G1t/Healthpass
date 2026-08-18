@@ -54,7 +54,8 @@ class StaffSeeder extends Seeder
             'email' => 'nurse@'.$domain,
         ], $oneTime);
 
-        // One college admin per college — each scoped to their college (FR-AUTH-06)
+        // One college admin per college — each scoped to their college
+        // (FR-AUTH-06). 11 units since D-43 removed Senior High School.
         $adminColleges = [
             'COE' => 'COE Administrator',
             'CEA' => 'CEA Administrator',
@@ -66,7 +67,6 @@ class StaffSeeder extends Seeder
             'CIT' => 'CIT Administrator',
             'LAW' => 'LAW Administrator',
             'GS' => 'GS Administrator',
-            'SHS' => 'SHS Administrator',
             'LHS' => 'LHS Administrator',
         ];
 

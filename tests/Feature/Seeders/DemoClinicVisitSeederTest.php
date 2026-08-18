@@ -17,10 +17,12 @@ use Tests\TestCase;
  *
  *  1. a fresh seed must not crash — clinic_visits.college_id went NOT NULL
  *     with the D-17 snapshot migration, and the demo seeder used to omit it
- *     (regression check), and
- *  2. the analytics spread must actually cover all 12 colleges and both
+ *     (regression check),
+ *  2. the analytics spread must actually cover all 11 colleges and both
  *     sexes, so the Director analytics (FR-ANL-04) have meaningful data
- *     in dev.
+ *     in dev, and
+ *  3. every seeded visit carries the D-43 program snapshot, so the
+ *     per-program reporting built on it has something to render.
  */
 class DemoClinicVisitSeederTest extends TestCase
 {
@@ -48,8 +50,17 @@ class DemoClinicVisitSeederTest extends TestCase
             ->distinct()
             ->count('clinic_visits.college_id');
 
-        $this->assertSame(12, College::count());
+        $this->assertSame(11, College::count()); // 12 before D-43 removed SHS
         $this->assertSame(College::count(), $collegesWithVisits);
+    }
+
+    public function test_fresh_seed_gives_every_visit_a_program_snapshot(): void
+    {
+        // D-43: the demo data feeds the per-program reporting, so a visit with
+        // no course would leave a hole in it. Real pre-D-43 visits legitimately
+        // hold null — but nothing the seeder creates is pre-D-43.
+        $this->assertGreaterThan(0, ClinicVisit::count());
+        $this->assertSame(0, ClinicVisit::whereNull('course')->count());
     }
 
     public function test_both_sexes_appear_among_encoded_visits(): void
