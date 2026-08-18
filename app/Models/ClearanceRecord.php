@@ -13,6 +13,15 @@ class ClearanceRecord extends Model
     use HasFactory;
 
     /**
+     * The only two outcomes a nurse encodes (FR-NRS-03, D-32 dropped case
+     * categories) — mirrors the `result` enum. Used by the Nurse Dashboard's
+     * result filter (D-44); the encode form keeps its own Rule::in pair.
+     *
+     * @var list<string>
+     */
+    public const RESULTS = ['Fit', 'Unfit'];
+
+    /**
      * Clearance purposes (FR-NRS-03) — the locked PRD list; validation is
      * the real gate (SQLite in tests doesn't enforce the MySQL enum).
      *

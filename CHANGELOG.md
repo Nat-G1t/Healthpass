@@ -4,6 +4,34 @@
 
 ### Added
 
+* **Nurse Dashboard — the nurse's encode log finally has a home** (D-44,
+  FR-NRS-09). **No schema change.** The nurse was the only role without a
+  history surface: once a visit is encoded it leaves the Live Queue
+  (`scopeLiveQueue` only sees `captured`), so after a clinic day there was no
+  way to see what had been encoded short of typing each URL.
+  - **New page `/nurse/dashboard`** — four stat tiles (encoded today, encoded
+    this month, awaiting encode, flagged vitals this month) above the encode
+    history. One page, not a dashboard-plus-history pair.
+  - **The history is CLINIC-WIDE, not per-nurse**, and every row names its
+    encoder. Two nurses on shift must read one continuous log; "who encoded
+    this" is answered by a column, not by hiding rows.
+  - Columns: reference no., student, capture-time college, the **D-43 program
+    snapshot** ("—" when null), Fit/Unfit, encoded by, encoded at, printed.
+  - Filters are GET (`month`, `result`, `q`) so a filtered view is shareable,
+    and `withQueryString()` carries them through the pager (15 rows a page).
+    The month list reuses `App\Support\VisitMonths`; a month the picker does
+    not offer degrades to "all months" rather than erroring.
+  - **Rows reuse what already exists — no new detail page.** View opens the
+    encode screen, which already renders read-only for an encoded visit;
+    Reprint posts to the existing reprint route (in a new tab: the hidden print
+    iframe and its script belong to the encode page, and duplicating them would
+    fork the print flow).
+  - **The dashboard is now the nurse's home** (`EnsureRole`). Live Queue is
+    unchanged, still first in reach from the nav, and Save & Close still
+    returns there so the reverse-stack ghost row is untouched.
+  - Month bounds are Carbon, never `MONTH()`/`DATE_FORMAT` — the suite runs on
+    SQLite while dev/prod is MySQL.
+
 * **Senior High School removed; clinic visits now snapshot the student's
   program** (D-43). **SCHEMA CHANGE: `clinic_visits.course` VARCHAR(120) NULL.**
   Two consequences of D-42 making programs real data.

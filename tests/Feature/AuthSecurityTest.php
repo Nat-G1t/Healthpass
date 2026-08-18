@@ -104,17 +104,18 @@ class AuthSecurityTest extends TestCase
     {
         $nurse = User::factory()->create(['role' => 'nurse']);
 
+        // The nurse's home is the dashboard, not the queue (D-44).
         $this->actingAs($nurse)
             ->get(route('student.dashboard'))
-            ->assertRedirect(route('nurse.queue'));
+            ->assertRedirect(route('nurse.dashboard'));
 
         $this->actingAs($nurse)
             ->get(route('admin.dashboard'))
-            ->assertRedirect(route('nurse.queue'));
+            ->assertRedirect(route('nurse.dashboard'));
 
         $this->actingAs($nurse)
             ->get(route('director.dashboard'))
-            ->assertRedirect(route('nurse.queue'));
+            ->assertRedirect(route('nurse.dashboard'));
     }
 
     public function test_director_cannot_access_non_director_routes(): void
@@ -158,7 +159,7 @@ class AuthSecurityTest extends TestCase
     {
         $dashboards = [
             'student' => route('student.dashboard'),
-            'nurse' => route('nurse.queue'),
+            'nurse' => route('nurse.dashboard'),
             'director' => route('director.dashboard'),
         ];
 

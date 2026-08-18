@@ -8,6 +8,7 @@ use App\Http\Controllers\Director\AnomaliesController as DirectorAnomaliesContro
 use App\Http\Controllers\Director\BatchApprovalController as DirectorBatchApprovalController;
 use App\Http\Controllers\Director\DashboardController as DirectorDashboardController;
 use App\Http\Controllers\Kiosk\KioskController;
+use App\Http\Controllers\Nurse\DashboardController as NurseDashboardController;
 use App\Http\Controllers\Nurse\EncodeController as NurseEncodeController;
 use App\Http\Controllers\Nurse\KioskDeviceController as NurseKioskDeviceController;
 use App\Http\Controllers\Nurse\PrintClearanceController as NursePrintClearanceController;
@@ -137,6 +138,9 @@ Route::middleware(['auth', 'role:nurse'])
     ->prefix('nurse')
     ->name('nurse.')
     ->group(function () {
+        // Dashboard (FR-NRS-09, D-44): stat tiles + the clinic-wide encode
+        // history. The nurse's HOME — see EnsureRole::DASHBOARDS.
+        Route::get('/dashboard', NurseDashboardController::class)->name('dashboard');
         Route::get('/queue', [NurseQueueController::class, 'index'])->name('queue');
         // JSON feed for the 4 s Live Queue poll (FR-NRS-02). Nurse-only, same
         // guard as the page — it exposes the same captured-visit rows.

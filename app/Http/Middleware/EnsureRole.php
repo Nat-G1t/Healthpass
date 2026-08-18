@@ -18,7 +18,9 @@ class EnsureRole
     private const DASHBOARDS = [
         'student' => '/student/dashboard',
         'college_admin' => '/admin/dashboard',
-        'nurse' => '/nurse/queue',
+        // D-44: the dashboard (encode history + stat tiles), not the queue —
+        // the queue is still one click away in the sidebar.
+        'nurse' => '/nurse/dashboard',
         'director' => '/director/dashboard',
     ];
 

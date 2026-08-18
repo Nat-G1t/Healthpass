@@ -29,7 +29,7 @@ to use, what to click, and what you should see.
 
 | Role | Email | Notes |
 |---|---|---|
-| Nurse | `nurse@healthpass.test` | Live Queue + Encode |
+| Nurse | `nurse@healthpass.test` | Dashboard (encode history) + Live Queue + Encode |
 | Clinic Director | `director@healthpass.test` | Approvals + Analytics |
 | CCS College Admin | `admin.ccs@healthpass.test` | Pattern: `admin.<code>@healthpass.test` |
 | CEA College Admin | `admin.cea@healthpass.test` | For cross-college tests |
@@ -37,8 +37,9 @@ to use, what to click, and what you should see.
 | Student — Maria Reyes (CCS) | `maria.reyes@psu.edu.ph` | Student no. `2022060002` |
 | Student — Carlo Cruz (CCS) | `carlo.cruz@psu.edu.ph` | Student no. `2023060003` |
 
-There are 30 demo students across all 12 colleges; any `@psu.edu.ph` student
-in the seeder works. A full list is in the `StudentSeeder`.
+There are 28 demo students across all 11 colleges (D-43 removed Senior High
+School); any `@psu.edu.ph` student in the seeder works. A full list is in the
+`StudentSeeder`.
 
 ### Two things to know about the kiosk
 
@@ -304,6 +305,58 @@ encode → print.
 capture, **no** nurse encode, and **no** printed clearance. Any kiosk session
 by a dental-only student is recorded as a walk-in, not linked to the dental
 appointment.
+
+---
+
+## E2E-7 — Kiosk submit → nurse encodes → the result appears in the encode history
+
+**Goal:** confirm the Nurse Dashboard (FR-NRS-09, D-44) shows what the nurse
+just encoded, attributed to the right nurse and carrying the right **program**.
+
+**Accounts:** the nurse `nurse@healthpass.test`, and any student with a program
+on their profile, e.g. `juan.santos@psu.edu.ph` (CCS).
+
+**Steps:**
+
+1. Log in as the **nurse**. → **Expect:** you land on **`/nurse/dashboard`**,
+   not the Live Queue — the dashboard is the nurse's home. Note the
+   **Encoded Today** and **Awaiting Encode** tiles.
+2. Open the kiosk in another tab, log in as the student (email path), and
+   complete a full session through **Submit**.
+3. Back on the dashboard, reload. → **Expect:** **Awaiting Encode** has gone up
+   by one; the new visit is **not** in the history yet — it is still `captured`,
+   so it belongs to the Live Queue.
+4. Open **Live Queue**, click **Encode Result** on that visit, choose **Fit**,
+   and **Save & Close**. → **Expect:** you return to the Live Queue and the row
+   animates away (unchanged behaviour).
+5. Open **Dashboard**. → **Expect:** the visit is now the **top row** of the
+   encode history (newest first), showing its reference number, the student's
+   name, their college **code**, the **program the student had at capture**,
+   a **Fit** badge, **Encoded by = the nurse you are logged in as**, the encode
+   timestamp, and **Printed = No**. **Encoded Today** has gone up by one and
+   **Awaiting Encode** back down by one.
+6. Click **Reprint** on that row. → **Expect:** the official clearance form
+   opens in a **new tab**; print or close it, return to the dashboard and
+   reload. → **Expect:** that row's **Printed** now reads **Yes**.
+7. Exercise the filters: set **Result = Unfit** → the Fit row disappears; set it
+   back. Type part of the student's **name** in Search, then their **reference
+   number** — each finds the row. Pick a different **Month** → the row
+   disappears. Click **Clear** → everything comes back.
+8. If the clinic has more than 15 encoded results, go to **page 2** with a
+   filter still applied. → **Expect:** the filter is **still applied** on page 2
+   (the URL keeps `result=`/`q=`/`month=`), and no row from page 1 repeats.
+9. **Clinic-wide check:** log in as a *different* nurse (or have a teammate
+   encode a visit) and reload the dashboard as the first nurse. → **Expect:**
+   the other nurse's encode is **visible**, with **their** name in Encoded by —
+   the log is the clinic's, not one nurse's.
+10. Confirm **Live Queue** still works and still auto-polls (open it in two
+    windows and submit a kiosk session — both update within one poll cycle).
+
+**Pass criteria:** the encoded result appears in the history with the correct
+program snapshot and encoder; captured (un-encoded) visits never appear; every
+filter narrows and survives paging; both nurses see one continuous log; the
+Live Queue is unaffected. A visit captured before D-43 (no program snapshot)
+renders "—" in the Program column and is **never** backfilled.
 
 ---
 

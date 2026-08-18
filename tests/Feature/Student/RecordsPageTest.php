@@ -119,7 +119,7 @@ class RecordsPageTest extends TestCase
         // EnsureRole redirects (not 403) — sends the user to their own dashboard.
         $this->actingAs($this->nurse())
             ->get(route('student.records'))
-            ->assertRedirect('/nurse/queue');
+            ->assertRedirect('/nurse/dashboard');
     }
 
     public function test_student_can_access_records_page(): void

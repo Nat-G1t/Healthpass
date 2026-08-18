@@ -35,7 +35,7 @@ class KioskTutorialTest extends TestCase
 
         $this->actingAs($nurse)
             ->get(route('student.tutorial'))
-            ->assertRedirect('/nurse/queue');
+            ->assertRedirect('/nurse/dashboard');
     }
 
     public function test_student_can_view_tutorial_page(): void
