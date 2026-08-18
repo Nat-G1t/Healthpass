@@ -14,6 +14,7 @@ in-session.
 | 3 | Nurse Dashboard (encode history) | D-44 | none | `/laravel-tdd` |
 | 4 | Shared analytics service + College Admin analytics | D-45 | none | `/laravel-security` |
 | 5 | Printable monthly report + Director program card | D-46 | none | `/verify` |
+| 6 | Director super-admin console (staff provisioning) | D-47 | none | `/laravel-security` |
 
 **Branch for all five:** `feature/advisor-revisions` (already exists, branched
 off `main`, currently level with it). Do **not** create a new branch per prompt.
@@ -23,9 +24,12 @@ One commit per prompt; merge to `main` after Prompt 5.
 that 1 creates. 2 before 3 because the nurse history table shows the per-visit
 program snapshot that 2 adds. 4 before 5 because 5 renders the report from the
 service that 4 extracts. 3 is otherwise independent and can be moved earlier if
-you want a quick win first.
+you want a quick win first. 6 is independent of all of them — it shares no code
+with 1–5 — but is placed last deliberately: it answers a question the adviser
+raised after the others were scoped, and it is the safest one to cut if the
+Aug 28 freeze gets tight.
 
-**Why one decision per prompt (D-42 … D-46):** each prompt writes its own PRD
+**Why one decision per prompt (D-42 … D-47):** each prompt writes its own PRD
 decision row, its own revision-history row, and its own FR changes, so no prompt
 is blocked on another prompt's doc edits landing first.
 
@@ -815,6 +819,195 @@ CONSTRAINTS:
 
 DO NOT COMMIT. Leave everything uncommitted and print a summary of changed files
 when done.
+```
+
+---
+
+## PROMPT 6 — Director super-admin console, staff provisioning (D-47)
+
+```
+Work on the existing branch feature/advisor-revisions. Do not create a new
+branch. Read docs/HealthPass_PRD.md section 5 (FR-AUTH) and section 14
+(D-2, D-35) before starting.
+
+PRECONDITION: prompts 1-5 of this file are finished and committed. This prompt
+shares no code with them, but its decision number (D-47) and revision row
+assume D-42..D-46 already exist in the PRD.
+
+CONTEXT
+Our faculty adviser asked whether the system has a super admin, and assumed it
+was the Clinic Director. It does not have one today, and the gap is
+operational, not cosmetic: staff accounts (College Admin, Nurse) can ONLY be
+created by running database/seeders/StaffSeeder.php. On the hosted deployment
+that is now primary (D-34), adding one College Admin therefore requires a
+developer with server and database access. There is no in-app way to add a
+staff member, deactivate one who has left, or reissue a forgotten password.
+
+DECISIONS ALREADY LOCKED — implement these, do not propose alternatives:
+- The Director gains super-admin CAPABILITIES. Do NOT add a fifth role.
+  users.role is a hard enum of exactly four values, and FR-AUTH-02 mandates
+  "exactly four roles" — a super_admin role would need an enum migration and
+  would overturn a Mandatory requirement plus D-2. A capability layer on the
+  existing director role needs NO schema change at all.
+- Accounts are PROVISIONED by the Director. There is NO staff self-registration
+  and NO approval queue. FR-AUTH-05 (Mandatory) already reads "created only via
+  database seeders / provisioning — no public staff registration path shall
+  exist", so in-app provisioning satisfies it as written, while a
+  self-registration flow would have contradicted it. Add no public route.
+- The Director may provision college_admin and nurse ONLY. Never another
+  director, never a student. This is the anti-privilege-escalation rule and it
+  MUST be enforced server-side, not merely absent from the dropdown.
+- Credentials reuse D-35 exactly: Str::password(16, symbols: false), Hash::make,
+  must_change_password = true, and the existing RequirePasswordChange
+  middleware forces the change at first login. Build no second credential path.
+- The generated password is SHOWN ONCE on screen for the Director to hand over
+  through official channels. Do NOT email it, and do NOT persist it in readable
+  form — StaffSeeder::reportOneTimePasswords() already documents that rule.
+
+SCOPE — do exactly these, nothing else:
+
+A. Routes and navigation
+   New routes inside the existing ['auth', 'role:director'] group in
+   routes/web.php:
+     GET    /director/staff                    director.staff.index
+     POST   /director/staff                    director.staff.store
+     POST   /director/staff/{user}/password    director.staff.password
+     PATCH  /director/staff/{user}/status      director.staff.status
+     PATCH  /director/staff/{user}/college     director.staff.college
+   Give EACH write endpoint its own throttle prefix (the third argument). For an
+   authenticated user Laravel's inline throttle keys on the user id with no
+   path, so without distinct prefixes these would share one counter with each
+   other and with the batch endpoints — the exact bug documented at
+   routes/web.php around line 129 for batch-appt-cancel.
+   Add "Staff Accounts" to the 'director' arm of
+   resources/views/components/layout/sidebar.blade.php (around line 30).
+
+B. NEW app/Http/Controllers/Director/StaffAccountController.php
+   index    — list college_admin and nurse accounts: name, email, role, managed
+              college, status, and whether a password change is still pending
+              (must_change_password). Order by role then name. Students are not
+              listed, and neither is the Director's own account.
+   store    — create a staff account. Generate the one-time password, hash it,
+              set must_change_password = true, status = 'active', and
+              email_verified_at = now() (staff do not verify by email; the
+              seeder already does this). Flash the plaintext to the session
+              ONCE so index can show it in a dismissible panel — after that it
+              is gone.
+   password — reissue a one-time password for an existing staff account under
+              the same rules, setting must_change_password = true again.
+   status   — flip active/inactive. NEVER delete a user: FKs are
+              restrictOnDelete and clearance_records.encoded_by /
+              batch_requests.reviewed_by point at staff rows. Deactivation is
+              the only form of removal this system has.
+   college  — reassign a college_admin's managed_college_id.
+
+C. Form Requests (CLAUDE.md: non-trivial forms use Form Request classes)
+   app/Http/Requests/Director/StoreStaffAccountRequest.php:
+     role  => required, in:college_admin,nurse     <-- the escalation guard
+     name  => required, string, max:120
+     email => required, email, max:191, unique:users,email
+     managed_college_id => required and must exist in colleges when role is
+                           college_admin; must be null when role is nurse
+   The role whitelist lives in the REQUEST, not only in the view: a POST naming
+   role=director must be rejected by validation.
+   Add a second request class for the college reassignment.
+
+D. Safety rules to implement explicitly
+   - The Director cannot deactivate, or reissue a password for, their OWN
+     account through this screen. Guard it server-side and 403.
+   - A college_admin with a null managed_college_id is unusable, because
+     college.scope 403s them on every /admin route. store must refuse to create
+     one, and the reassign endpoint must refuse to null it.
+   - Deactivating a user must never touch their historical records.
+
+E. Views
+   resources/views/director/staff.blade.php using x-layout.sidebar and the
+   existing x-hp.card / x-hp.table / x-hp.badge components — match how
+   admin/batches renders its form-plus-table pages rather than inventing a new
+   layout. A "New staff account" form, the account table with per-row actions,
+   and the show-once credential panel. That panel must be visually
+   unmistakable and must state plainly that the password will not be shown
+   again. Must work in dark mode (D-38).
+
+F. Tests — tests/Feature/Director/StaffAccountTest.php
+   - a student, a nurse, and a college admin are each refused on EVERY endpoint
+   - the Director can create a college_admin with a college, and a nurse without
+   - SECURITY: POSTing role=director is rejected
+   - SECURITY: POSTing role=student is rejected
+   - creating a college_admin WITHOUT managed_college_id is rejected
+   - the created account has must_change_password = true and is forced to the
+     change-password screen at first login — assert against the existing
+     behaviour covered by tests/Feature/Auth/RequirePasswordChangeTest.php
+   - the plaintext password is never persisted in readable form
+   - deactivating a user blocks their login (LoginRequest already enforces
+     status !== 'active', around line 54)
+   - the Director cannot deactivate their own account
+   - reassigning a college_admin's college changes what their /admin pages see
+   - a deactivated nurse's past clearance records still render
+
+OUT OF SCOPE — do not build any of these:
+- A system activity log or audit trail. Separate, larger, and may be cut.
+- College or program CRUD. Programs are config-backed by D-42 and a UI to edit
+  them would contradict that decision.
+- Any UI for capacity or clinical thresholds. D-37 keeps capacity in config and
+  the BP threshold 140/90 is LOCKED — a screen that edits it is actively wrong.
+- Impersonation / "log in as". It would let the Director read a student's
+  medical records as that student. Hard no for a health system.
+- Creating or deleting students. They self-register (FR-REG), and deletion is
+  blocked by restrictOnDelete regardless.
+- Any change to StaffSeeder. Seeding stays exactly as it is; this adds an
+  in-app path alongside it, it does not replace it.
+
+VERIFICATION (do not declare done without this):
+- php artisan test — full suite green, including your new tests.
+- php artisan serve --port=8080 and npm run dev. As the Director: create a new
+  College Admin, copy the one-time password, log out, log in as that admin, and
+  confirm you are forced to change the password before reaching any dashboard.
+  Confirm the new admin then sees only their assigned college.
+- Deactivate that admin and confirm the login is refused.
+- With devtools, POST role=director to the store endpoint and confirm you get a
+  validation failure, not a created account.
+
+DOCS TO UPDATE IN THIS SAME CHANGE:
+- docs/HealthPass_PRD.md
+  * Add FR-AUTH-10 — this belongs in the FR-AUTH block, not FR-DIRA, because it
+    is an account-lifecycle requirement extending FR-AUTH-05 and FR-AUTH-07
+    (FR-DIRA-01..06 are all taken and are about batch approvals). Text:
+    "Staff Account Provisioning — the Director shall be able to create
+    college_admin and nurse accounts in-app, issuing a one-time password shown
+    once and requiring a change at first login; to reissue a password; to
+    activate or deactivate an account; and to reassign a College Admin's
+    managed college. The Director shall not be able to provision a director or
+    student account, nor deactivate their own account." Priority S.
+  * Note against FR-AUTH-05 that in-app provisioning by the Director satisfies
+    its "provisioning" clause, and that no public staff registration path is
+    added.
+  * Decisions Log: add D-47 — "The Clinic Director gains super-admin
+    capabilities as a CAPABILITY LAYER on the existing role, NOT a fifth role;
+    users.role stays a four-value enum and FR-AUTH-02 is unchanged. Staff
+    accounts are PROVISIONED by the Director, reusing the D-35
+    one-time-password flow. Self-registration with an approval queue was
+    considered and REJECTED: it would contradict FR-AUTH-05, add a public
+    unauthenticated endpoint where none exists today, and verify identity only
+    by self-assertion. NO schema change." Record the separation-of-duties note:
+    the Director both approves clinical batches and controls access, accepted
+    because the Director is the clinic's data controller and provisioning is
+    limited to clinic-facing staff, never to another Director.
+  * Revision History: add row v1.22, dated the day you run this.
+- docs/dev-notes.md — staff accounts can now be created in-app; the seeder
+  remains the bootstrap path for the very first Director account.
+- docs/deployment-hosted.md — adding staff after go-live no longer needs server
+  or database access.
+- CHANGELOG.md — one entry under Unreleased.
+
+CONSTRAINTS:
+- No new packages, no new tables, no migration.
+- Reuse Str::password / Hash::make / must_change_password exactly as
+  StaffSeeder::createStaff() does — do not invent a second credential path.
+- If anything here conflicts with the PRD, STOP and say so before coding.
+
+DO NOT COMMIT. Leave everything uncommitted and print a summary of changed
+files when done.
 ```
 
 ---

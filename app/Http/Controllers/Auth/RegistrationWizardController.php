@@ -11,6 +11,7 @@ use App\Models\College;
 use App\Models\StudentProfile;
 use App\Models\User;
 use App\Support\Otp;
+use App\Support\Programs;
 use Carbon\Carbon;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
@@ -70,7 +71,12 @@ class RegistrationWizardController extends Controller
 
         $colleges = College::orderBy('name')->get(['id', 'code', 'name']);
 
-        return view('auth.register.step2', compact('colleges'));
+        // The whole program catalog, keyed by college id, for the cascading
+        // Program / Year Level selects on the form (D-42). Read here rather
+        // than in the view so the Blade file does no database work.
+        $programCatalog = Programs::all();
+
+        return view('auth.register.step2', compact('colleges', 'programCatalog'));
     }
 
     public function storeInfo(StoreRegistrationInfoRequest $request): RedirectResponse

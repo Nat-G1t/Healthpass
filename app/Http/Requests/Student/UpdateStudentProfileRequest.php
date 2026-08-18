@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Student;
 
+use App\Support\Programs;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -30,6 +31,11 @@ class UpdateStudentProfileRequest extends FormRequest
 
     public function rules(): array
     {
+        // Program and year level are scoped to the college being SUBMITTED,
+        // not the one currently saved (D-42) — a transfer re-scopes both, so
+        // keeping the old program while switching college must be rejected.
+        $collegeId = (int) $this->input('college_id');
+
         return [
             'first_name' => ['required', 'string', 'max:80'],
             'middle_name' => ['nullable', 'string', 'max:80'],
@@ -41,8 +47,8 @@ class UpdateStudentProfileRequest extends FormRequest
             // Editable on transfer (FR-STU-09). Must be a real college — mirrors
             // registration Step 2 so an edit can't set an invalid/forged id.
             'college_id' => ['required', 'integer', 'exists:colleges,id'],
-            'course' => ['required', 'string', 'max:120'],
-            'year_level' => ['required', 'string', 'in:1,2,3,4,5'],
+            'course' => ['required', 'string', 'max:120', Rule::in(Programs::forCollege($collegeId))],
+            'year_level' => ['required', 'string', Rule::in(Programs::yearLevelKeys($collegeId))],
             'date_of_birth' => ['required', 'date', 'before:today', 'after:'.now()->subYears(100)->toDateString()],
             'place_of_birth' => ['required', 'string', 'max:120'],
             'civil_status' => ['required', 'in:Single,Married,Widowed,Separated'],
@@ -52,9 +58,17 @@ class UpdateStudentProfileRequest extends FormRequest
 
     public function messages(): array
     {
+        // Same reasoning as registration: a missing/forged college invalidates
+        // every program, so say that instead of blaming the program field.
+        $collegeChosen = Programs::forCollege((int) $this->input('college_id')) !== [];
+        $collegeFirst = 'Select your college first, then choose your program.';
+
         return [
             'email.unique' => 'This email address is already registered.',
-            'year_level.in' => 'Please select a valid year level (1–5).',
+            'course.required' => $collegeChosen ? 'Please choose your program.' : $collegeFirst,
+            'course.in' => $collegeChosen ? 'Please choose a program offered by your college.' : $collegeFirst,
+            'year_level.required' => $collegeChosen ? 'Please choose your year level.' : $collegeFirst,
+            'year_level.in' => $collegeChosen ? 'Please choose a year level your college offers.' : $collegeFirst,
             'civil_status.in' => 'Please select a valid civil status.',
             'date_of_birth.before' => 'Date of birth must be in the past.',
         ];

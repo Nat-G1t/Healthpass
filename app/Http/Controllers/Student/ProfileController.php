@@ -10,6 +10,7 @@ use App\Mail\OtpVerificationMail;
 use App\Models\College;
 use App\Models\User;
 use App\Support\Otp;
+use App\Support\Programs;
 use Carbon\Carbon;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
@@ -60,7 +61,12 @@ class ProfileController extends Controller
         // College dropdown options for the Edit modal (FR-STU-09 — editable on transfer).
         $colleges = College::orderBy('name')->get(['id', 'code', 'name']);
 
-        return view('student.id-profile', compact('profile', 'studentNumberDigits', 'qrSvg', 'pendingEmail', 'colleges'));
+        // Program catalog keyed by college id, for the Edit modal's cascading
+        // Program / Year Level selects and for the read-only year-level label
+        // (D-42). Read here so the Blade view does no database work.
+        $programCatalog = Programs::all();
+
+        return view('student.id-profile', compact('profile', 'studentNumberDigits', 'qrSvg', 'pendingEmail', 'colleges', 'programCatalog'));
     }
 
     /** PATCH /student/id-profile — update only the self-editable fields. */

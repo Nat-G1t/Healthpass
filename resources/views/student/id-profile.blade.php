@@ -1,11 +1,11 @@
 <x-layout.sidebar title="My ID & Profile">
 
 @php
-    // Year level "3" → "3rd Year" for read-only display.
-    $ordinal = [
-        '1' => '1st Year', '2' => '2nd Year', '3' => '3rd Year',
-        '4' => '4th Year', '5' => '5th Year',
-    ][$profile->year_level] ?? $profile->year_level;
+    // Year level "3" → "3rd Year" for read-only display. The labels come from
+    // the student's college in config/programs.php (D-42), so a Laboratory High
+    // School student reads "Grade 8" rather than a bare "8".
+    $ordinal = $programCatalog[$profile->college_id]['year_levels'][$profile->year_level]
+        ?? $profile->year_level;
 
     $sexLabel  = ['M' => 'Male', 'F' => 'Female'][$profile->sex] ?? $profile->sex;
     $age       = $profile->date_of_birth ? $profile->date_of_birth->age : null;
@@ -335,7 +335,22 @@
                 </button>
             </div>
 
-            <form method="POST" action="{{ route('student.id-profile.update') }}" class="px-6 py-5">
+            {{-- Program and Year Level cascade off the College select (D-42):
+                 `catalog` is the whole program catalog keyed by college id, and
+                 the two getters re-read it whenever `collegeId` changes. A
+                 transfer therefore clears the old program instead of keeping a
+                 value the new college does not offer — which the server would
+                 reject anyway (UpdateStudentProfileRequest). --}}
+            <form method="POST" action="{{ route('student.id-profile.update') }}" class="px-6 py-5"
+                  x-data="{
+                      catalog: @js($programCatalog),
+                      collegeId: '{{ old('college_id', $profile->college_id) }}',
+                      course: '{{ old('course', $profile->course) }}',
+                      yearLevel: '{{ old('year_level', $profile->year_level) }}',
+                      get programs() { return this.catalog[this.collegeId]?.programs ?? []; },
+                      get yearLevels() { return this.catalog[this.collegeId]?.year_levels ?? {}; },
+                  }"
+                  x-init="$watch('collegeId', () => { course = ''; yearLevel = ''; })">
                 @csrf
                 @method('PATCH')
 
@@ -352,13 +367,26 @@
                     <x-hp.input label="Email" name="email" type="email"
                                 :value="old('email', $profile->user->email)"
                                 :error="$errors->first('email')" required />
-                    <x-hp.input label="Course" name="course"
-                                :value="old('course', $profile->course)"
-                                :error="$errors->first('course')" required />
+                    {{-- pr-9 + truncate: program names outrun the box, and the
+                         browser paints the dropdown arrow inside the right
+                         padding, so px-3 alone leaves text under the arrow. --}}
+                    <x-hp.select label="Program" name="course" x-model="course"
+                                 x-bind:disabled="! collegeId" class="pr-9 truncate"
+                                 :error="$errors->first('course')" required>
+                        <option value="" x-text="collegeId ? '— Select your program —' : '— Select your college first —'">
+                            — Select your program —
+                        </option>
+                        {{-- :selected as well as x-model — x-for creates these
+                             <option>s after the <select> initialises, so the
+                             binding on the option restores the saved program. --}}
+                        <template x-for="program in programs" :key="program">
+                            <option :value="program" :selected="program === course" x-text="program"></option>
+                        </template>
+                    </x-hp.select>
 
                     {{-- College — editable on transfer (FR-STU-09). Past visits keep
                          their capture-time snapshot, so analytics history stays put. --}}
-                    <x-hp.select label="College" name="college_id" :error="$errors->first('college_id')">
+                    <x-hp.select label="College" name="college_id" x-model="collegeId" :error="$errors->first('college_id')">
                         @foreach ($colleges as $college)
                             <option value="{{ $college->id }}"
                                 @selected((int) old('college_id', $profile->college_id) === $college->id)>
@@ -367,10 +395,13 @@
                         @endforeach
                     </x-hp.select>
 
-                    <x-hp.select label="Year Level" name="year_level" :error="$errors->first('year_level')">
-                        @foreach (['1' => '1st Year', '2' => '2nd Year', '3' => '3rd Year', '4' => '4th Year', '5' => '5th Year'] as $val => $text)
-                            <option value="{{ $val }}" @selected(old('year_level', $profile->year_level) === $val)>{{ $text }}</option>
-                        @endforeach
+                    <x-hp.select label="Year Level" name="year_level" x-model="yearLevel"
+                                 x-bind:disabled="! collegeId"
+                                 :error="$errors->first('year_level')">
+                        <option value="">—</option>
+                        <template x-for="[value, label] in Object.entries(yearLevels)" :key="value">
+                            <option :value="value" :selected="value === yearLevel" x-text="label"></option>
+                        </template>
                     </x-hp.select>
 
                     <x-hp.input label="Date of Birth" name="date_of_birth" type="date"

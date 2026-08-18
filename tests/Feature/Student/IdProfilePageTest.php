@@ -59,7 +59,7 @@ class IdProfilePageTest extends TestCase
             'middle_name' => 'Reyes',
             'last_name' => 'Cruz',
             'sex' => 'M',
-            'course' => 'BS Information Technology',
+            'course' => 'Bachelor of Science in Information Technology',
             'year_level' => '3',
             'date_of_birth' => '2003-05-15',
             'place_of_birth' => 'Angeles City, Pampanga',
@@ -80,7 +80,8 @@ class IdProfilePageTest extends TestCase
             'last_name' => 'Cruz',
             'email' => 'juan@example.com',
             'college_id' => $this->college()->id,
-            'course' => 'BS Computer Science',
+            // Real CCS program + a year level CCS offers (config/programs.php, D-42).
+            'course' => 'Bachelor of Science in Computer Science',
             'year_level' => '4',
             'date_of_birth' => '2003-05-15',
             'place_of_birth' => 'Mabalacat City, Pampanga',
@@ -161,7 +162,7 @@ class IdProfilePageTest extends TestCase
         $response = $this->actingAs($student)->patch(route('student.id-profile.update'), $this->validPayload([
             'first_name' => 'Juancho',
             'last_name' => 'Cruz',
-            'course' => 'BS Computer Science',
+            'course' => 'Bachelor of Science in Computer Science',
             'year_level' => '4',
         ]));
 
@@ -171,7 +172,7 @@ class IdProfilePageTest extends TestCase
         $this->assertDatabaseHas('student_profiles', [
             'user_id' => $student->id,
             'first_name' => 'Juancho',
-            'course' => 'BS Computer Science',
+            'course' => 'Bachelor of Science in Computer Science',
             'year_level' => '4',
         ]);
 
@@ -209,9 +210,14 @@ class IdProfilePageTest extends TestCase
         $student = $this->studentWithProfile('2023-12345');
         $newCollege = College::create(['code' => 'CEA', 'name' => 'College of Engineering and Architecture']);
 
+        // Transferring re-scopes the program too — the new college must be sent
+        // with one of ITS programs (D-42), not the old college's.
         $response = $this->actingAs($student)->patch(
             route('student.id-profile.update'),
-            $this->validPayload(['college_id' => $newCollege->id])
+            $this->validPayload([
+                'college_id' => $newCollege->id,
+                'course' => 'Bachelor of Science in Civil Engineering',
+            ])
         );
 
         $response->assertRedirect(route('student.id-profile'));
@@ -270,7 +276,7 @@ class IdProfilePageTest extends TestCase
 
         $response = $this->actingAs($student)->patch(
             route('student.id-profile.update'),
-            $this->validPayload(['email' => 'new@example.com', 'course' => 'BS Data Science'])
+            $this->validPayload(['email' => 'new@example.com', 'course' => 'Bachelor of Science in Information Systems'])
         );
 
         // Redirected to the verify screen; OTP mailed to the NEW address.
@@ -279,7 +285,7 @@ class IdProfilePageTest extends TestCase
 
         // Email NOT yet changed; the other fields ARE saved.
         $this->assertDatabaseHas('users', ['id' => $student->id, 'email' => 'juan@example.com']);
-        $this->assertDatabaseHas('student_profiles', ['user_id' => $student->id, 'course' => 'BS Data Science']);
+        $this->assertDatabaseHas('student_profiles', ['user_id' => $student->id, 'course' => 'Bachelor of Science in Information Systems']);
     }
 
     public function test_correct_otp_applies_new_email(): void

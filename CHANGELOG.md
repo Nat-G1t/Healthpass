@@ -4,6 +4,39 @@
 
 ### Added
 
+* **Academic programs are now a validated, college-dependent catalog**
+  (D-42 — FR-REG-03, FR-STU-09). **No schema change.** The adviser needs
+  monthly clinic reports broken down per academic program, and
+  `student_profiles.course` was free text validated only with `max:120` —
+  "BSIT", "BS Info Tech" and "Bachelor of Science in Information Technology"
+  are three programs to a `GROUP BY` and one to a human.
+  - **New `config/programs.php`** — the catalog, keyed by college code (so it
+    survives a reseed that renumbers college ids), holding each college's
+    program list and its year levels as storage-key ⇒ display-label. A config
+    file rather than a table: there is no admin CRUD requirement for programs,
+    and this keeps the canonical schema at 10 tables. No migration, no foreign
+    key, no backfill.
+  - **New `App\Support\Programs`** — the one bridge from a college **id** (what
+    forms post) to the catalog's college **code**. Never throws: an unknown
+    college returns an empty list, so a hand-edited form fails validation
+    instead of 500ing.
+  - **Registration Step 2 and the My ID & Profile edit modal** replace the
+    Course text input with a **Program** select, disabled until a College is
+    chosen and repopulated when it changes. **Year Level now comes from the
+    same per-college map** instead of a hardcoded 1–5 list, so Graduate Studies
+    offers years 1–2 and Laboratory High School shows Grades 7–10. Alpine drives
+    the cascade — no new package.
+  - **The server is the authority.** Both Form Requests validate `course` and
+    `year_level` against the college **actually submitted**, so a POST naming
+    another college's program is rejected; a transfer that keeps the old
+    college's program fails until the program changes too. A missing or invalid
+    college reports "Select your college first, then choose your program."
+    rather than a bare "selected course is invalid".
+  - The column keeps the name `course` — the official form
+    DHVSU-QSP-OSS-004-FO002-R03 prints "Course, Year & Section" (D-25) — while
+    the UI labels it "Program". Majors are flat entries in one dropdown, not a
+    second cascade level.
+
 * **A withdrawn student is now emailed** (D-41 — FR-STU-13).
   **No schema change.** This closes the last hole in the chain: D-39 emailed
   students when their college booked them and stopped them cancelling a batch

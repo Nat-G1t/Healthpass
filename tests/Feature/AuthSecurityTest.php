@@ -50,7 +50,8 @@ class AuthSecurityTest extends TestCase
             'student_number' => '2024-00001',
             'college_id' => $college->id,
             'sex' => 'M',
-            'course' => 'BS Information Technology',
+            // Must be a real CCS program from config/programs.php (D-42).
+            'course' => 'Bachelor of Science in Information Technology',
             'year_level' => '1',
             'date_of_birth' => '2000-06-15',
             'place_of_birth' => 'San Fernando, Pampanga',

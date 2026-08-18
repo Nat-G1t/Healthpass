@@ -14,6 +14,15 @@
         novalidate
         x-data="{
             ready: false,
+            // The whole program catalog, keyed by college id (D-42). `catalog`
+            // never changes; `collegeId` does, and the two getters below re-read
+            // the catalog whenever it does — that is the entire cascade.
+            catalog: @js($programCatalog),
+            collegeId: '{{ old('college_id') }}',
+            course: '{{ old('course') }}',
+            yearLevel: '{{ old('year_level') }}',
+            get programs() { return this.catalog[this.collegeId]?.programs ?? []; },
+            get yearLevels() { return this.catalog[this.collegeId]?.year_levels ?? {}; },
             validate() {
                 for (const el of this.$el.querySelectorAll('[required]')) {
                     if (el.name === 'password_confirmation') continue; // never inspect the confirm field
@@ -24,7 +33,9 @@
                 this.ready = true;
             },
         }"
-        x-init="validate()"
+        {{-- Switching college clears the program and year level: the old choice
+             belongs to the old college and would fail server validation. --}}
+        x-init="validate(); $watch('collegeId', () => { course = ''; yearLevel = ''; }); $nextTick(() => validate())"
         @input="validate()"
         @change="validate()"
     >
@@ -93,6 +104,7 @@
                 id="college_id"
                 name="college_id"
                 required
+                x-model="collegeId"
                 :error="$errors->first('college_id')"
             >
                 <option value="">— Select your college —</option>
@@ -137,19 +149,38 @@
             @enderror
         </div>
 
-        {{-- Course / Year Level --}}
+        {{-- Program / Year Level — both come from the chosen college's entry in
+             config/programs.php (D-42) and stay disabled until it is chosen.
+             The server re-checks both against the SUBMITTED college, so this
+             cascade is convenience, not security. --}}
         <div class="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div class="sm:col-span-2">
-                <x-hp.input
-                    label="Course"
+                <x-hp.select
+                    label="Program"
                     id="course"
                     name="course"
-                    type="text"
-                    :value="old('course')"
-                    placeholder="e.g. BSCS, BSED, BSBA"
                     required
+                    x-model="course"
+                    x-bind:disabled="! collegeId"
                     :error="$errors->first('course')"
-                />
+                    {{-- Program names run long ("…Industrial Technology major in
+                         Instrumentation and Control"). The browser paints the
+                         dropdown arrow inside the box's right padding, so the
+                         default px-3 leaves the text running underneath it —
+                         pr-9 stops the text short of the arrow and truncate
+                         ends it with an ellipsis instead of a hard clip. --}}
+                    class="pr-9 truncate"
+                >
+                    <option value="" x-text="collegeId ? '— Select your program —' : '— Select your college first —'">
+                        — Select your college first —
+                    </option>
+                    {{-- :selected as well as x-model — these <option>s are created
+                         by x-for AFTER the <select> initialises, so the binding on
+                         the option itself is what restores a previous choice. --}}
+                    <template x-for="program in programs" :key="program">
+                        <option :value="program" :selected="program === course" x-text="program"></option>
+                    </template>
+                </x-hp.select>
             </div>
             <div>
                 <x-hp.select
@@ -157,14 +188,14 @@
                     id="year_level"
                     name="year_level"
                     required
+                    x-model="yearLevel"
+                    x-bind:disabled="! collegeId"
                     :error="$errors->first('year_level')"
                 >
                     <option value="">—</option>
-                    @foreach (['1' => '1st Year', '2' => '2nd Year', '3' => '3rd Year', '4' => '4th Year', '5' => '5th Year'] as $val => $label)
-                        <option value="{{ $val }}" {{ old('year_level') === $val ? 'selected' : '' }}>
-                            {{ $label }}
-                        </option>
-                    @endforeach
+                    <template x-for="[value, label] in Object.entries(yearLevels)" :key="value">
+                        <option :value="value" :selected="value === yearLevel" x-text="label"></option>
+                    </template>
                 </x-hp.select>
             </div>
         </div>
