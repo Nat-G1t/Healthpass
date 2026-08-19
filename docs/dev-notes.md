@@ -37,6 +37,34 @@ Run `php artisan migrate:fresh --seed` to restore this state at any time.
 (11 admins since **D-43** removed Senior High School — `admin.shs@healthpass.test`
 no longer exists.)
 
+> **Since D-47, the seeder is no longer the only way to get a staff account.**
+> The Director has **Staff Accounts** in the sidebar (`/director/staff`) and can
+> create `college_admin` and `nurse` accounts in-app, deactivate/reactivate an
+> account, and move a College Admin to a different college. The generated
+> password is shown **once** on that page — nothing emails it and nothing stores
+> it. There is **no reset-password action** (D-47a): the Director sets a
+> password once, at creation, and a forgotten one is recovered by the account
+> owner through "Forgot password" on the login page. Locally that OTP goes to
+> `storage/logs/laravel.log`, since `MAIL_MAILER=log`.
+>
+> `StaffSeeder` is **unchanged** and remains the **bootstrap** path: it is what
+> creates the very first **Director** account, and the Director cannot create
+> another Director (anti-escalation — the endpoint 403s and the validation
+> rejects `role=director`). So on a fresh database you still run the seeder
+> first; after that, day-to-day staff changes happen in the app.
+>
+> Two things the screen deliberately will **not** do: delete an account
+> (`clearance_records.encoded_by` and `batch_requests.reviewed_by` are
+> `restrictOnDelete` — deactivation is the only removal, and it leaves history
+> intact), and touch the Director's own row (you cannot lock yourself out).
+>
+> **Deactivate is immediate, including for someone already signed in.**
+> `App\Http\Middleware\EnsureAccountIsActive` (web group, ahead of
+> `RequirePasswordChange`) re-reads `users.status` every request and ends the
+> session on the spot. Handy to know while testing: flipping a seeded account to
+> `inactive` in the database will boot that browser tab on its next click, which
+> looks like a random logout if you have forgotten you did it.
+
 ### Student accounts (28 total)
 
 Every program below is a verbatim entry from `config/programs.php` (D-42) and

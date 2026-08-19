@@ -50,6 +50,17 @@
             </div>
         @endif
 
+        {{-- Why a second, RED flash: a session ended mid-use — an account
+             deactivated while signed in (FR-AUTH-07, EnsureAccountIsActive) —
+             lands here, and "your account is inactive" in the green success
+             style would read as reassurance. data-flash-sticky keeps it up:
+             unlike a success notice, the reader has to act on this one. --}}
+        @if (session('error'))
+            <div data-hp-flash data-flash-sticky class="mb-4 rounded-lg border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+                {{ session('error') }}
+            </div>
+        @endif
+
         <form method="POST" action="{{ route('login') }}" class="space-y-[13px]">
             @csrf
 

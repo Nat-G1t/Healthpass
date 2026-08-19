@@ -9,6 +9,7 @@ use App\Http\Controllers\Director\AnalyticsController as DirectorAnalyticsContro
 use App\Http\Controllers\Director\AnomaliesController as DirectorAnomaliesController;
 use App\Http\Controllers\Director\BatchApprovalController as DirectorBatchApprovalController;
 use App\Http\Controllers\Director\DashboardController as DirectorDashboardController;
+use App\Http\Controllers\Director\StaffAccountController as DirectorStaffAccountController;
 use App\Http\Controllers\Kiosk\KioskController;
 use App\Http\Controllers\Nurse\DashboardController as NurseDashboardController;
 use App\Http\Controllers\Nurse\EncodeController as NurseEncodeController;
@@ -219,6 +220,27 @@ Route::middleware(['auth', 'role:director'])
             ->whereNumber('batch')->middleware('throttle:20,1,batch-approve')->name('batches.approve');
         Route::post('/batches/{batch}/reject', [DirectorBatchApprovalController::class, 'reject'])
             ->whereNumber('batch')->middleware('throttle:20,1,batch-reject')->name('batches.reject');
+        // Staff Accounts (FR-AUTH-10, D-47): the Director provisions the
+        // college_admin and nurse accounts that used to need a developer running
+        // StaffSeeder on the server. NOT a fifth role — a capability layer on
+        // the existing director role, so users.role is untouched.
+        //
+        // Every write below carries its OWN throttle bucket (the 3rd arg). For an
+        // authenticated user the inline throttle keys on the user id with NO
+        // path, so without distinct prefixes these five would share one counter
+        // with each other and with the batch endpoints above — the same bug
+        // documented at batch-appt-cancel.
+        Route::get('/staff', [DirectorStaffAccountController::class, 'index'])->name('staff.index');
+        Route::post('/staff', [DirectorStaffAccountController::class, 'store'])
+            ->middleware('throttle:15,1,staff-store')->name('staff.store');
+        // NOTE: there is deliberately no "reissue password" endpoint. A Director
+        // who can set someone else's password can sign in as them and read their
+        // records, which is the impersonation D-47 rules out. A staff member who
+        // forgets their password uses the ordinary forgot-password OTP (D-20).
+        Route::patch('/staff/{user}/status', [DirectorStaffAccountController::class, 'status'])
+            ->whereNumber('user')->middleware('throttle:30,1,staff-status')->name('staff.status');
+        Route::patch('/staff/{user}/college', [DirectorStaffAccountController::class, 'college'])
+            ->whereNumber('user')->middleware('throttle:30,1,staff-college')->name('staff.college');
     });
 
 // ── Kiosk (Module KSK, FR-KSK-01..16) — PUBLIC clinic terminal ───────────────

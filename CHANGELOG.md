@@ -4,6 +4,133 @@
 
 ### Added
 
+* **The Director can now provision staff accounts in the app** (D-47,
+  FR-AUTH-10). **No schema change, no migration, no new package, and no fifth
+  role.** Until now a College Admin or Nurse account could only be created by
+  running `database/seeders/StaffSeeder.php`, so on the hosted deployment
+  (D-34) adding one admin needed a developer with server and database access,
+  and there was no way at all to deactivate someone who had left.
+  - **New `/director/staff`** ("Staff Accounts" in the Director's sidebar,
+    `Director\StaffAccountController` + `director/staff.blade.php`): list the
+    `college_admin` and `nurse` accounts, create one, activate/deactivate it,
+    and move a College Admin to another college. Four routes inside the existing
+    `['auth', 'role:director']` group, each with **its own throttle prefix** —
+    an authenticated inline throttle keys on the user id with no path, so a
+    shared bucket would have coupled them to each other and to the batch
+    endpoints.
+  - **Super-admin is a capability layer, not a role.** `users.role` stays the
+    four-value enum FR-AUTH-02 mandates (D-2 unchanged), which is why this
+    needed no migration.
+  - **Credentials reuse D-35 exactly** — `Str::password(16, symbols: false)`,
+    `Hash::make`, `must_change_password = true`, and the existing
+    `RequirePasswordChange` middleware forcing the change at first login. The
+    plaintext is shown **once** in a show-once panel, never emailed and stored
+    nowhere; only the bcrypt hash reaches the database. The Director sets that
+    password once, at creation, and can never set it again — see D-47a below.
+  - **Anti-escalation, enforced server-side in three places.** The role
+    whitelist lives in `StoreStaffAccountRequest`, so a posted `role=director`
+    or `role=student` is a validation failure rather than an account; every
+    write endpoint refuses a target that is not a `college_admin`/`nurse`; and
+    it refuses the signed-in Director's own row, so the only super-admin cannot
+    lock themselves out. A `college_admin` can be neither created nor left
+    without a `managed_college_id` — `college.scope` would 403 such an account
+    on every Admin page (FR-AUTH-06).
+  - **Nothing is ever deleted.** `clearance_records.encoded_by` and
+    `batch_requests.reviewed_by` are `restrictOnDelete`, so deactivation is the
+    only removal this system has, and it leaves every historical record intact
+    — a deactivated nurse's past clearances still render, asserted by test.
+  - **`StaffSeeder` is unchanged.** It stays the bootstrap path for the very
+    first Director account; this is an in-app path alongside it. Self-
+    registration with an approval queue was considered and **rejected**: it
+    would contradict FR-AUTH-05 and add a public unauthenticated endpoint where
+    none exists today.
+  - 28 new cases in `tests/Feature/Director/StaffAccountTest.php`.
+
+* **A "Last active" column on Staff Accounts** (D-48, FR-AUTH-10 amended).
+  **Schema change: `users.last_active_at` (TIMESTAMP, nullable, no default,
+  never backfilled).** `users.status` answers "is this account allowed in",
+  which the Director had been reading as "is this account still in use" — a
+  different question. A College Admin who left in June reads as Active until
+  somebody thinks to deactivate them; this column is what makes the Deactivate
+  button actionable rather than guesswork.
+  - New **`App\Http\Middleware\RecordLastActive`**, appended to the web group
+    **after** `EnsureAccountIsActive` and `RequirePasswordChange` — a request
+    those gates turn away is not the account being used, so being bounced at
+    the door must not register as activity.
+  - **Throttled to at most one write per account per minute.** Stamping every
+    request would put a database write on every page load, and the Live Queue
+    polls every four seconds, while the question this column answers is
+    measured in days.
+  - Written through the **query builder, not Eloquent**: an Eloquent `update()`
+    silently adds `updated_at` to the SET clause, which would turn the user
+    record's "last edited" stamp into a second "last seen" stamp. A test caught
+    that, not review.
+  - Accounts not seen since the column existed render **"Never"** — the rule
+    `clinic_visits.course` (D-43) and `appointments.scheduled_time` (D-37)
+    already follow. **Known limitation:** the stamp tracks requests, so a
+    browser left open on the auto-polling Live Queue keeps a nurse looking
+    active. At the day-level granularity the column exists for, that changes
+    no answer.
+  - 7 cases in `tests/Feature/Auth/RecordLastActiveTest.php`.
+
+### Changed
+
+* **The Director can no longer reset a staff account's password** (D-47a). The
+  button, the `POST /director/staff/{user}/password` route and the controller
+  method are gone, and `StaffAccountController` now generates a password in
+  exactly one place — `store()`. A Director who can set an existing account's
+  password can sign in as that person and read their medical records, which is
+  precisely the impersonation D-47's own scope list rules out; keeping the
+  button left a supported path to it. A staff member who forgets their password
+  now uses the ordinary **forgot-password OTP** (FR-AUTH-09), which only their
+  own mailbox can complete. Tests assert the route is absent and that the page
+  offers no such control.
+
+* **Reassigning a College Admin's college is confirm-on-change** (D-47a). The
+  Save button beside the dropdown read as an unclear second step. Choosing a
+  college now raises a confirmation and submits on accept; cancelling puts the
+  dropdown back where it was, so the control never shows a college the admin is
+  not actually assigned to. The confirmation text is assembled in JavaScript
+  from the option's own label and never interpolates the account name — an
+  apostrophe ("O'Brien") would break the string literal and silently skip the
+  guard, the same trap already noted on the kiosk-devices Revoke button.
+
+### Fixed
+
+* **Deactivating an account now ends the session it is already using**
+  (FR-AUTH-07, amended by D-47). `users.status` was read in exactly one place —
+  `LoginRequest::authenticate()` — so deactivation blocked the *next login* and
+  nothing else: a user who was signed in when they were revoked kept full access
+  until their session expired on its own, up to `SESSION_LIFETIME` (two hours by
+  default). Harmless while deactivation meant editing the database by hand;
+  not harmless now that the Director has a **Deactivate** button and it is the
+  system's only form of removal.
+  - New **`App\Http\Middleware\EnsureAccountIsActive`**, appended to the **web
+    group** so no route can forget it, and ordered **ahead of
+    `RequirePasswordChange`** — an inactive account is turned away rather than
+    invited to set a new password. It logs the user out, invalidates the
+    session and issues a fresh CSRF token (the same three steps Breeze's own
+    logout takes), then returns them to the login page.
+  - The login page gained a **red flash** for `session('error')`; it previously
+    rendered only the green `session('status')`, and "your account is inactive"
+    in the success style would have read as reassurance. The wording is the one
+    `LoginRequest` already uses, so both paths say the same thing.
+  - **JSON requests get a 403, not a redirect** — the Live Queue polls every
+    four seconds and must never be handed an HTML login page to parse. Same
+    rule `RequirePasswordChange` follows.
+  - 8 cases in `tests/Feature/Auth/EnsureAccountIsActiveTest.php` (every role
+    unaffected while active, guests untouched, student and staff sessions cut,
+    the JSON branch, and inactive winning over `must_change_password`), plus a
+    regression case in `StaffAccountTest` covering the Director revoking an
+    admin who is signed in at that moment.
+
+* **Dropdown arrows are no longer hidden behind long option labels**
+  (`x-hp.select`, D-47a). The browser draws the arrow inside the select's own
+  padding box, so with equal `px-3` padding a label like "CCS — College of
+  Computing Studies" ran underneath it and the arrow could not be seen. Now
+  `pl-3 pr-9`, which reserves the arrow its own lane. Affects every dropdown in
+  the app, not only Staff Accounts.
+
 * **Printing no longer opens a new tab** (FR-NRS-05, FR-ADM-09). The hidden
   print frame + arming script that `nurse/encode.blade.php` has used all along
   moved into a shared **`resources/views/partials/print-frame.blade.php`**, and

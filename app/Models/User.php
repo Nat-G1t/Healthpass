@@ -24,6 +24,7 @@ class User extends Authenticatable
         'managed_college_id',
         'status',
         'must_change_password',
+        'last_active_at',
     ];
 
     protected $hidden = [
@@ -47,6 +48,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'must_change_password' => 'boolean',
+            'last_active_at' => 'datetime',
         ];
     }
 

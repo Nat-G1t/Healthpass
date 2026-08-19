@@ -282,6 +282,52 @@ and lets nothing else through until they set their own.
 Leave `HEALTHPASS_SEED_STAFF_ONE_TIME` unset locally: dev keeps the familiar
 shared `password` accounts from `docs/dev-notes.md`.
 
+### 5.1 After go-live — adding staff needs no server access (D-47)
+
+The seeder above is the **bootstrap**, run once. From then on the **Director**
+manages the staff roster from inside the app at **`/director/staff`** ("Staff
+Accounts" in their sidebar), so **adding a College Admin no longer requires SSH
+or a database client** (FR-AUTH-10):
+
+| Action | What it does |
+|---|---|
+| Create account | `college_admin` (with a college) or `nurse` (without one). Issues a one-time password on the same D-35 terms as the seeder. |
+| Deactivate / Reactivate | An inactive account cannot log in **and is signed out of any session it already has, on its very next request** (FR-AUTH-07). **This is the only removal there is** — accounts are never deleted, so a departed nurse's encoded clearances still render. |
+| Change college | Moves a College Admin to another unit without creating a second account. |
+
+The generated password is displayed **once**, in a panel on that page. It is not
+emailed and is stored nowhere — same rule as the seeder's table. Hand it over
+through official channels.
+
+**There is no "reset password" action, deliberately (D-47a).** The Director sets
+an account's password exactly once, when creating it. A Director who could reset
+an existing account's password could sign in as that person and read their
+records, which is the impersonation D-47 rules out. A staff member who forgets
+their password uses **Forgot password** on the login page (FR-AUTH-09) — an OTP
+to their own mailbox, which nobody else can complete. That makes each staff
+address a real dependency: confirm them at handover, not at go-live.
+
+Two things the Director **cannot** do there, both enforced server-side and both
+covered by tests in `tests/Feature/Director/StaffAccountTest.php`:
+
+- **Create another Director, or a student.** Posting `role=director` with
+  devtools is a validation failure, not an account. A second Director account
+  therefore still means running the seeder (or a one-off tinker) on the server —
+  deliberately, so the role cannot self-propagate.
+- **Deactivate or re-credential their own account.** The only super-admin cannot
+  lock themselves out of the deployment.
+
+**Operational consequence:** the Director's own password is the one credential
+that still has no in-app recovery path beyond the ordinary forgot-password OTP
+(D-20), which needs their mailbox to be reachable. Confirm that address works
+**before** the defense.
+
+> **Revoking access is immediate.** `App\Http\Middleware\EnsureAccountIsActive`
+> re-reads `users.status` on every web request, so Deactivate cuts an open
+> session on its next request rather than waiting for it to expire. If someone
+> leaves or a laptop goes missing, Deactivate is the whole procedure — there is
+> no session table to clear by hand.
+
 ---
 
 ## 6. Kiosk enrollment for the Pi

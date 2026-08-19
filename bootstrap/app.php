@@ -1,8 +1,10 @@
 <?php
 
+use App\Http\Middleware\EnsureAccountIsActive;
 use App\Http\Middleware\EnsureCollegeScope;
 use App\Http\Middleware\EnsureRole;
 use App\Http\Middleware\KioskAccess;
+use App\Http\Middleware\RecordLastActive;
 use App\Http\Middleware\RequirePasswordChange;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -21,12 +23,21 @@ return Application::configure(basePath: dirname(__DIR__))
             'college.scope' => EnsureCollegeScope::class,
         ]);
 
-        // D-35: runs on every web request, so a seeded staff account cannot reach
-        // any page until it has replaced its one-time password. Appended to the
-        // web group (not an alias) precisely because it must not be possible to
-        // forget it on a route.
+        // Both run on every web request, appended to the group (not aliased)
+        // precisely because it must not be possible to forget them on a route.
+        // Order matters: an inactive account is shown the door before anything
+        // else, so it is never sent to the change-password screen instead.
         $middleware->web(append: [
+            // FR-AUTH-07 (D-47): deactivation takes effect on the NEXT request,
+            // not at the next login — an already-open session is ended.
+            EnsureAccountIsActive::class,
+            // D-35: a seeded staff account cannot reach any page until it has
+            // replaced its one-time password.
             RequirePasswordChange::class,
+            // D-48: stamps users.last_active_at. LAST, and deliberately so — a
+            // request the two gates above turned away is not the account being
+            // used, so it must not register as activity.
+            RecordLastActive::class,
         ]);
 
         // NOTE: trusted proxies (D-34) are NOT configured here. This closure runs
