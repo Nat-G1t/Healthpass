@@ -479,6 +479,36 @@ class StaffAccountTest extends TestCase
         $this->assertSame('active', $nurse->refresh()->status);
     }
 
+    public function test_the_college_picker_uses_the_app_dialog_not_a_browser_confirm(): void
+    {
+        // The picker must look like the rest of the app: the same teleported
+        // Alpine modal the Log out button uses, never window.confirm().
+        $this->admin();
+
+        $response = $this->actingAs($this->director)
+            ->get(route('director.staff.index'))
+            ->assertOk();
+
+        $response->assertSee('Move to another college?');
+        $response->assertSee('x-teleport="body"', escape: false);
+        $response->assertSee('role="dialog"', escape: false);
+        // A cancelled dialog has to put the dropdown back, or the control would
+        // display a college the database does not agree with.
+        $response->assertSee('cancel()', escape: false);
+        $response->assertDontSee('window.confirm', escape: false);
+    }
+
+    public function test_a_nurse_row_has_no_college_picker(): void
+    {
+        // Nurses are clinic-wide, so there is nothing to reassign and no dialog.
+        $this->nurse('Solo Nurse');
+
+        $this->actingAs($this->director)
+            ->get(route('director.staff.index'))
+            ->assertOk()
+            ->assertDontSee('Move to another college?');
+    }
+
     // ── 7. Reassigning a college ─────────────────────────────────────────────
 
     public function test_reassigning_a_college_changes_what_the_admin_sees(): void

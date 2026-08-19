@@ -125,14 +125,25 @@
   own mailbox can complete. Tests assert the route is absent and that the page
   offers no such control.
 
-* **Reassigning a College Admin's college is confirm-on-change** (D-47a). The
-  Save button beside the dropdown read as an unclear second step. Choosing a
-  college now raises a confirmation and submits on accept; cancelling puts the
-  dropdown back where it was, so the control never shows a college the admin is
-  not actually assigned to. The confirmation text is assembled in JavaScript
-  from the option's own label and never interpolates the account name — an
-  apostrophe ("O'Brien") would break the string literal and silently skip the
-  guard, the same trap already noted on the kiosk-devices Revoke button.
+* **Reassigning a College Admin's college is confirm-on-change, using the app's
+  own dialog** (D-47a). The Save button beside the dropdown read as an unclear
+  second step. Choosing a college now opens a confirmation and submits on
+  accept; **Cancel, Esc and a backdrop click all put the dropdown back**, so the
+  control never shows a college the admin is not actually assigned to — the
+  browser has already moved the visible selection by the time `change` fires, so
+  every dismissal path has to revert it.
+  - The dialog is the **same teleported Alpine modal `x-logout-confirm` uses**,
+    extracted as `resources/views/components/college-reassign-confirm.blade.php`
+    — same backdrop, same spring-in panel, same button pair. It replaces a
+    native `window.confirm()`, which was unstyled, ignored the design system,
+    and could not be dismissed by backdrop or Esc.
+  - The form lives **inside** the modal rather than around the select, mirroring
+    how the logout dialog holds its own POST form, so the confirm button is a
+    real submit button and nothing reaches across the teleport to submit.
+  - The target college's name is read at runtime from the chosen option's
+    `data-name` and never interpolated into a JavaScript string — an apostrophe
+    ("O'Brien") would break the literal and silently skip the guard, the same
+    trap already noted on the kiosk-devices Revoke button.
 
 ### Fixed
 

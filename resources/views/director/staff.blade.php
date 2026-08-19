@@ -11,7 +11,7 @@
     </p>
 </div>
 
-{{-- Success / status flash (create, reissue, activate, reassign). --}}
+{{-- Success / status flash (create, activate/deactivate, reassign). --}}
 @if (session('status'))
     <div data-hp-flash class="mb-5 rounded-lg border border-hp-orange/30 bg-hp-peach/40 px-4 py-3 text-sm font-medium text-hp-slate">
         {{ session('status') }}
@@ -158,47 +158,13 @@
 
                         <x-hp.table-cell label="College">
                             @if ($account->role === 'college_admin')
-                                {{--
-                                    Picking a college IS the action — there is no Save
-                                    button, because a second step next to a dropdown
-                                    reads as "did that save or not?". Choosing a new
-                                    college asks for confirmation and submits; cancelling
-                                    puts the dropdown back where it was, so the control
-                                    never shows a college the admin is not actually on.
-
-                                    The confirm text is built in JS from the option's own
-                                    label and never interpolates $account->name: a name
-                                    with an apostrophe ("O'Brien") would break the JS
-                                    string literal and silently skip the guard — the same
-                                    trap noted on the kiosk-devices Revoke button.
-                                --}}
-                                <form method="POST" action="{{ route('director.staff.college', $account) }}"
-                                      class="flex items-center justify-end md:justify-start"
-                                      x-data="{
-                                          previous: '{{ $account->managed_college_id }}',
-                                          confirmMove(event) {
-                                              const college = event.target.selectedOptions[0].text;
-                                              if (window.confirm('Move this College Admin to ' + college + '? They will immediately see only that college and lose access to their current one.')) {
-                                                  event.target.form.submit();
-                                              } else {
-                                                  event.target.value = this.previous;
-                                              }
-                                          }
-                                      }">
-                                    @csrf
-                                    @method('PATCH')
-                                    <select name="managed_college_id"
-                                            x-on:change="confirmMove($event)"
-                                            aria-label="College managed by {{ $account->name }}"
-                                            class="rounded-lg border border-hp-slate/25 bg-hp-white py-1 pl-2 pr-7 text-[12px] text-hp-slate
-                                                   focus:border-hp-orange focus:outline-none focus:ring-1 focus:ring-hp-orange">
-                                        @foreach ($colleges as $college)
-                                            <option value="{{ $college->id }}" @selected($account->managed_college_id === $college->id)>
-                                                {{ $college->code }}
-                                            </option>
-                                        @endforeach
-                                    </select>
-                                </form>
+                                {{-- Picking a college IS the action — there is no Save
+                                     button, because a second step next to a dropdown
+                                     reads as "did that save or not?". The picker and
+                                     its confirmation dialog live together in one
+                                     component, which uses the same modal UI as the
+                                     Log out confirmation. --}}
+                                <x-college-reassign-confirm :account="$account" :colleges="$colleges" />
                             @else
                                 <span class="text-hp-slate/50 dark:text-hp-slate/60">—</span>
                             @endif
