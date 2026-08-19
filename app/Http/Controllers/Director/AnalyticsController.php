@@ -32,13 +32,25 @@ class AnalyticsController extends Controller
 
         $analytics = new ClinicAnalytics($month, $college);
 
+        // D-46: when the filter narrows to ONE college, the by-College card
+        // is a single bar with nothing to compare itself against, so it
+        // becomes Clinic Visits by Program for that college. Both builders
+        // run under the SAME scope and describe the same visits one level
+        // down, so their totals agree by construction; the view picks which
+        // pair of rows it draws. With "All colleges" the program builder is
+        // never called and the card is exactly what it was before.
+        $visitCards = [
+            ...$analytics->visitsByCollege(),
+            ...($college === null ? [] : $analytics->visitsByProgram()),
+        ];
+
         return view('director.analytics', [
             'availableMonths' => VisitMonths::available(),
             'selectedMonth' => $month->format('Y-m'),
             'selectedMonthLabel' => $month->format('F Y'),
             'colleges' => College::orderBy('code')->get(['id', 'code']),
             'selectedCollegeId' => $college?->id,
-            ...$analytics->visitsByCollege(),
+            ...$visitCards,
             ...$analytics->visitsByPurpose(),
             ...$analytics->vitalSignFlags(),
             // No argument = the clinic-wide series: the trend ignores both

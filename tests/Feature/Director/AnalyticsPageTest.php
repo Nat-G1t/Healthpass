@@ -384,6 +384,43 @@ class AnalyticsPageTest extends TestCase
         $this->assertSame('2026-06', $response->viewData('selectedMonth'));
     }
 
+    // ── Card swap: by-College becomes by-Program for one college (D-46) ──────
+
+    public function test_the_by_college_card_renders_with_all_colleges_selected(): void
+    {
+        $student = $this->makeStudent($this->ccs);
+        $this->makeVisit($student, $this->ccs, '2026-05-05');
+
+        $this->page('?month=2026-05')
+            ->assertOk()
+            ->assertSee('Clinic Visits by College')
+            ->assertDontSee('Clinic Visits by Program');
+    }
+
+    public function test_the_by_program_card_replaces_it_when_one_college_is_selected(): void
+    {
+        // D-46: a single college bar has nothing to compare itself against, so
+        // the card drops one level to that college's programs. Same builder as
+        // the College Admin page (FR-ADM-08), same totals.
+        $student = $this->makeStudent($this->ccs);
+        $this->makeVisit($student, $this->ccs, '2026-05-05');
+
+        $response = $this->page('?month=2026-05&college='.$this->ccs->id)->assertOk();
+
+        $response->assertSee('Clinic Visits by Program')
+            ->assertDontSee('Clinic Visits by College')
+            // A real CCS program from the catalog (D-42), zero rows included.
+            ->assertSee('Bachelor of Science in Information Technology');
+
+        // The swapped-in rows describe the same visits, so they still sum to
+        // the card's headline totals.
+        $this->assertSame(1, $response->viewData('totalVisits'));
+        $this->assertSame(
+            $response->viewData('totalVisits'),
+            array_sum(array_column($response->viewData('programRows'), 'total')),
+        );
+    }
+
     public function test_removed_medical_cases_views_are_gone(): void
     {
         // D-32: no cases chart/matrix on the page, and the print + CSV

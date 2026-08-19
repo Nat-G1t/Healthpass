@@ -335,9 +335,12 @@ on their profile, e.g. `juan.santos@psu.edu.ph` (CCS).
    a **Fit** badge, **Encoded by = the nurse you are logged in as**, the encode
    timestamp, and **Printed = No**. **Encoded Today** has gone up by one and
    **Awaiting Encode** back down by one.
-6. Click **Reprint** on that row. → **Expect:** the official clearance form
-   opens in a **new tab**; print or close it, return to the dashboard and
-   reload. → **Expect:** that row's **Printed** now reads **Yes**.
+6. Click **Reprint** on that row. → **Expect:** the **print dialog opens on
+   the dashboard itself** — **no new tab** — with the official clearance form
+   in its preview pane. Print or cancel, then reload the dashboard. →
+   **Expect:** that row's **Printed** now reads **Yes** (the reprint stamps
+   `printed_at` when the form is fetched, so cancelling the dialog still
+   counts as a reprint).
 7. Exercise the filters: set **Result = Unfit** → the Fit row disappears; set it
    back. Type part of the student's **name** in Search, then their **reference
    number** — each finds the row. Pick a different **Month** → the row
@@ -357,6 +360,54 @@ program snapshot and encoder; captured (un-encoded) visits never appear; every
 filter narrows and survives paging; both nurses see one continuous log; the
 Live Queue is unaffected. A visit captured before D-43 (no program snapshot)
 renders "—" in the Program column and is **never** backfilled.
+
+---
+
+## E2E-8 — College Admin prints the monthly report (figures must match the screen)
+
+**Goal:** confirm the printable Monthly Clinic Report (FR-ADM-09, D-46) carries
+the College Admin's filters and quotes exactly the figures the analytics page
+shows for the same scope.
+
+**Accounts:** a College Admin with data, e.g. `admin.ccs@healthpass.test`.
+
+**Steps:**
+
+1. Log in as the **CCS admin** and open **Analytics**. Pick a **month that has
+   data**. → **Expect:** the scope banner names your college, and Clinic Visits
+   by Program lists **every CCS program**, zero-visit ones included.
+2. Write down, from the screen: the **total / medical / dental** headline, each
+   program row's three numbers, the **Visits by Purpose** counts, the three
+   **Vital-Sign Flag** counts and rates, the four **BMI** bucket counts, and the
+   **Male / Female** counts and percentages.
+3. Click **Print Monthly Report**. → **Expect:** the browser's **print dialog
+   opens straight away, on the Analytics page itself** — **no new tab**. The
+   dialog's preview pane is the report. Cancel it: you are still on Analytics
+   with your filters and scroll position untouched.
+4. Compare the preview against step 2. → **Expect:** **every number matches.**
+   The header carries the university, **College of Computing Studies (CCS)**,
+   "Monthly Clinic Report", the month written in full, and a generated-at
+   timestamp with **your name**. The footer states the report covers data
+   captured by HealthPass only.
+5. Confirm it is a **report, not a screenshot of the page**: there are **no
+   charts** — every section is a table — and no app sidebar or navigation.
+6. In the print dialog switch the paper between **A4** and **Letter**. →
+   **Expect:** clean on both — nothing clipped at the right edge, no row split
+   across a page break, and table headers repeat on any second sheet.
+7. Go back to the analytics tab, set the **program filter** to one program, and
+   click **Print Monthly Report** again. → **Expect:** the report is narrowed to
+   that program and **states its filter** ("Filtered to: …") under the month.
+8. **Dark mode check (D-38):** switch the app to **dark**, reload Analytics, and
+   print again. → **Expect:** the report is **still light** — white paper, dark
+   text — with no dark background anywhere in the preview.
+9. **Security negative:** with the report open, hand-edit its URL to append
+   `&college=<another college's id>` and reload. → **Expect:** the figures and
+   the college name are **unchanged** — still your own college.
+
+**Pass criteria:** every printed figure equals the on-screen figure for the same
+month and program; zero-visit programs appear on the printout; the header names
+the college, month, generator and time; the page prints clean at A4 and Letter;
+it stays light in dark mode; and `?college=` cannot move the scope.
 
 ---
 

@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\AnalyticsController as AdminAnalyticsController;
 use App\Http\Controllers\Admin\BatchRequestController as AdminBatchRequestController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
+use App\Http\Controllers\Admin\MonthlyReportController as AdminMonthlyReportController;
 use App\Http\Controllers\Auth\PasswordChangeController;
 use App\Http\Controllers\Director\AnalyticsController as DirectorAnalyticsController;
 use App\Http\Controllers\Director\AnomaliesController as DirectorAnomaliesController;
@@ -136,6 +137,12 @@ Route::middleware(['auth', 'role:college_admin', 'college.scope'])
         // App\Services\ClinicAnalytics behind both pages. Filters are month
         // + program only — the college is never a request parameter here.
         Route::get('/analytics', AdminAnalyticsController::class)->name('analytics');
+        // Printable Monthly Clinic Report (FR-ADM-09, D-46): the same cards as
+        // the page above, rendered as TABLES in a standalone print document —
+        // charts do not print reliably. Same scope rule: the college is
+        // managedCollege(), never a request parameter; only month + program
+        // carry over from the analytics page's query string.
+        Route::get('/analytics/print', AdminMonthlyReportController::class)->name('analytics.print');
     });
 
 // ── Nurse (FR-AUTH-03) ───────────────────────────────────────────────────────

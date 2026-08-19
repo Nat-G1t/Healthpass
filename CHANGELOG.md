@@ -4,6 +4,58 @@
 
 ### Added
 
+* **Printing no longer opens a new tab** (FR-NRS-05, FR-ADM-09). The hidden
+  print frame + arming script that `nurse/encode.blade.php` has used all along
+  moved into a shared **`resources/views/partials/print-frame.blade.php`**, and
+  the **Nurse Dashboard's Reprint** switched from `target="_blank"` to posting
+  into that frame. Reprint still POSTs (it re-stamps `printed_at`), it just
+  prints where you are — the nurse keeps their filters, their search and their
+  page in the encode history. The encode screen keeps its own copy of the
+  script: it also flips a hidden "printed" field belonging to Save & Close, and
+  forking *that* is what the partial exists to avoid, not to cause. A print
+  document now self-fires `window.print()` **only when it is the top window**,
+  so a middle-clicked link still prints while the framed copy leaves the dialog
+  to its parent.
+
+* **A printable Monthly Clinic Report for College Admins, and the Director's
+  by-College card drops to programs on a single college** (D-46, FR-ADM-09;
+  FR-ANL-09/13 amended). **No schema change, no new package, no CSV** —
+  FR-ANL-06's export stays struck by D-32.
+  - **New `GET /admin/analytics/print`** (`Admin\MonthlyReportController`)
+    renders `resources/views/admin/monthly-report.blade.php`: a standalone
+    Blade document with no app shell — the same pattern the clearance form
+    already uses (Module PRT). A **Print Monthly Report** button on
+    `/admin/analytics` carries the current month and program filters into the
+    URL and **prints in place**: the report loads into a hidden print frame and
+    the dialog opens on the Analytics page, with **no new tab**. The browser's
+    print dialog is the preview, so there was never anything for a tab to show.
+  - **Tables, not charts.** Chart.js canvases print unreliably and a bar
+    without a number on it is useless on paper, so every section is a table:
+    summary line, Clinic Visits by Program (zero-visit programs included, with
+    a totals row), Visits by Purpose, Vital-Sign Flags with counts and rates,
+    BMI Distribution, and Students Screened by Sex with percentages.
+  - The header carries the university, the college's full name and code, the
+    month written out, and a **generated-at timestamp with the name of the
+    admin who generated it**; the footer states the report covers **data
+    captured by HealthPass only**. A filtered report **says** it is filtered.
+  - **The flag captions come from `config('healthpass.thresholds')`** by way of
+    the service — 140/90 and 37.2 are not restated in the print view.
+  - **Permanently light** (D-38): no `partials/theme-init`, no dark palette.
+    The report is white paper even with the app in dark mode.
+  - **Same scope rule as the page it prints.** The college is
+    `managedCollege()`; `?college=` is never read, so there is nothing for a
+    hand-edited print URL to override (FR-AUTH-06 / FR-ADM-06). The program
+    filter is checked against the *managed* college's catalog (D-42). Both the
+    page and the report are built by the same `App\Services\ClinicAnalytics`
+    under the same scope, so **the printout cannot quote a different number
+    than the screen it came from** — a test asserts the two match key for key.
+  - **Director analytics:** filtering to a single college now swaps *Clinic
+    Visits by College* for *Clinic Visits by Program* for that college, through
+    the existing `ClinicAnalytics::visitsByProgram()` — no new query logic. A
+    single-college bar chart compares nothing; its programs are the breakdown
+    the filter implies. "All colleges" leaves the card exactly as it was, and
+    **no existing assertion in `Director/AnalyticsPageTest.php` was edited**.
+
 * **College Admin Analytics, per program — and the analytics queries become a
   shared service** (D-45, FR-ADM-08). **No schema change.** A college can ask
   for a monthly report of its own students' clinic results; that lands here as

@@ -39,13 +39,29 @@
         </p>
     </form>
 
-    {{-- ── Clinic Visits by College (FR-ANL-09) ─────────────────────────── --}}
+    {{-- ── Clinic Visits by College / by Program (FR-ANL-09, D-46) ────────
+         With "All colleges" this is the by-College card, unchanged. Filter to
+         ONE college and it becomes that college's PROGRAMS — a single college
+         bar has nothing to compare itself against, and the programs are the
+         same visits one level down (the College Admin's FR-ADM-08 card, from
+         the same ClinicAnalytics builder). Only the rows, the bar and the unit
+         label change; the totals are identical either way. --}}
+    @php
+        $byProgram = $selectedCollegeId !== null;
+        $unitLabel = $byProgram ? 'Program' : 'College';
+        $unitKey = $byProgram ? 'program' : 'code';
+        $unitRows = $byProgram ? $programRows : $collegeRows;
+        $unitBar = $byProgram ? $programBar : $collegeBar;
+        // Program names wrap onto two or three axis lines; college codes are
+        // three letters on one.
+        $unitRowHeight = $byProgram ? 56 : 32;
+    @endphp
     <x-hp.card class="mb-5">
         <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div>
-                <h3 class="text-sm font-semibold text-hp-slate">Clinic Visits by College</h3>
+                <h3 class="text-sm font-semibold text-hp-slate">Clinic Visits by {{ $unitLabel }}</h3>
                 <p class="mt-1 text-xs text-hp-slate/50 dark:text-hp-slate/60">
-                    Visits per college, split by service type — sorted by volume.
+                    Visits per {{ strtolower($unitLabel) }}, split by service type — sorted by volume.
                 </p>
                 <p class="text-xs text-hp-slate/50 dark:text-hp-slate/60">
                     Medical = kiosk check-ins · Dental = completed appointments (scheduling-only, no vitals).
@@ -76,13 +92,13 @@
                 </span>
             </div>
 
-            {{-- Stacked horizontal bar — one row per college, zeros included.
+            {{-- Stacked horizontal bar — one row per unit, zeros included.
                  Height scales with the row count so single-college filtering
                  doesn't stretch one bar across the card. --}}
-            <div data-visits-bar data-chart="{{ json_encode($collegeBar) }}"
-                 style="height: {{ count($collegeRows) * 32 + 24 }}px">
+            <div data-visits-bar data-chart="{{ json_encode($unitBar) }}"
+                 style="height: {{ count($unitRows) * $unitRowHeight + 24 }}px">
                 <canvas role="img"
-                        aria-label="Stacked bar chart: clinic visits per college, medical and dental. The same numbers are in the table below."></canvas>
+                        aria-label="Stacked bar chart: clinic visits per {{ strtolower($unitLabel) }}, medical and dental. The same numbers are in the table below."></canvas>
             </div>
 
             {{-- "View as table" (FR-ANL-09) — also the contrast relief for
@@ -93,16 +109,16 @@
                     <table class="min-w-[420px] text-xs text-hp-slate">
                         <thead>
                             <tr class="border-b border-hp-slate/10 text-hp-slate/50 dark:text-hp-slate/60">
-                                <th class="px-3 py-1.5 text-left font-semibold">College</th>
+                                <th class="px-3 py-1.5 text-left font-semibold">{{ $unitLabel }}</th>
                                 <th class="px-3 py-1.5 text-right font-semibold">Medical</th>
                                 <th class="px-3 py-1.5 text-right font-semibold">Dental</th>
                                 <th class="px-3 py-1.5 text-right font-semibold">Total</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach ($collegeRows as $row)
+                            @foreach ($unitRows as $row)
                                 <tr class="even:bg-hp-slate/[0.04]">
-                                    <td class="px-3 py-1.5">{{ $row['code'] }}</td>
+                                    <td class="px-3 py-1.5">{{ $row[$unitKey] }}</td>
                                     <td class="px-3 py-1.5 text-right tabular-nums">{{ $row['medical'] }}</td>
                                     <td class="px-3 py-1.5 text-right tabular-nums">{{ $row['dental'] }}</td>
                                     <td class="px-3 py-1.5 text-right font-semibold tabular-nums">{{ $row['total'] }}</td>

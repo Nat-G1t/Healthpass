@@ -313,6 +313,25 @@ class DashboardPageTest extends TestCase
 
     // ── 7. Stat tiles ─────────────────────────────────────────────────────────
 
+    public function test_reprint_prints_in_place_instead_of_opening_a_new_tab(): void
+    {
+        // FR-NRS-05: the print dialog IS the preview, so Reprint posts into
+        // the page's hidden print frame rather than navigating a new tab —
+        // the nurse keeps their filters and their place in the history.
+        $nurse = $this->nurse();
+        $this->encodedVisit('Printable Visit', $nurse);
+
+        $this->actingAs($nurse)
+            ->get(route('nurse.dashboard'))
+            ->assertOk()
+            ->assertSee('Reprint')
+            ->assertSee('target="hp-print-frame"', false)
+            ->assertSee('data-print-trigger', false)
+            // The frame itself, and no new-tab escape hatch.
+            ->assertSee('id="hp-print-frame"', false)
+            ->assertDontSee('target="_blank"', false);
+    }
+
     public function test_stat_tiles_count_today_this_month_queue_and_flags(): void
     {
         $nurse = $this->nurse();

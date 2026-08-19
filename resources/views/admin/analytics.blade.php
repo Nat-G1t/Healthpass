@@ -51,6 +51,40 @@
         <p class="text-[11px] text-hp-slate/40 dark:text-hp-slate/55">
             Month + program scope every card below · the trend always shows the whole year
         </p>
+
+        {{-- ── Print Monthly Report (FR-ADM-09, D-46) ───────────────────────
+             Carries the CURRENT filters into the print URL, so the printout is
+             the page the admin is looking at. Nulls are dropped: an empty
+             ?program= would read as a filter on "" rather than "all programs".
+
+             data-print-trigger loads the report into the hidden print frame
+             below and prints it in place — the print dialog IS the preview,
+             so there is no reason to leave Analytics for one. The href stays
+             real so middle-click / "open in new tab" still works; opened that
+             way the report prints itself instead.
+
+             Not a submit button: this form's GET action is the analytics
+             page, and the trend/donut are Chart.js canvases that do not
+             print, which is exactly why the report is a separate view. --}}
+        @php
+            $printQuery = array_filter(
+                ['month' => $selectedMonth, 'program' => $selectedProgram],
+                fn ($value) => $value !== null,
+            );
+        @endphp
+        <a href="{{ route('admin.analytics.print', $printQuery) }}"
+           data-print-trigger
+           class="ml-auto inline-flex items-center gap-2 rounded-full bg-hp-peach px-4 py-1.5 text-xs
+                  font-semibold text-hp-orange transition-[color,background-color,transform]
+                  duration-hp-fast ease-hp-out hover:bg-orange-100 dark:hover:bg-hp-peach/70
+                  active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2
+                  focus-visible:ring-hp-orange focus-visible:ring-offset-1">
+            <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                      d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+            </svg>
+            Print Monthly Report
+        </a>
     </form>
 
     {{-- ── Clinic Visits by Program (FR-ADM-08) ─────────────────────────── --}}
@@ -334,6 +368,9 @@
             });
         })();
     </script>
+
+    {{-- Hidden frame the Print Monthly Report link loads into (FR-ADM-09). --}}
+    @include('partials.print-frame')
 
     @vite('resources/js/analytics.js')
 

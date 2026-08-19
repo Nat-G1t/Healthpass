@@ -183,13 +183,16 @@
                                        class="text-xs font-semibold text-hp-orange hover:underline">View</a>
 
                                     {{-- Reprint re-stamps printed_at and returns the official
-                                         form (FR-NRS-05). It opens in a NEW TAB rather than the
-                                         encode screen's hidden print iframe: that iframe and its
-                                         script belong to the encode page, and duplicating them
-                                         here would fork the print flow. Ctrl+P in the new tab. --}}
-                                    <form method="POST" action="{{ route('nurse.visits.print.reprint', $visit) }}" target="_blank">
+                                         form (FR-NRS-05). It posts into the hidden print frame
+                                         at the foot of this page and prints there — the print
+                                         dialog is the preview, so the nurse never leaves the
+                                         dashboard or loses their filters. It stays a POST, not
+                                         a link, because it writes printed_at. --}}
+                                    <form method="POST" action="{{ route('nurse.visits.print.reprint', $visit) }}"
+                                          target="hp-print-frame">
                                         @csrf
-                                        <button type="submit" class="text-xs font-semibold text-hp-slate/60 hover:text-hp-slate hover:underline">
+                                        <button type="submit" data-print-trigger
+                                                class="text-xs font-semibold text-hp-slate/60 hover:text-hp-slate hover:underline">
                                             Reprint
                                         </button>
                                     </form>
@@ -233,5 +236,9 @@
         @endif
 
     </x-hp.card>
+
+    {{-- Hidden frame every Reprint above posts into (FR-NRS-05). One frame for
+         the whole table — the forms name it as their target. --}}
+    @include('partials.print-frame')
 
 </x-layout.sidebar>
