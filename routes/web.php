@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\ActivityLogController as AdminActivityLogController;
 use App\Http\Controllers\Admin\AnalyticsController as AdminAnalyticsController;
 use App\Http\Controllers\Admin\BatchRequestController as AdminBatchRequestController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
@@ -144,6 +145,12 @@ Route::middleware(['auth', 'role:college_admin', 'college.scope'])
         // managedCollege(), never a request parameter; only month + program
         // carry over from the analytics page's query string.
         Route::get('/analytics/print', AdminMonthlyReportController::class)->name('analytics.print');
+        // Activity Log (FR-ADM-10, D-49): who did what for THIS college —
+        // batch submissions by any of its admins, and the Director's decisions
+        // on them. Read-only and DERIVED from batch_requests; there is no
+        // activity_logs table and nothing writes an audit row, so the log
+        // cannot drift from the rows Batch Tracking renders.
+        Route::get('/activity', AdminActivityLogController::class)->name('activity');
     });
 
 // ── Nurse (FR-AUTH-03) ───────────────────────────────────────────────────────

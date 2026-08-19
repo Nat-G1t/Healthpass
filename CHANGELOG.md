@@ -73,6 +73,45 @@
     no answer.
   - 7 cases in `tests/Feature/Auth/RecordLastActiveTest.php`.
 
+* **A College Activity Log, so two admins in one college can see each other's
+  work** (D-49, FR-ADM-10). **No schema change and no new table.** A college can
+  have more than one College Admin — nothing has ever constrained
+  `users.managed_college_id` to a single account, and the new Staff Accounts
+  screen makes a second one a two-minute job. Neither could see what the other
+  had submitted, and the Director's approvals and rejections left no trace
+  anywhere the college could read as history.
+  - **New `/admin/activity`** ("Activity Log" in the College Admin sidebar,
+    `Admin\ActivityLogController` + `admin/activity.blade.php`): each batch
+    **submission** (who, when, student count, reason) and each **Director
+    decision** — approved with the date appointments were generated for, or
+    rejected carrying the Director's written D-36 reason. Newest first, 15 per
+    page, each row linking to the batch.
+  - **Derived, not logged — the point of the whole design.** There is no audit
+    table and nothing writes a log row. Every entry is read back out of
+    `batch_requests`, which already stores `requested_by`/`created_at` and
+    `reviewed_by`/`reviewed_at`/`rejection_reason`, so **the log cannot drift
+    from the rows Batch Tracking renders**. An `activity_logs` table was
+    considered and rejected: an 11th table in a canon D-32 had just brought back
+    to 10, a write path on every action that a later edit can forget, and a
+    record able to disagree with the data it describes.
+  - **Flattened in PHP, not as a SQL UNION.** A UNION of submission and decision
+    rows means raw SQL, and the suite runs on SQLite while dev and prod are
+    MySQL. A college's batch history is tens of rows, so there is nothing to buy
+    by risking that drift. Sorting is tie-broken so a decision outranks the
+    submission it decided when both share a timestamp.
+  - Scope is the standard `/admin` rule: `managedCollege()`, with `?college=`
+    never read — asserted by test, alongside a case proving one college cannot
+    see another's entries.
+  - **Deliberately excluded**, each for a reason: appointment withdrawals
+    (`appointments` has no `cancelled_by`, so the actor cannot be named and
+    would have to be guessed from `updated_at`); student self-bookings (by far
+    the highest-volume event, which would bury the admin actions the page
+    exists to surface); page views and other reads (a coordination log is not
+    surveillance, and read-logging a health system creates its own privacy
+    problem); and anything clinical, since a College Admin must never see vitals
+    or Fit/Unfit.
+  - 14 cases in `tests/Feature/Admin/ActivityLogPageTest.php`.
+
 ### Changed
 
 * **The Director can no longer reset a staff account's password** (D-47a). The
