@@ -1,11 +1,15 @@
 /**
- * Director Analytics charts (D-32 rescope, FR-ANL-09/11 + amended 04):
- *  - Clinic Visits by College — stacked horizontal bar, Medical/Dental
+ * Analytics charts, shared by the Director page (FR-ANL-09/11 + amended 04)
+ * and the College Admin page (FR-ADM-08, D-45) — the same three charts on
+ * both, because both are drawn from the same App\Services\ClinicAnalytics:
+ *  - Clinic Visits by College / by Program — stacked horizontal bar,
+ *    Medical/Dental. One selector serves both: the two cards differ only in
+ *    what a row IS, which is settled server-side.
  *  - Visits per Month — two-series line, direct label on latest points
  *  - Students Screened by Sex — doughnut
  *
  * Dedicated Vite entry (same pattern as nurse/live-queue.js) so Chart.js is
- * only downloaded on this page, never in the app-wide bundle. Chart.js v4 is
+ * only downloaded on these pages, never in the app-wide bundle. Chart.js v4 is
  * tree-shakeable: registering only the pieces used keeps the build lean.
  * The purpose + BMI mini bars are server-rendered HTML — no JS needed.
  *
@@ -88,10 +92,10 @@ window.addEventListener('hp:themechange', () => {
 /** Parse the JSON payload the controller ships on a data attribute. */
 const chartData = (host) => JSON.parse(host.dataset.chart);
 
-// ── Clinic Visits by College — stacked horizontal bar (FR-ANL-09) ────────
-const collegeHost = document.querySelector('[data-college-bar]');
+// ── Clinic Visits by College / by Program — stacked bar (FR-ANL-09) ──────
+const visitsHost = document.querySelector('[data-visits-bar]');
 
-if (collegeHost) {
+if (visitsHost) {
     // Draws each row's total just past the end of its stacked bar — the
     // mockup's right-hand value column, done as a Chart.js inline plugin.
     const rowTotals = {
@@ -113,9 +117,9 @@ if (collegeHost) {
         },
     };
 
-    const collegeChart = new Chart(collegeHost.querySelector('canvas'), {
+    const visitsChart = new Chart(visitsHost.querySelector('canvas'), {
         type: 'bar',
-        data: chartData(collegeHost),
+        data: chartData(visitsHost),
         options: {
             indexAxis: 'y',
             responsive: true,
@@ -146,7 +150,7 @@ if (collegeHost) {
         plugins: [rowTotals],
     });
 
-    onThemeChange(collegeChart, (chart) => {
+    onThemeChange(visitsChart, (chart) => {
         chart.options.datasets.bar.borderColor = C.surface;
         chart.options.scales.y.ticks.color = C.ink;
     });

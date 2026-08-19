@@ -1,15 +1,29 @@
 <x-layout.sidebar title="Analytics">
 
-    {{-- Director Analytics, rebuilt after the D-32 rescope (FR-ANL-09..13).
-         Layout follows the approved mockup
-         (docs/prototypes/web/director-analytics-rescope.html): filters row,
-         Visits by College (purpose inside), Vital-Sign Flags, trend + donut
-         side by side, BMI last. No print, no CSV export (FR-ANL-06 retired). --}}
+    {{-- College Admin Analytics (FR-ADM-08, D-45).
+         Deliberately the Director's page one college down: same cards, same
+         order, same components — only the first card changes, from Clinic
+         Visits by College to Clinic Visits by Program. There is no college
+         dropdown because there is no college choice to make: the scope banner
+         states it and the server derives it from managedCollege(). --}}
 
-    {{-- ── Filters row (FR-ANL-13) ──────────────────────────────────────────
-         Month + college scope every card except the trend. Both selects
-         auto-submit the GET form; the overlay shows while reloading. --}}
-    <form method="GET" action="{{ route('director.analytics') }}"
+    {{-- ── College-scope banner (FR-ADM-01 / FR-ADM-06) ─────────────────── --}}
+    <div class="mb-6 flex items-start gap-3 rounded-xl border border-hp-orange/25 bg-hp-peach/40 px-4 py-3.5">
+        <svg class="mt-0.5 h-4 w-4 shrink-0 text-hp-orange" fill="none" viewBox="0 0 24 24"
+             stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round"
+                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <p class="text-sm text-hp-slate">
+            <span class="font-semibold">{{ $college->name }}</span>
+            — these figures cover your college only.
+        </p>
+    </div>
+
+    {{-- ── Filters row ───────────────────────────────────────────────────────
+         Month + program scope every card below. Both selects auto-submit the
+         GET form; the overlay shows while reloading. --}}
+    <form method="GET" action="{{ route('admin.analytics') }}"
           class="mb-4 flex flex-wrap items-center gap-3">
         @if (!empty($availableMonths))
             <label for="analytics-month" class="sr-only">Analytics month</label>
@@ -23,29 +37,29 @@
             </select>
         @endif
 
-        <label for="analytics-college" class="sr-only">College filter</label>
-        <select id="analytics-college" name="college" data-filter-select
-                class="rounded-lg border-hp-slate/20 py-1.5 pl-3 pr-8 text-xs font-medium text-hp-slate focus:border-hp-orange focus:ring-hp-orange">
-            <option value="">All colleges</option>
-            @foreach ($colleges as $collegeOption)
-                <option value="{{ $collegeOption->id }}" @selected($collegeOption->id === $selectedCollegeId)>
-                    {{ $collegeOption->code }}
+        <label for="analytics-program" class="sr-only">Program filter</label>
+        <select id="analytics-program" name="program" data-filter-select
+                class="max-w-[22rem] rounded-lg border-hp-slate/20 py-1.5 pl-3 pr-8 text-xs font-medium text-hp-slate focus:border-hp-orange focus:ring-hp-orange">
+            <option value="">All programs</option>
+            @foreach ($programs as $programOption)
+                <option value="{{ $programOption }}" @selected($programOption === $selectedProgram)>
+                    {{ $programOption }}
                 </option>
             @endforeach
         </select>
 
         <p class="text-[11px] text-hp-slate/40 dark:text-hp-slate/55">
-            Month + college scope every card below · the trend always shows the whole year
+            Month + program scope every card below · the trend always shows the whole year
         </p>
     </form>
 
-    {{-- ── Clinic Visits by College (FR-ANL-09) ─────────────────────────── --}}
+    {{-- ── Clinic Visits by Program (FR-ADM-08) ─────────────────────────── --}}
     <x-hp.card class="mb-5">
         <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div>
-                <h3 class="text-sm font-semibold text-hp-slate">Clinic Visits by College</h3>
+                <h3 class="text-sm font-semibold text-hp-slate">Clinic Visits by Program</h3>
                 <p class="mt-1 text-xs text-hp-slate/50 dark:text-hp-slate/60">
-                    Visits per college, split by service type — sorted by volume.
+                    Visits per program, split by service type — sorted by volume.
                 </p>
                 <p class="text-xs text-hp-slate/50 dark:text-hp-slate/60">
                     Medical = kiosk check-ins · Dental = completed appointments (scheduling-only, no vitals).
@@ -61,7 +75,7 @@
             <div class="flex flex-col items-center py-10 text-center">
                 <p class="text-sm font-medium text-hp-slate/60">No visits recorded for this month yet</p>
                 <p class="mt-1 text-xs text-hp-slate/40 dark:text-hp-slate/55">
-                    The chart fills in as students check in at the kiosk or complete dental appointments.
+                    The chart fills in as your students check in at the kiosk or complete dental appointments.
                 </p>
             </div>
         @else
@@ -76,33 +90,33 @@
                 </span>
             </div>
 
-            {{-- Stacked horizontal bar — one row per college, zeros included.
-                 Height scales with the row count so single-college filtering
-                 doesn't stretch one bar across the card. --}}
-            <div data-visits-bar data-chart="{{ json_encode($collegeBar) }}"
-                 style="height: {{ count($collegeRows) * 32 + 24 }}px">
+            {{-- Stacked horizontal bar — one row per program, zeros included.
+                 56px a row (against the Director's 32) because program names
+                 are wrapped onto two or three axis lines, not 3-letter codes. --}}
+            <div data-visits-bar data-chart="{{ json_encode($programBar) }}"
+                 style="height: {{ count($programRows) * 56 + 24 }}px">
                 <canvas role="img"
-                        aria-label="Stacked bar chart: clinic visits per college, medical and dental. The same numbers are in the table below."></canvas>
+                        aria-label="Stacked bar chart: clinic visits per program, medical and dental. The same numbers are in the table below."></canvas>
             </div>
 
-            {{-- "View as table" (FR-ANL-09) — also the contrast relief for
-                 the orange series (dataviz: sub-3:1 fill needs a table). --}}
+            {{-- "View as table" — also the contrast relief for the orange
+                 series (dataviz: sub-3:1 fill needs a table). --}}
             <details class="mt-3">
                 <summary class="cursor-pointer text-xs font-semibold text-hp-slate/50 dark:text-hp-slate/60">View as table</summary>
                 <div class="mt-3 overflow-x-auto">
                     <table class="min-w-[420px] text-xs text-hp-slate">
                         <thead>
                             <tr class="border-b border-hp-slate/10 text-hp-slate/50 dark:text-hp-slate/60">
-                                <th class="px-3 py-1.5 text-left font-semibold">College</th>
+                                <th class="px-3 py-1.5 text-left font-semibold">Program</th>
                                 <th class="px-3 py-1.5 text-right font-semibold">Medical</th>
                                 <th class="px-3 py-1.5 text-right font-semibold">Dental</th>
                                 <th class="px-3 py-1.5 text-right font-semibold">Total</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach ($collegeRows as $row)
+                            @foreach ($programRows as $row)
                                 <tr class="even:bg-hp-slate/[0.04]">
-                                    <td class="px-3 py-1.5">{{ $row['code'] }}</td>
+                                    <td class="px-3 py-1.5">{{ $row['program'] }}</td>
                                     <td class="px-3 py-1.5 text-right tabular-nums">{{ $row['medical'] }}</td>
                                     <td class="px-3 py-1.5 text-right tabular-nums">{{ $row['dental'] }}</td>
                                     <td class="px-3 py-1.5 text-right font-semibold tabular-nums">{{ $row['total'] }}</td>
@@ -122,9 +136,9 @@
             </details>
         @endif
 
-        {{-- Visits by Purpose (inside the same card, FR-ANL-09): why the
-             month's medical visits were booked. Single muted hue + direct
-             value labels; walk-ins get their own bucket. --}}
+        {{-- Visits by Purpose (inside the same card): why the month's medical
+             visits were booked. Single muted hue + direct value labels;
+             walk-ins get their own bucket. --}}
         <div class="mt-6 border-t border-hp-slate/10 pt-4">
             <h4 class="text-xs font-semibold text-hp-slate">Visits by Purpose</h4>
             <p class="mb-3 mt-0.5 text-xs text-hp-slate/50 dark:text-hp-slate/60">
@@ -179,20 +193,25 @@
             </div>
         @endif
 
+        {{-- No Flagged Anomalies screen for this role: row-level vitals are
+             clinical data the Nurse and Director act on (FR-ANL-05), so this
+             card is counts only. --}}
         <p class="mt-3.5 text-xs text-hp-slate/50 dark:text-hp-slate/60">
-            Row-level detail lives on the <span class="font-semibold">Flagged Anomalies</span> screen.
+            Counts only — the clinic follows up flagged students directly.
         </p>
     </x-hp.card>
 
     {{-- ── Trend + donut, side by side (stacking on narrow) ─────────────── --}}
     <div class="mb-5 grid gap-5 lg:grid-cols-5">
 
-        {{-- Visits per Month (FR-ANL-11) — ignores both filters by design. --}}
+        {{-- Visits per Month (FR-ANL-11) — ignores the month filter by design.
+             Unlike the Director's, it stays inside this college: an admin is
+             never shown another college's numbers, aggregated or not. --}}
         <x-hp.card class="lg:col-span-3">
             <h3 class="text-sm font-semibold text-hp-slate">Visits per Month</h3>
             <p class="mt-1 text-xs text-hp-slate/50 dark:text-hp-slate/60">
                 Medical screenings and completed dental appointments across all months with data —
-                the whole-year, all-college view (ignores the filters above by design).
+                your college's whole-year view (ignores the month filter above by design).
             </p>
 
             @if ($trendMonthCount === 0)
@@ -304,7 +323,7 @@
     <script>
         (function () {
             // Filter switch: show the reload overlay, then submit the GET
-            // form so the page reloads scoped to the chosen month/college.
+            // form so the page reloads scoped to the chosen month/program.
             const overlay = document.getElementById('analytics-loading');
             document.querySelectorAll('[data-filter-select]').forEach((select) => {
                 select.addEventListener('change', () => {

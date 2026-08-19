@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\AnalyticsController as AdminAnalyticsController;
 use App\Http\Controllers\Admin\BatchRequestController as AdminBatchRequestController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Auth\PasswordChangeController;
@@ -130,6 +131,11 @@ Route::middleware(['auth', 'role:college_admin', 'college.scope'])
         Route::delete('/batches/{batch}/appointments/{appointment}', [AdminBatchRequestController::class, 'cancelAppointment'])
             ->whereNumber('batch')->whereNumber('appointment')
             ->middleware('throttle:30,1,batch-appt-cancel')->name('batches.appointments.cancel');
+        // Analytics (FR-ADM-08, D-45): the Director's six cards, scoped to
+        // this admin's college and broken out per program. Same
+        // App\Services\ClinicAnalytics behind both pages. Filters are month
+        // + program only — the college is never a request parameter here.
+        Route::get('/analytics', AdminAnalyticsController::class)->name('analytics');
     });
 
 // ── Nurse (FR-AUTH-03) ───────────────────────────────────────────────────────

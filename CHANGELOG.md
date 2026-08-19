@@ -4,6 +4,51 @@
 
 ### Added
 
+* **College Admin Analytics, per program — and the analytics queries become a
+  shared service** (D-45, FR-ADM-08). **No schema change.** A college can ask
+  for a monthly report of its own students' clinic results; that lands here as
+  analytics on the College Admin side, not as a new report format.
+  - **`App\Services\ClinicAnalytics`** now owns all six card builders. They
+    were moved out of `Director\AnalyticsController` (~390 lines, now ~65 and
+    doing nothing but resolving `?month=` and `?college=`), not copied — two
+    sets of the same aggregate queries would have drifted the first time a
+    rule changed, and the two roles would then quote different numbers off the
+    same database.
+  - **The extraction's acceptance bar was that
+    `tests/Feature/Director/AnalyticsPageTest.php` passed COMPLETELY UNEDITED**,
+    which it did. It is untouched in this change; needing to edit it would have
+    meant behaviour had moved.
+  - **New page `/admin/analytics`** with the same six cards, **Clinic Visits by
+    College replaced by Clinic Visits by Program**: one row per program the
+    college offers, split Medical / Dental, sorted by volume with an
+    alphabetical tie-break, **zero-visit programs included**.
+  - **Medical reads the D-43 `clinic_visits.course` snapshot**, so re-running
+    August's report in October cannot move a student's visit to the program
+    they shifted to in September. Dental has no `clinic_visits` row and so
+    attributes through the current profile — the same stated limitation dental
+    already carries for college.
+  - Visits whose snapshot is NULL (pre-D-43, never backfilled) land in a
+    trailing **"Not specified"** row instead of being dropped, so the card's
+    headline can never disagree with the other cards on the page.
+  - **The college is never read from the request.** There is no `?college=`
+    handling on this page — not validated, not rejected, simply never
+    consulted — so there is nothing for it to override (FR-AUTH-06 /
+    FR-ADM-06). The scope is fixed on the service at construction from
+    `managedCollege()`. `?program=` is checked against the *managed* college's
+    catalog (D-42), so another college's program is refused like a made-up one.
+  - Two deliberate departures from a pure mirror of the Director page, both
+    about scope: the FR-ANL-11 trend still ignores the month but **stays inside
+    the college** (a clinic-wide aggregate is still other colleges' numbers),
+    and the month picker offers only months **this** college has data in.
+    `VisitMonths::available()`/`resolve()` gained an optional `?College` for
+    that; the Director and Nurse call sites are unchanged.
+  - The Chart.js bundle moved `resources/js/director/analytics.js` ->
+    `resources/js/analytics.js` (both pages use it now) and its stacked-bar
+    hook from `[data-college-bar]` to `[data-visits-bar]`. Program names are
+    wrapped server-side into multi-line axis ticks; nothing else changed.
+  - Month bounds stay Carbon, never `MONTH()`/`DATE_FORMAT` — the suite runs on
+    SQLite while dev/prod is MySQL.
+
 * **Nurse Dashboard — the nurse's encode log finally has a home** (D-44,
   FR-NRS-09). **No schema change.** The nurse was the only role without a
   history surface: once a visit is encoded it leaves the Live Queue
