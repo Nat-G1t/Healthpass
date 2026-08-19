@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Admin\Concerns\ScopedToManagedCollege;
 use App\Http\Controllers\Controller;
+use App\Support\TransferNotice;
 use Illuminate\View\View;
 
 /**
@@ -40,6 +41,12 @@ class DashboardController extends Controller
             ->latest()
             ->get();
 
-        return view('admin.dashboard', compact('college', 'stats', 'batchRequests'));
+        // D-50: if the Director moved this admin to another college, say so once,
+        // here, on the page they land on after signing in. pull() returns the
+        // notice AND clears it, so it cannot reappear on the next visit. Null
+        // for the overwhelmingly common case of no pending transfer.
+        $transferNotice = TransferNotice::pull(auth()->user());
+
+        return view('admin.dashboard', compact('college', 'stats', 'batchRequests', 'transferNotice'));
     }
 }

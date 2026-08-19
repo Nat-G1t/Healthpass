@@ -7,8 +7,11 @@ namespace App\Http\Controllers\Director;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Director\StoreStaffAccountRequest;
 use App\Http\Requests\Director\UpdateStaffCollegeRequest;
+use App\Jobs\SendStaffAccountCreatedMail;
+use App\Jobs\SendStaffTransferredMail;
 use App\Models\College;
 use App\Models\User;
+use App\Support\TransferNotice;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -85,7 +88,7 @@ class StaffAccountController extends Controller
         $validated = $request->validated();
         $password = $this->generateOneTimePassword();
 
-        User::create([
+        $staff = User::create([
             'role' => $validated['role'],
             'name' => $validated['name'],
             'email' => $validated['email'],
@@ -103,9 +106,15 @@ class StaffAccountController extends Controller
             'must_change_password' => true,
         ]);
 
+        // Tell them the account exists and where to sign in (D-50). QUEUED, so a
+        // slow or unreachable mail server cannot fail the provisioning that has
+        // already been written. The message carries NO password — that is shown
+        // on this screen once and handed over in person (D-35).
+        SendStaffAccountCreatedMail::dispatch($staff);
+
         return redirect()
             ->route('director.staff.index')
-            ->with('status', 'Account created for '.$validated['name'].'.')
+            ->with('status', 'Account created for '.$validated['name'].'. A welcome email is on its way.')
             ->with('new_staff_credential', [
                 'name' => $validated['name'],
                 'email' => $validated['email'],
@@ -148,11 +157,34 @@ class StaffAccountController extends Controller
         // nothing to reassign — refuse rather than quietly writing the column.
         abort_unless($user->role === 'college_admin', 403);
 
-        $user->update(['managed_college_id' => $request->validated()['managed_college_id']]);
+        // Read the origin BEFORE the write. The column is overwritten in place
+        // and the old value is not recorded anywhere, so this is the only moment
+        // the transfer can be described at all.
+        $from = $user->managedCollege;
+        $to = College::findOrFail($request->validated()['managed_college_id']);
+
+        // Moving an admin to the college they are already on is a no-op the UI
+        // cannot even produce (the select fires no change event), but guard it
+        // so a hand-made request cannot send "moved from CCS to CCS".
+        if ($from !== null && $from->is($to)) {
+            return redirect()
+                ->route('director.staff.index')
+                ->with('status', $user->name.' already manages '.$to->code.'.');
+        }
+
+        $user->update(['managed_college_id' => $to->id]);
+
+        if ($from !== null) {
+            // Two notices, both about the same move (D-50). The email is the
+            // durable one; the dashboard notice is so the change is not a
+            // surprise when their students appear to have vanished.
+            SendStaffTransferredMail::dispatch($user, $from, $to);
+            TransferNotice::put($user, $from, $to);
+        }
 
         return redirect()
             ->route('director.staff.index')
-            ->with('status', $user->name.' now manages '.$user->refresh()->managedCollege?->code.'.');
+            ->with('status', $user->name.' now manages '.$to->code.'. They have been emailed about the change.');
     }
 
     /**

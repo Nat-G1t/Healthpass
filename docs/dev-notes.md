@@ -47,6 +47,15 @@ no longer exists.)
 > owner through "Forgot password" on the login page. Locally that OTP goes to
 > `storage/logs/laravel.log`, since `MAIL_MAILER=log`.
 >
+> **Two emails fire from this screen (D-50).** Creating an account sends a
+> welcome notice with a sign-in link; moving an admin between colleges sends a
+> transfer notice and queues a one-time dialog they see on their next dashboard
+> visit. Both are QUEUED, so locally you need `php artisan queue:work` running
+> or the `jobs` rows just sit there — the same trap the appointment emails have.
+> With `MAIL_MAILER=log` the rendered message lands in
+> `storage/logs/laravel.log`. The welcome email deliberately contains **no
+> password**.
+>
 > `StaffSeeder` is **unchanged** and remains the **bootstrap** path: it is what
 > creates the very first **Director** account, and the Director cannot create
 > another Director (anti-escalation — the endpoint 403s and the validation

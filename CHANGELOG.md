@@ -112,6 +112,50 @@
     or Fit/Unfit.
   - 14 cases in `tests/Feature/Admin/ActivityLogPageTest.php`.
 
+* **Staff accounts are announced by email, and a transferred admin is told
+  twice** (D-50, extends FR-AUTH-10). **No schema change, no new table, no new
+  package.** A provisioned account used to be invisible until somebody
+  remembered to phone the person, and an admin moved between colleges just
+  watched their students vanish with no explanation on screen.
+  - **Welcome email on creation** (`StaffAccountCreatedMail`): role, college,
+    and a sign-in link built from `route('login')` — so it follows `APP_URL` and
+    needs **no edit of its own** when the real domain is set on deployment day.
+  - **It carries no password, and says so.** The one-time credential is shown on
+    the Director's screen once and handed over in person (D-35, D-47); putting
+    it in a mailbox would undo that. Stating the rule in the message is what
+    makes a later "HealthPass needs your password" mail obviously fake. A test
+    asserts the issued password does not appear in the rendered email.
+  - **Transfer email** (`StaffTransferredMail`) naming the college left and the
+    college gained. Both are **fixed at dispatch**, not re-read when the worker
+    runs, so if the same admin is moved again while the first job is still
+    queued each message still describes the move it was sent for.
+  - **A one-time dialog on the transferred admin's next dashboard visit**, same
+    modal UI as Log out. Held in the **cache** (`App\Support\TransferNotice`)
+    and read with `Cache::pull()`, which returns and clears it in one step so it
+    cannot reappear on a refresh. Cache rather than a column on purpose: the
+    notice must outlive the request that created it, but it is a courtesy nudge
+    and not a record — the email is the durable one, so losing it to a
+    `cache:clear` costs nothing and it does not deserve a schema change.
+  - Both jobs share a new **`StaffMailJob`** base — retry policy (3 tries,
+    60s/300s), `deleteWhenMissingModels`, recipient resolved from the User
+    record and never from a request, PII-free failure logging. The staff-side
+    twin of `AppointmentMailJob`, deliberately separate because that one is
+    built around an Appointment. As on D-41 the shared property is **not**
+    `readonly`, or the job throws the moment the queue rehydrates it.
+  - **Nothing is emailed when the action did not happen:** a rejected creation,
+    a refused transfer, and a move to the college the admin is already on all
+    email nobody, each asserted by test.
+  - `StaffTransferredMail`'s properties are `$fromCollege`/`$toCollege`, never
+    `$from`/`$to` — `Illuminate\Mail\Mailable` already declares both and
+    redeclaring them is a fatal error.
+  - 15 cases in `tests/Feature/Director/StaffNotificationTest.php`.
+  - **Not built, by Nat's decision:** logging a transfer in both colleges'
+    Activity Logs. It cannot be derived — `users.managed_college_id` is
+    overwritten in place, so the origin college id is gone the moment the
+    transfer happens — and would have needed either an 11th table or lossy
+    columns on `users` holding only the most recent move. He chose to drop the
+    feature rather than pay that; D-49's derived Activity Log is unchanged.
+
 ### Changed
 
 * **The Director can no longer reset a staff account's password** (D-47a). The

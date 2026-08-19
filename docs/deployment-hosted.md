@@ -322,6 +322,14 @@ that still has no in-app recovery path beyond the ordinary forgot-password OTP
 (D-20), which needs their mailbox to be reachable. Confirm that address works
 **before** the defense.
 
+> **Staff emails follow `APP_URL` (D-50).** Creating an account emails the new
+> staff member a sign-in link, and moving a College Admin emails them the
+> change. Both links are generated from `route('login')`, so setting `APP_URL`
+> to the real domain in §3 is the only thing needed — there is no separate URL
+> to edit. Both are queued, so they need the §3 worker running; and both need
+> real SMTP, or the notice is written to a log nobody reads. The welcome email
+> deliberately carries **no password**.
+>
 > **Revoking access is immediate.** `App\Http\Middleware\EnsureAccountIsActive`
 > re-reads `users.status` on every web request, so Deactivate cuts an open
 > session on its next request rather than waiting for it to expire. If someone

@@ -6,6 +6,66 @@
         </div>
     @endif
 
+    {{-- ── Transfer notice (D-50, FR-AUTH-10) ────────────────────────────────
+         Shown ONCE, the first time a moved admin loads their dashboard, so the
+         change is not a surprise when their students appear to have vanished.
+         Same dialog UI as Log out and the Director's reassign confirmation.
+         The controller already cleared it, so a refresh will not bring it back;
+         the email sent at the same moment is the durable record. --}}
+    @if ($transferNotice)
+        <div x-data="{ open: true }" @keydown.escape.window="open = false">
+            <template x-teleport="body">
+                <div
+                    x-show="open"
+                    x-cloak
+                    class="fixed inset-0 z-[60] flex items-center justify-center px-4"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="transfer-notice-title"
+                >
+                    <div
+                        x-show="open"
+                        @click="open = false"
+                        x-transition:enter="ease-hp-out duration-hp-base"
+                        x-transition:enter-start="opacity-0"
+                        x-transition:enter-end="opacity-100"
+                        x-transition:leave="ease-hp-in duration-hp-fast"
+                        x-transition:leave-start="opacity-100"
+                        x-transition:leave-end="opacity-0"
+                        class="absolute inset-0 bg-hp-slate/50 dark:bg-black/60"
+                        aria-hidden="true"
+                    ></div>
+
+                    <div
+                        x-show="open"
+                        x-transition:enter="ease-hp-spring duration-hp-slow"
+                        x-transition:enter-start="opacity-0 translate-y-6"
+                        x-transition:enter-end="opacity-100 translate-y-0"
+                        x-transition:leave="ease-hp-in duration-hp-base"
+                        x-transition:leave-start="opacity-100 translate-y-0"
+                        x-transition:leave-end="opacity-0 translate-y-6"
+                        class="relative w-full max-w-sm rounded-2xl bg-hp-white p-6 shadow-xl"
+                    >
+                        <h2 id="transfer-notice-title" class="text-lg font-semibold text-hp-slate">
+                            You have been moved to {{ $transferNotice['toCode'] }}
+                        </h2>
+                        <p class="mt-1.5 text-sm text-hp-slate/70">
+                            The Clinic Director moved your account from
+                            <strong class="font-semibold text-hp-slate">{{ $transferNotice['from'] }}</strong>
+                            to <strong class="font-semibold text-hp-slate">{{ $transferNotice['to'] }}</strong>.
+                            Every page now shows {{ $transferNotice['toCode'] }}'s students, batch
+                            requests and analytics. We have emailed you a copy of this notice.
+                        </p>
+
+                        <div class="mt-6 flex justify-end">
+                            <x-hp.button variant="primary" @click="open = false">Got it</x-hp.button>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+    @endif
+
     {{-- ── College-scope banner (FR-ADM-01) ─────────────────────────────── --}}
     <div class="mb-6 flex items-start gap-3 rounded-xl border border-hp-orange/25 bg-hp-peach/40 px-4 py-3.5">
         <svg class="mt-0.5 h-4 w-4 shrink-0 text-hp-orange" fill="none" viewBox="0 0 24 24"
