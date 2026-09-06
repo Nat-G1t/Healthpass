@@ -236,7 +236,7 @@ Home, Calendar, FileText, QrCode, Plus, List, Activity, Edit, BarChart, Alert, C
 
 | Role | Nav items |
 |---|---|
-| Student | Dashboard · Book Appointment · My Records · My ID |
+| Student | Dashboard · Book Appointment · My Appointments · My Records · My ID |
 | College Admin | Dashboard · New Batch Request · Batch Tracking |
 | Nurse | Live Queue · Encode Result · Enable Kiosk Mode (Kiosk Devices: enroll/revoke trusted terminals, D-27) |
 | Clinic Director | Dashboard · Batch Approvals · Analytics · Flagged Anomalies |
@@ -297,6 +297,15 @@ Progress steps: Consent → Account Info → Email Verify → Link ID
 - Centered success: orange circle with check icon.
 - Summary box: Service, Date, Clinic Hours, Reference No.
 - "Back to Dashboard" button.
+
+#### My Appointments (`student-my-appointments`) — FR-STU-14, D-51
+- Lists **every** upcoming appointment (strictly after today, status != cancelled), ordered by date then slot — not just the nearest one. This is the surface the cancel rule always allowed but nothing exposed: the dashboard card renders a single row, so a student holding three appointments could previously reach only one.
+- One card per appointment: full date, one-hour slot ("—" on pre-D-37 rows), Service badge, **who-scheduled-it** badge ("Self-scheduled" / "Booked by <College>", from `Appointment::scheduledByLabel()`), reference number.
+- **Self-booked rows** carry their own Cancel button, gated on `Appointment::isSelfCancellable()` — the same rule the endpoint enforces. One shared Alpine confirm modal serves every row (`cancelId` selects the row's hidden form) rather than one modal per appointment.
+- **Two traps, both hit once and both now covered by test.** (1) The dialog **must** be wrapped in `<template x-teleport="body">`, like `x-logout-confirm`: `position: fixed` resolves against the nearest ancestor establishing a containing block, and the motion pass gives the cards a transform, so an unteleported dialog is laid out **inside card 2** instead of over the screen. This was a **pre-existing defect on the student dashboard**, fixed in the same pass. (2) The confirm text is read at runtime from `data-cancel-label` via `$el.dataset`, never interpolated — **`@js()` is not compiled inside a Blade component tag's attribute** (`<x-hp.button @click="…@js($x)…">` emits the literal string `@js($x)`, making the whole Alpine expression a JS syntax error so the button silently does nothing), and a hand-written JS literal would break on an apostrophe anyway. Same rule as the college-reassign dialog's `data-name`.
+- **Batch rows** are listed but have no Cancel control; they show "Booked by your college. Contact your college administrator…" instead (FR-STU-06 / D-39).
+- **Out of scope by design:** appointments dated today (past the cancel cutoff — they live on the dashboard card, which the empty state names), plus past and cancelled appointments (history belongs to My Records).
+- Cancelling from here returns here, chosen by a two-value allow-list on `from`, never a request-supplied URL.
 
 #### My Records (`student-records`)
 - Table: Date, Service, Result (Fit/Unfit badge), Reference No., View.

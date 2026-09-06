@@ -79,6 +79,12 @@
                         {{ ucfirst($nextAppointment->service_type) }}
                     </x-hp.badge>
                     <x-hp.badge variant="pending">Scheduled</x-hp.badge>
+                    {{-- FR-STU-14 (D-51): who put this in the diary. Shown for
+                         BOTH sources and on every date — the "Booked by your
+                         college" note below is gated on a future date, so a
+                         batch appointment dated today used to say nothing at
+                         all about where it came from. --}}
+                    <x-hp.badge variant="neutral">{{ $nextAppointment->scheduledByLabel() }}</x-hp.badge>
                 </div>
                 <p class="mt-2 flex items-center gap-1 text-xs text-hp-slate/50 dark:text-hp-slate/60">
                     <svg class="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24"
@@ -128,21 +134,50 @@
         @endif
     </x-hp.card>
 
-    {{-- Cancel confirm modal — only rendered when there is a cancellable future appointment. --}}
+    {{-- Cancel confirm modal — only rendered when there is a cancellable future appointment.
+
+         Teleported to <body>. Without this the dialog is laid out INSIDE this
+         card instead of over the whole screen: `position: fixed` resolves against
+         the nearest ancestor that establishes a containing block, and the card
+         carries a transform (the §6.2 motion pass), which is exactly such an
+         ancestor. Same fix, same reason, as x-logout-confirm. --}}
     @if ($nextAppointment && $nextAppointment->isSelfCancellable())
+    <template x-teleport="body">
     <div x-show="cancelModal" x-cloak
-         class="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center"
-         style="background-color: rgba(75,85,99,0.45);">
-        <div class="w-full max-w-sm rounded-2xl bg-hp-white p-6 shadow-xl">
+         @keydown.escape.window="cancelModal = false"
+         {{-- Centred at EVERY breakpoint, like x-logout-confirm. The old
+              `items-end sm:items-center` pinned the panel to the bottom edge on
+              phones, which read as the dialog falling off the screen. --}}
+         class="fixed inset-0 z-[60] flex items-center justify-center p-4"
+         role="dialog" aria-modal="true">
+
+        {{-- Backdrop — click outside to dismiss. Its own element so a click on
+             the panel does not bubble up and close the dialog. --}}
+        <div @click="cancelModal = false"
+             class="absolute inset-0"
+             style="background-color: rgba(75,85,99,0.45);"
+             aria-hidden="true"></div>
+
+        {{-- max-h/overflow so the panel can never be taller than a short phone
+             viewport and get clipped (same guard as the Records modal). --}}
+        <div class="relative max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-2xl bg-hp-white p-6 shadow-xl">
 
             <div class="mb-3 flex items-center gap-3">
-                <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-50 dark:bg-red-500/10">
+                {{-- A real button, not a decorative glyph: it reads as an X, so
+                     clicking it must dismiss the dialog and change nothing. --}}
+                <button type="button"
+                        @click="cancelModal = false"
+                        aria-label="Close"
+                        class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full
+                               bg-red-50 transition-colors hover:bg-red-100 focus-visible:outline-none
+                               focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-1
+                               dark:bg-red-500/10 dark:hover:bg-red-500/20">
                     <svg class="h-4 w-4 text-red-500 dark:text-red-400" fill="none" viewBox="0 0 24 24"
                          stroke="currentColor" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round"
                               d="M6 18L18 6M6 6l12 12"/>
                     </svg>
-                </div>
+                </button>
                 <h3 class="text-base font-semibold text-hp-slate">Cancel appointment?</h3>
             </div>
 
@@ -180,6 +215,7 @@
 
         </div>
     </div>
+    </template>
     @endif
 
     </div>{{-- /x-data --}}

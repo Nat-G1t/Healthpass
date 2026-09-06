@@ -96,6 +96,29 @@ class Appointment extends Model
     }
 
     /**
+     * Who put this appointment in the diary — "Self-scheduled", or
+     * "Booked by <College>" for a batch-generated one. (FR-STU-14, D-51)
+     *
+     * The student cannot act on a batch appointment themselves (D-39), so the
+     * label is what tells them WHY there is no cancel button and, by naming the
+     * college, exactly who to go to instead. One accessor rather than the same
+     * ternary in two Blade files, so the dashboard card and the My Appointments
+     * list can never word it differently.
+     *
+     * Null-safe on the relation: a batch row whose request or college has gone
+     * missing degrades to the generic "your college" instead of throwing in a
+     * view. Callers should eager-load `batchRequest.college` to avoid an N+1.
+     */
+    public function scheduledByLabel(): string
+    {
+        if ($this->source !== 'batch') {
+            return 'Self-scheduled';
+        }
+
+        return 'Booked by '.($this->batchRequest?->college?->name ?? 'your college');
+    }
+
+    /**
      * May the STUDENT cancel this appointment themselves? (FR-STU-06, D-39)
      *
      * Three conditions, and the third is new in D-39: a batch appointment

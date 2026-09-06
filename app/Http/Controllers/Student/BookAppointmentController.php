@@ -201,8 +201,16 @@ class BookAppointmentController extends Controller
 
         $appointment->update(['status' => 'cancelled']);
 
+        // Send the student back to the page they cancelled from. `from` is
+        // matched against a two-value ALLOW-LIST, never used as a URL: a
+        // redirect target taken straight from the request body is an open
+        // redirect, and this form is reachable by any logged-in student.
+        $route = $request->input('from') === 'list'
+            ? 'student.my-appointments'
+            : 'student.dashboard';
+
         return redirect()
-            ->route('student.dashboard')
+            ->route($route)
             ->with('status', 'appointment-cancelled');
     }
 

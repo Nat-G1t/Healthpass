@@ -28,6 +28,8 @@ class DashboardController extends Controller
             ->where('status', '!=', 'cancelled')
             ->where('scheduled_date', '>=', today())
             ->oldest('scheduled_date')
+            // scheduledByLabel() names the college on a batch row (FR-STU-14).
+            ->with('batchRequest.college')
             ->first();
 
         // Count of visits that have an encoded clearance

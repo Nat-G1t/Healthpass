@@ -20,6 +20,7 @@ use App\Http\Controllers\Nurse\QueueController as NurseQueueController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Student\BookAppointmentController;
 use App\Http\Controllers\Student\DashboardController as StudentDashboardController;
+use App\Http\Controllers\Student\MyAppointmentsController as StudentMyAppointmentsController;
 use App\Http\Controllers\Student\ProfileController as StudentProfileController;
 use App\Http\Controllers\Student\RecordsController as StudentRecordsController;
 use App\Http\Middleware\EnsureRole;
@@ -81,6 +82,10 @@ Route::middleware(['auth', 'role:student'])
         Route::get('/appointments/{appointment}/confirmed', [BookAppointmentController::class, 'confirmed'])->name('appointments.confirmed');
         Route::delete('/appointments/{appointment}', [BookAppointmentController::class, 'cancel'])
             ->middleware('throttle:20,1,appt-cancel')->name('appointments.cancel');
+        // FR-STU-14 (D-51): every upcoming appointment, each cancellable on its
+        // own. Deliberately NOT under /appointments/... — that prefix already
+        // belongs to the booking page and carries an {appointment} wildcard.
+        Route::get('/my-appointments', StudentMyAppointmentsController::class)->name('my-appointments');
         Route::get('/records', StudentRecordsController::class)->name('records');
         // Kiosk Tutorial (FR-STU-11): static walkthrough, no data to prepare —
         // Route::view renders the Blade view directly, no controller needed.
