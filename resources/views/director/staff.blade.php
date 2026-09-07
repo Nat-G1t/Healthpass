@@ -3,7 +3,7 @@
 {{-- ── Page header ────────────────────────────────────────────────────────── --}}
 <div class="mb-6">
     <h2 class="text-xl font-semibold text-hp-slate">Staff Accounts</h2>
-    <p class="mt-0.5 text-sm text-hp-slate/50 dark:text-hp-slate/60">
+    <p class="mt-0.5 text-sm text-hp-slate/50">
         Create College Admin and Nurse accounts, move an admin between colleges, and
         deactivate anyone who has left. Accounts are never deleted — their records
         stay in the system. A staff member who forgets their password recovers it
@@ -48,11 +48,11 @@
 
                 <dl class="mt-4 grid gap-3 sm:grid-cols-2">
                     <div>
-                        <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/50 dark:text-hp-slate/60">Sign in with</dt>
+                        <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/50">Sign in with</dt>
                         <dd class="mt-1 break-all font-mono text-sm text-hp-slate">{{ $credential['email'] }}</dd>
                     </div>
                     <div>
-                        <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/50 dark:text-hp-slate/60">One-time password</dt>
+                        <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/50">One-time password</dt>
                         <dd class="mt-1 flex items-center gap-2">
                             <input type="text" readonly x-ref="pw" value="{{ $credential['password'] }}"
                                    aria-label="One-time password"
@@ -113,7 +113,7 @@
                         </option>
                     @endforeach
                 </x-hp.select>
-                <p class="mt-1 text-[12px] text-hp-slate/50 dark:text-hp-slate/60">
+                <p class="mt-1 text-[12px] text-hp-slate/50">
                     An admin only ever sees this college's students and batches.
                 </p>
             </div>
@@ -134,11 +134,11 @@
     <x-hp.card class="lg:col-span-2">
         <h3 class="mb-4 text-sm font-semibold text-hp-slate">
             College Admins &amp; Nurses
-            <span class="ml-1 font-normal text-hp-slate/50 dark:text-hp-slate/60">({{ $accounts->count() }})</span>
+            <span class="ml-1 font-normal text-hp-slate/50">({{ $accounts->count() }})</span>
         </h3>
 
         @if ($accounts->isEmpty())
-            <p class="py-8 text-center text-sm text-hp-slate/50 dark:text-hp-slate/60">
+            <p class="py-8 text-center text-sm text-hp-slate/50">
                 No staff accounts yet. Create one with the form on the left.
             </p>
         @else
@@ -147,7 +147,7 @@
                     <x-hp.table-row>
                         <x-hp.table-cell label="Name">
                             <span class="font-medium">{{ $account->name }}</span>
-                            <span class="block break-all text-[12px] text-hp-slate/50 dark:text-hp-slate/60">
+                            <span class="block break-all text-[12px] text-hp-slate/50">
                                 {{ $account->email }}
                             </span>
                         </x-hp.table-cell>
@@ -166,7 +166,7 @@
                                      Log out confirmation. --}}
                                 <x-college-reassign-confirm :account="$account" :colleges="$colleges" />
                             @else
-                                <span class="text-hp-slate/50 dark:text-hp-slate/60">—</span>
+                                <span class="text-hp-slate/50">—</span>
                             @endif
                         </x-hp.table-cell>
 
@@ -178,7 +178,7 @@
                             @endif
 
                             @if ($account->must_change_password)
-                                <span class="mt-1 block text-[11px] text-hp-slate/50 dark:text-hp-slate/60">
+                                <span class="mt-1 block text-[11px] text-hp-slate/50">
                                     Password change pending
                                 </span>
                             @endif
@@ -193,11 +193,11 @@
                                 <span title="{{ $account->last_active_at->format('M j, Y g:i A') }}">
                                     {{ $account->last_active_at->diffForHumans() }}
                                 </span>
-                                <span class="block text-[11px] text-hp-slate/50 dark:text-hp-slate/60">
+                                <span class="block text-[11px] text-hp-slate/50">
                                     {{ $account->last_active_at->format('M j, Y g:i A') }}
                                 </span>
                             @else
-                                <span class="text-hp-slate/50 dark:text-hp-slate/60">Never</span>
+                                <span class="text-hp-slate/50">Never</span>
                             @endif
                         </x-hp.table-cell>
 

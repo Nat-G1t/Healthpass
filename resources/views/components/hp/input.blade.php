@@ -8,7 +8,7 @@
 @php
     $inputId      = $id ?? ($label ? Str::slug($label, '_') : null);
     $baseClasses  = 'w-full rounded-lg border-[1.5px] border-hp-slate/25 px-3.5 py-2.5 text-sm text-hp-slate
-                     placeholder-hp-slate/40 dark:placeholder-hp-slate/55 transition-colors duration-hp-fast
+                     placeholder-hp-slate/40 transition-colors duration-hp-fast
                      focus:border-hp-orange focus:ring-1 focus:ring-hp-orange focus:outline-none
                      disabled:bg-hp-slate/5 disabled:cursor-not-allowed';
 
@@ -40,7 +40,7 @@
                 type="button"
                 @click="show = !show"
                 :aria-label="show ? 'Hide password' : 'Show password'"
-                class="absolute inset-y-0 right-0 flex items-center px-3 text-hp-slate/50 dark:text-hp-slate/60 hover:text-hp-slate"
+                class="absolute inset-y-0 right-0 flex items-center px-3 text-hp-slate/50 hover:text-hp-slate"
                 tabindex="-1"
             >
                 {{-- Eye icon --}}
@@ -69,6 +69,6 @@
     @endif
 
     @if ($error)
-        <p class="hp-anim-fade text-xs text-red-600 dark:text-red-400">{{ $error }}</p>
+        <p class="hp-anim-fade text-xs text-red-600">{{ $error }}</p>
     @endif
 </div>

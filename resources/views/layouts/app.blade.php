@@ -15,20 +15,18 @@
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
-        @include('partials.theme-init')
-
         <!-- Scripts -->
         @vite(['resources/css/app.css', 'resources/js/app.js'])
         @include('partials.favicon')
     </head>
     <body class="font-sans antialiased">
         <x-hp.splash />
-        <div class="min-h-screen bg-gray-100 dark:bg-hp-bg">
+        <div class="min-h-screen bg-gray-100">
             @include('layouts.navigation')
 
             <!-- Page Heading -->
             @isset($header)
-                <header class="bg-hp-white shadow dark:border-b dark:border-hp-slate/15 dark:shadow-none">
+                <header class="bg-hp-white shadow">
                     <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
                         {{ $header }}
                     </div>

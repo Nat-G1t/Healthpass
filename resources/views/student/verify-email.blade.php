@@ -15,21 +15,21 @@
                 A 6-digit verification code was sent to<br>
                 <strong class="text-hp-orange break-all">{{ $email }}</strong>
             </p>
-            <p class="mt-1 text-xs text-hp-slate/45 dark:text-hp-slate/60">
+            <p class="mt-1 text-xs text-hp-slate/45">
                 Your email won't change until you enter the code below.
             </p>
         </div>
 
         {{-- Resend success flash --}}
         @if (session('status'))
-            <div data-hp-flash class="mb-4 rounded-lg border border-green-200 dark:border-green-500/30 bg-green-50 dark:bg-green-500/10 px-4 py-3 text-sm text-green-700 dark:text-green-300">
+            <div data-hp-flash class="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
                 {{ session('status') }}
             </div>
         @endif
 
         {{-- OTP error --}}
         @error('otp')
-            <div class="mb-4 rounded-lg border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+            <div class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                 {{ $message }}
             </div>
         @enderror
@@ -113,7 +113,7 @@
         <div class="mt-6 border-t border-hp-slate/10 pt-4 text-center">
             <form method="POST" action="{{ route('student.id-profile.verify-email.cancel') }}">
                 @csrf
-                <button type="submit" class="text-[12px] text-hp-slate/50 dark:text-hp-slate/60 hover:text-hp-slate hover:underline">
+                <button type="submit" class="text-[12px] text-hp-slate/50 hover:text-hp-slate hover:underline">
                     ← Cancel and keep my current email
                 </button>
             </form>
@@ -121,7 +121,7 @@
 
         {{-- Dev: where to find the OTP --}}
         @if (app()->isLocal())
-            <div class="mt-6 rounded-lg border border-slate-200 dark:border-hp-slate/15 bg-slate-50 dark:bg-hp-white px-4 py-3 text-xs text-slate-500 dark:text-hp-slate/60">
+            <div class="mt-6 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
                 <p class="mb-1 font-semibold">Dev — read the OTP from storage/logs/laravel.log</p>
                 <p>The log mailer appends the rendered email to the log on each send. Open the file and
                    scroll to the last message, or search for <code>Your verification code</code>.</p>

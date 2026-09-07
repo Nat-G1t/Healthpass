@@ -261,8 +261,7 @@
     captured by HealthPass only**. A filtered report **says** it is filtered.
   - **The flag captions come from `config('healthpass.thresholds')`** by way of
     the service — 140/90 and 37.2 are not restated in the print view.
-  - **Permanently light** (D-38): no `partials/theme-init`, no dark palette.
-    The report is white paper even with the app in dark mode.
+  - **Permanently light**: the report is white paper.
   - **Same scope rule as the page it prints.** The college is
     `managedCollege()`; `?college=` is never read, so there is nothing for a
     hand-edited print URL to override (FR-AUTH-06 / FR-ADM-06). The program
@@ -668,30 +667,6 @@
   timestamp, and every other row shows an em dash. The reason is Director-written
   free text, so it is escaped on output and set via `x-text`, never raw HTML.
   Works in both the desktop table and the mobile stacked-card rendering.
-
-* Site-wide **light/dark theme** for the web app (D-38, FR-UI-04 / NFR-10). A
-  toggle sits in the top-right of the sticky header on every page that uses the
-  sidebar layout, and fixed top-right on the auth/guest shells. The choice is
-  remembered per device in `localStorage` and defaults to the OS
-  `prefers-color-scheme` — no schema change, no user column, no request on
-  toggle. The theme class is applied by an inline `<head>` script before first
-  paint, so a dark reload never flashes light. Colour transitions use the
-  existing `--hp-dur-base` / `--hp-ease-out` motion tokens and still collapse
-  under `prefers-reduced-motion`.
-  Implemented by **re-pointing the five `--hp-*` colour tokens** rather than
-  scattering `dark:` variants: the tokens are now `R G B` channel triplets and
-  Tailwind resolves `hp-*` through `rgb(var(--…) / <alpha-value>)`, so ~300
-  existing `text-hp-slate/NN` utilities re-theme untouched. **In plain CSS a
-  colour token must now be wrapped — `rgb(var(--hp-bg))`, not `var(--hp-bg)`.**
-  Dark peach becomes a dark amber chip (`#3B2A17`) because the app pairs it with
-  orange text, which was 1.55:1 on a light peach; dark slate is `#F3F4F6` so the
-  muted alpha steps still clear AA. Brand orange is unchanged — it measures
-  7.3:1 on the dark card. Known issue, pre-existing and identical in light: the
-  white-on-orange button label is 2.32:1.
-  **The kiosk and all print output are excluded and stay light** — the kiosk is
-  a fixed clinic appliance (D-26) and printed clearances must match the official
-  form. Verified with a per-page contrast audit across all four roles in both
-  themes, plus no-flash-on-reload, kiosk-stays-light and print-stays-light checks.
 
 ### Fixed
 

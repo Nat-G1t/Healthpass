@@ -10,9 +10,6 @@
      the analytics page (partials/print-frame), which prints it in place — the
      admin never leaves Analytics and the print dialog is the preview.
 
-     PERMANENTLY LIGHT (D-38, CLAUDE.md): print views never include
-     partials/theme-init and carry no dark palette. Nothing here reads a theme.
-
      Every number is server-computed by App\Services\ClinicAnalytics under the
      SAME scope as the on-screen page, so the printout cannot disagree with it.
      Thresholds ride in on $flagTiles' captions, which the service reads from

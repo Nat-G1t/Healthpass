@@ -52,8 +52,7 @@
                  as bare "R G B" channel triplets so Tailwind can derive alpha
                  variants from them (see resources/css/app.css). A bare
                  var(--hp-bg) here is not a valid <color> and the panel renders
-                 transparent. The kiosk still resolves the LIGHT values — it
-                 never gets the .dark class (D-38). --}}
+                 transparent. --}}
             background: rgb(var(--hp-bg));
             overflow: hidden;
         }

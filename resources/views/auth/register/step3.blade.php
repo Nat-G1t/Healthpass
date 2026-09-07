@@ -8,14 +8,14 @@
 
     {{-- Resend success flash --}}
     @if (session('status'))
-        <div data-hp-flash class="mb-4 rounded-lg border border-green-200 dark:border-green-500/30 bg-green-50 dark:bg-green-500/10 px-4 py-3 text-sm text-green-700 dark:text-green-300">
+        <div data-hp-flash class="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
             {{ session('status') }}
         </div>
     @endif
 
     {{-- OTP error --}}
     @error('otp')
-        <div class="mb-4 rounded-lg border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+        <div class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {{ $message }}
         </div>
     @enderror
@@ -108,14 +108,14 @@
 
     {{-- Dev: where to find the OTP --}}
     @if (app()->isLocal())
-        <div class="mt-6 rounded-lg border border-slate-200 dark:border-hp-slate/15 bg-slate-50 dark:bg-hp-white px-4 py-3 text-xs text-slate-500 dark:text-hp-slate/60">
+        <div class="mt-6 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
             <p class="mb-1 font-semibold">Dev — reading the OTP from storage/logs/laravel.log</p>
             <p>The log mailer appends the full rendered email at the bottom of the file on every send.
                Open the file and scroll to the last <code>Message-ID:</code> block, or search for
                <code>Subject: HealthPass</code>. The OTP appears in the HTML body as a 6-digit number
                next to "Your verification code".</p>
             <p class="mt-1">Quick command:</p>
-            <code class="block rounded bg-slate-100 dark:bg-hp-bg px-2 py-1 mt-1 select-all">
+            <code class="block rounded bg-slate-100 px-2 py-1 mt-1 select-all">
                 php artisan tinker --execute="echo file_get_contents(storage_path('logs/laravel.log'));" | tail -80
             </code>
         </div>
@@ -123,7 +123,7 @@
 
     {{-- Start over --}}
     <div class="mt-6 flex justify-center">
-        <a href="{{ route('register') }}" class="text-[12px] text-hp-slate/50 dark:text-hp-slate/60 hover:underline">
+        <a href="{{ route('register') }}" class="text-[12px] text-hp-slate/50 hover:underline">
             ← Start over
         </a>
     </div>

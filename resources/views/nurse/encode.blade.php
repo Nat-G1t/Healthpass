@@ -75,7 +75,7 @@
             <x-hp.badge variant="flagged">Awaiting encode</x-hp.badge>
         @endif
     </div>
-    <p class="mt-0.5 text-sm text-hp-slate/50 dark:text-hp-slate/60">
+    <p class="mt-0.5 text-sm text-hp-slate/50">
         <span class="font-mono">{{ $visit->reference_no }}</span>
         · captured {{ $capturedAt?->diffForHumans() ?? '—' }}
     </p>
@@ -115,25 +115,25 @@
                 </div>
                 <div class="min-w-0">
                     <p class="text-lg font-semibold text-hp-slate">{{ $student->name ?? '—' }}</p>
-                    <p class="font-mono text-sm text-hp-slate/50 dark:text-hp-slate/60">{{ $profile->student_number ?? '—' }}</p>
+                    <p class="font-mono text-sm text-hp-slate/50">{{ $profile->student_number ?? '—' }}</p>
                 </div>
             </div>
             <dl class="mt-5 grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-4">
                 <div>
-                    <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">College</dt>
+                    <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">College</dt>
                     {{-- Capture-time snapshot (FR-STU-09/D-17), not the profile's current college. --}}
                     <dd class="mt-0.5 text-hp-slate">{{ $visit->college->name ?? '—' }}</dd>
                 </div>
                 <div>
-                    <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">Course &amp; Year</dt>
+                    <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Course &amp; Year</dt>
                     <dd class="mt-0.5 text-hp-slate">{{ $profile->course ?? '—' }} · {{ $profile->year_level ?? '—' }}</dd>
                 </div>
                 <div>
-                    <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">Age</dt>
+                    <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Age</dt>
                     <dd class="mt-0.5 text-hp-slate">{{ $profile?->date_of_birth?->age ?? '—' }}</dd>
                 </div>
                 <div>
-                    <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">Sex</dt>
+                    <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Sex</dt>
                     <dd class="mt-0.5 text-hp-slate">{{ $sexLabel }}</dd>
                 </div>
             </dl>
@@ -144,7 +144,7 @@
             <div class="flex items-center justify-between gap-3">
                 <h3 class="text-sm font-semibold text-hp-slate">Vital Signs</h3>
                 @if ($vs)
-                    <span class="text-xs text-hp-slate/40 dark:text-hp-slate/55">Entry: {{ ucfirst($vs->entry_method) }}</span>
+                    <span class="text-xs text-hp-slate/40">Entry: {{ ucfirst($vs->entry_method) }}</span>
                 @endif
             </div>
             @if ($vs)
@@ -158,7 +158,7 @@
                         ['Heart Rate',     $vs->heart_rate_bpm.' bpm',                    false],
                     ] as [$label, $value, $isFlagged])
                         <div class="rounded-xl bg-hp-bg p-3">
-                            <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">{{ $label }}</p>
+                            <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">{{ $label }}</p>
                             <div class="mt-1 flex flex-wrap items-center gap-2">
                                 <span class="text-lg font-bold {{ $isFlagged ? 'text-hp-orange' : 'text-hp-slate' }}">{{ $value }}</span>
                                 @if ($isFlagged)
@@ -169,7 +169,7 @@
                     @endforeach
                 </div>
             @else
-                <p class="mt-3 text-sm text-hp-slate/40 dark:text-hp-slate/55">No vitals recorded for this visit.</p>
+                <p class="mt-3 text-sm text-hp-slate/40">No vitals recorded for this visit.</p>
             @endif
         </x-hp.card>
 
@@ -183,7 +183,7 @@
                             <span class="text-sm text-hp-slate/70">{{ $label }}</span>
                             {{-- Kiosk colour language: orange = reported issue, green = all clear. --}}
                             <span class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold
-                                         {{ $sr->{$column} ? 'bg-hp-orange/15 text-hp-orange' : 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' }}">
+                                         {{ $sr->{$column} ? 'bg-hp-orange/15 text-hp-orange' : 'bg-emerald-50 text-emerald-600' }}">
                                 {{ $sr->{$column} ? 'Yes' : 'No' }}
                             </span>
                         </div>
@@ -192,19 +192,19 @@
                         <span class="text-sm text-hp-slate/70">
                             Currently pregnant
                             @if ($sr->is_pregnant)
-                                <span class="block text-xs text-hp-slate/40 dark:text-hp-slate/55">
+                                <span class="block text-xs text-hp-slate/40">
                                     LMP: {{ $sr->last_menstrual_period?->format('M j, Y') ?? '—' }}
                                 </span>
                             @endif
                         </span>
                         <span class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold
-                                     {{ $sr->is_pregnant ? 'bg-hp-orange/15 text-hp-orange' : 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' }}">
+                                     {{ $sr->is_pregnant ? 'bg-hp-orange/15 text-hp-orange' : 'bg-emerald-50 text-emerald-600' }}">
                             {{ $sr->is_pregnant ? 'Yes' : 'No' }}
                         </span>
                     </div>
                 </div>
             @else
-                <p class="mt-3 text-sm text-hp-slate/40 dark:text-hp-slate/55">No questionnaire recorded for this visit.</p>
+                <p class="mt-3 text-sm text-hp-slate/40">No questionnaire recorded for this visit.</p>
             @endif
         </x-hp.card>
     </div>
@@ -212,7 +212,7 @@
     {{-- ══ Right column — the assessment form (FR-NRS-03) ══════════════════════ --}}
     <x-hp.card class="lg:sticky lg:top-20">
         <h3 class="text-sm font-semibold text-hp-slate">Assessment</h3>
-        <p class="mt-0.5 text-xs text-hp-slate/50 dark:text-hp-slate/60">
+        <p class="mt-0.5 text-xs text-hp-slate/50">
             Result is required; category and purpose are optional (BR-16).
         </p>
 
@@ -235,7 +235,7 @@
                         <input type="radio" name="result" value="Fit" class="peer sr-only" required
                                @checked(old('result', $record?->result) === 'Fit') @disabled($readOnly)>
                         <span class="flex items-center justify-center rounded-xl border-2 border-hp-slate/20
-                                     py-3 text-base font-bold text-hp-slate/50 dark:text-hp-slate/60 transition-colors
+                                     py-3 text-base font-bold text-hp-slate/50 transition-colors
                                      peer-checked:border-emerald-500 peer-checked:bg-emerald-500 peer-checked:text-white
                                      peer-focus-visible:ring-2 peer-focus-visible:ring-emerald-500 peer-focus-visible:ring-offset-2">
                             Fit
@@ -245,7 +245,7 @@
                         <input type="radio" name="result" value="Unfit" class="peer sr-only"
                                @checked(old('result', $record?->result) === 'Unfit') @disabled($readOnly)>
                         <span class="flex items-center justify-center rounded-xl border-2 border-hp-slate/20
-                                     py-3 text-base font-bold text-hp-slate/50 dark:text-hp-slate/60 transition-colors
+                                     py-3 text-base font-bold text-hp-slate/50 transition-colors
                                      peer-checked:border-hp-orange peer-checked:bg-hp-orange peer-checked:text-white
                                      peer-focus-visible:ring-2 peer-focus-visible:ring-hp-orange peer-focus-visible:ring-offset-2">
                             Unfit
@@ -253,7 +253,7 @@
                     </label>
                 </div>
                 @error('result')
-                    <p class="mt-1 text-xs text-red-600 dark:text-red-400">{{ $message }}</p>
+                    <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
                 @enderror
             </div>
 
@@ -284,7 +284,7 @@
                             ? $visit->appointment->purpose_other
                             : $bookingPurpose }}
                     </p>
-                    <p class="text-xs text-hp-slate/45 dark:text-hp-slate/60">Chosen by the student at booking — carried to the printed form.</p>
+                    <p class="text-xs text-hp-slate/45">Chosen by the student at booking — carried to the printed form.</p>
                 </div>
             @else
                 <div x-data="{ purpose: @js($savedPurpose ?? ''), purposeOther: @js(old('purpose_other', $record?->purpose_other) ?? '') }">
@@ -298,7 +298,7 @@
                  on the official form (FR-PRT-02). --}}
             <div>
                 <span class="text-sm font-semibold text-hp-slate">Physical Signs Disorder of</span>
-                <p class="mt-0.5 text-xs text-hp-slate/50 dark:text-hp-slate/60">
+                <p class="mt-0.5 text-xs text-hp-slate/50">
                     Physician's exam findings — leave a row unanswered to keep it blank on the printed form.
                 </p>
                 <div class="mt-1.5 divide-y divide-hp-slate/10">

@@ -53,7 +53,7 @@
                              px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-white">
                     Next
                 </span>
-                <p class="queue-ref font-mono text-[11px] text-hp-slate/35 dark:text-hp-slate/55" data-cell="ref">{{ $visit->reference_no }}</p>
+                <p class="queue-ref font-mono text-[11px] text-hp-slate/35" data-cell="ref">{{ $visit->reference_no }}</p>
             </div>
         </div>
     </td>
@@ -68,15 +68,15 @@
         @if ($vs)
             <div class="flex items-center gap-x-3">
                 <span class="{{ $vs->is_temp_flagged ? $flagged : $normal }}">{{ $vs->temperature_c }}°C</span>
-                <span class="text-hp-slate/20 dark:text-hp-slate/50">·</span>
+                <span class="text-hp-slate/20">·</span>
                 <span class="{{ $vs->is_bp_flagged ? $flagged : $normal }}">{{ $vs->bp_systolic }}/{{ $vs->bp_diastolic }}</span>
-                <span class="text-hp-slate/20 dark:text-hp-slate/50">·</span>
+                <span class="text-hp-slate/20">·</span>
                 <span class="{{ $vs->is_bmi_flagged ? $flagged : $normal }}">BMI {{ $vs->bmi }}</span>
-                <span class="text-hp-slate/20 dark:text-hp-slate/50">·</span>
+                <span class="text-hp-slate/20">·</span>
                 <span class="{{ $normal }}">{{ $vs->heart_rate_bpm }} bpm</span>
             </div>
         @else
-            <span class="text-hp-slate/30 dark:text-hp-slate/55">—</span>
+            <span class="text-hp-slate/30">—</span>
         @endif
     </td>
 
@@ -89,12 +89,12 @@
                 @if ($vs->is_bmi_flagged)  <x-hp.badge variant="flagged">BMI</x-hp.badge>  @endif
             </div>
         @else
-            <span class="text-hp-slate/30 dark:text-hp-slate/55">—</span>
+            <span class="text-hp-slate/30">—</span>
         @endif
     </td>
 
     {{-- Capture time, humanized (e.g. "2m ago") --}}
-    <td class="py-4 pr-6 text-sm text-hp-slate/50 dark:text-hp-slate/60 whitespace-nowrap" data-cell="time">
+    <td class="py-4 pr-6 text-sm text-hp-slate/50 whitespace-nowrap" data-cell="time">
         {{ $capturedAt?->diffForHumans() ?? '—' }}
     </td>
 
@@ -111,8 +111,8 @@
     <td class="py-4 pr-4 text-right whitespace-nowrap">
         @if ($leaving)
             {{-- Not a link on purpose: the ghost is about to animate away. --}}
-            <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 px-4 py-1.5
-                         text-xs font-semibold text-emerald-600 dark:text-emerald-400">Encoded ✓</span>
+            <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-4 py-1.5
+                         text-xs font-semibold text-emerald-600">Encoded ✓</span>
         @else
             <span class="queue-btn-next"><a href="{{ route('nurse.visits.encode', $visit) }}"
                 class="{{ $btnBase }} bg-hp-orange text-white hover:bg-orange-500 focus-visible:ring-hp-orange">Encode Result</a></span>

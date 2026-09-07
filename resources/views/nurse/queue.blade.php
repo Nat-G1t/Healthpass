@@ -69,7 +69,7 @@
              number while the ticker rewrites the rest of the line. --}}
         {{-- Kept as ONE line: the spans must be separated by exactly one space
              so the rendered text still reads "{n} students waiting …". --}}
-        <p class="mt-0.5 text-sm text-hp-slate/50 dark:text-hp-slate/60" data-queue-subtitle><span data-queue-count>{{ $count }}</span> <span data-queue-subtitle-rest>{{ \Illuminate\Support\Str::plural('student', $count) }} waiting · updated just now</span></p>
+        <p class="mt-0.5 text-sm text-hp-slate/50" data-queue-subtitle><span data-queue-count>{{ $count }}</span> <span data-queue-subtitle-rest>{{ \Illuminate\Support\Str::plural('student', $count) }} waiting · updated just now</span></p>
     </div>
 </div>
 
@@ -78,7 +78,7 @@
      occupies its layout slot from the first frame (the fade-up only moves
      transform/opacity), so its entrance never shifts the table mid-collapse. --}}
 @if (session('status'))
-    <div data-hp-flash class="mb-5 rounded-xl border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">
+    <div data-hp-flash class="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
         {{ session('status') }}
     </div>
 @endif
@@ -92,14 +92,14 @@
     <div data-queue-empty class="{{ $hasRows ? 'hidden' : '' }}">
         <div class="flex flex-col items-center justify-center py-12 text-center">
             <div class="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-hp-bg">
-                <svg class="h-6 w-6 text-hp-slate/30 dark:text-hp-slate/55" fill="none" viewBox="0 0 24 24"
+                <svg class="h-6 w-6 text-hp-slate/30" fill="none" viewBox="0 0 24 24"
                      stroke="currentColor" stroke-width="1.5">
                     <path stroke-linecap="round" stroke-linejoin="round"
                           d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                 </svg>
             </div>
             <p class="text-sm font-medium text-hp-slate">Queue is clear</p>
-            <p class="mt-0.5 text-xs text-hp-slate/50 dark:text-hp-slate/60">
+            <p class="mt-0.5 text-xs text-hp-slate/50">
                 Students appear here the moment they finish at the kiosk
             </p>
         </div>
@@ -114,12 +114,12 @@
         <table class="w-full text-left border-separate border-spacing-x-0 border-spacing-y-1.5">
             <thead>
                 <tr class="[&>th]:border-b [&>th]:border-hp-slate/15">
-                    <th class="pb-3 pl-4 pr-6 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">Student</th>
-                    <th class="pb-3 pr-6 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">College</th>
-                    <th class="pb-3 pr-6 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">Vitals Summary</th>
-                    <th class="pb-3 pr-6 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">Flags</th>
-                    <th class="pb-3 pr-6 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">Time</th>
-                    <th class="pb-3 pr-4 text-right text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">Action</th>
+                    <th class="pb-3 pl-4 pr-6 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Student</th>
+                    <th class="pb-3 pr-6 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">College</th>
+                    <th class="pb-3 pr-6 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Vitals Summary</th>
+                    <th class="pb-3 pr-6 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Flags</th>
+                    <th class="pb-3 pr-6 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Time</th>
+                    <th class="pb-3 pr-4 text-right text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Action</th>
                 </tr>
             </thead>
             <tbody data-queue-body>

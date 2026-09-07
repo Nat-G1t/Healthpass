@@ -52,7 +52,7 @@
                 x-transition:leave="ease-hp-in duration-hp-fast"
                 x-transition:leave-start="opacity-100"
                 x-transition:leave-end="opacity-0"
-                class="absolute inset-0 bg-hp-slate/50 dark:bg-black/60"
+                class="absolute inset-0 bg-hp-slate/50"
                 aria-hidden="true"
             ></div>
 

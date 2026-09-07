@@ -18,17 +18,12 @@
     <title>Register — HealthPass</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    @include('partials.theme-init')
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @include('partials.favicon')
 </head>
 <body class="flex min-h-full flex-col items-center bg-hp-bg p-6">
 
     <x-hp.splash />
-
-    <div class="fixed right-4 top-4 z-10">
-        <x-hp.theme-toggle />
-    </div>
 
     {{-- Logo (md size, no subtitle — matches prototype) --}}
     <div class="mb-[22px]">

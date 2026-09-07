@@ -58,14 +58,11 @@ const token = (name, alpha = 1) => {
 };
 
 /**
- * Theme-dependent chart colours (D-38). Chart.js bakes colours into its config
- * when the chart is constructed, so dark mode needs two things: read these
- * from the CSS tokens instead of hardcoding hex, and recompute + re-apply them
- * when the theme is toggled without a page reload.
+ * Chart colours, read from the --hp-* tokens rather than hardcoded, so the
+ * palette has one source (resources/css/app.css).
  *
  * `surface` is the hairline gap drawn between stacked bar segments and
- * doughnut slices — it must match the CARD behind the chart (it was a literal
- * #FFFFFF, which drew white scratches across the marks in dark mode).
+ * doughnut slices — it must match the CARD behind the chart.
  */
 const palette = () => ({
     ink:     token('--hp-slate'),
@@ -74,20 +71,7 @@ const palette = () => ({
     surface: token('--hp-white'),
 });
 
-let C = palette();
-
-// Charts that need re-colouring when the theme flips, each with a callback
-// that knows its own colour slots.
-const themed = [];
-const onThemeChange = (chart, retheme) => themed.push({ chart, retheme });
-
-window.addEventListener('hp:themechange', () => {
-    C = palette();
-    themed.forEach(({ chart, retheme }) => {
-        retheme(chart);
-        chart.update('none'); // 'none' = re-render without replaying the entrance animation
-    });
-});
+const C = palette();
 
 /** Parse the JSON payload the controller ships on a data attribute. */
 const chartData = (host) => JSON.parse(host.dataset.chart);
@@ -106,7 +90,7 @@ if (visitsHost) {
 
             ctx.save();
             ctx.font = "600 11px 'Poppins', sans-serif";
-            ctx.fillStyle = C.ink; // read at DRAW time, so it follows the theme
+            ctx.fillStyle = C.ink;
             ctx.textBaseline = 'middle';
 
             lastMeta.data.forEach((bar, i) => {
@@ -117,7 +101,7 @@ if (visitsHost) {
         },
     };
 
-    const visitsChart = new Chart(visitsHost.querySelector('canvas'), {
+    new Chart(visitsHost.querySelector('canvas'), {
         type: 'bar',
         data: chartData(visitsHost),
         options: {
@@ -149,11 +133,6 @@ if (visitsHost) {
         },
         plugins: [rowTotals],
     });
-
-    onThemeChange(visitsChart, (chart) => {
-        chart.options.datasets.bar.borderColor = C.surface;
-        chart.options.scales.y.ticks.color = C.ink;
-    });
 }
 
 // ── Visits per Month — two-series line (FR-ANL-11) ───────────────────────
@@ -169,7 +148,7 @@ if (trendHost) {
             const { ctx } = chart;
             ctx.save();
             ctx.font = "700 11px 'Poppins', sans-serif";
-            ctx.fillStyle = C.ink; // read at DRAW time, so it follows the theme
+            ctx.fillStyle = C.ink;
             ctx.textAlign = 'center';
 
             const placed = [];
@@ -192,7 +171,7 @@ if (trendHost) {
 
     const trendData = chartData(trendHost);
 
-    const trendChart = new Chart(trendHost.querySelector('canvas'), {
+    new Chart(trendHost.querySelector('canvas'), {
         type: 'line',
         data: {
             labels: trendData.labels,
@@ -229,13 +208,6 @@ if (trendHost) {
         },
         plugins: [latestPointLabels],
     });
-
-    onThemeChange(trendChart, (chart) => {
-        chart.options.scales.x.ticks.color = C.tick;
-        chart.options.scales.y.ticks.color = C.tick;
-        chart.options.scales.y.grid.color = C.grid;
-        chart.data.datasets.forEach((ds) => { ds.pointBorderColor = C.surface; });
-    });
 }
 
 // ── Students Screened by Sex — doughnut (FR-ANL-04) ──────────────────────
@@ -244,7 +216,7 @@ const donutHost = document.querySelector('[data-by-sex]');
 if (donutHost) {
     const donutData = chartData(donutHost);
 
-    const donutChart = new Chart(donutHost.querySelector('canvas'), {
+    new Chart(donutHost.querySelector('canvas'), {
         type: 'doughnut',
         data: {
             labels: donutData.labels,
@@ -267,9 +239,5 @@ if (donutHost) {
                 legend: { display: false },
             },
         },
-    });
-
-    onThemeChange(donutChart, (chart) => {
-        chart.data.datasets.forEach((ds) => { ds.borderColor = C.surface; });
     });
 }

@@ -22,12 +22,12 @@
 {{-- ── Page header ─────────────────────────────────────────────────────────── --}}
 <div class="mb-7">
     <h2 class="text-xl font-semibold text-hp-slate">My ID &amp; Profile</h2>
-    <p class="mt-0.5 text-sm text-hp-slate/50 dark:text-hp-slate/60">Your kiosk QR code and personal details</p>
+    <p class="mt-0.5 text-sm text-hp-slate/50">Your kiosk QR code and personal details</p>
 </div>
 
 {{-- Success flash (profile updated / ID linked / email confirmed) --}}
 @if (session('status'))
-    <div data-hp-flash class="mb-6 flex items-center gap-2 rounded-lg border border-green-200 dark:border-green-500/30 bg-green-50 dark:bg-green-500/10 px-4 py-3 text-sm text-green-800 dark:text-green-200">
+    <div data-hp-flash class="mb-6 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
         <svg class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
             <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
         </svg>
@@ -37,7 +37,7 @@
 
 {{-- Failure flash (email change failed — OTP expired / wrong / taken) --}}
 @if (session('error'))
-    <div data-hp-flash data-flash-sticky class="mb-6 flex items-center gap-2 rounded-lg border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+    <div data-hp-flash data-flash-sticky class="mb-6 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
         <svg class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4a2 2 0 00-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z"/>
         </svg>
@@ -63,7 +63,7 @@
                class="text-sm font-semibold text-hp-orange hover:underline">Enter code</a>
             <form method="POST" action="{{ route('student.id-profile.verify-email.cancel') }}">
                 @csrf
-                <button type="submit" class="text-sm text-hp-slate/55 dark:text-hp-slate/65 hover:text-hp-slate hover:underline">
+                <button type="submit" class="text-sm text-hp-slate/55 hover:text-hp-slate hover:underline">
                     Cancel
                 </button>
             </form>
@@ -95,8 +95,8 @@
                     {!! $qrSvg !!}
                 </div>
                 <p class="mt-4 text-sm font-semibold text-hp-slate">{{ $fullName }}</p>
-                <p class="font-mono text-xs text-hp-slate/45 dark:text-hp-slate/60">{{ $profile->student_number }}</p>
-                <p class="mt-3 text-xs leading-relaxed text-hp-slate/50 dark:text-hp-slate/60">
+                <p class="font-mono text-xs text-hp-slate/45">{{ $profile->student_number }}</p>
+                <p class="mt-3 text-xs leading-relaxed text-hp-slate/50">
                     Show this code at the clinic kiosk to start your vitals check-in.
                 </p>
             </div>
@@ -109,24 +109,24 @@
             <div id="qr-file-reader" class="hidden" aria-hidden="true"></div>
 
             <div x-data="qrLinkId('{{ $studentNumberDigits }}')" x-cloak>
-                <p class="mb-4 text-xs leading-relaxed text-hp-slate/55 dark:text-hp-slate/65">
+                <p class="mb-4 text-xs leading-relaxed text-hp-slate/55">
                     You skipped linking your student ID at registration. Scan it now to
                     enable kiosk check-in.
                 </p>
 
                 {{-- Server-side error (back() after a failed link POST) --}}
                 @error('id_number')
-                    <div class="mb-4 rounded-lg border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">
+                    <div class="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
                         {{ $message }}
                     </div>
                 @enderror
 
                 {{-- Client-side error (mismatch / unreadable QR) --}}
                 <div x-show="mode === 'error'"
-                     class="mb-4 rounded-lg border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">
+                     class="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
                     <p class="mb-1 font-medium" x-text="errorMsg"></p>
                     <button type="button" @click="reset()"
-                            class="font-semibold underline underline-offset-2 hover:text-red-900 hover:dark:text-red-200">
+                            class="font-semibold underline underline-offset-2 hover:text-red-900">
                         ← Try again
                     </button>
                 </div>
@@ -180,7 +180,7 @@
 
                 {{-- Matched: confirm and POST to the student link route --}}
                 <div x-show="mode === 'matched'">
-                    <div class="mb-3 flex items-center gap-3 rounded-xl border border-green-200 dark:border-green-500/30 bg-green-50 dark:bg-green-500/10 px-3 py-2">
+                    <div class="mb-3 flex items-center gap-3 rounded-xl border border-green-200 bg-green-50 px-3 py-2">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
                              fill="none" stroke="#16a34a" stroke-width="2.5"
                              stroke-linecap="round" stroke-linejoin="round" class="shrink-0">
@@ -188,8 +188,8 @@
                             <polyline points="9 12 11 14 15 10"/>
                         </svg>
                         <div>
-                            <p class="text-xs font-semibold text-green-800 dark:text-green-200">QR code matched</p>
-                            <p class="text-[11px] text-green-700 dark:text-green-300">IDNo: <span x-text="matchedId"></span></p>
+                            <p class="text-xs font-semibold text-green-800">QR code matched</p>
+                            <p class="text-[11px] text-green-700">IDNo: <span x-text="matchedId"></span></p>
                         </div>
                     </div>
 
@@ -214,26 +214,26 @@
 
                 {{-- Dev panel — local only (paste IDNo without a camera) --}}
                 @if (app()->isLocal())
-                    <div class="mt-4 rounded-lg border border-dashed border-slate-300 dark:border-hp-slate/25 bg-slate-50 dark:bg-hp-white px-3 py-2">
-                        <p class="mb-2 text-[11px] font-semibold text-slate-500 dark:text-hp-slate/60">Dev: paste IDNo (no camera)</p>
+                    <div class="mt-4 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-2">
+                        <p class="mb-2 text-[11px] font-semibold text-slate-500">Dev: paste IDNo (no camera)</p>
                         <div class="flex gap-2">
                             <input type="text" x-model="devInput"
                                    placeholder="e.g. {{ $profile->student_number }}"
                                    @keydown.enter.prevent="submitDev()"
-                                   class="flex-1 rounded-lg border border-slate-300 dark:border-hp-slate/25 px-2 py-1.5 text-xs text-hp-slate
-                                          placeholder-hp-slate/40 dark:placeholder-hp-slate/55
+                                   class="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-xs text-hp-slate
+                                          placeholder-hp-slate/40
                                           focus:border-hp-orange focus:outline-none focus:ring-2 focus:ring-hp-orange/30">
                             <button type="button" @click="submitDev()"
                                     class="rounded-lg bg-slate-600 px-3 py-1.5 text-xs font-semibold text-white
                                            transition-colors hover:bg-slate-700
-                                           focus:outline-none focus:ring-2 focus:ring-slate-400 focus:dark:ring-hp-slate/40/40">
+                                           focus:outline-none focus:ring-2 focus:ring-slate-400">
                                 Submit
                             </button>
                         </div>
                     </div>
                 @endif
 
-                <p class="mt-4 border-t border-hp-slate/10 pt-3 text-[11px] leading-relaxed text-hp-slate/45 dark:text-hp-slate/60">
+                <p class="mt-4 border-t border-hp-slate/10 pt-3 text-[11px] leading-relaxed text-hp-slate/45">
                     You can keep using HealthPass without linking — you'll just log in at the
                     kiosk by email instead. Skip again and link any time from this page.
                 </p>
@@ -252,38 +252,38 @@
 
         <dl class="grid grid-cols-1 gap-x-8 gap-y-5 sm:grid-cols-2">
             <div>
-                <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">Full Name</dt>
+                <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Full Name</dt>
                 <dd class="mt-1 text-sm font-medium text-hp-slate">{{ $fullName }}</dd>
             </div>
             <div>
-                <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">Email</dt>
+                <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Email</dt>
                 <dd class="mt-1 text-sm font-medium text-hp-slate break-all">{{ $profile->user->email }}</dd>
             </div>
 
             {{-- Locked fields — display only --}}
             <div>
-                <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">
-                    Student Number <span class="font-normal normal-case text-hp-slate/30 dark:text-hp-slate/55">· locked</span>
+                <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+                    Student Number <span class="font-normal normal-case text-hp-slate/30">· locked</span>
                 </dt>
                 <dd class="mt-1 font-mono text-sm font-medium text-hp-slate">{{ $profile->student_number }}</dd>
             </div>
             <div>
-                <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">College</dt>
+                <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">College</dt>
                 <dd class="mt-1 text-sm font-medium text-hp-slate">{{ $profile->college->name }}</dd>
             </div>
             <div>
-                <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">
-                    Sex <span class="font-normal normal-case text-hp-slate/30 dark:text-hp-slate/55">· locked</span>
+                <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+                    Sex <span class="font-normal normal-case text-hp-slate/30">· locked</span>
                 </dt>
                 <dd class="mt-1 text-sm font-medium text-hp-slate">{{ $sexLabel }}</dd>
             </div>
 
             <div>
-                <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">Course &amp; Year</dt>
+                <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Course &amp; Year</dt>
                 <dd class="mt-1 text-sm font-medium text-hp-slate">{{ $profile->course }} · {{ $ordinal }}</dd>
             </div>
             <div>
-                <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">Date of Birth</dt>
+                <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Date of Birth</dt>
                 <dd class="mt-1 flex items-center gap-2 text-sm font-medium text-hp-slate">
                     {{ $profile->date_of_birth?->format('F j, Y') }}
                     @if (! is_null($age))
@@ -294,15 +294,15 @@
                 </dd>
             </div>
             <div>
-                <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">Place of Birth</dt>
+                <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Place of Birth</dt>
                 <dd class="mt-1 text-sm font-medium text-hp-slate">{{ $profile->place_of_birth }}</dd>
             </div>
             <div>
-                <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">Civil Status</dt>
+                <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Civil Status</dt>
                 <dd class="mt-1 text-sm font-medium text-hp-slate">{{ $profile->civil_status }}</dd>
             </div>
             <div class="sm:col-span-2">
-                <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">Address</dt>
+                <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Address</dt>
                 <dd class="mt-1 text-sm font-medium text-hp-slate">{{ $profile->address }}</dd>
             </div>
         </dl>
@@ -321,13 +321,13 @@
                         border-b border-hp-slate/10 bg-hp-white px-6 py-4">
                 <div>
                     <h3 class="text-sm font-semibold text-hp-slate">Edit Profile</h3>
-                    <p class="mt-0.5 text-xs text-hp-slate/50 dark:text-hp-slate/60">
+                    <p class="mt-0.5 text-xs text-hp-slate/50">
                         Student number and sex can't be changed here.
                     </p>
                 </div>
                 <button type="button" @click="editOpen = false"
                         class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full
-                               text-hp-slate/40 dark:text-hp-slate/55 transition-colors hover:bg-hp-slate/10 hover:text-hp-slate
+                               text-hp-slate/40 transition-colors hover:bg-hp-slate/10 hover:text-hp-slate
                                focus:outline-none">
                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>

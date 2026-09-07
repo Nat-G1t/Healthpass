@@ -11,37 +11,37 @@
     <div class="hp-stagger mb-6 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
 
         <x-hp.card class="border-l-4 border-l-hp-orange">
-            <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">
+            <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
                 Encoded Today
             </p>
             <p class="mt-3 text-3xl font-bold leading-none text-hp-orange" data-hp-countup>{{ $stats['encodedToday'] }}</p>
-            <p class="mt-2 text-xs text-hp-slate/50 dark:text-hp-slate/60">{{ today()->format('M j, Y') }}</p>
+            <p class="mt-2 text-xs text-hp-slate/50">{{ today()->format('M j, Y') }}</p>
         </x-hp.card>
 
         <x-hp.card>
-            <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">
+            <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
                 Encoded This Month
             </p>
             <p class="mt-3 text-3xl font-bold leading-none text-hp-slate" data-hp-countup>{{ $stats['encodedMonth'] }}</p>
-            <p class="mt-2 text-xs text-hp-slate/50 dark:text-hp-slate/60">{{ now()->format('F Y') }}</p>
+            <p class="mt-2 text-xs text-hp-slate/50">{{ now()->format('F Y') }}</p>
         </x-hp.card>
 
         <x-hp.card>
-            <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">
+            <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
                 Awaiting Encode
             </p>
             <p class="mt-3 text-3xl font-bold leading-none text-hp-slate" data-hp-countup>{{ $stats['awaitingEncode'] }}</p>
-            <p class="mt-2 text-xs text-hp-slate/50 dark:text-hp-slate/60">
+            <p class="mt-2 text-xs text-hp-slate/50">
                 <a href="{{ route('nurse.queue') }}" class="text-hp-orange hover:underline">in the Live Queue</a>
             </p>
         </x-hp.card>
 
         <x-hp.card>
-            <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">
+            <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
                 Flagged Vitals This Month
             </p>
             <p class="mt-3 text-3xl font-bold leading-none text-hp-slate" data-hp-countup>{{ $stats['flaggedMonth'] }}</p>
-            <p class="mt-2 text-xs text-hp-slate/50 dark:text-hp-slate/60">vitals over a flag threshold</p>
+            <p class="mt-2 text-xs text-hp-slate/50">vitals over a flag threshold</p>
         </x-hp.card>
 
     </div>
@@ -52,7 +52,7 @@
         <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div>
                 <h3 class="text-sm font-semibold text-hp-slate">Encode History</h3>
-                <p class="mt-1 text-xs text-hp-slate/50 dark:text-hp-slate/60">
+                <p class="mt-1 text-xs text-hp-slate/50">
                     Every encoded result in the clinic, newest first — including your colleagues&rsquo;.
                 </p>
             </div>
@@ -66,7 +66,7 @@
               class="mb-5 flex flex-wrap items-end gap-3">
 
             <div class="flex flex-col gap-1">
-                <label for="history-month" class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">Month</label>
+                <label for="history-month" class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Month</label>
                 <select id="history-month" name="month"
                         class="rounded-lg border-hp-slate/20 bg-hp-white py-1.5 pl-3 pr-8 text-xs font-medium text-hp-slate focus:border-hp-orange focus:ring-hp-orange">
                     <option value="">All months</option>
@@ -79,7 +79,7 @@
             </div>
 
             <div class="flex flex-col gap-1">
-                <label for="history-result" class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">Result</label>
+                <label for="history-result" class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Result</label>
                 <select id="history-result" name="result"
                         class="rounded-lg border-hp-slate/20 bg-hp-white py-1.5 pl-3 pr-8 text-xs font-medium text-hp-slate focus:border-hp-orange focus:ring-hp-orange">
                     <option value="">All results</option>
@@ -90,17 +90,17 @@
             </div>
 
             <div class="flex min-w-[200px] flex-1 flex-col gap-1">
-                <label for="history-search" class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">Search</label>
+                <label for="history-search" class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Search</label>
                 <input id="history-search" name="q" type="search" value="{{ $search }}"
                        placeholder="Student name or reference no."
-                       class="w-full rounded-lg border-hp-slate/20 bg-hp-white py-1.5 px-3 text-xs text-hp-slate placeholder-hp-slate/40 dark:placeholder-hp-slate/55 focus:border-hp-orange focus:ring-hp-orange">
+                       class="w-full rounded-lg border-hp-slate/20 bg-hp-white py-1.5 px-3 text-xs text-hp-slate placeholder-hp-slate/40 focus:border-hp-orange focus:ring-hp-orange">
             </div>
 
             <x-hp.button type="submit" variant="soft" size="sm">Apply</x-hp.button>
 
             @if ($selectedMonth !== null || $selectedResult !== null || $search !== '')
                 <a href="{{ route('nurse.dashboard') }}"
-                   class="px-1 py-1.5 text-xs font-medium text-hp-slate/50 dark:text-hp-slate/60 hover:text-hp-slate">
+                   class="px-1 py-1.5 text-xs font-medium text-hp-slate/50 hover:text-hp-slate">
                     Clear
                 </a>
             @endif
@@ -110,14 +110,14 @@
             {{-- Empty state, in the Live Queue's voice. --}}
             <div class="flex flex-col items-center justify-center py-12 text-center">
                 <div class="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-hp-bg">
-                    <svg class="h-6 w-6 text-hp-slate/30 dark:text-hp-slate/55" fill="none" viewBox="0 0 24 24"
+                    <svg class="h-6 w-6 text-hp-slate/30" fill="none" viewBox="0 0 24 24"
                          stroke="currentColor" stroke-width="1.5">
                         <path stroke-linecap="round" stroke-linejoin="round"
                               d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                     </svg>
                 </div>
                 <p class="text-sm font-medium text-hp-slate">No encoded results yet</p>
-                <p class="mt-0.5 text-xs text-hp-slate/50 dark:text-hp-slate/60">
+                <p class="mt-0.5 text-xs text-hp-slate/50">
                     @if ($selectedMonth !== null || $selectedResult !== null || $search !== '')
                         Nothing matches these filters — try clearing them.
                     @else
@@ -170,7 +170,7 @@
                                 @if ($record->printed_at)
                                     <span class="text-xs" title="Last printed {{ $record->printed_at->format('M j, Y g:i A') }}">Yes</span>
                                 @else
-                                    <span class="text-xs text-hp-slate/50 dark:text-hp-slate/60">No</span>
+                                    <span class="text-xs text-hp-slate/50">No</span>
                                 @endif
                             </x-hp.table-cell>
 
@@ -208,19 +208,19 @@
                  the app; the paginator carries the active filters in its URLs. --}}
             @if ($records->hasPages())
                 <div class="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-hp-slate/10 pt-4">
-                    <p class="text-xs text-hp-slate/50 dark:text-hp-slate/60">
+                    <p class="text-xs text-hp-slate/50">
                         Showing {{ $records->firstItem() }}&ndash;{{ $records->lastItem() }} of {{ $records->total() }}
                     </p>
 
                     <div class="flex items-center gap-2">
                         @if ($records->onFirstPage())
-                            <span class="rounded-lg border border-hp-slate/15 px-3 py-1.5 text-xs font-medium text-hp-slate/30 dark:text-hp-slate/40">Previous</span>
+                            <span class="rounded-lg border border-hp-slate/15 px-3 py-1.5 text-xs font-medium text-hp-slate/30">Previous</span>
                         @else
                             <a href="{{ $records->previousPageUrl() }}"
                                class="rounded-lg border border-hp-slate/25 px-3 py-1.5 text-xs font-medium text-hp-slate hover:bg-hp-slate/8">Previous</a>
                         @endif
 
-                        <span class="px-1 text-xs text-hp-slate/50 dark:text-hp-slate/60">
+                        <span class="px-1 text-xs text-hp-slate/50">
                             Page {{ $records->currentPage() }} of {{ $records->lastPage() }}
                         </span>
 
@@ -228,7 +228,7 @@
                             <a href="{{ $records->nextPageUrl() }}"
                                class="rounded-lg border border-hp-slate/25 px-3 py-1.5 text-xs font-medium text-hp-slate hover:bg-hp-slate/8">Next</a>
                         @else
-                            <span class="rounded-lg border border-hp-slate/15 px-3 py-1.5 text-xs font-medium text-hp-slate/30 dark:text-hp-slate/40">Next</span>
+                            <span class="rounded-lg border border-hp-slate/15 px-3 py-1.5 text-xs font-medium text-hp-slate/30">Next</span>
                         @endif
                     </div>
                 </div>

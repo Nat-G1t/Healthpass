@@ -54,18 +54,7 @@
             line-height: 1;
         }
         #hp-splash .hp-splash-health { color: #4B5563; }  /* --hp-slate */
-        #hp-splash .hp-splash-pass   { color: #FF8C2A; }  /* --hp-orange, both themes */
-
-        /* Dark theme (D-38). These values are INLINED rather than read from the
-           --hp-* vars for the same reason as everything else in this block: the
-           splash must paint correctly before app.css has loaded. `.dark` is
-           already on <html> by now — partials/theme-init.blade.php runs in
-           <head>, above this element — so without these two rules a dark user
-           would get a full-screen cream flash on every slow page load.
-           The kiosk includes this splash but never includes theme-init, so it
-           can never match `html.dark` and stays light. */
-        html.dark #hp-splash                     { background: #0F1115; }
-        html.dark #hp-splash .hp-splash-health   { color: #F3F4F6; }
+        #hp-splash .hp-splash-pass   { color: #FF8C2A; }  /* --hp-orange */
         #hp-splash .hp-splash-dot {
             width: 8px;
             height: 8px;

@@ -78,7 +78,7 @@
         </label>
 
         @error('consent')
-            <p class="mb-3 text-xs text-red-600 dark:text-red-400">{{ $message }}</p>
+            <p class="mb-3 text-xs text-red-600">{{ $message }}</p>
         @enderror
 
         {{-- Actions — side by side like desktop; scales down to fit narrow phones,

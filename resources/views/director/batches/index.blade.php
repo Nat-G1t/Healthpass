@@ -24,7 +24,7 @@
     {{-- ── Page header ─────────────────────────────────────────────────── --}}
     <div class="mb-6">
         <h2 class="text-xl font-semibold text-hp-slate">Batch Approvals</h2>
-        <p class="mt-0.5 text-sm text-hp-slate/50 dark:text-hp-slate/60">
+        <p class="mt-0.5 text-sm text-hp-slate/50">
             Batch requests from all colleges, awaiting your review.
         </p>
     </div>
@@ -36,7 +36,7 @@
         </div>
     @endif
     @if (session('error'))
-        <div data-hp-flash data-flash-sticky class="mb-6 rounded-lg border border-red-300 dark:border-red-500/40 bg-red-50 dark:bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+        <div data-hp-flash data-flash-sticky class="mb-6 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">
             {{ session('error') }}
         </div>
     @endif
@@ -44,7 +44,7 @@
     {{-- Reject validation failure (D-36). Shown at page level because the
          redirect closes the modal the reason was typed into. --}}
     @error('rejection_reason')
-        <div class="mb-6 rounded-lg border border-red-300 dark:border-red-500/40 bg-red-50 dark:bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+        <div class="mb-6 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">
             {{ $message }}
         </div>
     @enderror
@@ -54,14 +54,14 @@
         @if ($batchRequests->isEmpty())
             <div class="flex flex-col items-center py-10 text-center">
                 <div class="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-hp-bg">
-                    <svg class="h-6 w-6 text-hp-slate/30 dark:text-hp-slate/55" fill="none" viewBox="0 0 24 24"
+                    <svg class="h-6 w-6 text-hp-slate/30" fill="none" viewBox="0 0 24 24"
                          stroke="currentColor" stroke-width="1.5">
                         <path stroke-linecap="round" stroke-linejoin="round"
                               d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
                 </div>
                 <p class="text-sm font-medium text-hp-slate">No batch requests yet</p>
-                <p class="mt-0.5 text-xs text-hp-slate/50 dark:text-hp-slate/60">
+                <p class="mt-0.5 text-xs text-hp-slate/50">
                     College admins' submissions will appear here for review.
                 </p>
             </div>
@@ -69,7 +69,7 @@
             <div class="overflow-x-auto">
                 <table class="w-full text-left text-sm">
                     <thead>
-                        <tr class="border-b border-hp-slate/10 text-[11px] uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">
+                        <tr class="border-b border-hp-slate/10 text-[11px] uppercase tracking-widest text-hp-slate/40">
                             <th class="py-2.5 pr-4 font-semibold">Batch ID</th>
                             <th class="py-2.5 pr-4 font-semibold">College</th>
                             <th class="py-2.5 pr-4 font-semibold">Reason</th>
@@ -155,10 +155,9 @@
                                                     'url' => route('director.batches.reject', $batch),
                                                 ]) }})"
                                                 class="inline-flex items-center justify-center gap-2 rounded-full
-                                                       border-[1.5px] border-red-300 dark:border-red-500/40 px-4 py-1.5
-                                                       text-xs font-semibold text-red-500 dark:text-red-400
-                                                       transition-colors duration-hp-fast hover:bg-red-50
-                                                       hover:dark:bg-red-500/10 focus-visible:outline-none
+                                                       border-[1.5px] border-red-300 px-4 py-1.5
+                                                       text-xs font-semibold text-red-500
+                                                       transition-colors duration-hp-fast hover:bg-red-50 focus-visible:outline-none
                                                        focus-visible:ring-2 focus-visible:ring-red-500
                                                        focus-visible:ring-offset-1">
                                                 Reject
@@ -166,7 +165,7 @@
                                         </div>
 
                                         @if (! $canApprove)
-                                            <p class="mt-2 max-w-xs text-xs text-hp-slate/60 dark:text-hp-slate/65">
+                                            <p class="mt-2 max-w-xs text-xs text-hp-slate/60">
                                                 @if ($isStale)
                                                     The requested date has already passed — reject it with a reason
                                                     asking the college to resubmit for a new date.
@@ -222,7 +221,7 @@
                 x-transition:leave="ease-hp-in duration-hp-fast"
                 x-transition:leave-start="opacity-100"
                 x-transition:leave-end="opacity-0"
-                class="absolute inset-0 bg-hp-slate/50 dark:bg-black/60"
+                class="absolute inset-0 bg-hp-slate/50"
                 aria-hidden="true"
             ></div>
 
@@ -251,14 +250,14 @@
                      for the Director to change — disliking the date means
                      rejecting with a reason. --}}
                 <div class="mt-5 rounded-lg bg-hp-bg px-4 py-3">
-                    <p class="text-xs font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">
+                    <p class="text-xs font-semibold uppercase tracking-widest text-hp-slate/40">
                         Requested clinic date
                     </p>
                     <p class="mt-1 text-base font-semibold text-hp-slate" x-text="requestedLabel"></p>
 
                     {{-- D-37: the hour span, read-only for the same reason the
                          date is — the Director confirms it or rejects. --}}
-                    <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">
+                    <p class="mt-3 text-xs font-semibold uppercase tracking-widest text-hp-slate/40">
                         Clinic hours
                     </p>
                     <p class="mt-1 text-base font-semibold text-hp-slate" x-text="batch?.spanLabel"></p>
@@ -277,7 +276,7 @@
                     {{-- Day load, for context. Informational only — the rule
                          that decides anything is the per-hour block below. --}}
                     <p x-show="booked !== null" x-cloak
-                       class="mt-3 text-xs text-hp-slate/50 dark:text-hp-slate/60">
+                       class="mt-3 text-xs text-hp-slate/50">
                         This date currently holds <strong x-text="booked"></strong> of
                         <strong x-text="capacity"></strong> appointments.
                     </p>
@@ -289,7 +288,7 @@
                          and confirm-only approval (D-36) leaves no way to move
                          the batch — so the only outcome is reject-and-resubmit. --}}
                     <p x-show="fullSlots.length > 0" x-cloak
-                       class="mt-3 rounded-lg border border-red-300 dark:border-red-500/40 bg-red-50 dark:bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+                       class="mt-3 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
                         &#9888; The <strong x-text="fullSlots.join(' and the ')"></strong>
                         slot in this batch's span is already fully booked, so this batch
                         cannot be approved. Reject it with a reason so the college can
@@ -298,7 +297,7 @@
 
                     {{-- BR-23: requested for today, but those hours have ended. --}}
                     <p x-show="elapsedSlots.length > 0" x-cloak
-                       class="mt-3 rounded-lg border border-red-300 dark:border-red-500/40 bg-red-50 dark:bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+                       class="mt-3 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
                         &#9888; The <strong x-text="elapsedSlots.join(' and the ')"></strong>
                         slot in this batch's span has already passed today, so this batch
                         cannot be approved. Reject it with a reason so the college can
@@ -337,7 +336,7 @@
                 x-transition:leave="ease-hp-in duration-hp-fast"
                 x-transition:leave-start="opacity-100"
                 x-transition:leave-end="opacity-0"
-                class="absolute inset-0 bg-hp-slate/50 dark:bg-black/60"
+                class="absolute inset-0 bg-hp-slate/50"
                 aria-hidden="true"
             ></div>
 
@@ -363,7 +362,7 @@
                 <form method="POST" :action="rejectTarget?.url" @submit="rejecting = true" class="mt-5">
                     @csrf
 
-                    <label for="rejection-reason" class="block text-xs font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">
+                    <label for="rejection-reason" class="block text-xs font-semibold uppercase tracking-widest text-hp-slate/40">
                         Reason for rejection
                     </label>
                     <textarea
@@ -380,7 +379,7 @@
 
                     {{-- Live counter. Convenience only — RejectBatchRequest is
                          the real gate (a client can post anything). --}}
-                    <p class="mt-1.5 text-xs" :class="reasonIsValid ? 'text-hp-slate/50 dark:text-hp-slate/60' : 'text-red-500 dark:text-red-400'">
+                    <p class="mt-1.5 text-xs" :class="reasonIsValid ? 'text-hp-slate/50' : 'text-red-500'">
                         <span x-text="reason.trim().length"></span>/{{ $reasonMax }}
                         <span x-show="! reasonIsValid" x-cloak>
                             — at least {{ $reasonMin }} characters

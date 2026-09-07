@@ -17,12 +17,6 @@ export default {
         hoverOnlyWhenSupported: true,
     },
 
-    // Dark mode is opt-in by CLASS, not by the OS media query: the user's
-    // manual choice has to be able to override `prefers-color-scheme`.
-    // `partials/theme-init.blade.php` puts `.dark` on <html> before first
-    // paint; `dark:` utilities key off that class. (D-38)
-    darkMode: 'class',
-
     theme: {
         extend: {
             fontFamily: {
@@ -32,9 +26,7 @@ export default {
             // `<alpha-value>` is the placeholder Tailwind substitutes when you
             // write an opacity modifier, so `text-hp-slate/50` compiles to
             // `rgb(var(--hp-slate) / 0.5)`. This is why app.css stores the
-            // tokens as bare "R G B" triplets instead of hex — and it is what
-            // makes a single `.dark` block re-theme every existing hp-*
-            // utility without editing the views. (D-38)
+            // tokens as bare "R G B" triplets instead of hex.
             colors: {
                 'hp-white':  'rgb(var(--hp-white)  / <alpha-value>)',
                 'hp-bg':     'rgb(var(--hp-bg)     / <alpha-value>)',

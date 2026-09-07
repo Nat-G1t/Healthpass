@@ -10,7 +10,7 @@
 <div class="mb-7 flex items-start justify-between">
     <div>
         <h2 class="text-xl font-semibold text-hp-slate">Good {{ $greeting }}, {{ $firstName }}!</h2>
-        <p class="mt-0.5 text-sm text-hp-slate/50 dark:text-hp-slate/60">{{ now()->format('l, F j, Y') }}</p>
+        <p class="mt-0.5 text-sm text-hp-slate/50">{{ now()->format('l, F j, Y') }}</p>
     </div>
 </div>
 
@@ -19,7 +19,7 @@
 
     {{-- Card 1: Clearance Status --}}
     <x-hp.card class="flex flex-col">
-        <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">
+        <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
             Clearance Status
         </p>
 
@@ -28,7 +28,7 @@
                 <x-hp.badge :variant="$latestClearance->result === 'Fit' ? 'fit' : 'unfit'">
                     {{ $latestClearance->result }}
                 </x-hp.badge>
-                <p class="mt-2 text-xs text-hp-slate/50 dark:text-hp-slate/60">
+                <p class="mt-2 text-xs text-hp-slate/50">
                     Last updated
                     {{ ($latestClearance->encoded_at ?? $latestClearance->created_at)->format('M j, Y') }}
                 </p>
@@ -36,14 +36,14 @@
         @else
             <div class="mt-4 flex-1 flex flex-col items-center py-4 text-center">
                 <div class="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-hp-bg">
-                    <svg class="h-5 w-5 text-hp-slate/30 dark:text-hp-slate/55" fill="none" viewBox="0 0 24 24"
+                    <svg class="h-5 w-5 text-hp-slate/30" fill="none" viewBox="0 0 24 24"
                          stroke="currentColor" stroke-width="1.5">
                         <path stroke-linecap="round" stroke-linejoin="round"
                               d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
                 </div>
                 <p class="text-sm font-medium text-hp-slate">No clearance yet</p>
-                <p class="mt-0.5 text-xs text-hp-slate/50 dark:text-hp-slate/60">Book an appointment to get started</p>
+                <p class="mt-0.5 text-xs text-hp-slate/50">Book an appointment to get started</p>
             </div>
         @endif
 
@@ -60,7 +60,7 @@
     {{-- Card 2: Next Appointment — wrapped in Alpine for the cancel confirm modal. --}}
     <div x-data="{ cancelModal: false }">
     <x-hp.card class="h-full flex flex-col">
-        <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">
+        <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
             Next Appointment
         </p>
 
@@ -86,7 +86,7 @@
                          all about where it came from. --}}
                     <x-hp.badge variant="neutral">{{ $nextAppointment->scheduledByLabel() }}</x-hp.badge>
                 </div>
-                <p class="mt-2 flex items-center gap-1 text-xs text-hp-slate/50 dark:text-hp-slate/60">
+                <p class="mt-2 flex items-center gap-1 text-xs text-hp-slate/50">
                     <svg class="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24"
                          stroke="currentColor" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round"
@@ -94,7 +94,7 @@
                     </svg>
                     {{ $clinicHoursLabel }}
                 </p>
-                <p class="mt-1 text-xs text-hp-slate/40 dark:text-hp-slate/55">{{ $nextAppointment->reference_no }}</p>
+                <p class="mt-1 text-xs text-hp-slate/40">{{ $nextAppointment->reference_no }}</p>
             </div>
 
             {{-- D-39: batch-booked appointments show guidance instead of a button —
@@ -106,7 +106,7 @@
                     </x-hp.button>
                 </div>
             @elseif ($nextAppointment->source === 'batch' && $nextAppointment->scheduled_date->gt(today()))
-                <p class="mt-5 text-xs leading-relaxed text-hp-slate/50 dark:text-hp-slate/60">
+                <p class="mt-5 text-xs leading-relaxed text-hp-slate/50">
                     Booked by your college. Contact your college administrator if you
                     need this cancelled.
                 </p>
@@ -114,14 +114,14 @@
         @else
             <div class="mt-4 flex-1 flex flex-col items-center py-4 text-center">
                 <div class="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-hp-bg">
-                    <svg class="h-5 w-5 text-hp-slate/30 dark:text-hp-slate/55" fill="none" viewBox="0 0 24 24"
+                    <svg class="h-5 w-5 text-hp-slate/30" fill="none" viewBox="0 0 24 24"
                          stroke="currentColor" stroke-width="1.5">
                         <path stroke-linecap="round" stroke-linejoin="round"
                               d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                     </svg>
                 </div>
                 <p class="text-sm font-medium text-hp-slate">No upcoming appointment</p>
-                <p class="mt-0.5 text-xs text-hp-slate/50 dark:text-hp-slate/60">Your schedule is clear</p>
+                <p class="mt-0.5 text-xs text-hp-slate/50">Your schedule is clear</p>
             </div>
             <div class="mt-5">
                 <a href="{{ route('student.appointments') }}"
@@ -170,9 +170,8 @@
                         aria-label="Close"
                         class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full
                                bg-red-50 transition-colors hover:bg-red-100 focus-visible:outline-none
-                               focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-1
-                               dark:bg-red-500/10 dark:hover:bg-red-500/20">
-                    <svg class="h-4 w-4 text-red-500 dark:text-red-400" fill="none" viewBox="0 0 24 24"
+                               focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-1">
+                    <svg class="h-4 w-4 text-red-500" fill="none" viewBox="0 0 24 24"
                          stroke="currentColor" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round"
                               d="M6 18L18 6M6 6l12 12"/>
@@ -222,13 +221,13 @@
 
     {{-- Card 3: Past Clearances --}}
     <x-hp.card class="flex flex-col">
-        <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">
+        <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
             Past Clearances
         </p>
 
         <div class="mt-4 flex flex-1 flex-col items-center py-4 text-center">
             <p class="text-5xl font-bold text-hp-orange leading-none">{{ $pastClearancesCount }}</p>
-            <p class="mt-2 text-sm text-hp-slate/50 dark:text-hp-slate/60">
+            <p class="mt-2 text-sm text-hp-slate/50">
                 {{ $pastClearancesCount === 1 ? 'clearance' : 'clearances' }} on record
             </p>
         </div>
@@ -256,14 +255,14 @@
     @if ($recentActivity->isEmpty())
         <div class="flex flex-col items-center justify-center py-10 text-center">
             <div class="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-hp-bg">
-                <svg class="h-6 w-6 text-hp-slate/30 dark:text-hp-slate/55" fill="none" viewBox="0 0 24 24"
+                <svg class="h-6 w-6 text-hp-slate/30" fill="none" viewBox="0 0 24 24"
                      stroke="currentColor" stroke-width="1.5">
                     <path stroke-linecap="round" stroke-linejoin="round"
                           d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                 </svg>
             </div>
             <p class="text-sm font-medium text-hp-slate">No activity yet</p>
-            <p class="mt-0.5 text-xs text-hp-slate/50 dark:text-hp-slate/60">
+            <p class="mt-0.5 text-xs text-hp-slate/50">
                 Your recent bookings and visits will appear here
             </p>
         </div>
@@ -283,13 +282,13 @@
                                           d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                                 </svg>
                             @elseif ($event['icon'] === 'x')
-                                <svg class="h-3.5 w-3.5 text-hp-slate/40 dark:text-hp-slate/55" fill="none"
+                                <svg class="h-3.5 w-3.5 text-hp-slate/40" fill="none"
                                      viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                     <path stroke-linecap="round" stroke-linejoin="round"
                                           d="M6 18L18 6M6 6l12 12"/>
                                 </svg>
                             @elseif ($event['icon'] === 'checkin')
-                                <svg class="h-3.5 w-3.5 text-hp-slate/40 dark:text-hp-slate/55" fill="none"
+                                <svg class="h-3.5 w-3.5 text-hp-slate/40" fill="none"
                                      viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                     <path stroke-linecap="round" stroke-linejoin="round"
                                           d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/>
@@ -301,7 +300,7 @@
                                           d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                                 </svg>
                             @else {{-- registered --}}
-                                <svg class="h-3.5 w-3.5 text-hp-slate/40 dark:text-hp-slate/55" fill="none"
+                                <svg class="h-3.5 w-3.5 text-hp-slate/40" fill="none"
                                      viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                     <path stroke-linecap="round" stroke-linejoin="round"
                                           d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
@@ -319,8 +318,8 @@
                         <p class="text-sm font-medium text-hp-slate leading-snug">
                             {{ $event['label'] }}
                         </p>
-                        <p class="mt-0.5 text-xs text-hp-slate/50 dark:text-hp-slate/60">{{ $event['detail'] }}</p>
-                        <p class="mt-0.5 text-[11px] text-hp-slate/40 dark:text-hp-slate/55">
+                        <p class="mt-0.5 text-xs text-hp-slate/50">{{ $event['detail'] }}</p>
+                        <p class="mt-0.5 text-[11px] text-hp-slate/40">
                             {{ \Carbon\Carbon::parse($event['at'])->format('M j, Y · g:i A') }}
                         </p>
                     </div>

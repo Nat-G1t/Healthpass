@@ -12,7 +12,7 @@
     'class' => 'flex items-baseline justify-between gap-4 py-1 md:table-cell md:py-3 md:pr-4 md:last:pr-0',
 ]) }}>
     @if ($label !== '')
-        <span class="shrink-0 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55 md:hidden">
+        <span class="shrink-0 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 md:hidden">
             {{ $label }}
         </span>
     @endif

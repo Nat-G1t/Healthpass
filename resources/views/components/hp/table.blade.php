@@ -29,7 +29,7 @@
 
     @if (! empty($headers))
         <thead class="hidden md:table-header-group">
-            <tr class="border-b border-hp-slate/10 text-[11px] uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">
+            <tr class="border-b border-hp-slate/10 text-[11px] uppercase tracking-widest text-hp-slate/40">
                 @foreach ($headers as $header)
                     <th class="py-2.5 pr-4 font-semibold last:pr-0">{{ $header }}</th>
                 @endforeach

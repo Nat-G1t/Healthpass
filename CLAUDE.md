@@ -148,23 +148,10 @@ npm run dev                       # terminal 2
 
 - Light palette: white `#FFFFFF`, off-white `#F6F2ED`, peach `#FFCAA0`,
   orange `#FF8C2A` (primary), slate `#4B5563` (text)
-- **Dark palette (D-38)** — same token *names*, re-pointed in the
-  `.dark` block of `resources/css/app.css`:
-  surface `#1A1D24`, background `#0F1115`, peach `#3B2A17`,
-  orange `#FF8C2A` (unchanged), slate/text `#F3F4F6`.
-  Peach is a **dark amber chip** in dark, not a light peach — the app
-  always pairs `bg-hp-peach` with `text-hp-orange`, and orange on a light
-  peach is 1.55:1. Orange on the dark card is 7.3:1, so brand orange is
-  safe for small text in dark; do **not** add a "lighter orange".
 - **Colour tokens are `R G B` channel triplets, not hex** — that is what
   lets Tailwind derive `text-hp-slate/50` etc. In plain CSS you must write
   `rgb(var(--hp-bg))`; a bare `var(--hp-bg)` is not a valid colour and
   renders transparent. (Motion tokens are normal values — `var()` is fine.)
-- **Dark mode is web-app only. The kiosk and every print view are
-  excluded and stay permanently light.** `resources/views/kiosk/**` must
-  never include `partials/theme-init` and gets no toggle; print output is
-  forced light by a `@media print` block in `app.css`. Don't "finish the
-  job" by theming them.
 - Font: Poppins. Kiosk viewport: **1080×1920px portrait** (15.6″ panel,
   D-26; the original 800×480 prototype canvas is superseded — layouts
   restack vertically, don't copy its side-by-side compositions).
@@ -233,6 +220,8 @@ schema change explicitly.
 ## Never do
 
 - Re-introduce AI/predictive features in code, comments, or docs
+- Re-introduce dark mode, a theme toggle or any `dark:` utility — the app
+  is light-only and the decision that added it was struck from the PRD
 - Use `localhost` in URLs (use `127.0.0.1`; the Pi deployment is the
   only localhost exception, and it's handled by config)
 - Show clearance outcomes on the kiosk UI

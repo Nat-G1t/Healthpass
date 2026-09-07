@@ -15,27 +15,21 @@
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
-        @include('partials.theme-init')
-
         <!-- Scripts -->
         @vite(['resources/css/app.css', 'resources/js/app.js'])
         @include('partials.favicon')
     </head>
-    <body class="font-sans text-gray-900 dark:text-hp-slate antialiased">
+    <body class="font-sans text-gray-900 antialiased">
         <x-hp.splash />
 
-        <div class="fixed right-4 top-4 z-10">
-            <x-hp.theme-toggle />
-        </div>
-
-        <div class="min-h-screen flex flex-col sm:justify-center items-center pt-6 sm:pt-0 bg-gray-100 dark:bg-hp-bg">
+        <div class="min-h-screen flex flex-col sm:justify-center items-center pt-6 sm:pt-0 bg-gray-100">
             <div>
                 <a href="/">
-                    <x-application-logo class="w-20 h-20 fill-current text-gray-500 dark:text-hp-slate/60" />
+                    <x-application-logo class="w-20 h-20 fill-current text-gray-500" />
                 </a>
             </div>
 
-            <div class="w-full sm:max-w-md mt-6 px-6 py-4 bg-hp-white shadow-md overflow-hidden sm:rounded-lg dark:border dark:border-hp-slate/15 dark:shadow-none">
+            <div class="w-full sm:max-w-md mt-6 px-6 py-4 bg-hp-white shadow-md overflow-hidden sm:rounded-lg">
                 {{ $slot }}
             </div>
         </div>

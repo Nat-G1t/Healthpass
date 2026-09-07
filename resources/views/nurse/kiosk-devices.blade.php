@@ -96,14 +96,14 @@
         <h3 class="mb-4 text-sm font-semibold text-hp-slate">Enrolled devices</h3>
 
         @if ($devices->isEmpty())
-            <p class="py-8 text-center text-sm text-hp-slate/50 dark:text-hp-slate/60">
+            <p class="py-8 text-center text-sm text-hp-slate/50">
                 No devices enrolled yet. Enable Kiosk Mode on a terminal to add one.
             </p>
         @else
             <div class="overflow-x-auto">
                 <table class="w-full text-left text-sm">
                     <thead>
-                        <tr class="text-[12px] font-semibold uppercase tracking-wide text-hp-slate/50 dark:text-hp-slate/60">
+                        <tr class="text-[12px] font-semibold uppercase tracking-wide text-hp-slate/50">
                             <th class="pb-2 pr-4">Device</th>
                             <th class="pb-2 pr-4">Enrolled by</th>
                             <th class="pb-2 pr-4">Status</th>
@@ -115,7 +115,7 @@
                             <tr class="border-t border-hp-slate/10">
                                 <td class="py-3 pr-4">
                                     <div class="font-medium">{{ $device->name }}</div>
-                                    <div class="text-[12px] text-hp-slate/50 dark:text-hp-slate/60">
+                                    <div class="text-[12px] text-hp-slate/50">
                                         {{ $device->created_at?->format('M j, Y') }}
                                     </div>
                                 </td>

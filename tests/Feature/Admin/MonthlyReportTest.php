@@ -382,17 +382,16 @@ class MonthlyReportTest extends TestCase
             ->assertSee("> {$thresholds['temperature_max']} °C");
     }
 
-    public function test_the_report_is_a_standalone_light_document(): void
+    public function test_the_report_is_a_standalone_print_document(): void
     {
-        // D-38 / CLAUDE.md: print views are permanently light — no theme-init
-        // script, and no app sidebar around them.
+        // The report is its own document — it self-prints and carries no app
+        // shell around it.
         $this->report()
             ->assertOk()
             ->assertSee('window.print()', false)
             // The marker partials/print-frame checks before firing the dialog.
             ->assertSee('data-hp-print-doc', false)
             ->assertSee('covers data captured by HealthPass only')
-            ->assertDontSee('hp-theme')     // partials/theme-init's localStorage key
             ->assertDontSee('hp-sidebar');  // the app shell's <aside>
     }
 

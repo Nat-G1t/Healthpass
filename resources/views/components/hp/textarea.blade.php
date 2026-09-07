@@ -22,13 +22,13 @@
         rows="{{ $rows }}"
         {{ $attributes->merge([
             'class' => 'w-full rounded-lg border border-hp-slate/25 px-3 py-2 text-sm text-hp-slate
-                        placeholder-hp-slate/40 dark:placeholder-hp-slate/55 resize-y transition-colors duration-150
+                        placeholder-hp-slate/40 resize-y transition-colors duration-150
                         focus:border-hp-orange focus:ring-1 focus:ring-hp-orange focus:outline-none
                         disabled:bg-hp-slate/5 disabled:cursor-not-allowed',
         ]) }}
     >{{ $slot }}</textarea>
 
     @if ($error)
-        <p class="text-xs text-red-600 dark:text-red-400">{{ $error }}</p>
+        <p class="text-xs text-red-600">{{ $error }}</p>
     @endif
 </div>

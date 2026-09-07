@@ -37,11 +37,11 @@
         <x-hp.input name="purpose_other" x-model="purposeOther" maxlength="120"
                     :disabled="$disabled" placeholder="{{ $specifyPlaceholder }}" />
         @error('purpose_other')
-            <p class="mt-1 text-xs text-red-600 dark:text-red-400">{{ $message }}</p>
+            <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
         @enderror
     </div>
 
     @error('purpose')
-        <p class="mt-1 text-xs text-red-600 dark:text-red-400">{{ $message }}</p>
+        <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
     @enderror
 </div>

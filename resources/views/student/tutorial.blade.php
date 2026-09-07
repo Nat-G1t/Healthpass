@@ -116,7 +116,7 @@
 
                 {{-- Progress: "Step N of 6" + dots --}}
                 <div class="mb-5 flex items-center justify-between">
-                    <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40 dark:text-hp-slate/55">
+                    <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
                         Step {{ $n - 1 }} of {{ count($steps) }}
                     </p>
                     <div class="flex items-center gap-1.5" aria-hidden="true">

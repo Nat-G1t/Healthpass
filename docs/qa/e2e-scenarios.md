@@ -397,17 +397,14 @@ shows for the same scope.
 7. Go back to the analytics tab, set the **program filter** to one program, and
    click **Print Monthly Report** again. → **Expect:** the report is narrowed to
    that program and **states its filter** ("Filtered to: …") under the month.
-8. **Dark mode check (D-38):** switch the app to **dark**, reload Analytics, and
-   print again. → **Expect:** the report is **still light** — white paper, dark
-   text — with no dark background anywhere in the preview.
-9. **Security negative:** with the report open, hand-edit its URL to append
+8. **Security negative:** with the report open, hand-edit its URL to append
    `&college=<another college's id>` and reload. → **Expect:** the figures and
    the college name are **unchanged** — still your own college.
 
 **Pass criteria:** every printed figure equals the on-screen figure for the same
 month and program; zero-visit programs appear on the printout; the header names
 the college, month, generator and time; the page prints clean at A4 and Letter;
-it stays light in dark mode; and `?college=` cannot move the scope.
+and `?college=` cannot move the scope.
 
 ---
 

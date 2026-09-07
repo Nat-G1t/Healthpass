@@ -13,7 +13,7 @@
 
     {{-- ── Logo ──────────────────────────────────────────────────────────── --}}
     <section>
-        <h2 class="mb-4 text-xs font-semibold uppercase tracking-widest text-hp-slate/50 dark:text-hp-slate/60">Logo</h2>
+        <h2 class="mb-4 text-xs font-semibold uppercase tracking-widest text-hp-slate/50">Logo</h2>
         <div class="flex flex-wrap items-end gap-8">
             <x-hp.logo size="sm" />
             <x-hp.logo size="md" />
@@ -23,7 +23,7 @@
 
     {{-- ── Buttons ─────────────────────────────────────────────────────────── --}}
     <section>
-        <h2 class="mb-4 text-xs font-semibold uppercase tracking-widest text-hp-slate/50 dark:text-hp-slate/60">Buttons — variants</h2>
+        <h2 class="mb-4 text-xs font-semibold uppercase tracking-widest text-hp-slate/50">Buttons — variants</h2>
         <div class="flex flex-wrap gap-3 mb-6">
             <x-hp.button variant="primary">Primary</x-hp.button>
             <x-hp.button variant="ghost">Ghost</x-hp.button>
@@ -32,7 +32,7 @@
             <x-hp.button variant="primary" disabled>Disabled</x-hp.button>
         </div>
 
-        <h2 class="mb-4 text-xs font-semibold uppercase tracking-widest text-hp-slate/50 dark:text-hp-slate/60">Buttons — sizes</h2>
+        <h2 class="mb-4 text-xs font-semibold uppercase tracking-widest text-hp-slate/50">Buttons — sizes</h2>
         <div class="flex flex-wrap items-center gap-3">
             <x-hp.button size="sm">Small</x-hp.button>
             <x-hp.button size="md">Medium</x-hp.button>
@@ -43,7 +43,7 @@
 
     {{-- ── Badges ──────────────────────────────────────────────────────────── --}}
     <section>
-        <h2 class="mb-4 text-xs font-semibold uppercase tracking-widest text-hp-slate/50 dark:text-hp-slate/60">Badges</h2>
+        <h2 class="mb-4 text-xs font-semibold uppercase tracking-widest text-hp-slate/50">Badges</h2>
         <div class="flex flex-wrap gap-2">
             <x-hp.badge variant="positive">Positive</x-hp.badge>
             <x-hp.badge variant="approved">Approved</x-hp.badge>
@@ -60,7 +60,7 @@
 
     {{-- ── Card ────────────────────────────────────────────────────────────── --}}
     <section>
-        <h2 class="mb-4 text-xs font-semibold uppercase tracking-widest text-hp-slate/50 dark:text-hp-slate/60">Card</h2>
+        <h2 class="mb-4 text-xs font-semibold uppercase tracking-widest text-hp-slate/50">Card</h2>
         <x-hp.card class="max-w-sm">
             <p class="text-sm text-hp-slate">This is an <strong>HPCard</strong>. White background, 12px radius, subtle border, 24px padding.</p>
             <div class="mt-4 flex gap-2">
@@ -72,7 +72,7 @@
 
     {{-- ── Inputs ──────────────────────────────────────────────────────────── --}}
     <section>
-        <h2 class="mb-4 text-xs font-semibold uppercase tracking-widest text-hp-slate/50 dark:text-hp-slate/60">Inputs</h2>
+        <h2 class="mb-4 text-xs font-semibold uppercase tracking-widest text-hp-slate/50">Inputs</h2>
         <div class="grid grid-cols-1 gap-5 max-w-md">
             <x-hp.input label="Email Address" type="email" placeholder="you@psu.palawan.edu.ph" />
             <x-hp.input label="Password" :password="true" placeholder="••••••••" />
@@ -92,7 +92,7 @@
 
     {{-- ── Colour swatches ─────────────────────────────────────────────────── --}}
     <section>
-        <h2 class="mb-4 text-xs font-semibold uppercase tracking-widest text-hp-slate/50 dark:text-hp-slate/60">Design tokens</h2>
+        <h2 class="mb-4 text-xs font-semibold uppercase tracking-widest text-hp-slate/50">Design tokens</h2>
         <div class="flex gap-3">
             @foreach ([
                 ['hp-white',  '#FFFFFF', 'White'],
@@ -104,7 +104,7 @@
                 <div class="text-center">
                     <div class="h-12 w-12 rounded-lg border border-hp-slate/15" style="background:{{ $hex }}"></div>
                     <p class="mt-1 text-[10px] font-semibold text-hp-slate">{{ $name }}</p>
-                    <p class="text-[10px] text-hp-slate/50 dark:text-hp-slate/60">{{ $hex }}</p>
+                    <p class="text-[10px] text-hp-slate/50">{{ $hex }}</p>
                 </div>
             @endforeach
         </div>

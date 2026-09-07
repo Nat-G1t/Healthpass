@@ -12,7 +12,7 @@
      cancel() flashes the KEY 'appointment-cancelled', not a sentence, so the
      wording lives here rather than in the controller. --}}
 @if (session('status') === 'appointment-cancelled')
-    <div data-hp-flash class="mb-6 rounded-lg border border-green-200 dark:border-green-500/30 bg-green-50 dark:bg-green-500/10 px-4 py-3 text-sm text-green-700 dark:text-green-300">
+    <div data-hp-flash class="mb-6 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
         Your appointment has been cancelled. The slot is now free for another student.
     </div>
 @endif
@@ -20,7 +20,7 @@
 {{-- ── Page header ──────────────────────────────────────────────────────────── --}}
 <div class="mb-6">
     <h2 class="text-xl font-semibold text-hp-slate">My Appointments</h2>
-    <p class="mt-0.5 text-sm text-hp-slate/50 dark:text-hp-slate/60">
+    <p class="mt-0.5 text-sm text-hp-slate/50">
         Your upcoming clinic appointments
     </p>
 </div>
@@ -38,7 +38,7 @@
     <h3 class="mb-5 text-sm font-semibold text-hp-slate">
         Upcoming Appointments
         @if ($appointments->isNotEmpty())
-            <span class="ml-1 font-normal text-hp-slate/40 dark:text-hp-slate/55">({{ $appointments->count() }})</span>
+            <span class="ml-1 font-normal text-hp-slate/40">({{ $appointments->count() }})</span>
         @endif
     </h3>
 
@@ -46,14 +46,14 @@
 
         <div class="flex flex-col items-center justify-center py-10 text-center">
             <div class="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-hp-bg">
-                <svg class="h-6 w-6 text-hp-slate/30 dark:text-hp-slate/55" fill="none" viewBox="0 0 24 24"
+                <svg class="h-6 w-6 text-hp-slate/30" fill="none" viewBox="0 0 24 24"
                      stroke="currentColor" stroke-width="1.5">
                     <path stroke-linecap="round" stroke-linejoin="round"
                           d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                 </svg>
             </div>
             <p class="text-sm font-medium text-hp-slate">No upcoming appointments</p>
-            <p class="mt-0.5 text-xs text-hp-slate/50 dark:text-hp-slate/60">
+            <p class="mt-0.5 text-xs text-hp-slate/50">
                 Appointments scheduled for today appear on your dashboard
             </p>
             <a href="{{ route('student.appointments') }}"
@@ -85,7 +85,7 @@
                         <p class="text-sm font-semibold text-hp-slate">
                             {{ $appointment->scheduled_date->format('l, F j, Y') }}
                         </p>
-                        <p class="mt-0.5 text-xs text-hp-slate/60 dark:text-hp-slate/70">
+                        <p class="mt-0.5 text-xs text-hp-slate/60">
                             {{-- "—" on pre-D-37 rows that belong to no slot --}}
                             {{ $appointment->timeRangeLabel() }}
                         </p>
@@ -98,7 +98,7 @@
                             <x-hp.badge variant="neutral">{{ $appointment->scheduledByLabel() }}</x-hp.badge>
                         </div>
 
-                        <p class="mt-2 font-mono text-xs text-hp-slate/35 dark:text-hp-slate/55">
+                        <p class="mt-2 font-mono text-xs text-hp-slate/35">
                             {{ $appointment->reference_no }}
                         </p>
                     </div>
@@ -132,7 +132,7 @@
                         @elseif ($appointment->source === 'batch')
                             {{-- D-39: only the College Admin who booked the cohort
                                  may withdraw a batch appointment. --}}
-                            <p class="max-w-xs text-xs leading-relaxed text-hp-slate/50 dark:text-hp-slate/60">
+                            <p class="max-w-xs text-xs leading-relaxed text-hp-slate/50">
                                 Booked by your college. Contact your college
                                 administrator if you need this cancelled.
                             </p>
@@ -181,9 +181,8 @@
                     aria-label="Close"
                     class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full
                            bg-red-50 transition-colors hover:bg-red-100 focus-visible:outline-none
-                           focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-1
-                           dark:bg-red-500/10 dark:hover:bg-red-500/20">
-                <svg class="h-4 w-4 text-red-500 dark:text-red-400" fill="none" viewBox="0 0 24 24"
+                           focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-1">
+                <svg class="h-4 w-4 text-red-500" fill="none" viewBox="0 0 24 24"
                      stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
                 </svg>

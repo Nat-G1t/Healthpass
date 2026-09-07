@@ -62,9 +62,8 @@ $maxWidth = [
         x-transition:leave-start="opacity-100"
         x-transition:leave-end="opacity-0"
     >
-        {{-- A scrim must always be DARKER than the page. In dark mode a mid-grey
-             at 75% reads as a light haze, so drop to near-black there. --}}
-        <div class="absolute inset-0 bg-gray-500 opacity-75 dark:bg-black dark:opacity-70"></div>
+        {{-- A scrim must always be DARKER than the page. --}}
+        <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
     </div>
 
     <div
