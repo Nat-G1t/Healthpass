@@ -41,6 +41,10 @@ class BatchRequest extends Model
         'pending' => 'Pending Director Approval',
         'approved' => 'Approved',
         'rejected' => 'Rejected',
+        // D-52: the college withdrew the request before the Director ruled
+        // on it. A terminal state like the other two, but reached from the
+        // admin side, so it is worded as an action they took.
+        'cancelled' => 'Cancelled',
     ];
 
     protected $fillable = [
@@ -58,6 +62,8 @@ class BatchRequest extends Model
         'rejection_reason',
         'reviewed_by',
         'reviewed_at',
+        'cancelled_at',
+        'cancelled_by',
     ];
 
     protected function casts(): array
@@ -66,6 +72,7 @@ class BatchRequest extends Model
             'requested_date' => 'date',
             'scheduled_date' => 'date',
             'reviewed_at' => 'datetime',
+            'cancelled_at' => 'datetime',
         ];
     }
 
@@ -75,6 +82,23 @@ class BatchRequest extends Model
     public function statusLabel(): string
     {
         return self::STATUS_LABELS[$this->status] ?? ucfirst($this->status);
+    }
+
+    /**
+     * D-52: may the college still cancel this request itself (FR-ADM-11)?
+     *
+     * PENDING ONLY. Once the Director has approved it, appointments exist and
+     * students have been emailed (FR-STU-12) — unwinding that is the
+     * per-student withdrawal on the batch roster (FR-ADM-07), not a
+     * whole-batch cancel. A rejected or already-cancelled batch is terminal.
+     *
+     * One rule, called by the Batch Tracking page (to decide whether to draw
+     * the button) and by the cancel endpoint on the LOCKED row, so the button
+     * can never offer something the server would refuse.
+     */
+    public function isCancellable(): bool
+    {
+        return $this->status === 'pending';
     }
 
     /**
@@ -176,6 +200,16 @@ class BatchRequest extends Model
     public function reviewer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reviewed_by');
+    }
+
+    /**
+     * The college admin who cancelled this request (null unless cancelled).
+     * A college may have more than one admin (D-47), so this is NOT the same
+     * person as [[requester]] by construction.
+     */
+    public function canceller(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
     }
 
     /** The individual student pivot rows included in this batch. */

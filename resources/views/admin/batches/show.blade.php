@@ -2,12 +2,13 @@
 
 @php
     // Appointments only exist once the Director has approved (BR-08), so the
-    // Appointment / Time / Withdraw columns are meaningless on a pending or
-    // rejected batch — the roster there is just "who was submitted".
+    // Appointment / Time / Status / Result / Withdraw columns are meaningless
+    // on a pending, rejected or cancelled batch — the roster there is just
+    // "who was submitted".
     $isApproved = $batch->status === 'approved';
 
     $headers = $isApproved
-        ? ['Student', 'Student No.', 'Appointment', 'Time', 'Status', '']
+        ? ['Student', 'Student No.', 'Appointment', 'Time', 'Status', 'Result', '']
         : ['Student', 'Student No.', 'Course & Year'];
 
     $rows = $batch->batchRequestStudents;
@@ -21,6 +22,39 @@
     $withdrawnCount = $rows->filter(
         fn ($row) => $row->appointment !== null && $row->appointment->status === 'cancelled'
     )->count();
+
+    // ── D-53: the results roll-up ────────────────────────────────────────────
+    // Counted from the SAME Appointment::clearanceProgress() and
+    // clearanceResult() the rows below use, so the summary and the table can
+    // never disagree — the rule lives in one place (the model) and both read it.
+    $progress = $rows->map(fn ($row) => $row->appointment?->clearanceProgress());
+
+    $fitCount = $rows->filter(fn ($row) => $row->appointment?->clearanceResult() === 'Fit')->count();
+    $unfitCount = $rows->filter(fn ($row) => $row->appointment?->clearanceResult() === 'Unfit')->count();
+    $toAttendCount = $progress->filter(fn (?string $p) => in_array($p, ['awaiting', 'in_clinic'], true))->count();
+    $missedCount = $progress->filter(fn (?string $p) => $p === 'missed')->count();
+
+    $resultParts = [];
+
+    if ($fitCount > 0) {
+        $resultParts[] = $fitCount.' Fit';
+    }
+
+    if ($unfitCount > 0) {
+        $resultParts[] = $unfitCount.' Unfit';
+    }
+
+    if ($toAttendCount > 0) {
+        $resultParts[] = $toAttendCount.' still to attend';
+    }
+
+    if ($missedCount > 0) {
+        $resultParts[] = $missedCount.' did not attend';
+    }
+
+    if ($withdrawnCount > 0) {
+        $resultParts[] = $withdrawnCount.' withdrawn';
+    }
 @endphp
 
 {{-- ── Flash messages ───────────────────────────────────────────────────────── --}}
@@ -53,8 +87,8 @@
                 {{ $batch->reference_no }}
             </h2>
             <p class="mt-0.5 text-sm text-hp-slate/50">
-                {{ Str::limit($batch->reasonText(), 70) }} ·
                 {{ $batch->service_type === 'medical' ? 'Medical Clearance' : 'Dental Check' }}
+                for {{ $rows->count() }} {{ Str::plural('student', $rows->count()) }}
             </p>
         </div>
         <x-hp.badge :variant="$batch->status">{{ $batch->statusLabel() }}</x-hp.badge>
@@ -63,7 +97,7 @@
 
 {{-- ── Batch summary ────────────────────────────────────────────────────────── --}}
 <x-hp.card class="mb-6">
-    <dl class="grid gap-4 sm:grid-cols-3">
+    <dl class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div>
             <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
                 Clinic date
@@ -81,6 +115,14 @@
         </div>
         <div>
             <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+                Purpose
+            </dt>
+            {{-- The batch's own reason (BR-06), or the admin's typed text when
+                 they picked "Others" — reasonText() already resolves both. --}}
+            <dd class="mt-1 text-sm font-semibold text-hp-slate">{{ $batch->reasonText() }}</dd>
+        </div>
+        <div>
+            <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
                 Students
             </dt>
             <dd class="mt-1 text-sm font-semibold text-hp-slate">
@@ -93,7 +135,51 @@
             </dd>
         </div>
     </dl>
+
+    {{-- ── Results roll-up (FR-ADM-07 as amended by D-53) ───────────────────── --}}
+    {{-- Only on an approved batch: nothing else can have a result. --}}
+    @if ($isApproved)
+        <div class="mt-5 border-t border-hp-slate/10 pt-4">
+            <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+                Clearance results
+            </dt>
+            <dd class="mt-1 text-sm font-semibold text-hp-slate">
+                {{-- Only reachable when the batch has no appointments at all —
+                     every appointment lands in one of the counted states. --}}
+                @if ($resultParts === [])
+                    <span class="font-normal text-hp-slate/60">
+                        Nothing to report — this batch has no appointments.
+                    </span>
+                @else
+                    {{ implode(' · ', $resultParts) }}
+                @endif
+            </dd>
+        </div>
+    @endif
 </x-hp.card>
+
+{{-- ── Cancelled notice (FR-ADM-11, D-52) ───────────────────────────────────── --}}
+@if ($batch->status === 'cancelled')
+    <div class="mb-6 flex items-start gap-3 rounded-xl border border-hp-slate/20 bg-hp-bg px-4 py-3.5">
+        <svg class="mt-0.5 h-4 w-4 shrink-0 text-hp-slate/50" fill="none" viewBox="0 0 24 24"
+             stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round"
+                  d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/>
+        </svg>
+        <p class="text-xs leading-relaxed text-hp-slate">
+            This request was cancelled
+            @if ($batch->canceller !== null)
+                by <strong class="font-semibold">{{ $batch->canceller->name }}</strong>
+            @endif
+            @if ($batch->cancelled_at !== null)
+                on {{ $batch->cancelled_at->format('M j, Y \a\t g:i A') }}
+            @endif
+            before the Clinic Director reviewed it. <strong class="font-semibold">No appointments
+            were created</strong>, and the clinic hours it asked for were never held.
+            To book these students, submit a new batch request.
+        </p>
+    </div>
+@endif
 
 {{-- ── Withdrawal guidance (FR-ADM-07, D-40) ────────────────────────────────── --}}
 @if ($isApproved)
@@ -151,12 +237,36 @@
                         <x-hp.table-cell label="Status">
                             @if ($appointment === null)
                                 <span class="text-hp-slate/50">&mdash;</span>
-                            @elseif ($appointment->status === 'cancelled')
-                                <x-hp.badge variant="rejected">Withdrawn</x-hp.badge>
                             @else
-                                <x-hp.badge :variant="$appointment->status === 'scheduled' ? 'pending' : 'approved'">
-                                    {{ ucfirst(str_replace('_', ' ', $appointment->status)) }}
-                                </x-hp.badge>
+                                @php
+                                    // D-53: one key from the model, mapped here to the
+                                    // wording and the badge. Orange for the student who
+                                    // is at the clinic RIGHT NOW (the one state that is
+                                    // still moving), peach once it is done, slate for
+                                    // everything that is waiting or did not happen.
+                                    [$progressLabel, $progressVariant] = match ($appointment->clearanceProgress()) {
+                                        'withdrawn' => ['Withdrawn', 'rejected'],
+                                        'missed'    => ['Did not attend', 'rejected'],
+                                        'awaiting'  => ['Not yet attended', 'pending'],
+                                        'in_clinic' => ['At the clinic', 'live'],
+                                        'completed' => ['Completed', 'approved'],
+                                    };
+                                @endphp
+                                <x-hp.badge :variant="$progressVariant">{{ $progressLabel }}</x-hp.badge>
+                            @endif
+                        </x-hp.table-cell>
+
+                        <x-hp.table-cell label="Result">
+                            {{-- D-53 (amends PRD §6.6): the OUTCOME only. Vitals,
+                                 screening answers and nurse notes are not on this
+                                 page and no link from it reaches them — the College
+                                 Admin sees Fit or Unfit for their own college's
+                                 students and nothing more of the clinical record. --}}
+                            @php $result = $appointment?->clearanceResult(); @endphp
+                            @if ($result !== null)
+                                <x-hp.badge :variant="Str::lower($result)">{{ $result }}</x-hp.badge>
+                            @else
+                                <span class="text-hp-slate/50">&mdash;</span>
                             @endif
                         </x-hp.table-cell>
 

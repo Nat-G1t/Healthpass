@@ -28,13 +28,17 @@ use Illuminate\View\View;
  * `activity_logs` table and nothing writes an audit row anywhere. Every entry is
  * read back out of `batch_requests`, which already stores `requested_by` +
  * `created_at` for the submission and `reviewed_by` + `reviewed_at` +
- * `rejection_reason` for the decision. Two consequences, both good:
+ * `rejection_reason` for the decision. D-52 stayed in that spirit: a college
+ * cancellation is two more columns ON THE SAME ROW (`cancelled_at`,
+ * `cancelled_by`), not an audit table, so it joins the timeline the same way.
+ * Two consequences, both good:
  *
  *  - The log CANNOT DRIFT from the data. It is not a parallel record that a
  *    missed write could leave incomplete — it is the same rows Batch Tracking
  *    renders, read a different way, so the two can never disagree.
- *  - No 11th table (the canon is 10 — D-32 having just brought it back), no
- *    migration, no write path on any existing action.
+ *  - No 11th table (the canon is 10 — D-32 having just brought it back) and no
+ *    write path on any existing action. D-52's two nullable columns are the
+ *    only schema this page has ever needed.
  *
  * The flattening happens in PHP rather than as a SQL UNION on purpose: a UNION
  * of "submitted" and "decided" rows needs raw SQL, and the suite runs on SQLite
@@ -58,7 +62,7 @@ class ActivityLogController extends Controller
 
         // Start from the college's own relationship, never a request value.
         $batches = $college->batchRequests()
-            ->with(['requester:id,name', 'reviewer:id,name'])
+            ->with(['requester:id,name', 'reviewer:id,name', 'canceller:id,name'])
             ->withCount('batchRequestStudents')
             ->latest('created_at')
             ->get();
@@ -83,7 +87,8 @@ class ActivityLogController extends Controller
 
     /**
      * Flatten each batch row into the events it records: always a submission,
-     * plus a decision once the Director has made one.
+     * plus a decision once the Director has made one, and a cancellation once the
+     * college has withdrawn it (D-52).
      *
      * @param  Collection<int, BatchRequest>  $batches
      * @return Collection<int, array<string, mixed>>
@@ -117,6 +122,25 @@ class ActivityLogController extends Controller
                     'detail' => $batch->status === 'rejected'
                         ? $batch->rejection_reason
                         : 'Appointments generated for '.$batch->scheduled_date?->format('M j, Y').'.',
+                ];
+            }
+
+            // D-52: the college withdrew it before the Director ruled on it
+            // (FR-ADM-11). Guarded on cancelled_at for the same reason as the
+            // decision above — it is the field that carries WHEN, and an entry
+            // with no timestamp could not be placed on a timeline.
+            //
+            // The actor is `canceller`, NOT `requester`: a college can have
+            // more than one admin (D-47), so the admin who cancelled is not
+            // necessarily the one who submitted.
+            if ($batch->cancelled_at !== null && $batch->status === 'cancelled') {
+                $entries[] = [
+                    'type' => 'cancelled',
+                    'at' => $batch->cancelled_at,
+                    'actor' => $batch->canceller?->name,
+                    'actorRole' => 'College Admin',
+                    'batch' => $batch,
+                    'detail' => 'Withdrawn before the Clinic Director reviewed it — no appointments were created.',
                 ];
             }
 

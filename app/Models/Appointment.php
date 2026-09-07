@@ -164,6 +164,60 @@ class Appointment extends Model
             && ! $this->scheduled_date->lt(today());
     }
 
+    /**
+     * D-53: how far this appointment has got, as ONE key the batch roster maps
+     * to a label and a badge (FR-ADM-07 as amended).
+     *
+     * The College Admin who booked a graduation cohort needs to know who still
+     * has to turn up, and `appointments.status` alone cannot tell them: the
+     * kiosk LINKS a clinic visit to the appointment but leaves the status on
+     * `scheduled` (see SubmitKioskVisit::todaysAppointmentId), and only the
+     * nurse's encode flips it to `completed`. So a student can be standing at
+     * the clinic with their vitals captured while this row still reads
+     * "scheduled". The visit and its clearance record are what carry that.
+     *
+     *   withdrawn  — the admin pulled this seat (FR-ADM-07)
+     *   missed     — the clinic day has passed and no visit was ever recorded
+     *   awaiting   — booked for today or later, not at the kiosk yet
+     *   in_clinic  — vitals captured at the kiosk, waiting on the nurse
+     *   completed  — the nurse has encoded it; clearanceResult() has a value
+     *
+     * `checked_in` is deliberately not consulted: nothing in the app ever
+     * writes it (the enum value predates the kiosk flow), so keying on it
+     * would produce a state no real row can reach.
+     *
+     * Reads $this->clinicVisit and its clearanceRecord — the roster eager-loads
+     * both, so a 60-student batch stays 3 queries rather than 121.
+     */
+    public function clearanceProgress(): string
+    {
+        if ($this->status === 'cancelled') {
+            return 'withdrawn';
+        }
+
+        $visit = $this->clinicVisit;
+
+        if ($visit === null) {
+            return $this->scheduled_date->lt(today()) ? 'missed' : 'awaiting';
+        }
+
+        return $visit->clearanceRecord === null ? 'in_clinic' : 'completed';
+    }
+
+    /**
+     * D-53: the nurse's clearance OUTCOME for this appointment — 'Fit',
+     * 'Unfit', or null while there is nothing encoded yet.
+     *
+     * Outcome only. The vitals, the screening answers and the nurse's notes
+     * stay out of the College Admin's reach: PRD §6.6 as amended by D-53 opens
+     * exactly this one field to the admin of the student's own college, and
+     * nothing else on the record.
+     */
+    public function clearanceResult(): ?string
+    {
+        return $this->clinicVisit?->clearanceRecord?->result;
+    }
+
     // ── Relationships ────────────────────────────────────────────────────────
 
     /** The student this appointment belongs to. */

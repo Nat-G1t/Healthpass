@@ -156,6 +156,93 @@
     columns on `users` holding only the most recent move. He chose to drop the
     feature rather than pay that; D-49's derived Activity Log is unchanged.
 
+* **A College Admin can cancel their own batch request — while it is still
+  pending** (D-52, FR-ADM-11, BR-24). **Schema change: `batch_requests.status`
+  gains a fourth value `cancelled`, plus `cancelled_at` (TIMESTAMP, nullable)
+  and `cancelled_by` (FK → users, nullable) — no new table, the canon stays at
+  10, and neither column is ever backfilled.** A college whose cohort event
+  moved had exactly one way out: ask the Director to **reject** the batch. That
+  recorded the college's own change of mind as a Director's rejection, on the
+  college's permanent record, with a written reason somebody had to invent.
+  - **New `DELETE /admin/batches/{batch}/cancel`**
+    (`Admin\BatchRequestController@cancel`) with **its own `batch-cancel`
+    throttle prefix** — an authenticated inline throttle keys on the user id
+    with no path, so without it this would have shared one counter with batch
+    submission. Batch Tracking grows a **blank-header trailing column**,
+    rendered only when at least one row is cancellable (the same "no column of
+    em dashes" rule the D-36 Rejection Reason column uses), holding a Cancel
+    control on **pending rows only** and a teleported confirm dialog naming the
+    reference, the student count and the requested clinic date.
+  - **Pending-only is the design, not an omission.** Approval fans out one
+    appointment per student and emails every one of them (BR-08, FR-STU-12);
+    cancelling a whole batch after that would be a silent mass-cancellation of
+    seats students have already been told to attend. That case already has a
+    deliberate one-at-a-time answer in FR-ADM-07 (D-40), which frees one seat
+    and emails one student. Extending cancel past `pending` was considered and
+    **rejected**.
+  - **Two columns rather than none, because the Activity Log is derived.**
+    D-49 writes no audit row, so a cancellation reaches that timeline only if
+    the row itself carries an actor and a timestamp. Reusing
+    `reviewed_by`/`reviewed_at` was rejected — they mean "the Director decided"
+    in the Approvals list, the Activity Log and the rejection modal, and
+    overloading them would credit the Director with an action they never took.
+    Deriving the actor from `requested_by` was also rejected: since D-47 a
+    college can have two admins, so the log would routinely name the wrong
+    person. `cancelled_by` is **whoever pressed the button**.
+  - `BatchRequest::isCancellable()` is the single rule — the view draws the
+    control from it and the endpoint re-reads it **under `lockForUpdate()`**, so
+    a double-click, or a race with the Director approving in the next tab, is
+    refused rather than raced.
+  - **The Director's endpoints needed no logic change** — `approve()` and
+    `reject()` already refuse a non-pending row under the same lock. Only their
+    wording did: the Approvals list rendered "✕ Rejected" for anything
+    non-pending, so a cancelled batch would have read as a Director rejection,
+    and the refusal message said "already been decided". Both are now
+    status-aware ("↩ Cancelled by college").
+  - 20 cases in `tests/Feature/Admin/BatchCancelTest.php`.
+
+* **The batch roster now shows each student's clearance result** (D-53,
+  FR-ADM-07 amended). **No schema change, no new route, no new page** — the
+  roster of D-40 grows two columns. **This required amending PRD §6.6**, which
+  read "admins see only their college's *roster and batch* data (never clinical
+  results)". A separate "Batch Results" page was considered and **rejected**: it
+  would have duplicated the roster's student table, and the date, hour span and
+  purpose it needed were already in the roster's header.
+  - **Result** (Fit / Unfit, em dash until the nurse encodes) and a real
+    **Status**: *Not yet attended · At the clinic · Completed · Did not
+    attend · Withdrawn*. The summary card gains an explicit **Purpose** field
+    and a roll-up — *"2 Fit · 1 Unfit · 1 still to attend"*.
+  - **`appointments.status` could not drive the Status column.** The kiosk
+    *links* a `clinic_visits` row to the appointment but leaves the status
+    `scheduled` (`SubmitKioskVisit`), and only the nurse's encode sets
+    `completed` — so a student standing at the kiosk would have rendered as
+    "not yet attended", which is exactly the question the page exists to
+    answer. `Appointment::clearanceProgress()` reads the visit and its
+    clearance record; `clearanceResult()` returns the outcome. Both live on the
+    model, so the row and the roll-up share one definition and cannot disagree.
+    `checked_in` is not consulted — nothing in the app writes it.
+  - **The §6.6 exception is one field wide.** Fit/Unfit, for a student on a
+    batch the admin's own college submitted. Vitals, screening answers, nurse
+    notes, the physician's details and the clinic-visit reference are not on the
+    page and behind no link on it; the Activity Log (FR-ADM-10) stays
+    clinical-free entirely. The justification: the college is the party that
+    **requested** the clearance and cannot discharge that duty without knowing
+    who was cleared — withholding it pushed the answer onto paper and
+    side-channels, a worse privacy posture than one enum value behind a scoped,
+    authenticated, college-filtered page. D-45 had already opened §6.6 at the
+    aggregate level; §6.6 now states the full boundary in one place.
+  - 12 cases in `tests/Feature/Admin/BatchResultsTest.php`.
+
+* **`DemoBatchSeeder` — six CCS batches covering every state** (dev only).
+  Two pending (cancellable), one approved on a past clinic day carrying all
+  four outcomes at once (Fit, Unfit, at the clinic, did not attend), one
+  approved upcoming with a withdrawn seat, one rejected with a written reason,
+  one already cancelled. Deterministic, idempotent, and it runs **after**
+  `DemoClinicVisitSeeder` on purpose — that seeder skips itself if any
+  `APT-2026-9xxx` row exists, so this one reserves the `APT-2026-85xx` /
+  `HP-2026-85xx` bands instead. 9 cases in
+  `tests/Feature/Seeders/DemoBatchSeederTest.php`.
+
 ### Changed
 
 * **The Director can no longer reset a staff account's password** (D-47a). The

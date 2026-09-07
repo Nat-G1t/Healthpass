@@ -36,6 +36,11 @@
                         'submitted' => ['Submitted', 'neutral'],
                         'approved'  => ['Approved', 'approved'],
                         'rejected'  => ['Rejected', 'rejected'],
+                        // D-52: a college-side withdrawal, not a Director
+                        // decision. Slate like a rejection because it is a
+                        // terminal, nothing-happened outcome — but the label
+                        // names what actually occurred.
+                        'cancelled' => ['Cancelled', 'rejected'],
                     };
                 @endphp
                 <x-hp.table-row>

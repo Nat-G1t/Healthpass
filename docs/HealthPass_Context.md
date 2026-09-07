@@ -347,7 +347,10 @@ Progress steps: Consent → Account Info → Email Verify → Link ID
 - Two buttons: "View Tracking" + "Dashboard".
 
 #### Batch Tracking (`admin-batch-tracking`)
-- Table: Batch ID, Reason (truncated with ellipsis), Students, Submitted, Status (Pending shows as "Pending Director Approval").
+- Table: Batch ID, Reason (truncated with ellipsis), Students, Submitted, Status (Pending shows as "Pending Director Approval"; `cancelled` shows as "Cancelled" — D-52).
+- **Rejection Reason** column (D-36) appears only when the list holds at least one rejected row.
+- **Cancel column** (D-52, FR-ADM-11): a trailing column with a **blank header**, rendered only when at least one row is cancellable, holding a Cancel control on **pending rows only** (every other row gets an em dash). Clicking it opens a confirmation dialog naming the reference, the student count and the requested clinic date. Blank-headed because it holds an action rather than a value — the same shape as the Withdraw column on the batch roster.
+- Batch ID links to the **batch roster** (D-40), which since **D-53** also reports each student's progress (Not yet attended / At the clinic / Completed / Did not attend / Withdrawn) and their clearance **Result** (Fit / Unfit), plus a roll-up and the batch's date, hour span and purpose.
 - "+ New Request" button (top-right).
 
 ---
@@ -608,10 +611,12 @@ requested_date        date NULL             -- admin-proposed clinic date, set a
 requested_time        time NULL             -- D-37: admin-chosen START hour of the batch's span (canonical 'H:i:s')
 requested_blocks      tinyint unsigned NULL -- D-37: span LENGTH in whole hours = ceil(students / hourly_capacity), always computed server-side. Start + block count, NEVER an end time and never both: the count is what every consumer loops over, an end time is ambiguous about the last hour, and re-deriving it later could silently shrink an approved span if a student left the roster. Both columns NULL only on pre-D-37 batches, which (like a NULL requested_date under D-36) cannot be approved at all
 scheduled_date        date NULL             -- FINAL appointment date, stamped at approval; = requested_date since D-36 (D-5, amended by D-29/D-36)
-status                enum('pending','approved','rejected') DEFAULT 'pending'
+status                enum('pending','approved','rejected','cancelled') DEFAULT 'pending'  -- D-52 added 'cancelled'; the transition is pending → {approved, rejected, cancelled} and all three are terminal (BR-24)
 rejection_reason      text NULL             -- Director's written reason, required on reject (10-500 chars, D-36); NULL on pending/approved and on pre-D-36 rejections
 reviewed_by           bigint NULL FK → users.id   -- director who acted
 reviewed_at           timestamp NULL
+cancelled_at          timestamp NULL        -- D-52: when the College Admin cancelled a PENDING request (FR-ADM-11)
+cancelled_by          bigint NULL FK → users.id   -- D-52: the admin who ACTED, not requested_by — a college may have two admins since D-47. Both cancellation columns are NULL on every non-cancelled row and are NEVER backfilled. They exist because the College Activity Log (D-49) is DERIVED from this table and needs an actor + a timestamp to place the event; reviewed_by/reviewed_at were deliberately NOT reused, since they mean "the Director decided" in three other places and a cancellation is not a decision
 created_at, updated_at
 ```
 

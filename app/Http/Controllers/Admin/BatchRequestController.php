@@ -14,6 +14,7 @@ use App\Models\StudentProfile;
 use App\Services\ClinicScheduleService;
 use App\Services\ReferenceNumberService;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -182,6 +183,12 @@ class BatchRequestController extends Controller
      * on one row of it. This is that page, and it is where the admin withdraws
      * a single student's appointment.
      *
+     * D-53 added the RESULT to it: each row now carries how far that student
+     * has got (booked / at the clinic / completed / did not attend) and, once
+     * the nurse has encoded it, Fit or Unfit. That last field is clinical, and
+     * PRD §6.6 was amended by D-53 to permit exactly it — the outcome and
+     * nothing else — to the admin of that student's own college.
+     *
      * Scoped the same way as confirmation(): fetched through the managed
      * college's relationship, so another college's batch id 404s (FR-ADM-06).
      */
@@ -190,17 +197,86 @@ class BatchRequestController extends Controller
         $batch = $this->managedCollege()->batchRequests()
             ->with([
                 'reviewer:id,name',
+                // D-52: who cancelled it, for the cancelled-batch notice.
+                'canceller:id,name',
                 // The roster in a stable order, with each student's generated
                 // appointment. Eager-loaded, so a 60-student batch is 3 queries
                 // rather than 121.
                 'batchRequestStudents' => fn ($query) => $query->orderBy('id'),
                 'batchRequestStudents.student:id,name',
                 'batchRequestStudents.student.studentProfile:id,user_id,student_number,course,year_level',
-                'batchRequestStudents.appointment',
+                // D-53: the clinic visit and its clearance record ride along —
+                // Appointment::clearanceProgress() and clearanceResult() read
+                // both, and eager-loading keeps a 60-student roster at a
+                // handful of queries instead of 121.
+                'batchRequestStudents.appointment.clinicVisit.clearanceRecord',
             ])
             ->findOrFail($batchId);
 
         return view('admin.batches.show', ['batch' => $batch]);
+    }
+
+    /**
+     * Cancel a whole PENDING batch request (FR-ADM-11, D-52).
+     *
+     * A college submits a batch and then the cohort's event moves, or the
+     * roster turns out wrong. Before D-52 the only way out was to ask the
+     * Director to REJECT it — which left a rejection on the college's record
+     * for something the college itself wanted withdrawn. This is that
+     * withdrawal, and it reads as the college's own action on Batch Tracking
+     * and on the Activity Log alike.
+     *
+     * PENDING ONLY, and deliberately so. Approval fans out one appointment per
+     * student and emails every one of them (BR-08, FR-STU-12); undoing that is
+     * the per-student withdrawal on the batch roster below (FR-ADM-07), which
+     * frees one seat and emails one student. A whole-batch cancel after
+     * approval would be a silent mass-cancellation, so it is not offered.
+     *
+     * Guards, all resolved server-side:
+     *   - the batch is fetched through the managed college, so another
+     *     college's id is a plain 404 (FR-ADM-06)
+     *   - BatchRequest::isCancellable() — the SAME rule the page used to decide
+     *     whether to draw the button — is re-read under a ROW LOCK, so a
+     *     double-click, or a race with the Director approving it in the next
+     *     tab, cannot slip past the unlocked read the page did
+     *
+     * Nothing else has to be unwound: no appointments exist yet, so no clinic
+     * seat is held and no student has been told anything.
+     */
+    public function cancel(Request $request, int $batchId): RedirectResponse
+    {
+        $batch = $this->managedCollege()->batchRequests()->findOrFail($batchId);
+
+        $wasCancelled = DB::transaction(function () use ($batch, $request): bool {
+            $locked = BatchRequest::whereKey($batch->id)->lockForUpdate()->firstOrFail();
+
+            if (! $locked->isCancellable()) {
+                return false;
+            }
+
+            // cancelled_by is the admin who PRESSED THE BUTTON, not the batch's
+            // original requester — a college can have more than one admin
+            // (D-47), and the Activity Log names the person who acted.
+            $locked->update([
+                'status' => 'cancelled',
+                'cancelled_at' => now(),
+                'cancelled_by' => $request->user()->id,
+            ]);
+
+            return true;
+        });
+
+        if (! $wasCancelled) {
+            return redirect()->route('admin.batches.index')->with(
+                'error',
+                "{$batch->reference_no} can no longer be cancelled — the Clinic Director has already decided on it.",
+            );
+        }
+
+        return redirect()->route('admin.batches.index')->with(
+            'status',
+            "{$batch->reference_no} has been cancelled. It is no longer waiting for the Clinic Director.",
+        );
     }
 
     /**

@@ -12,14 +12,45 @@
     if ($hasRejected) {
         $headers[] = 'Rejection Reason';
     }
+
+    // FR-ADM-11 (D-52): the Cancel column follows the same rule as the one
+    // above — it exists only when at least one row can actually use it, so a
+    // list with nothing pending doesn't carry a column of em dashes either.
+    // Its header is deliberately BLANK: the column holds an action, not a
+    // value, exactly like the Withdraw column on the batch roster (FR-ADM-07).
+    $hasCancellable = $batchRequests->contains(fn ($batch) => $batch->isCancellable());
+
+    if ($hasCancellable) {
+        $headers[] = '';
+    }
 @endphp
 
 {{--
-    One page-level Alpine component holds the rejection-reason modal's state:
+    One page-level Alpine component holds BOTH modals' state:
     `detail` is null (closed) or the { ref, reason, reviewer, reviewedAt } of
-    the row whose View button was clicked.
+    the row whose View button was clicked; `cancelTarget` (D-52) is null or the
+    { id, ref, students, date } of the row whose Cancel button was clicked.
+
+    Two independent keys rather than one shared `modal` object: the dialogs
+    carry different payloads, and neither can be open while the other is, so
+    closing one never has to reset the other.
 --}}
-<div x-data="{ detail: null }">
+<div x-data="{ detail: null, cancelTarget: null }">
+
+{{-- ── Flash messages ─────────────────────────────────────────────────────── --}}
+{{-- Where the cancel endpoint lands (FR-ADM-11): both its success and its
+     refusal redirect back to this page. --}}
+@if (session('status'))
+    <div data-hp-flash class="mb-6 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+        {{ session('status') }}
+    </div>
+@endif
+
+@if (session('error'))
+    <div data-hp-flash data-flash-sticky class="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        {{ session('error') }}
+    </div>
+@endif
 
 {{-- ── Page header ────────────────────────────────────────────────────────── --}}
 <div class="mb-6 flex flex-wrap items-end justify-between gap-3">
@@ -101,6 +132,43 @@
                             @endif
                         </x-hp.table-cell>
                     @endif
+
+                    {{-- FR-ADM-11 (D-52): withdraw a request the Director has not
+                         ruled on yet. isCancellable() is the SAME rule the endpoint
+                         re-checks under a row lock, so this button can never offer
+                         something the server would refuse. --}}
+                    @if ($hasCancellable)
+                        <x-hp.table-cell label="">
+                            @if ($batch->isCancellable())
+                                {{-- Plain <button> carrying the danger variant's classes,
+                                     for the same reason as the View button above: the
+                                     payload is built with Js::from(), and Blade output
+                                     isn't compiled inside a component tag's attribute.
+
+                                     `students` is CAST to int: withCount() comes back an
+                                     int on SQLite but a STRING from MySQL's PDO driver,
+                                     and the dialog compares it with === 1 to pluralise. --}}
+                                <button type="button"
+                                    @click="cancelTarget = {{ Illuminate\Support\Js::from([
+                                        'id' => $batch->id,
+                                        'ref' => $batch->reference_no,
+                                        'students' => (int) $batch->batch_request_students_count,
+                                        'date' => $batch->requested_date?->format('M j, Y'),
+                                    ]) }}"
+                                    class="inline-flex items-center justify-center gap-2 rounded-full
+                                           border-[1.5px] border-red-300 bg-transparent px-4 py-1.5 text-xs
+                                           font-semibold text-red-500 hover:bg-red-50 active:scale-[0.97]
+                                           transition-[color,background-color,border-color,transform]
+                                           duration-hp-fast ease-hp-out focus-visible:outline-none
+                                           focus-visible:ring-2 focus-visible:ring-red-500
+                                           focus-visible:ring-offset-1">
+                                    Cancel
+                                </button>
+                            @else
+                                <span class="text-hp-slate/50">&mdash;</span>
+                            @endif
+                        </x-hp.table-cell>
+                    @endif
                 </x-hp.table-row>
             @endforeach
         </x-hp.table>
@@ -163,6 +231,89 @@
 
             <div class="mt-6 flex justify-end">
                 <x-hp.button variant="muted" @click="detail = null">Close</x-hp.button>
+            </div>
+        </div>
+    </div>
+</template>
+
+{{-- ── Cancel confirmation (FR-ADM-11, D-52) ──────────────────────────────── --}}
+{{-- Same dialog shape as the rejection-reason modal above and as
+     <x-college-reassign-confirm>: teleported to <body> so no ancestor's
+     overflow or stacking context clips the full-screen backdrop, and
+     dismissable with Esc, a backdrop click, or "Keep it".
+
+     ONE form serves every row. The panel is rendered once, outside the table,
+     and Alpine builds the action from the clicked batch's id — rendering a
+     hidden form per row would put N of them in the DOM for no gain. The base
+     comes from the NAMED index route, so a URL-prefix change still lands. --}}
+<template x-teleport="body">
+    <div
+        x-show="cancelTarget !== null"
+        x-cloak
+        @keydown.escape.window="cancelTarget = null"
+        class="fixed inset-0 z-[60] flex items-center justify-center px-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="cancel-batch-title"
+    >
+        {{-- Backdrop — click outside to dismiss --}}
+        <div
+            x-show="cancelTarget !== null"
+            @click="cancelTarget = null"
+            x-transition:enter="ease-hp-out duration-hp-base"
+            x-transition:enter-start="opacity-0"
+            x-transition:enter-end="opacity-100"
+            x-transition:leave="ease-hp-in duration-hp-fast"
+            x-transition:leave-start="opacity-100"
+            x-transition:leave-end="opacity-0"
+            class="absolute inset-0 bg-hp-slate/50"
+            aria-hidden="true"
+        ></div>
+
+        {{-- Panel --}}
+        <div
+            x-show="cancelTarget !== null"
+            x-transition:enter="ease-hp-spring duration-hp-slow"
+            x-transition:enter-start="opacity-0 translate-y-6"
+            x-transition:enter-end="opacity-100 translate-y-0"
+            x-transition:leave="ease-hp-in duration-hp-base"
+            x-transition:leave-start="opacity-100 translate-y-0"
+            x-transition:leave-end="opacity-0 translate-y-6"
+            class="relative w-full max-w-md rounded-2xl bg-hp-white p-6 shadow-xl"
+        >
+            <h2 id="cancel-batch-title" class="text-lg font-semibold text-hp-slate">
+                Cancel <span x-text="cancelTarget?.ref"></span>?
+            </h2>
+
+            <p class="mt-1.5 text-sm text-hp-slate/70">
+                This withdraws the request before the Clinic Director reviews it.
+                <span x-show="cancelTarget?.students" x-cloak>
+                    The <span x-text="cancelTarget?.students"></span><span
+                        x-text="cancelTarget?.students === 1 ? ' student' : ' students'"></span>
+                    on it lose nothing — no appointment has been created yet.
+                </span>
+                <span x-show="cancelTarget?.date" x-cloak>
+                    The clinic hours it asked for on
+                    <span class="font-semibold text-hp-slate" x-text="cancelTarget?.date"></span>
+                    stay free for other bookings.
+                </span>
+            </p>
+
+            <p class="mt-3 rounded-lg bg-hp-bg px-4 py-3 text-xs text-hp-slate">
+                This cannot be undone. To book the same students again, submit a new
+                batch request.
+            </p>
+
+            <div class="mt-6 flex justify-end gap-3">
+                <x-hp.button variant="muted" @click="cancelTarget = null">Keep it</x-hp.button>
+
+                <form method="POST" :action="`{{ route('admin.batches.index') }}/${cancelTarget?.id}/cancel`">
+                    @csrf
+                    @method('DELETE')
+                    <x-hp.button type="submit" variant="danger" data-pending-label="Cancelling…">
+                        Cancel request
+                    </x-hp.button>
+                </form>
             </div>
         </div>
     </div>

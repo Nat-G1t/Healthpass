@@ -185,6 +185,13 @@
                                     @elseif ($batch->status === 'approved')
                                         {{-- Decided rows are static — no re-decision (FR-DIRA-05) --}}
                                         <span class="text-sm font-semibold text-hp-orange">✓ Approved</span>
+                                    @elseif ($batch->status === 'cancelled')
+                                        {{-- FR-ADM-11 (D-52): the college withdrew it before
+                                             this page could rule on it. Called out separately
+                                             because it is NOT a Director decision — labelling
+                                             it "Rejected" would credit the Director with an
+                                             action they never took. --}}
+                                        <span class="text-sm font-semibold text-hp-slate/60">↩ Cancelled by college</span>
                                     @else
                                         <span class="text-sm font-semibold text-hp-slate/60">✕ Rejected</span>
                                     @endif

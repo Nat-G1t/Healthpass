@@ -132,6 +132,13 @@ Route::middleware(['auth', 'role:college_admin', 'college.scope'])
         // managedCollege() like every other /admin read, so a foreign id 404s.
         Route::get('/batches/{batch}', [AdminBatchRequestController::class, 'show'])
             ->whereNumber('batch')->name('batches.show');
+        // Cancel a whole PENDING batch (FR-ADM-11, D-52). Its own throttle
+        // bucket for the same reason as batch-appt-cancel below: an authed
+        // throttle keys on the user id with no path, so without the 3rd arg
+        // this would share one counter with batch-store.
+        Route::delete('/batches/{batch}/cancel', [AdminBatchRequestController::class, 'cancel'])
+            ->whereNumber('batch')
+            ->middleware('throttle:20,1,batch-cancel')->name('batches.cancel');
         // Withdraw ONE student's appointment from an approved batch — the other
         // half of D-39, since a batch student cannot cancel their own. Its own
         // throttle bucket: authed throttles key on the user id with no path, so

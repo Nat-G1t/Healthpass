@@ -248,7 +248,7 @@ class BatchApprovalController extends Controller
 
         if ($outcome === 'already_decided') {
             return redirect()->route('director.batches.index')
-                ->with('error', "{$batch->reference_no} has already been decided — nothing was changed.");
+                ->with('error', $this->unchangedMessage($batch));
         }
 
         if ($outcome === 'no_requested_date') {
@@ -336,10 +336,30 @@ class BatchApprovalController extends Controller
 
         if (! $wasRejected) {
             return redirect()->route('director.batches.index')
-                ->with('error', "{$batch->reference_no} has already been decided — nothing was changed.");
+                ->with('error', $this->unchangedMessage($batch));
         }
 
         return redirect()->route('director.batches.index')
             ->with('status', "{$batch->reference_no} rejected — no appointments were created.");
+    }
+
+    /**
+     * Why a decision POST changed nothing, worded for the state it actually
+     * found (D-52).
+     *
+     * Both approve() and reject() re-read the row under a lock and no-op when
+     * it is no longer pending — but "already decided" is only true when a
+     * DIRECTOR decided it. Since D-52 a College Admin can cancel their own
+     * pending request (FR-ADM-11), and telling the Director they decided that
+     * would credit them with an action they never took.
+     *
+     * refresh() because $batch still holds the row as the Approvals page
+     * rendered it — that stale copy is exactly what let the POST through.
+     */
+    private function unchangedMessage(BatchRequest $batch): string
+    {
+        return $batch->refresh()->status === 'cancelled'
+            ? "{$batch->reference_no} was cancelled by the college — nothing was changed."
+            : "{$batch->reference_no} has already been decided — nothing was changed.";
     }
 }
