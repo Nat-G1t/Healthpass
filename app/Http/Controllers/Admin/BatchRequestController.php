@@ -13,6 +13,8 @@ use App\Models\BatchRequest;
 use App\Models\StudentProfile;
 use App\Services\ClinicScheduleService;
 use App\Services\ReferenceNumberService;
+use App\Services\ScheduleClashService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -32,7 +34,10 @@ class BatchRequestController extends Controller
 {
     use ScopedToManagedCollege;
 
-    public function __construct(private readonly ClinicScheduleService $schedule) {}
+    public function __construct(
+        private readonly ClinicScheduleService $schedule,
+        private readonly ScheduleClashService $clashes,
+    ) {}
 
     /**
      * Batch Tracking (FR-ADM-05): the college's requests, newest first.
@@ -92,6 +97,33 @@ class BatchRequestController extends Controller
             // `today` — it never decides what "now" is (same rule as BR-20).
             'today' => today()->toDateString(),
             'elapsedSlotsToday' => $this->schedule->elapsedSlots(today()->toDateString()),
+            // D-54: the mini calendar's first month and its greyed-out days —
+            // the same rules, from the same service, as the student calendar.
+            'year' => today()->year,
+            'month' => today()->month,
+            'fullDays' => $this->schedule->fullDaysForMonth(today()->year, today()->month),
+            'cutoffDays' => $this->schedule->cutoffDaysForMonth(today()->year, today()->month),
+            'bookingDays' => config('healthpass.booking_days'),
+        ]);
+    }
+
+    /**
+     * JSON for the New Batch mini calendar (FR-ADM-04, D-54): the month's FULL
+     * days and the BR-20 cutoff day, fetched when the admin changes month.
+     *
+     * Exactly the two lists the student booking calendar gets, from the same
+     * ClinicScheduleService methods, so the two calendars can never disagree
+     * about which days are open. It reads no college data, so there is nothing
+     * here to scope.
+     */
+    public function availability(Request $request): JsonResponse
+    {
+        $year = max(now()->year, min((int) $request->query('year', now()->year), now()->year + 2));
+        $month = max(1, min((int) $request->query('month', now()->month), 12));
+
+        return response()->json([
+            'full_days' => $this->schedule->fullDaysForMonth($year, $month),
+            'cutoff_days' => $this->schedule->cutoffDaysForMonth($year, $month),
         ]);
     }
 
@@ -108,8 +140,11 @@ class BatchRequestController extends Controller
         // The form posts student_profile ids (that's what the roster picker
         // knows), but the pivot stores USER ids (data dictionary:
         // batch_request_students.student_id → users) — translate here.
-        $studentUserIds = StudentProfile::whereIn('id', $request->validated('students'))
-            ->pluck('user_id');
+        // Keyed user id => profile id: a D-54 clash is found by user id but
+        // reported back to the form under the profile id it posted.
+        $profileIdsByUserId = StudentProfile::whereIn('id', $request->validated('students'))
+            ->pluck('id', 'user_id');
+        $studentUserIds = $profileIdsByUserId->keys();
 
         // D-37: the span is DERIVED from the roster size, never posted.
         $startSlot = $request->validated('requested_time');
@@ -120,7 +155,7 @@ class BatchRequestController extends Controller
         // rows commit together or not at all. generateBatchRef() is called
         // INSIDE so its sequence lock holds until this commit (see the
         // service's concurrency notes).
-        $batch = DB::transaction(function () use ($request, $refs, $college, $studentUserIds, $startSlot, $requestedDate, $blocks): BatchRequest {
+        $batch = DB::transaction(function () use ($request, $refs, $college, $studentUserIds, $profileIdsByUserId, $startSlot, $requestedDate, $blocks): BatchRequest {
             // The Form Request already checked that every hour in the span has
             // room, but that read is unlocked and races with a student
             // self-booking the last seat in one of those hours. Re-check HERE
@@ -135,6 +170,18 @@ class BatchRequestController extends Controller
                         $this->schedule->label($fullSlots[0]),
                     ),
                 ]);
+            }
+
+            // D-54 / BR-25: the same race for the clash rule — a student may
+            // self-book one of these hours between the Form Request's read and
+            // this insert. Re-read under the lock, and report it with the same
+            // `clashes.*` keys, so the New Batch popup opens either way.
+            $clashes = $this->clashes->clashesForBatch($studentUserIds->all(), $requestedDate, $span, lock: true);
+
+            if ($clashes !== []) {
+                throw ValidationException::withMessages(
+                    StoreBatchRequestRequest::clashErrors($clashes, $profileIdsByUserId->all()),
+                );
             }
 
             $batch = BatchRequest::create([

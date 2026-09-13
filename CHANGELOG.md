@@ -4,6 +4,44 @@
 
 ### Added
 
+* **Batches and self-bookings can no longer double-book a student** (D-54, new
+  BR-25). **No schema change, no new table, no new package.** A student could
+  self-book Sept 10, 9–10 AM and their College Admin could still put them in a
+  batch for Sept 10 starting 9 AM — or the other way round — and nothing
+  refused either.
+  - New **`App\Services\ScheduleClashService`**, the one definition of a clash,
+    read by the student booking, the batch submission and the Director's
+    approval: an **hour overlap, for any service**; a batch holds its **whole
+    span** for every student on it while `pending` or `approved`; rejected and
+    cancelled batches, and a student withdrawn from an approved batch, hold
+    nothing; NULL-time (pre-D-37) rows never clash. Overlap is computed in PHP
+    from `requestedSpan()` — no raw SQL.
+  - **First come wins.** The student is refused on Book with "… has already
+    been scheduled for you by your college admin." (no batch reference, under
+    its own modal heading). The College Admin's submit comes back with a popup
+    listing every clashing student and what they clash with, plus **Remove
+    these students from the batch** / **Close**. The Director's approval
+    refuses a batch that already clashes. Student and admin writes re-check
+    under lock inside their transactions, exactly like the capacity checks.
+  - **BR-04 counts self-bookings only** — an approved 9 AM batch appointment no
+    longer forbids a 2 PM self-booking of the same service.
+  - **Kiosk link:** among today's scheduled appointments, the one whose hour
+    starts closest to check-in wins (a tie goes to the earlier hour; NULL-time
+    only if nothing else), **superseding D-33's "medical wins" edge rule**. The
+    `KioskSubmitTest` case that asserted medical-wins was rewritten for the new
+    rule, not deleted.
+  - The New Batch **Requested clinic date** is now a compact month calendar
+    with the student calendar's rules (past, FULL, cutoff and non-booking days
+    disabled; "today" from the server clock), fed by new
+    `GET /admin/batches/availability` with its own `batch-availability`
+    throttle bucket. `fullDaysForMonth()` and `cutoffDaysForMonth()` moved from
+    `BookAppointmentController` into `ClinicScheduleService`; the student
+    availability JSON is unchanged.
+  - 40 new cases: `tests/Unit/ScheduleClashServiceTest.php` (17) plus the
+    student booking, batch submit/create, Director approval and kiosk submit
+    suites, including two race tests that inject the competing booking between
+    the Form Request's read and the locked re-check.
+
 * **The Director can now provision staff accounts in the app** (D-47,
   FR-AUTH-10). **No schema change, no migration, no new package, and no fifth
   role.** Until now a College Admin or Nurse account could only be created by

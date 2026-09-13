@@ -88,6 +88,24 @@ class ClinicScheduleService
     }
 
     /**
+     * "7:00 AM – 10:00 AM" — the hours a span covers, without the slot count.
+     * D-54's clash list names another batch's hours this way.
+     *
+     * @param  list<string>  $span
+     */
+    public function rangeLabel(array $span): string
+    {
+        if ($span === []) {
+            return '—';
+        }
+
+        $start = Carbon::createFromFormat(self::SLOT_FORMAT, $span[0]);
+        $end = Carbon::createFromFormat(self::SLOT_FORMAT, end($span))->addHour();
+
+        return $start->format('g:i A').' – '.$end->format('g:i A');
+    }
+
+    /**
      * "7:00 AM – 10:00 AM (3 slots)" — the whole span a batch occupies.
      *
      * @param  list<string>  $span
@@ -98,10 +116,7 @@ class ClinicScheduleService
             return '—';
         }
 
-        $start = Carbon::createFromFormat(self::SLOT_FORMAT, $span[0]);
-        $end = Carbon::createFromFormat(self::SLOT_FORMAT, end($span))->addHour();
-
-        return $start->format('g:i A').' – '.$end->format('g:i A')
+        return $this->rangeLabel($span)
             .' ('.count($span).' slot'.(count($span) === 1 ? '' : 's').')';
     }
 
@@ -333,5 +348,105 @@ class ClinicScheduleService
             $span,
             fn (string $slot): bool => $this->bookedInSlot($date, $slot, $lock) >= $capacity,
         ));
+    }
+
+    // ── Month calendar (FR-STU-03, FR-ADM-04) ────────────────────────────────
+    // Moved here from BookAppointmentController by D-54, so the student booking
+    // calendar and the College Admin's New Batch mini calendar grey out exactly
+    // the same days.
+
+    /**
+     * Day numbers (1–31) the calendar greys out as FULL. FR-STU-03 / BR-02 / D-37.
+     *
+     * Since D-37 a day is full when EVERY one of its slots is at the hourly cap —
+     * a day with one free hour left is still bookable. The outer daily cap is
+     * kept as a second condition because it is the only one that sees legacy
+     * pre-D-37 rows (scheduled_time NULL), which sit in no slot.
+     *
+     * Portability (CLAUDE.md): one grouped query over the raw
+     * (scheduled_date, scheduled_time) pair — no DAY()/MONTH()/HOUR() in
+     * selectRaw or havingRaw — and the per-day roll-up is done in PHP.
+     * whereYear/whereMonth are compiled per-driver by Laravel, so they're safe.
+     *
+     * @return int[]
+     */
+    public function fullDaysForMonth(int $year, int $month): array
+    {
+        $hourlyCapacity = $this->hourlyCapacity();
+        $dailyCapacity = $this->dailyCapacity();
+        $slotCount = count($this->slots());
+
+        $rows = Appointment::query()
+            ->whereYear('scheduled_date', $year)
+            ->whereMonth('scheduled_date', $month)
+            ->where('status', '!=', 'cancelled')
+            ->select('scheduled_date', 'scheduled_time', DB::raw('COUNT(*) as cnt'))
+            ->groupBy('scheduled_date', 'scheduled_time')
+            ->get();
+
+        $fullSlotsPerDay = [];
+        $totalPerDay = [];
+
+        foreach ($rows as $row) {
+            $day = Carbon::parse($row->scheduled_date)->day;
+            $count = (int) $row->cnt;
+
+            $totalPerDay[$day] = ($totalPerDay[$day] ?? 0) + $count;
+
+            if ($row->scheduled_time !== null && $count >= $hourlyCapacity) {
+                $fullSlotsPerDay[$day] = ($fullSlotsPerDay[$day] ?? 0) + 1;
+            }
+        }
+
+        $fullDays = [];
+
+        foreach ($totalPerDay as $day => $total) {
+            $everySlotFull = $slotCount > 0 && ($fullSlotsPerDay[$day] ?? 0) >= $slotCount;
+
+            if ($everySlotFull || $total >= $dailyCapacity) {
+                $fullDays[] = $day;
+            }
+        }
+
+        // BR-23: TODAY is also unavailable once no hour is left to book — every
+        // slot has either filled up or already ended. Only today can have
+        // elapsed hours, so no other day needs this check (and a day with zero
+        // appointments never reaches the loop above, which is exactly the
+        // late-afternoon case that matters here).
+        $today = today();
+
+        if ($year === $today->year && $month === $today->month
+            && ! in_array($today->day, $fullDays, true)
+            && ! $this->hasAvailableSlot($today->toDateString())) {
+            $fullDays[] = $today->day;
+        }
+
+        sort($fullDays);
+
+        return $fullDays;
+    }
+
+    /**
+     * Day numbers unavailable because of the same-day closing cutoff (BR-20).
+     *
+     * Returns today's day-of-month only when the given month is the current month AND
+     * the local clock has reached closing_hour — i.e. at most one entry, and only for
+     * the current month. The cutoff is decided here (server-side), never trusted from
+     * the browser clock; the calendar just greys out whatever this returns.
+     *
+     * @return int[]
+     */
+    public function cutoffDaysForMonth(int $year, int $month): array
+    {
+        $today = today();
+        $closingHour = (int) config('healthpass.closing_hour');
+
+        $isCurrentMonth = $year === $today->year && $month === $today->month;
+
+        if ($isCurrentMonth && now()->hour >= $closingHour) {
+            return [$today->day];
+        }
+
+        return [];
     }
 }

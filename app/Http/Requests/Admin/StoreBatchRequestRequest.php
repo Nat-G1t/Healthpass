@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Http\Requests\Admin;
 
 use App\Models\BatchRequest;
+use App\Models\StudentProfile;
 use App\Services\ClinicScheduleService;
+use App\Services\ScheduleClashService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -103,10 +105,11 @@ class StoreBatchRequestRequest extends FormRequest
      * D-37 span rules. Runs only once the basic rules pass, so the student
      * count and the start hour are both trustworthy by this point.
      *
-     * The same three checks are re-run under a row lock at write time
-     * (BatchRequestController::store) — this read is unlocked and races with a
-     * self-booking taking the last seat in one of the batch's hours, exactly
-     * as the student booking Form Request does.
+     * The capacity check (4) and the D-54 clash check (5) are re-run under a
+     * row lock at write time (BatchRequestController::store) — this read is
+     * unlocked and races with a self-booking taking the last seat in one of
+     * the batch's hours, or a student self-booking one of them, exactly as the
+     * student booking Form Request does.
      */
     public function withValidator(Validator $validator): void
     {
@@ -170,7 +173,50 @@ class StoreBatchRequestRequest extends FormRequest
                         $fullSlots,
                     )),
                 ));
+
+                return;
+            }
+
+            // (5) D-54 / BR-25: no student may already be scheduled during the
+            // span — by their own self-booking or on another pending/approved
+            // batch, whatever the service. First come wins, so THIS batch is
+            // the one refused. One error per clashing student, keyed
+            // `clashes.<student_profile_id>`: the New Batch page collects those
+            // keys into its popup and its "Remove these students" button.
+            $profileIdsByUserId = StudentProfile::whereIn('id', (array) $this->input('students'))
+                ->pluck('id', 'user_id')
+                ->all();
+
+            $clashes = app(ScheduleClashService::class)
+                ->clashesForBatch(array_keys($profileIdsByUserId), $date, $span);
+
+            foreach (self::clashErrors($clashes, $profileIdsByUserId) as $key => $message) {
+                $validator->errors()->add($key, $message);
             }
         });
+    }
+
+    /**
+     * D-54: one validation message per clashing student, keyed
+     * `clashes.<student_profile_id>`.
+     *
+     * The form knows students by PROFILE id, while ScheduleClashService speaks
+     * USER ids (what the pivot stores), hence the lookup. Shared with the
+     * locked re-check in BatchRequestController::store() so both gates report
+     * a clash identically.
+     *
+     * @param  array<int, list<string>>  $clashes  user id => what they clash with
+     * @param  array<int, int>  $profileIdsByUserId
+     * @return array<string, string>
+     */
+    public static function clashErrors(array $clashes, array $profileIdsByUserId): array
+    {
+        $errors = [];
+
+        foreach ($clashes as $userId => $reasons) {
+            $errors['clashes.'.$profileIdsByUserId[$userId]] = implode('; ', $reasons);
+        }
+
+        return $errors;
     }
 }

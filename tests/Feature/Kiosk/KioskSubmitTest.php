@@ -12,6 +12,7 @@ use App\Models\StudentProfile;
 use App\Models\User;
 use App\Models\VitalSigns;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 /**
@@ -284,29 +285,94 @@ class KioskSubmitTest extends TestCase
     }
 
     /**
-     * D-33 edge rule: with BOTH a medical and a dental appointment today, the
-     * medical one wins the link and the dental one stays `scheduled`.
+     * UPDATED BY D-54 — this used to assert D-33's "medical wins" edge rule,
+     * which D-54 supersedes. With a medical AND a dental appointment today, the
+     * one whose hour starts closest to check-in now wins the link, whatever its
+     * service, and the other stays `scheduled`. Medical is created FIRST (lower
+     * id) and is further away, so both the old medical-first rule and a plain
+     * id-order pick would fail this test.
      */
-    public function test_medical_wins_when_both_appointments_are_booked_today(): void
+    public function test_the_appointment_closest_to_check_in_wins_whatever_its_service(): void
     {
+        Carbon::setTestNow(Carbon::parse('2026-09-10 13:30', 'Asia/Manila'));
+
         $student = $this->student();
-        // Dental created FIRST (lower id) so the test fails if the resolution
-        // orders by id instead of the medical-first rule.
-        $dental = Appointment::factory()->dental()->create([
-            'student_id' => $student->id,
-            'scheduled_date' => now()->toDateString(),
-            'status' => 'scheduled',
-        ]);
-        $medical = Appointment::factory()->medical()->create([
-            'student_id' => $student->id,
-            'scheduled_date' => now()->toDateString(),
-            'status' => 'scheduled',
-        ]);
+        $medical = $this->todaysAppointment($student, '08:00:00');
+        $dental = $this->todaysAppointment($student, '14:00:00', ['service_type' => 'dental']);
 
         $this->submit($student->id)->assertOk();
 
-        $this->assertSame($medical->id, ClinicVisit::first()->appointment_id);
-        $this->assertSame('scheduled', $dental->fresh()->status);
+        $this->assertSame($dental->id, ClinicVisit::first()->appointment_id);
+        $this->assertSame('scheduled', $medical->fresh()->status);
+    }
+
+    // ── D-54: the appointment closest to check-in wins the link ───────────────
+
+    /** A scheduled medical appointment today for $student in $slot (NULL = pre-D-37). */
+    private function todaysAppointment(User $student, ?string $slot, array $overrides = []): Appointment
+    {
+        return Appointment::factory()->medical()->create(array_merge([
+            'student_id' => $student->id,
+            'scheduled_date' => today()->toDateString(),
+            'scheduled_time' => $slot,
+            'status' => 'scheduled',
+        ], $overrides));
+    }
+
+    public function test_a_morning_check_in_links_the_9am_batch_appointment(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-09-10 09:10', 'Asia/Manila'));
+
+        $student = $this->student();
+        // The 2 PM one is created first, so an id-order pick would choose it.
+        $this->todaysAppointment($student, '14:00:00', ['source' => 'self']);
+        $batch = $this->todaysAppointment($student, '09:00:00', ['source' => 'batch']);
+
+        $this->submit($student->id)->assertOk();
+
+        $this->assertSame($batch->id, ClinicVisit::first()->appointment_id);
+    }
+
+    public function test_an_afternoon_check_in_links_the_2pm_self_booking(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-09-10 13:50', 'Asia/Manila'));
+
+        $student = $this->student();
+        $batch = $this->todaysAppointment($student, '09:00:00', ['source' => 'batch']);
+        $selfBooked = $this->todaysAppointment($student, '14:00:00', ['source' => 'self']);
+
+        $this->submit($student->id)->assertOk();
+
+        $this->assertSame($selfBooked->id, ClinicVisit::first()->appointment_id);
+        $this->assertSame('scheduled', $batch->fresh()->status);
+    }
+
+    public function test_a_tie_goes_to_the_earlier_hour(): void
+    {
+        // 10:00 is exactly one hour from both 9 AM and 11 AM.
+        Carbon::setTestNow(Carbon::parse('2026-09-10 10:00', 'Asia/Manila'));
+
+        $student = $this->student();
+        $this->todaysAppointment($student, '11:00:00');
+        $earlier = $this->todaysAppointment($student, '09:00:00', ['service_type' => 'dental']);
+
+        $this->submit($student->id)->assertOk();
+
+        $this->assertSame($earlier->id, ClinicVisit::first()->appointment_id);
+    }
+
+    public function test_an_appointment_with_no_time_links_only_when_nothing_else_is_booked(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-09-10 08:00', 'Asia/Manila'));
+
+        $student = $this->student();
+        // A pre-D-37 row has no hour to measure — it loses to any timed one.
+        $this->todaysAppointment($student, null);
+        $timed = $this->todaysAppointment($student, '16:00:00', ['service_type' => 'dental']);
+
+        $this->submit($student->id)->assertOk();
+
+        $this->assertSame($timed->id, ClinicVisit::first()->appointment_id);
     }
 
     /**

@@ -1,4 +1,4 @@
-# HealthPass — End-to-End UAT Scenarios (E2E-1…E2E-6)
+# HealthPass — End-to-End UAT Scenarios (E2E-1…E2E-9)
 
 Source: `docs/HealthPass_PRD.md` §13 (Acceptance & UAT). These are the
 Week-11 end-to-end acceptance runs, written as step-by-step checklists a
@@ -405,6 +405,75 @@ shows for the same scope.
 month and program; zero-visit programs appear on the printout; the header names
 the college, month, generator and time; the page prints clean at A4 and Letter;
 and `?college=` cannot move the scope.
+
+---
+
+## E2E-9 — A student can't be double-booked by a batch and a self-booking (D-54)
+
+**Goal:** confirm a College Admin cannot put a student into a batch during an
+hour that student already self-booked, that a student cannot self-book an hour
+their college's batch already holds, and that the New Batch page's clash popup,
+its **Remove** button and the new mini calendar all work.
+
+**Accounts:** students `juan.santos@psu.edu.ph` and `maria.reyes@psu.edu.ph`
+(both CCS), and the CCS Admin `admin.ccs@healthpass.test`.
+
+**Steps — a batch after a self-booking:**
+
+1. Log in as **Juan Santos**. Book Appointment → **Medical Clearance** → pick a
+   date at least two days ahead → **9:00 AM – 10:00 AM** → any purpose →
+   Confirm Booking → Yes, book it. → **Expect:** the booking confirmation.
+   Write down the date. Log out.
+2. Log in as the **CCS admin** and open **New Batch Request**. → **Expect:**
+   "Requested clinic date" is a **small month calendar**, not a date box. Past
+   days are faded and cannot be clicked, the left arrow is disabled on the
+   current month, the right arrow moves forward and back again, and any FULL
+   day is greyed with a "Full" label.
+3. Click Juan's date on the calendar. → **Expect:** "Selected: <that date>"
+   appears under it. Choose a **Reason**, **Service = Medical**, **Start time
+   9:00 AM – 10:00 AM**, and tick **Juan Santos** and **Maria Reyes**. Click
+   **Submit Batch Request**.
+4. → **Expect:** the page comes back with a popup titled **"Some students are
+   already scheduled at this time"**. It lists **Juan Santos**, his student
+   number and "self-booked <Mon DD>, 9:00 AM – 10:00 AM". **Maria is not
+   listed.** Behind the popup the reason, service, date, start hour and both
+   ticks are still filled in. Batch Tracking shows **no** new batch.
+5. Click **Close**. → **Expect:** the popup closes and **both** students are
+   still ticked.
+6. Change **Start time** to **10:00 AM – 11:00 AM** (the batch no longer covers
+   9 AM) and submit. → **Expect:** the confirmation screen with a new `BR-`
+   number. Two students need one hour, so this batch holds 10–11 AM.
+7. Start another **New Batch Request** for the **same date**, **Start time
+   9:00 AM – 10:00 AM**, ticking Juan and Maria again (Maria's other batch is
+   10–11, which 9–10 does not overlap). Submit. → **Expect:** the popup lists
+   **Juan only**. Click **Remove these students from the batch**. →
+   **Expect:** the popup closes, **Juan is unticked**, Maria is still ticked,
+   and the "(N of M selected)" counter drops by one. Submit again. →
+   **Expect:** the confirmation screen.
+
+**Steps — a self-booking after a batch:**
+
+8. Log out and log in as **Maria Reyes** — the pending batches from steps 6
+   and 7 hold her 9–10 AM and 10–11 AM on that date. Book Appointment →
+   **Dental Check** → the same date. → **Expect:** tapping the date and then
+   the **10:00 AM – 11:00 AM** hour works normally — nothing is refused yet.
+9. Confirm Booking → Yes, book it. → **Expect:** a popup titled **"Already
+   Scheduled by Your College"** reading "<Day, Mon DD>, 10:00 AM – 11:00 AM has
+   already been scheduled for you by your college admin." It shows **no**
+   `BR-` number and no other student's name. No appointment is created (her
+   dashboard's Next Appointment is unchanged).
+10. Close it, pick **2:00 PM – 3:00 PM** on the same date and book. →
+    **Expect:** the booking succeeds — a different hour on the same day does
+    not clash.
+
+**Pass criteria:** a batch is refused while any ticked student already holds an
+hour inside its span; the popup lists exactly those students and what they
+clash with; **Close** keeps the selection and **Remove** deselects only the
+listed students; a span that misses the booked hour submits; the student is
+refused on **Book** (never on tapping a date or hour) with the college-admin
+message and no batch reference; a non-overlapping hour on the same day books
+normally; the mini calendar disables past and FULL days and its month arrows
+work.
 
 ---
 

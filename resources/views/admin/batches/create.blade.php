@@ -27,6 +27,28 @@
     MAX_RENDER_ROWS matching rows are actually rendered; "Select all" operates
     on the DATA (all filtered matches), not on the rendered rows.
 --}}
+@php
+    // D-54: a batch that would double-book students comes back with ONE
+    // validation error per clashing student, keyed `clashes.<student_profile_id>`.
+    // $errors is the bag Laravel shares with every view after a failed
+    // validation; pick those keys out and pair each with its roster row.
+    $roster = $students->keyBy('id');
+
+    $clashes = collect($errors->getMessages())
+        ->filter(fn (array $messages, string $key): bool => str_starts_with($key, 'clashes.'))
+        ->map(function (array $messages, string $key) use ($roster): array {
+            $id = (int) substr($key, strlen('clashes.'));
+
+            return [
+                'id' => $id,
+                'name' => $roster[$id]['name'] ?? 'Student',
+                'number' => $roster[$id]['number'] ?? '—',
+                'with' => $messages[0],
+            ];
+        })
+        ->values();
+@endphp
+
 <script>
 function batchForm() {
     const MAX_RENDER_ROWS = 150;
@@ -52,6 +74,25 @@ function batchForm() {
         maxBatchSize:   {{ $maxBatchSize }},
         reasonOthers:  @js(\App\Models\BatchRequest::REASON_OTHERS),
 
+        // ── D-54 mini calendar ──────────────────────────────────────────────
+        // Same month grid and rules as the student booking calendar. FULL and
+        // cutoff days come from the server, and "today" is the SERVER's date
+        // shipped above — this browser's clock is never asked (BR-20/BR-23).
+        calYear:         {{ $year }},
+        calMonth:        {{ $month }},
+        fullDays:        @js($fullDays),
+        cutoffDays:      @js($cutoffDays),
+        bookingDays:     @js($bookingDays),
+        calLoading:      false,
+        availabilityUrl: @js(route('admin.batches.availability')),
+
+        // ── D-54 clash popup ────────────────────────────────────────────────
+        // Students the server refused because they are already scheduled
+        // during this span. Non-empty only straight after that refusal, which
+        // is exactly when the popup should open.
+        clashes:    @js($clashes),
+        clashModal: @js($clashes->isNotEmpty()),
+
         // ── Student picker ──────────────────────────────────────────────────
         students: @js($students),
         selected: @js(array_values(array_map('intval', old('students', [])))),
@@ -65,6 +106,25 @@ function batchForm() {
          */
         init() {
             this.selected = this.selected.filter(id => this.students.some(s => s.id === id));
+
+            // D-54: a date restored after a failed submission may sit in
+            // another month — open the calendar there.
+            if (/^\d{4}-\d{2}-\d{2}$/.test(this.requestedDate)) {
+                const [y, m] = this.requestedDate.split('-').map(Number);
+
+                if (y !== this.calYear || m !== this.calMonth) {
+                    this.calYear  = y;
+                    this.calMonth = m;
+                    this.fetchAvailability();
+                }
+            }
+
+            // The default pick is today, but today may already be unselectable
+            // (full, or past closing) — don't start on a greyed-out day.
+            if (this.requestedDate === this.today
+                && this.calendarCells.some(c => c.dateStr === this.today && c.isDisabled)) {
+                this.requestedDate = '';
+            }
         },
 
         get filtered() {
@@ -122,6 +182,116 @@ function batchForm() {
             if (this.requestedTime && this.isSlotElapsed(this.requestedTime)) {
                 this.requestedTime = '';
             }
+        },
+
+        // ── D-54 mini calendar ──────────────────────────────────────────────
+        /** "September 2026" */
+        get monthLabel() {
+            return new Date(this.calYear, this.calMonth - 1, 1)
+                .toLocaleString('en-US', { month: 'long', year: 'numeric' });
+        },
+
+        /** "Thu, Sep 10, 2026" — built from the date's parts, so no timezone shift. */
+        get requestedDateLabel() {
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(this.requestedDate)) return '';
+            const [y, m, d] = this.requestedDate.split('-').map(Number);
+            return new Date(y, m - 1, d).toLocaleDateString('en-US', {
+                weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
+            });
+        },
+
+        /** The server's current month is the earliest one worth showing. */
+        get canGoBack() {
+            const [y, m] = this.today.split('-').map(Number);
+            return this.calYear > y || (this.calYear === y && this.calMonth > m);
+        },
+
+        /**
+         * One cell per day, padded to the right weekday column. A day is
+         * disabled when it is past, FULL, today after closing (cutoff), or not
+         * a booking weekday — the student calendar's list, exactly.
+         */
+        get calendarCells() {
+            const firstDow    = new Date(this.calYear, this.calMonth - 1, 1).getDay();
+            const daysInMonth = new Date(this.calYear, this.calMonth, 0).getDate();
+            const mm          = String(this.calMonth).padStart(2, '0');
+            const cells       = [];
+
+            for (let i = 0; i < firstDow; i++) {
+                cells.push({ blank: true, key: 'b' + i });
+            }
+
+            for (let d = 1; d <= daysInMonth; d++) {
+                const dateStr  = `${this.calYear}-${mm}-${String(d).padStart(2, '0')}`;
+                const weekday  = new Date(this.calYear, this.calMonth - 1, d).getDay();
+                const isCutoff = this.cutoffDays.includes(d);
+                const isFull   = this.fullDays.includes(d) && !isCutoff;
+
+                cells.push({
+                    blank: false, key: dateStr, d, dateStr, isFull,
+                    isToday: dateStr === this.today,
+                    // 'YYYY-MM-DD' strings sort as dates, so < means "before".
+                    isDisabled: dateStr < this.today || !this.bookingDays.includes(weekday)
+                        || isFull || isCutoff,
+                });
+            }
+
+            return cells;
+        },
+
+        prevMonth() {
+            if (!this.canGoBack) return;
+            if (this.calMonth === 1) { this.calYear--; this.calMonth = 12; } else { this.calMonth--; }
+            this.fetchAvailability();
+        },
+
+        nextMonth() {
+            if (this.calMonth === 12) { this.calYear++; this.calMonth = 1; } else { this.calMonth++; }
+            this.fetchAvailability();
+        },
+
+        /** A picked day stays picked while the admin browses other months. */
+        pickDate(cell) {
+            if (cell.isDisabled) return;
+            this.requestedDate = cell.dateStr;
+            this.onDateChange();
+        },
+
+        /** The month on screen's full + cutoff days (GET /admin/batches/availability). */
+        async fetchAvailability() {
+            const year = this.calYear;
+            const month = this.calMonth;
+            this.calLoading = true;
+
+            try {
+                const response = await fetch(`${this.availabilityUrl}?year=${year}&month=${month}`, {
+                    headers: { 'Accept': 'application/json' },
+                });
+                const data = await response.json();
+
+                // Ignore a stale answer if the admin has already moved on.
+                if (year !== this.calYear || month !== this.calMonth) return;
+
+                this.fullDays   = data.full_days;
+                this.cutoffDays = data.cutoff_days;
+            } catch {
+                // Don't leave the previous month's days greyed out on this one —
+                // the server still refuses an unavailable date on submit.
+                this.fullDays   = [];
+                this.cutoffDays = [];
+            } finally {
+                if (year === this.calYear && month === this.calMonth) {
+                    this.calLoading = false;
+                }
+            }
+        },
+
+        // ── D-54 clash popup ────────────────────────────────────────────────
+        /** "Remove these students from the batch": deselect exactly them, then close. */
+        removeClashingStudents() {
+            const clashing = this.clashes.map(c => c.id);
+            this.selected = this.selected.filter(id => !clashing.includes(id));
+            this.clashModal = false;
         },
 
         /** How many contiguous hours this cohort needs. */
@@ -224,14 +394,112 @@ function batchForm() {
                         @enderror
                     </div>
 
-                    {{-- Requested clinic date (D-29): the admin knows the
-                         cohort's event; the Director confirms or adjusts at
-                         approval. Past dates disabled; server re-checks. --}}
+                    {{-- Requested clinic date (D-29) — a mini calendar since
+                         D-54, with the student booking calendar's rules: past
+                         days, FULL days, non-booking weekdays and an unavailable
+                         today (after closing, or once no hour is left) cannot be
+                         picked. It still submits as `requested_date` and the
+                         server re-checks it. --}}
                     <div>
-                        <x-hp.input label="Requested clinic date" type="date"
-                                    name="requested_date" x-model="requestedDate"
-                                    @change="onDateChange()"
-                                    min="{{ now()->toDateString() }}" required />
+                        <span class="text-sm font-semibold text-hp-slate">Requested clinic date</span>
+                        <input type="hidden" name="requested_date" :value="requestedDate">
+
+                        <div class="mt-1.5 rounded-lg border border-hp-slate/15 p-3">
+                            {{-- Month navigation --}}
+                            <div class="mb-2 flex items-center justify-between">
+                                <button type="button" @click="prevMonth()" :disabled="!canGoBack"
+                                        aria-label="Previous month"
+                                        class="flex h-7 w-7 items-center justify-center rounded-lg transition-colors"
+                                        :class="canGoBack
+                                            ? 'text-hp-slate hover:bg-hp-bg hover:text-hp-orange'
+                                            : 'cursor-not-allowed text-hp-slate/20'">
+                                    <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+                                    </svg>
+                                </button>
+
+                                <span class="text-xs font-semibold text-hp-slate" x-text="monthLabel"></span>
+
+                                <button type="button" @click="nextMonth()" aria-label="Next month"
+                                        class="flex h-7 w-7 items-center justify-center rounded-lg text-hp-slate transition-colors hover:bg-hp-bg hover:text-hp-orange">
+                                    <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+                                    </svg>
+                                </button>
+                            </div>
+
+                            {{-- Grid (relative, so the loading overlay can cover it) --}}
+                            <div class="relative">
+                                <div x-show="calLoading" x-cloak
+                                     class="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-hp-white/70 backdrop-blur-[1px]">
+                                    <svg class="h-4 w-4 animate-spin text-hp-orange" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                                    </svg>
+                                </div>
+
+                                <div class="grid grid-cols-7">
+                                    @foreach (['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'] as $weekday)
+                                        <div class="flex h-6 items-center justify-center text-[10px] font-semibold uppercase tracking-wider text-hp-slate/35">
+                                            {{ $weekday }}
+                                        </div>
+                                    @endforeach
+                                </div>
+
+                                <div class="grid grid-cols-7 gap-y-0.5">
+                                    <template x-for="cell in calendarCells" :key="cell.key">
+                                        <div class="flex items-center justify-center">
+                                            <button x-show="!cell.blank" type="button"
+                                                :disabled="cell.isDisabled"
+                                                @click="pickDate(cell)"
+                                                class="flex h-8 w-8 flex-col items-center justify-center rounded-full text-xs
+                                                       transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-hp-orange"
+                                                :class="{
+                                                    'bg-hp-orange text-white font-semibold shadow-sm ring-2 ring-hp-orange/25 hp-anim-pop':
+                                                        !cell.blank && requestedDate === cell.dateStr,
+                                                    'ring-2 ring-hp-orange font-semibold':
+                                                        !cell.blank && cell.isToday && !cell.isDisabled && requestedDate !== cell.dateStr,
+                                                    'bg-hp-bg text-hp-slate/40 cursor-default':
+                                                        !cell.blank && cell.isFull,
+                                                    'text-hp-slate/25 cursor-not-allowed':
+                                                        !cell.blank && cell.isDisabled && !cell.isFull,
+                                                    'text-hp-slate hover:bg-hp-peach/50 hover:text-hp-orange cursor-pointer':
+                                                        !cell.blank && !cell.isDisabled && requestedDate !== cell.dateStr,
+                                                }">
+                                                <span x-text="cell.d" class="leading-none"></span>
+                                                <span x-show="cell.isFull"
+                                                      class="mt-px block text-[6px] font-bold uppercase leading-none tracking-wide">
+                                                    Full
+                                                </span>
+                                            </button>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+
+                            {{-- Legend — the student calendar's, compacted --}}
+                            <div class="mt-3 flex flex-wrap gap-x-3 gap-y-1.5 border-t border-hp-slate/10 pt-2.5">
+                                <span class="flex items-center gap-1 text-[11px] text-hp-slate/50">
+                                    <span class="h-2.5 w-2.5 rounded-full bg-hp-orange"></span> Selected
+                                </span>
+                                <span class="flex items-center gap-1 text-[11px] text-hp-slate/50">
+                                    <span class="h-2.5 w-2.5 rounded-full border-2 border-hp-orange bg-hp-white"></span> Today
+                                </span>
+                                <span class="flex items-center gap-1 text-[11px] text-hp-slate/50">
+                                    <span class="h-2.5 w-2.5 rounded-full border border-hp-slate/20 bg-hp-bg"></span> Full
+                                </span>
+                                <span class="flex items-center gap-1 text-[11px] text-hp-slate/50">
+                                    <span class="h-2.5 w-2.5 rounded-full border border-hp-slate/20 bg-hp-white"></span> Available
+                                </span>
+                                <span class="flex items-center gap-1 text-[11px] text-hp-slate/50">
+                                    <span class="h-2.5 w-2.5 rounded-full border border-hp-slate/10 bg-transparent opacity-40"></span> Unavailable
+                                </span>
+                            </div>
+                        </div>
+
+                        <p x-show="requestedDate" x-cloak class="mt-1.5 text-xs text-hp-slate/70">
+                            Selected: <span class="font-semibold text-hp-slate" x-text="requestedDateLabel"></span>
+                        </p>
                         <p class="mt-1 text-xs text-hp-slate/50">
                             When should these students visit the clinic? The
                             Director confirms this date or rejects with a reason
@@ -406,6 +674,78 @@ function batchForm() {
         </div>
 
     </div>
+
+    {{-- ── Clash popup (FR-ADM-04, D-54) ────────────────────────────────────
+         Opens on page load when the server refused this batch because some
+         students are already scheduled during its span. Same dialog shape as
+         the modals on Batch Tracking: teleported to <body> so no ancestor's
+         overflow or transform clips it, and dismissable with Esc, a backdrop
+         click or Close — all of which KEEP the selection, so the admin can
+         change the date or start hour instead. The list is rendered by Blade
+         from the validation errors, escaped like any other output. --}}
+    <template x-teleport="body">
+        <div
+            x-show="clashModal"
+            x-cloak
+            @keydown.escape.window="clashModal = false"
+            class="fixed inset-0 z-[60] flex items-center justify-center px-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="batch-clash-title"
+        >
+            {{-- Backdrop — click outside to dismiss --}}
+            <div
+                x-show="clashModal"
+                @click="clashModal = false"
+                x-transition:enter="ease-hp-out duration-hp-base"
+                x-transition:enter-start="opacity-0"
+                x-transition:enter-end="opacity-100"
+                x-transition:leave="ease-hp-in duration-hp-fast"
+                x-transition:leave-start="opacity-100"
+                x-transition:leave-end="opacity-0"
+                class="absolute inset-0 bg-hp-slate/50"
+                aria-hidden="true"
+            ></div>
+
+            {{-- Panel --}}
+            <div
+                x-show="clashModal"
+                x-transition:enter="ease-hp-spring duration-hp-slow"
+                x-transition:enter-start="opacity-0 translate-y-6"
+                x-transition:enter-end="opacity-100 translate-y-0"
+                x-transition:leave="ease-hp-in duration-hp-base"
+                x-transition:leave-start="opacity-100 translate-y-0"
+                x-transition:leave-end="opacity-0 translate-y-6"
+                class="relative w-full max-w-lg rounded-2xl bg-hp-white p-6 shadow-xl"
+            >
+                <h2 id="batch-clash-title" class="text-lg font-semibold text-hp-slate">
+                    Some students are already scheduled at this time
+                </h2>
+
+                <p class="mt-1.5 text-sm text-hp-slate/70">
+                    A student can't be booked twice in the same hour. Remove them from
+                    this batch, or close this and choose a different date or start hour.
+                </p>
+
+                <ul class="mt-4 max-h-72 divide-y divide-hp-slate/10 overflow-y-auto rounded-lg border border-hp-slate/10">
+                    @foreach ($clashes as $clash)
+                        <li class="px-4 py-2.5">
+                            <p class="text-sm font-medium text-hp-slate">
+                                {{ $clash['name'] }}
+                                <span class="font-normal text-hp-slate/50">· {{ $clash['number'] }}</span>
+                            </p>
+                            <p class="mt-0.5 text-xs text-hp-slate/70">{{ $clash['with'] }}</p>
+                        </li>
+                    @endforeach
+                </ul>
+
+                <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                    <x-hp.button variant="muted" @click="clashModal = false">Close</x-hp.button>
+                    <x-hp.button @click="removeClashingStudents()">Remove these students from the batch</x-hp.button>
+                </div>
+            </div>
+        </div>
+    </template>
 </form>
 
 </x-layout.sidebar>

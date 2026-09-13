@@ -138,37 +138,52 @@ final class SubmitKioskVisit
     }
 
     /**
-     * Today's non-cancelled appointment for this student, or null (walk-in,
-     * BR-10). D-33 (amends D-3): dental appointments now link too, so the
-     * nurse-encode step completes them and dental visits get a college
-     * snapshot. Medical is tried first — when BOTH are booked today the
-     * medical appointment wins the link and the dental one stays `scheduled`
-     * (D-33 edge rule). Walk-ins are first-class — they flow through the
-     * queue identically.
+     * Today's open appointment for this student, or null (walk-in, BR-10).
+     *
+     * D-33 (amends D-3) made dental appointments link too, so the nurse-encode
+     * step completes them and dental visits get a college snapshot.
+     *
+     * D-54 replaces D-33's "medical wins" edge rule. A student can now hold,
+     * say, a 9 AM batch appointment AND a 2 PM self-booking on the same day, so
+     * the link goes to the appointment whose hour STARTS closest to check-in
+     * (now()), whatever its service; a tie goes to the earlier hour. A row
+     * with no hour (pre-D-37) has nothing to measure, so it links only when no
+     * timed appointment exists (lowest id first). Walk-ins are first-class —
+     * they flow through the queue identically.
      */
     private function todaysAppointmentId(int $studentId): ?int
     {
-        foreach (['medical', 'dental'] as $serviceType) {
-            $id = Appointment::query()
-                ->where('student_id', $studentId)
-                ->where('service_type', $serviceType)
-                ->whereDate('scheduled_date', Carbon::today())
-                // Only an OPEN appointment may be linked. Matching "!= cancelled"
-                // also caught 'completed', so a student returning to the kiosk after
-                // a nurse already encoded their morning visit would re-link the same,
-                // already-completed appointment — the nurse then completes it twice
-                // and one appointment yields two counted visits. A second visit with
-                // no open appointment is a walk-in (appointment_id null, BR-10).
-                ->where('status', 'scheduled')
-                ->orderBy('id')
-                ->value('id');
+        $appointments = Appointment::query()
+            ->where('student_id', $studentId)
+            ->whereDate('scheduled_date', Carbon::today())
+            // Only an OPEN appointment may be linked. Matching "!= cancelled"
+            // also caught 'completed', so a student returning to the kiosk after
+            // a nurse already encoded their morning visit would re-link the same,
+            // already-completed appointment — the nurse then completes it twice
+            // and one appointment yields two counted visits. A second visit with
+            // no open appointment is a walk-in (appointment_id null, BR-10).
+            ->where('status', 'scheduled')
+            ->orderBy('id')
+            ->get(['id', 'scheduled_time']);
 
-            if ($id !== null) {
-                return (int) $id;
-            }
+        $timed = $appointments->whereNotNull('scheduled_time');
+
+        if ($timed->isEmpty()) {
+            return $appointments->first()?->id;
         }
 
-        return null;
+        $checkIn = now()->getTimestamp();
+
+        // Seconds between check-in and the start of the appointment's hour.
+        $distance = fn (Appointment $appointment): int => abs(
+            Carbon::parse(Carbon::today()->toDateString().' '.$appointment->scheduled_time)->getTimestamp() - $checkIn
+        );
+
+        // Closest first; on a tie, the earlier hour ('H:i:s' keys sort as times).
+        return $timed
+            ->sort(fn (Appointment $a, Appointment $b): int => [$distance($a), $a->scheduled_time] <=> [$distance($b), $b->scheduled_time])
+            ->first()
+            ->id;
     }
 
     /** BMI = weight(kg) ÷ height(m)², 1 decimal — matches the kiosk display (FR-KSK-09). */

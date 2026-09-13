@@ -521,6 +521,80 @@ class BatchApprovalDecisionTest extends TestCase
         $this->assertDatabaseCount('appointments', 0);
     }
 
+    // ── D-54 / BR-25: students already scheduled during the span ────────────
+    // Submission refuses a clashing batch, so these can only arise for a batch
+    // submitted before D-54, or one that raced a booking. Built directly in the
+    // database for exactly that reason.
+
+    public function test_approval_is_refused_when_students_are_already_scheduled_during_its_hours(): void
+    {
+        $date = now()->addDays(7)->toDateString();
+        $batch = $this->makeBatchWithStudents(5, ['requested_date' => $date, 'requested_time' => '07:00:00']);
+
+        // Four of the five students self-booked 7 AM on the same day.
+        $clashing = $batch->batchRequestStudents()->orderBy('id')->take(4)->get();
+
+        foreach ($clashing as $row) {
+            Appointment::factory()->inSlot('07:00:00')->create([
+                'student_id' => $row->student_id,
+                'scheduled_date' => $date,
+                'source' => 'self',
+            ]);
+        }
+
+        $names = User::whereIn('id', $clashing->pluck('student_id'))->orderBy('name')->pluck('name');
+
+        $this->approve($batch)
+            ->assertRedirect('/director/batches')
+            ->assertSessionHas(
+                'error',
+                "{$batch->reference_no} cannot be approved — 4 student(s) are already scheduled during its hours: "
+                ."{$names[0]}, {$names[1]}, {$names[2]} and 1 more. Reject it with a reason so the college can resubmit.",
+            );
+
+        $batch->refresh();
+        $this->assertSame('pending', $batch->status);
+        $this->assertNull($batch->scheduled_date);
+        $this->assertNull($batch->reviewed_by);
+        // Nothing fanned out — only the four self-bookings exist.
+        $this->assertSame(0, Appointment::where('batch_request_id', $batch->id)->count());
+        $this->assertDatabaseCount('appointments', 4);
+    }
+
+    public function test_approval_is_refused_when_a_student_is_on_an_overlapping_batch(): void
+    {
+        $date = now()->addDays(7)->toDateString();
+        $batch = $this->makeBatchWithStudents(2, ['requested_date' => $date, 'requested_time' => '09:00:00']);
+        $studentId = $batch->batchRequestStudents()->orderBy('id')->value('student_id');
+
+        // An approved 8–10 AM batch already holds that student.
+        $other = BatchRequest::create([
+            'reference_no' => 'BR-'.now()->year.'-999',
+            'college_id' => $this->ccs->id,
+            'requested_by' => $this->admin->id,
+            'reason' => 'ojt',
+            'service_type' => 'dental',
+            'requested_date' => $date,
+            'scheduled_date' => $date,
+            'requested_time' => '08:00:00',
+            'requested_blocks' => 2,
+            'status' => 'approved',
+        ]);
+        BatchRequestStudent::create(['batch_request_id' => $other->id, 'student_id' => $studentId]);
+
+        $name = User::findOrFail($studentId)->name;
+
+        $this->approve($batch)
+            ->assertRedirect('/director/batches')
+            ->assertSessionHas('error', fn (string $error) => str_contains(
+                $error,
+                "1 student(s) are already scheduled during its hours: {$name}. Reject it with a reason",
+            ));
+
+        $this->assertSame('pending', $batch->fresh()->status);
+        $this->assertSame(0, Appointment::where('batch_request_id', $batch->id)->count());
+    }
+
     public function test_non_directors_cannot_approve(): void
     {
         $batch = $this->makeBatchWithStudents(2);

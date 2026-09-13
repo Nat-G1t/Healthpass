@@ -10,8 +10,10 @@ use App\Http\Requests\Director\RejectBatchRequest;
 use App\Jobs\SendAppointmentScheduledMail;
 use App\Models\Appointment;
 use App\Models\BatchRequest;
+use App\Models\User;
 use App\Services\ClinicScheduleService;
 use App\Services\ReferenceNumberService;
+use App\Services\ScheduleClashService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -39,7 +41,10 @@ use Illuminate\View\View;
  */
 class BatchApprovalController extends Controller
 {
-    public function __construct(private readonly ClinicScheduleService $schedule) {}
+    public function __construct(
+        private readonly ClinicScheduleService $schedule,
+        private readonly ScheduleClashService $clashes,
+    ) {}
 
     /** All colleges' batch requests, newest first (FR-DIRA-01). */
     public function index(): View
@@ -149,6 +154,7 @@ class BatchApprovalController extends Controller
         // 'approved' | 'already_decided' | 'no_requested_date'
         // | 'stale_requested_date' | 'no_requested_time'
         // | ['span_elapsed'|'span_full', <offending hour label>]
+        // | ['span_clash', <clashing student user ids>]  (D-54)
         $outcome = DB::transaction(function () use ($batch, $director, $refService): string|array {
             $locked = BatchRequest::whereKey($batch->id)->lockForUpdate()->firstOrFail();
 
@@ -198,6 +204,24 @@ class BatchApprovalController extends Controller
                 return ['span_full', $this->schedule->label($fullSlots[0])];
             }
 
+            // D-54 / BR-25: no student on this batch may already be scheduled
+            // during its hours. Submission refuses such a batch, so this only
+            // catches one submitted before D-54 or one that raced a booking —
+            // read under the same lock, refused on the same reject-and-resubmit
+            // terms. The batch itself is left out, or it would clash with its
+            // own students.
+            $clashes = $this->clashes->clashesForBatch(
+                $locked->batchRequestStudents()->pluck('student_id')->all(),
+                $scheduledDate,
+                $span,
+                exceptBatchId: $locked->id,
+                lock: true,
+            );
+
+            if ($clashes !== []) {
+                return ['span_clash', array_keys($clashes)];
+            }
+
             $locked->update([
                 'status' => 'approved',
                 'scheduled_date' => $scheduledDate,
@@ -233,6 +257,12 @@ class BatchApprovalController extends Controller
 
             return 'approved';
         });
+
+        // D-54: the clash refusal carries the clashing students' user ids.
+        if (is_array($outcome) && $outcome[0] === 'span_clash') {
+            return redirect()->route('director.batches.index')
+                ->with('error', $this->clashMessage($batch, $outcome[1]));
+        }
 
         // Both span refusals carry the offending hour's label alongside the reason.
         if (is_array($outcome)) {
@@ -341,6 +371,28 @@ class BatchApprovalController extends Controller
 
         return redirect()->route('director.batches.index')
             ->with('status', "{$batch->reference_no} rejected — no appointments were created.");
+    }
+
+    /**
+     * "BR-2026-004 cannot be approved — 4 student(s) are already scheduled
+     * during its hours: A, B, C and 1 more. Reject it …" (D-54).
+     *
+     * At most three names, so a 60-student clash still reads as one line; the
+     * Director only needs enough to explain the rejection, and the College
+     * Admin's resubmission shows the full list in its own popup.
+     *
+     * @param  list<int>  $studentUserIds
+     */
+    private function clashMessage(BatchRequest $batch, array $studentUserIds): string
+    {
+        $names = User::whereIn('id', $studentUserIds)->orderBy('name')->pluck('name');
+        $more = $names->count() - 3;
+
+        return "{$batch->reference_no} cannot be approved — ".count($studentUserIds)
+            .' student(s) are already scheduled during its hours: '
+            .$names->take(3)->implode(', ')
+            .($more > 0 ? " and {$more} more" : '')
+            .'. Reject it with a reason so the college can resubmit.';
     }
 
     /**

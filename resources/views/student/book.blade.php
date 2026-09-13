@@ -56,6 +56,16 @@ function bookCalendar() {
         },
 
         /**
+         * D-54: being already scheduled by the college is not a booking problem
+         * the student caused, so that refusal gets its own heading.
+         */
+        get errorTitle() {
+            return this.errorMessage.includes('scheduled for you by your college admin')
+                ? 'Already Scheduled by Your College'
+                : 'Booking Not Available';
+        },
+
+        /**
          * D-28: purpose is only required for a medical clearance. Dental needs
          * none; picking "Others" needs the specify text. Mirrors the server's
          * StoreAppointmentRequest rules — the server stays the real gate.
@@ -699,7 +709,7 @@ function bookCalendar() {
                              1.333.192 3 1.732 3z"/>
                 </svg>
             </div>
-            <h3 class="text-base font-semibold text-hp-slate">Booking Not Available</h3>
+            <h3 class="text-base font-semibold text-hp-slate" x-text="errorTitle">Booking Not Available</h3>
         </div>
 
         <p class="text-sm text-hp-slate/70" x-text="errorMessage"></p>

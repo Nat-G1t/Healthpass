@@ -7,12 +7,13 @@ namespace App\Http\Requests\Student;
 use App\Models\Appointment;
 use App\Models\ClearanceRecord;
 use App\Services\ClinicScheduleService;
+use App\Services\ScheduleClashService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 /**
- * Validates a self-booking submission (FR-STU-04, FR-STU-05, BR-02, BR-04).
+ * Validates a self-booking submission (FR-STU-04, FR-STU-05, BR-02, BR-04, BR-25).
  *
  * Basic rules run first (service enum, date format, not in the past, and the
  * D-28 purpose of a medical clearance). The two DB-side checks run in the
@@ -150,6 +151,19 @@ class StoreAppointmentRequest extends FormRequest
                 return;
             }
 
+            // D-54 / BR-25: the student's college may already hold them in a
+            // batch during this hour — pending or approved, any service. First
+            // come wins, so this later self-booking is refused. Checked before
+            // capacity: "you're already scheduled then" is the real reason, and
+            // the message says who did it without naming the batch.
+            $clashes = app(ScheduleClashService::class);
+
+            if (in_array($slot, $clashes->blockedSlotsForStudent($this->user()->id, $date), true)) {
+                $validator->errors()->add('time', $clashes->studentClashMessage($date, $slot));
+
+                return;
+            }
+
             // D-37: per-slot cap. Medical and dental share this counter — an
             // appointment of either service occupies one of the hour's 12 seats.
             if ($schedule->bookedInSlot($date, $slot) >= $schedule->hourlyCapacity()) {
@@ -158,8 +172,12 @@ class StoreAppointmentRequest extends FormRequest
                 return;
             }
 
-            // BR-04: one active (non-cancelled) appointment per student per service per date.
+            // BR-04: one active (non-cancelled) SELF-booked appointment per
+            // student per service per date. Since D-54 a batch-made appointment
+            // no longer counts — an approved 9 AM batch must not forbid a 2 PM
+            // self-booking, which the clash rule above already allows.
             $duplicate = Appointment::where('student_id', $this->user()->id)
+                ->where('source', 'self')
                 ->where('service_type', $service)
                 ->whereDate('scheduled_date', $date)
                 ->where('status', '!=', 'cancelled')

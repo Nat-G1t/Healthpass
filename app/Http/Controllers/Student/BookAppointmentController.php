@@ -10,6 +10,7 @@ use App\Jobs\SendAppointmentScheduledMail;
 use App\Models\Appointment;
 use App\Services\ClinicScheduleService;
 use App\Services\ReferenceNumberService;
+use App\Services\ScheduleClashService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -20,7 +21,10 @@ use Illuminate\View\View;
 
 class BookAppointmentController extends Controller
 {
-    public function __construct(private readonly ClinicScheduleService $schedule) {}
+    public function __construct(
+        private readonly ClinicScheduleService $schedule,
+        private readonly ScheduleClashService $clashes,
+    ) {}
 
     public function show(): View
     {
@@ -30,8 +34,8 @@ class BookAppointmentController extends Controller
         return view('student.book', [
             'year' => $year,
             'month' => $month,
-            'fullDays' => $this->fullDaysForMonth($year, $month),
-            'cutoffDays' => $this->cutoffDaysForMonth($year, $month),
+            'fullDays' => $this->schedule->fullDaysForMonth($year, $month),
+            'cutoffDays' => $this->schedule->cutoffDaysForMonth($year, $month),
             'bookingDays' => config('healthpass.booking_days'),
             // D-37: the slot picker's options come from the config-derived grid,
             // never from a list typed into the Blade file.
@@ -58,8 +62,8 @@ class BookAppointmentController extends Controller
         $month = max(1, min((int) $request->query('month', now()->month), 12));
 
         $payload = [
-            'full_days' => $this->fullDaysForMonth($year, $month),
-            'cutoff_days' => $this->cutoffDaysForMonth($year, $month),
+            'full_days' => $this->schedule->fullDaysForMonth($year, $month),
+            'cutoff_days' => $this->schedule->cutoffDaysForMonth($year, $month),
         ];
 
         $date = (string) $request->query('date', '');
@@ -101,6 +105,15 @@ class BookAppointmentController extends Controller
                 ]);
             }
 
+            // D-54 / BR-25: re-read, under the same lock, whether a batch holds
+            // this student during the hour — their College Admin may have
+            // submitted one between the Form Request's read and this insert.
+            if (in_array($slot, $this->clashes->blockedSlotsForStudent($userId, $date, lock: true), true)) {
+                throw ValidationException::withMessages([
+                    'time' => $this->clashes->studentClashMessage($date, $slot),
+                ]);
+            }
+
             // D-37: the per-slot cap lives inside the SAME locked block — the
             // 12-seat hour is exactly the resource two students race for.
             if ($this->schedule->bookedInSlot($date, $slot, lock: true) >= $this->schedule->hourlyCapacity()) {
@@ -109,7 +122,9 @@ class BookAppointmentController extends Controller
                 ]);
             }
 
+            // BR-04 counts SELF-bookings only since D-54 (see the Form Request).
             $duplicate = Appointment::where('student_id', $userId)
+                ->where('source', 'self')
                 ->where('service_type', $service)
                 ->whereDate('scheduled_date', $date)
                 ->where('status', '!=', 'cancelled')
@@ -212,100 +227,5 @@ class BookAppointmentController extends Controller
         return redirect()
             ->route($route)
             ->with('status', 'appointment-cancelled');
-    }
-
-    /**
-     * Day numbers (1–31) the calendar greys out as FULL. FR-STU-03 / BR-02 / D-37.
-     *
-     * Since D-37 a day is full when EVERY one of its slots is at the hourly cap —
-     * a day with one free hour left is still bookable. The outer daily cap is
-     * kept as a second condition because it is the only one that sees legacy
-     * pre-D-37 rows (scheduled_time NULL), which sit in no slot.
-     *
-     * Portability (CLAUDE.md): one grouped query over the raw
-     * (scheduled_date, scheduled_time) pair — no DAY()/MONTH()/HOUR() in
-     * selectRaw or havingRaw — and the per-day roll-up is done in PHP.
-     * whereYear/whereMonth are compiled per-driver by Laravel, so they're safe.
-     *
-     * @return int[]
-     */
-    private function fullDaysForMonth(int $year, int $month): array
-    {
-        $hourlyCapacity = $this->schedule->hourlyCapacity();
-        $dailyCapacity = $this->schedule->dailyCapacity();
-        $slotCount = count($this->schedule->slots());
-
-        $rows = Appointment::query()
-            ->whereYear('scheduled_date', $year)
-            ->whereMonth('scheduled_date', $month)
-            ->where('status', '!=', 'cancelled')
-            ->select('scheduled_date', 'scheduled_time', DB::raw('COUNT(*) as cnt'))
-            ->groupBy('scheduled_date', 'scheduled_time')
-            ->get();
-
-        $fullSlotsPerDay = [];
-        $totalPerDay = [];
-
-        foreach ($rows as $row) {
-            $day = Carbon::parse($row->scheduled_date)->day;
-            $count = (int) $row->cnt;
-
-            $totalPerDay[$day] = ($totalPerDay[$day] ?? 0) + $count;
-
-            if ($row->scheduled_time !== null && $count >= $hourlyCapacity) {
-                $fullSlotsPerDay[$day] = ($fullSlotsPerDay[$day] ?? 0) + 1;
-            }
-        }
-
-        $fullDays = [];
-
-        foreach ($totalPerDay as $day => $total) {
-            $everySlotFull = $slotCount > 0 && ($fullSlotsPerDay[$day] ?? 0) >= $slotCount;
-
-            if ($everySlotFull || $total >= $dailyCapacity) {
-                $fullDays[] = $day;
-            }
-        }
-
-        // BR-23: TODAY is also unavailable once no hour is left to book — every
-        // slot has either filled up or already ended. Only today can have
-        // elapsed hours, so no other day needs this check (and a day with zero
-        // appointments never reaches the loop above, which is exactly the
-        // late-afternoon case that matters here).
-        $today = today();
-
-        if ($year === $today->year && $month === $today->month
-            && ! in_array($today->day, $fullDays, true)
-            && ! $this->schedule->hasAvailableSlot($today->toDateString())) {
-            $fullDays[] = $today->day;
-        }
-
-        sort($fullDays);
-
-        return $fullDays;
-    }
-
-    /**
-     * Day numbers unavailable because of the same-day closing cutoff (BR-20).
-     *
-     * Returns today's day-of-month only when the given month is the current month AND
-     * the local clock has reached closing_hour — i.e. at most one entry, and only for
-     * the current month. The cutoff is decided here (server-side), never trusted from
-     * the browser clock; the calendar just greys out whatever this returns.
-     *
-     * @return int[]
-     */
-    private function cutoffDaysForMonth(int $year, int $month): array
-    {
-        $today = today();
-        $closingHour = (int) config('healthpass.closing_hour');
-
-        $isCurrentMonth = $year === $today->year && $month === $today->month;
-
-        if ($isCurrentMonth && now()->hour >= $closingHour) {
-            return [$today->day];
-        }
-
-        return [];
     }
 }

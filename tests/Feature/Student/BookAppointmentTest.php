@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace Tests\Feature\Student;
 
 use App\Models\Appointment;
+use App\Models\BatchRequest;
+use App\Models\BatchRequestStudent;
 use App\Models\ClearanceRecord;
+use App\Models\College;
 use App\Models\User;
 use App\Services\ClinicScheduleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -663,8 +666,10 @@ class BookAppointmentTest extends TestCase
 
     public function test_duplicate_check_stays_per_date_not_per_slot(): void
     {
-        // D-37 explicitly left BR-04 alone: a student with a 7 AM medical
-        // appointment cannot book a second medical one at 2 PM the same day.
+        // D-37 left BR-04 per DATE, not per slot, and D-54 kept that for
+        // SELF-bookings: a student who self-booked 7 AM medical still cannot
+        // self-book a second medical one at 2 PM the same day. (A batch-made
+        // appointment no longer counts toward BR-04 — see section 4b.)
         $date = $this->futureDate();
         $student = $this->student();
 
@@ -725,6 +730,178 @@ class BookAppointmentTest extends TestCase
             'service_type' => 'medical',
             'status' => 'scheduled',
         ]);
+    }
+
+    // ── 4b. Already scheduled by the college (D-54, BR-25) ──────────────────
+
+    /**
+     * A batch holding $student for $blocks hours from $start on $date. An
+     * approved one also carries the student's generated appointment in the
+     * FIRST hour of the span, the way the Director's fan-out assigns it.
+     */
+    private function batchFor(User $student, string $status, string $date, string $start, int $blocks = 2): BatchRequest
+    {
+        static $seq = 500;
+
+        $college = College::firstOrCreate(['code' => 'CCS'], ['name' => 'College of Computing Studies']);
+        $admin = User::factory()->create(['role' => 'college_admin', 'managed_college_id' => $college->id]);
+
+        $batch = BatchRequest::create([
+            'reference_no' => 'BR-2026-'.$seq++,
+            'college_id' => $college->id,
+            'requested_by' => $admin->id,
+            'reason' => 'ojt',
+            'service_type' => 'medical',
+            'requested_date' => $date,
+            'scheduled_date' => $status === 'approved' ? $date : null,
+            'requested_time' => $start,
+            'requested_blocks' => $blocks,
+            'status' => $status,
+        ]);
+
+        $row = BatchRequestStudent::create(['batch_request_id' => $batch->id, 'student_id' => $student->id]);
+
+        if ($status === 'approved') {
+            $appointment = Appointment::factory()->medical()->inSlot($start)->create([
+                'student_id' => $student->id,
+                'scheduled_date' => $date,
+                'source' => 'batch',
+                'batch_request_id' => $batch->id,
+            ]);
+            $row->update(['appointment_id' => $appointment->id]);
+        }
+
+        return $batch;
+    }
+
+    /** Nat's reported case: the College Admin already has this student at 9 AM on Thu, Sep 10. */
+    public function test_self_booking_inside_a_pending_batch_span_is_refused_with_the_college_admin_message(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-09-01 08:00', 'Asia/Manila'));
+
+        $student = $this->student();
+        $batch = $this->batchFor($student, 'pending', '2026-09-10', '09:00:00', 2);
+
+        $response = $this->actingAs($student)
+            ->postJson(route('student.appointments.store'), $this->medicalBooking([
+                'date' => '2026-09-10',
+                'time' => '09:00:00',
+            ]))
+            ->assertStatus(422)
+            ->assertJsonPath('errors.time.0', 'Thu, Sep 10, 9:00 AM – 10:00 AM has already been scheduled for you by your college admin.');
+
+        // The student is never shown the batch reference (or who else is on it).
+        $this->assertStringNotContainsString($batch->reference_no, $response->getContent());
+        $this->assertDatabaseCount('appointments', 0);
+    }
+
+    public function test_self_booking_outside_the_batch_span_on_the_same_date_is_booked(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-09-01 08:00', 'Asia/Manila'));
+
+        $student = $this->student();
+        $this->batchFor($student, 'pending', '2026-09-10', '09:00:00', 2);
+
+        $this->actingAs($student)
+            ->postJson(route('student.appointments.store'), $this->medicalBooking([
+                'date' => '2026-09-10',
+                'time' => '14:00:00',
+            ]))
+            ->assertOk();
+
+        $this->assertDatabaseHas('appointments', ['student_id' => $student->id, 'scheduled_time' => '14:00:00']);
+    }
+
+    /**
+     * D-54 decision 4: BR-04 counts SELF-bookings only. An approved 9 AM batch
+     * appointment must not forbid a 2 PM self-booking of the same service —
+     * the hours don't overlap, so decision 1 allows it.
+     */
+    public function test_an_approved_batch_appointment_does_not_stop_a_later_self_booking_of_the_same_service(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-09-01 08:00', 'Asia/Manila'));
+
+        $student = $this->student();
+        $this->batchFor($student, 'approved', '2026-09-10', '09:00:00', 1);
+
+        $this->actingAs($student)
+            ->postJson(route('student.appointments.store'), $this->medicalBooking([
+                'date' => '2026-09-10',
+                'time' => '14:00:00',
+            ]))
+            ->assertOk();
+
+        $this->assertSame(2, Appointment::where('student_id', $student->id)->where('service_type', 'medical')->count());
+    }
+
+    public function test_an_approved_batch_still_blocks_the_rest_of_its_span(): void
+    {
+        // The student was assigned 9 AM, but the batch holds 9–11 for everyone on it.
+        Carbon::setTestNow(Carbon::parse('2026-09-01 08:00', 'Asia/Manila'));
+
+        $student = $this->student();
+        $this->batchFor($student, 'approved', '2026-09-10', '09:00:00', 2);
+
+        $this->actingAs($student)
+            ->postJson(route('student.appointments.store'), $this->medicalBooking([
+                'date' => '2026-09-10',
+                'time' => '10:00:00',
+            ]))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('time');
+
+        $this->assertSame(1, Appointment::where('student_id', $student->id)->count());
+    }
+
+    public function test_a_student_withdrawn_from_a_batch_can_self_book_inside_its_span(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-09-01 08:00', 'Asia/Manila'));
+
+        $student = $this->student();
+        $batch = $this->batchFor($student, 'approved', '2026-09-10', '09:00:00', 2);
+        Appointment::where('batch_request_id', $batch->id)->update(['status' => 'cancelled']);
+
+        $this->actingAs($student)
+            ->postJson(route('student.appointments.store'), $this->medicalBooking([
+                'date' => '2026-09-10',
+                'time' => '09:00:00',
+            ]))
+            ->assertOk();
+
+        $this->assertDatabaseHas('appointments', ['student_id' => $student->id, 'source' => 'self', 'status' => 'scheduled']);
+    }
+
+    /**
+     * The race the Form Request's unlocked read cannot see: the College Admin
+     * submits a batch holding this student the moment the Form Request's clash
+     * query returns. Only the locked re-check inside store() can catch it.
+     */
+    public function test_a_batch_submitted_mid_booking_is_caught_by_the_locked_recheck(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-09-01 08:00', 'Asia/Manila'));
+
+        $student = $this->student();
+        $batchInjected = false;
+
+        DB::listen(function ($query) use (&$batchInjected, $student): void {
+            if ($batchInjected || ! str_contains($query->sql, 'batch_request_students')) {
+                return;
+            }
+
+            $batchInjected = true; // set FIRST — the inserts below re-enter this listener
+            $this->batchFor($student, 'pending', '2026-09-10', '09:00:00', 1);
+        });
+
+        $this->actingAs($student)
+            ->postJson(route('student.appointments.store'), $this->medicalBooking([
+                'date' => '2026-09-10',
+                'time' => '09:00:00',
+            ]))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('time');
+
+        $this->assertTrue($batchInjected, 'The competing batch was never injected — the test no longer models the race.');
+        $this->assertDatabaseCount('appointments', 0);
     }
 
     // ── 5. Successful booking (FR-STU-04, BR-19) ─────────────────────────────

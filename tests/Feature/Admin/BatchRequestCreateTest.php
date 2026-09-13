@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Admin;
 
+use App\Models\Appointment;
 use App\Models\College;
 use App\Models\StudentProfile;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 /**
@@ -93,6 +95,61 @@ class BatchRequestCreateTest extends TestCase
             'managed_college_id' => null,
         ]);
         $this->actingAs($orphan)->get('/admin/batches/create')->assertForbidden();
+    }
+
+    // ── D-54: the requested clinic date is a mini calendar ──────────────────
+
+    public function test_create_page_carries_the_mini_calendar_data(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-09-01 08:00', 'Asia/Manila'));
+
+        $this->actingAs($this->admin)
+            ->get('/admin/batches/create')
+            ->assertOk()
+            ->assertSee('Requested clinic date')
+            // Still submitted under the same name, now from a hidden input.
+            ->assertSee('name="requested_date"', false)
+            ->assertViewHas('year', 2026)
+            ->assertViewHas('month', 9)
+            ->assertViewHas('fullDays', [])
+            ->assertViewHas('cutoffDays', [])
+            ->assertViewHas('bookingDays', config('healthpass.booking_days'));
+    }
+
+    public function test_availability_endpoint_reports_the_same_days_as_the_student_one(): void
+    {
+        // 6 PM on Sep 8: today is past closing (BR-20) and has no hour left
+        // (BR-23); Sep 15 is at the daily cap.
+        Carbon::setTestNow(Carbon::parse('2026-09-08 18:00', 'Asia/Manila'));
+        config(['healthpass.daily_capacity' => 2]);
+
+        Appointment::factory()->count(2)->create(['scheduled_date' => '2026-09-15', 'status' => 'scheduled']);
+
+        $query = ['year' => 2026, 'month' => 9];
+
+        $admin = $this->actingAs($this->admin)
+            ->getJson(route('admin.batches.availability', $query))
+            ->assertOk()
+            ->assertExactJson(['full_days' => [8, 15], 'cutoff_days' => [8]]);
+
+        $this->actingAs(User::factory()->create(['role' => 'student']))
+            ->getJson(route('student.appointments.availability', $query))
+            ->assertOk()
+            ->assertExactJson($admin->json());
+    }
+
+    public function test_availability_endpoint_is_refused_for_other_roles_and_guests(): void
+    {
+        $url = route('admin.batches.availability', ['year' => 2026, 'month' => 9]);
+
+        $this->get($url)->assertRedirect('/login');
+
+        foreach (['student', 'nurse', 'director'] as $role) {
+            $this->actingAs(User::factory()->create(['role' => $role]))
+                ->get($url)
+                ->assertRedirect()
+                ->assertSessionHas('error');
+        }
     }
 
     // ── BR-06: reason + conditional reason_detail ───────────────────────────

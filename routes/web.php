@@ -120,6 +120,13 @@ Route::middleware(['auth', 'role:college_admin', 'college.scope'])
         // ONLY the managed college's roster; store re-checks every student id
         // against that college server-side.
         Route::get('/batches/create', [AdminBatchRequestController::class, 'create'])->name('batches.create');
+        // The New Batch mini calendar's month data (D-54): the same full and
+        // cutoff days the student calendar gets. Declared before any
+        // /batches/{batch} route, with its own throttle bucket — an authed
+        // throttle keys on the user id with no path, so it would otherwise
+        // share one counter with batch-store.
+        Route::get('/batches/availability', [AdminBatchRequestController::class, 'availability'])
+            ->middleware('throttle:60,1,batch-availability')->name('batches.availability');
         Route::post('/batches', [AdminBatchRequestController::class, 'store'])
             ->middleware('throttle:15,1,batch-store')->name('batches.store');
         // Batch Tracking + post-submit confirmation (FR-ADM-04/05). Both fetch
