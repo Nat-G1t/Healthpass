@@ -82,15 +82,15 @@ class QueueGhostRowTest extends TestCase
 
         ScreeningResponse::create([
             'clinic_visit_id' => $visit->id,
-            'vision' => false,
-            'hearing' => false,
-            'nose' => false,
             'skin' => false,
-            'respiratory' => false,
-            'heart' => false,
-            'digestive' => false,
-            'bones' => false,
-            'nervous' => false,
+            'abdomen_git' => false,
+            'heent' => false,
+            'gut' => false,
+            'chest_lungs' => false,
+            'extremities' => false,
+            'heart_cvs' => false,
+            'neurological' => false,
+            'breast' => false,
             'is_pregnant' => false,
             'last_menstrual_period' => null,
         ]);

@@ -87,15 +87,15 @@ class PrintViewTest extends TestCase
 
         ScreeningResponse::create(array_merge([
             'clinic_visit_id' => $visit->id,
-            'vision' => false,
-            'hearing' => false,
-            'nose' => false,
             'skin' => false,
-            'respiratory' => true,
-            'heart' => false,
-            'digestive' => false,
-            'bones' => false,
-            'nervous' => false,
+            'abdomen_git' => false,
+            'heent' => false,
+            'gut' => false,
+            'chest_lungs' => true,
+            'extremities' => false,
+            'heart_cvs' => false,
+            'neurological' => false,
+            'breast' => false,
             'is_pregnant' => false,
             'last_menstrual_period' => null,
         ], $screening));
@@ -243,9 +243,9 @@ class PrintViewTest extends TestCase
     public function test_kiosk_questionnaire_does_not_shade_the_physical_signs(): void
     {
         $nurse = $this->nurse();
-        // Student self-reported a respiratory issue at the kiosk, but the
-        // nurse recorded no exam findings → CHEST/LUNGS must stay blank.
-        $visit = $this->makeVisit(['respiratory' => true]);
+        // Student answered CHEST/LUNGS YES at the kiosk, but the nurse
+        // recorded no exam findings → CHEST/LUNGS must stay blank.
+        $visit = $this->makeVisit(['chest_lungs' => true]);
         $this->encode($visit, $nurse);
 
         $html = $this->actingAs($nurse)

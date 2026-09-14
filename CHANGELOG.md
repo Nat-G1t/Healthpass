@@ -4,6 +4,38 @@
 
 ### Added
 
+* **The kiosk questionnaire asks the official form's physical signs** (D-56).
+  **FLAGGED SCHEMA CHANGE — no new table, no new package.** The kiosk used to
+  ask nine self-report systems (vision, hearing, nose…) that were not the
+  form's list, so GUT and BREAST always opened blank on the encode screen and
+  the other seven went through a lossy map.
+  - The questionnaire now asks the form's nine **Physical Signs Disorder of**
+    rows — SKIN, ABDOMEN (GIT), HEENT, GUT, CHEST/LUNGS, EXTREMITIES,
+    HEART/CVS, NEUROLOGICAL, BREAST — with the form's label verbatim plus a
+    plain helper line, and the form's pregnancy wording. **GUT's helper line
+    still needs the clinic's confirmation** (TODO in
+    `ScreeningResponse::QUESTIONS` and the kiosk's `SYSTEMS`).
+  - A YES offers an optional detail (≤ 120 characters), typed in a panel docked
+    at the bottom of the screen. The on-screen keyboard partial takes a
+    per-include `target` (`login` / `detail`), so the email login and staff
+    exit are unchanged. Switching to NO clears the detail; Review shows it
+    under the badge.
+  - `KioskSubmitRequest` cleans details server-side: unknown keys and non-YES
+    answers dropped, control characters stripped, trimmed, over 120 refused,
+    NULL when nothing is left.
+  - Nurse encode pre-fills all nine `ps_*` rows 1:1 from the kiosk (YES and
+    NO) and, for a visit not yet encoded, pre-fills Nurse Notes with
+    `SKIN: <detail>` lines in form order — still what prints under REMARKS.
+  - The student's My Records modal shows the nine labels and their details.
+  - Migration `2026_09_15_000001_replace_questionnaire_columns_on_screening_responses_table`
+    drops `vision … nervous` and adds `skin … breast` (BOOLEAN NULL) plus
+    `details` JSON NULL. **Old answers are discarded; a dev DB needs
+    `php artisan migrate:fresh --seed`.** Both demo seeders write the new columns.
+  - Tests: `KioskSubmitTest` (+9), `EncodePageTest` (+7, replacing the
+    GUT/BREAST-stay-blank case), `PrintFlowTest` (+1, detail → Nurse Notes →
+    REMARKS), `RecordsPageTest` (+1), new `tests/js/kiosk-questionnaire.test.js` (13).
+  - `docs/prototypes/kiosk/Kiosk.html` still shows the old questionnaire.
+
 * **Batch Results card on Batch Tracking, with an 8 PM absent rule** (D-55,
   new FR-ADM-12). **No schema change, no new table, no new route, no new
   package.** A College Admin who booked a cohort had to open each batch's

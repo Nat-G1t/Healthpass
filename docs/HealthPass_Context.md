@@ -43,7 +43,7 @@ HealthPass is a **single Laravel application** (plus a clinic kiosk that is a Bl
 - Solo appointment booking (medical or dental) by students
 - College Admin batch clearance requests (per-college, approved by Director)
 - Director approval that auto-generates appointments for listed students
-- Kiosk vitals capture (real sensors via Web Serial) + 9-item screening questionnaire
+- Kiosk vitals capture (real sensors via Web Serial) + the official form's nine Physical Signs questions (D-56)
 - Nurse live queue, encode result (Fit/Unfit), and clearance printout
 - Director dashboard: KPIs, approvals, analytics, flagged anomalies
 
@@ -121,7 +121,7 @@ Student arrives at clinic
                     │
                     └── Vitals: Height → Weight (+ BMI) → Temp → BP (+ HR)
                     │
-                    └── 9-item questionnaire + pregnancy/LMP
+                    └── Physical Signs questionnaire (the form's 9 rows + optional YES details) + pregnancy/LMP
                     │
                     └── Review & Submit → Clinic Visit created (status: captured)
                             │ (links to today's MEDICAL appointment if one exists, else walk-in)
@@ -313,7 +313,7 @@ Progress steps: Consent → Account Info → Email Verify → Link ID
 - Table: Date, Service, Result (Fit/Unfit badge), Reference No., View.
 - "View" opens a **Record modal** (fixed overlay, max-width 700px):
   - Left column: "Kiosk Vital Signs" (height, weight, BMI, temp, HR, BP key-value list) + one Medical Case Category chip per assigned category (0..n, D-23).
-  - Right column: 9-item questionnaire (Yes/No badges — Yes = flagged variant).
+  - Right column: the official form's nine Physical Signs rows (Yes/No badges — Yes = flagged variant), each Yes followed by the detail the student typed at the kiosk (D-56).
 
 #### My ID & Profile (`student-profile`)
 - Two-column layout (240px left + 1fr right):
@@ -374,13 +374,13 @@ Progress steps: Consent → Account Info → Email Verify → Link ID
   - **Left column**:
     - Student header card (avatar, name, college · student number · time, Flagged badge if applicable).
     - Vital Signs grid (3-col, flagged cells highlighted with peach bg + orange-40 border + orange value).
-    - Questionnaire answers card (Yes/No badges; Yes = flagged variant).
+    - Questionnaire answers card: the form's nine rows (Yes/No badges; Yes = flagged variant), with the student's typed detail under each Yes (D-56).
   - **Right column** — "Doctor's Assessment" card:
     - **Fit / Unfit** selector (two cards; selected = peach bg + orange border).
-    - **Medical Case Categories** multi-select checkboxes (D-23 — a case can span several systems; each persists as a `clearance_case_categories` row): Alimentary System, Respiratory System, Musculo-Skeletal System, Integumentary System, Urinary System, Metabolic Endocrine System, Cardiovascular System, Eyes, Ears, Nose & Throat Disorders. The kiosk's **vision/hearing answers are decision support** for the "Eyes, Ears, Nose & Throat Disorders" pick — they have no physical-sign row of their own.
+    - **Medical Case Categories** multi-select checkboxes (D-23 — a case can span several systems; each persists as a `clearance_case_categories` row): Alimentary System, Respiratory System, Musculo-Skeletal System, Integumentary System, Urinary System, Metabolic Endocrine System, Cardiovascular System, Eyes, Ears, Nose & Throat Disorders. The kiosk's **vision/hearing answers are decision support** for the "Eyes, Ears, Nose & Throat Disorders" pick — they have no physical-sign row of their own. *(Those two kiosk questions were removed by D-56.)*
     - **Purpose / Cleared For** dropdown: Off Campus Procedure, On-the-job Training, Field Trip/Educational Tour, Sports Activities, **Others, Specify…** — picking Others reveals a required text input for the exact event (max 120 chars, stored in `clearance_records.purpose_other`, D-24). **Shown only when the visit's appointment carries no student-supplied purpose** (walk-in / batch / pre-D-28). When the student chose the purpose at booking (D-28), this input is replaced by a read-only echo of their choice and the value is copied onto the clearance record on Save. Shares the `<x-hp.purpose-fieldset>` component with the student booking page.
-    - **Physical Signs Disorder of** (D-22): nine Yes/No rows — SKIN, ABDOMEN (GIT), HEENT, GUT, CHEST/LUNGS, EXTREMITIES, HEART/CVS, NEUROLOGICAL, BREAST. The physician examines the student at the clinic; the nurse records the findings. Each row optional — an unanswered row prints as blank bubbles on the form. Stored in `clearance_records.ps_*`. **Kiosk pre-fill:** a row whose questionnaire counterpart was answered YES opens pre-checked YES (skin→SKIN, digestive→ABDOMEN (GIT), nose→HEENT, respiratory→CHEST/LUNGS, bones→EXTREMITIES, heart→HEART/CVS, nervous→NEUROLOGICAL) for the nurse to confirm or correct — **YES and NO alike** (D-25); rows without a kiosk counterpart (GUT, BREAST) open unanswered and print as blank bubbles.
-    - **Nurse Notes** textarea (optional).
+    - **Physical Signs Disorder of** (D-22): nine Yes/No rows — SKIN, ABDOMEN (GIT), HEENT, GUT, CHEST/LUNGS, EXTREMITIES, HEART/CVS, NEUROLOGICAL, BREAST. The physician examines the student at the clinic; the nurse records the findings. Each row optional — an unanswered row prints as blank bubbles on the form. Stored in `clearance_records.ps_*`. **Kiosk pre-fill (D-56):** the kiosk asks these same nine rows, so every row — GUT and BREAST included — opens pre-checked with the student's answer, **YES and NO alike** (`ps_<key>` ← `<key>`), for the nurse to confirm or correct after the exam; a NULL kiosk answer leaves the row blank. *(Before D-56 the kiosk asked different self-report systems, mapped skin→SKIN, digestive→ABDOMEN (GIT), nose→HEENT, respiratory→CHEST/LUNGS, bones→EXTREMITIES, heart→HEART/CVS, nervous→NEUROLOGICAL, and GUT/BREAST always opened blank.)*
+    - **Nurse Notes** textarea (optional) — prints under REMARKS. For a visit not yet encoded it opens **pre-filled with the student's YES details**, one `SKIN: <detail>` line each in the form's order (D-56); `old()` input wins and the nurse edits freely. A read-only encoded record shows its saved notes only.
     - "Preview & Print Medical Clearance" button (ghost style, full width, Download icon).
     - "← Back" (ghost) + "Save & Close Appointment" (primary, flex-2) — Save disabled until Fit/Unfit chosen.
 
@@ -407,9 +407,12 @@ Progress steps: Consent → Account Info → Email Verify → Link ID
 **Physical-signs source (D-22, supersedes the earlier questionnaire → form mapping):**
 the form's nine Physical Signs rows shade from the nurse-encoded exam findings
 (`clearance_records.ps_*` — the physician examines, the nurse records), never
-from the kiosk questionnaire. The questionnaire's self-reported 9 systems are
-reference on the encode screen only; its pregnancy/LMP answer is the one
-questionnaire item that prints.
+from the kiosk questionnaire. Since D-56 the questionnaire asks the form's own
+nine rows, and each answer **pre-fills** its matching exam row on the encode
+screen for the nurse to confirm — it still never shades the print directly. Its
+pregnancy/LMP answer is the one questionnaire item that prints as-is; its YES
+details reach the printout only through Nurse Notes under REMARKS (pre-filled,
+then nurse-edited).
 
 ---
 
@@ -511,17 +514,18 @@ Each vital screen has:
 | 3/4 | Temperature | 🌡️ | IR forehead thermometer. Captured: e.g. 37.9°C, "Slightly Elevated" (flagged badge), normal range note. |
 | 4/4 | Blood Pressure | 💪 | Cuff BP monitor. Has its own instruction step ("Place your arm in the cuff") before measuring. Pulsing arm emoji during scan. Captured: e.g. 145/92 mmHg "Elevated — Flagged" + Heart Rate in peach panel (78 bpm, Normal badge). |
 
-#### Screen 8 — Questionnaire
-- "Any concern with the following?" heading.
-- **3-column grid** of 9 system cards (white, orange border when answered):
-  Vision/Eyes · Hearing/Ears · Nose & Throat · Skin · Respiratory/Breathing · Heart/Circulation · Digestive/Stomach · Bones & Joints · Nervous/Neurological.
-  Each card: system name + Yes (orange when selected) / No (slate when selected) buttons.
-- **Pregnancy question** below the grid (full width): Are you pregnant? Yes/No. If Yes: inline calendar (full month, tap to pick date — future dates disabled) for Last Menstrual Period.
+#### Screen 8 — Questionnaire (rewritten by D-56)
+- Heading **"Physical Signs Disorder of:"**, sub-line "Answer YES or NO for each."
+- **2-column grid** of the official form's nine rows, in the form's order:
+  SKIN · ABDOMEN (GIT) · HEENT · GUT · CHEST/LUNGS · EXTREMITIES · HEART/CVS · NEUROLOGICAL · BREAST.
+  Each card: the form's label verbatim + one plain-language helper line (e.g. SKIN — "Rashes, wounds, itching or other skin problems"; GUT — "Kidneys, bladder or urination", *awaiting clinic confirmation*) + Yes (orange when selected) / No (green when selected) buttons. One list: `ScreeningResponse::QUESTIONS`, mirrored by the kiosk's JS `SYSTEMS`.
+- **YES details:** a Yes card offers "Add details (optional)" → a full-width panel docked at the bottom of the screen with the question label, the typed text, an "N / 120" counter, **Done**, and the shared on-screen keyboard. Optional, max 120 characters, never blocks Review; switching to No clears it; the card then shows the detail truncated.
+- **Pregnancy question** below the grid (full width), in the form's wording: **Are you Pregnant?** Yes/No — "If YES, when is the last menstrual period?" If Yes: inline calendar (full month, tap to pick date — future dates disabled) for Last Menstrual Period.
 - Footer: "{N} of 10 answered" + "Review & Submit →" (disabled until all 10 answered including pregnancy).
 
 #### Screen 9 — Review
 - "Review Your Submission" in header.
-- Two-column cards: **Vital Signs** (key-value; flagged items in orange + ⚑) + **Health Questionnaire** (Yes/No badges).
+- Two-column cards: **Vital Signs** (key-value; flagged items in orange + ⚑) + **Health Questionnaire** (Yes/No badges for the form's nine rows, each YES detail shown under its badge — D-56).
 - "Submit to Clinic →" (xl, center).
 
 #### Screen 10 — Complete
@@ -672,15 +676,21 @@ created_at, updated_at
 ```sql
 id                    bigint PK
 clinic_visit_id       bigint UNIQUE FK → clinic_visits.id
-vision                boolean
-hearing               boolean
-nose                  boolean
-skin                  boolean
-respiratory           boolean
-heart                 boolean
-digestive             boolean
-bones                 boolean
-nervous               boolean
+-- The official form's nine "Physical Signs Disorder of" rows (D-56 replaced
+-- the old vision/hearing/nose/skin/respiratory/heart/digestive/bones/nervous
+-- self-report columns; old answers discarded). Names match the
+-- clearance_records ps_* suffixes. NULL at DB level; validation requires all
+-- nine on every new visit.
+skin                  boolean NULL
+abdomen_git           boolean NULL
+heent                 boolean NULL
+gut                   boolean NULL
+chest_lungs           boolean NULL
+extremities           boolean NULL
+heart_cvs             boolean NULL
+neurological          boolean NULL
+breast                boolean NULL
+details               json NULL             -- question key → text typed under a YES (≤120 chars); NULL when none
 is_pregnant           boolean
 last_menstrual_period date NULL             -- required if is_pregnant = true
 created_at, updated_at

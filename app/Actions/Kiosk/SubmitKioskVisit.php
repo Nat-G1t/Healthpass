@@ -6,8 +6,10 @@ namespace App\Actions\Kiosk;
 
 use App\Models\Appointment;
 use App\Models\ClinicVisit;
+use App\Models\ScreeningResponse;
 use App\Models\StudentProfile;
 use App\Services\ReferenceNumberService;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -85,15 +87,11 @@ final class SubmitKioskVisit
             ]);
 
             $visit->screeningResponse()->create([
-                'vision' => $screening['vision'],
-                'hearing' => $screening['hearing'],
-                'nose' => $screening['nose'],
-                'skin' => $screening['skin'],
-                'respiratory' => $screening['respiratory'],
-                'heart' => $screening['heart'],
-                'digestive' => $screening['digestive'],
-                'bones' => $screening['bones'],
-                'nervous' => $screening['nervous'],
+                // The official form's nine Physical Signs rows, one boolean column each (D-56).
+                ...Arr::only($screening, array_keys(ScreeningResponse::QUESTIONS)),
+                // Already cleaned by KioskSubmitRequest: known questions answered
+                // YES only, control characters stripped, ≤ 120 chars, null if none.
+                'details' => $screening['details'] ?? null,
                 'is_pregnant' => $screening['isPregnant'],
                 'last_menstrual_period' => $screening['lastMenstrualPeriod'] ?? null,
             ]);

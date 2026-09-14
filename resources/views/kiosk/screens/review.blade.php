@@ -70,20 +70,26 @@
                 </div>
             </div>
 
-            {{-- ── Questionnaire card (Yes/No badges) ───────────────────────── --}}
+            {{-- ── Questionnaire card: the form's nine rows as Yes/No badges,
+                 each YES detail under its badge (D-56) ─────────────────────── --}}
             <div class="rounded-2xl bg-hp-white p-5 shadow-sm">
                 <p class="text-sm font-semibold uppercase tracking-wider text-hp-slate/50">Questionnaire</p>
                 <div class="mt-2 flex flex-col divide-y divide-hp-slate/10">
                     <template x-for="sys in systemList" :key="sys.key">
-                        <div class="flex items-center justify-between gap-2 py-2">
-                            <span class="text-base text-hp-slate/70" x-text="sys.label"></span>
-                            <span
-                                class="rounded-full px-3 py-1 text-sm font-semibold"
-                                :class="systemAnswer(sys.key) === true
-                                    ? 'bg-hp-orange/15 text-hp-orange'
-                                    : 'bg-emerald-50 text-emerald-600'"
-                                x-text="systemAnswer(sys.key) === true ? 'Yes' : 'No'"
-                            ></span>
+                        <div class="py-2">
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="text-base text-hp-slate/70" x-text="sys.label"></span>
+                                <span
+                                    class="rounded-full px-3 py-1 text-sm font-semibold"
+                                    :class="systemAnswer(sys.key) === true
+                                        ? 'bg-hp-orange/15 text-hp-orange'
+                                        : 'bg-emerald-50 text-emerald-600'"
+                                    x-text="systemAnswer(sys.key) === true ? 'Yes' : 'No'"
+                                ></span>
+                            </div>
+                            <p x-show="systemAnswer(sys.key) === true && detailText(sys.key) !== ''" x-cloak
+                               class="mt-1 break-words text-sm text-hp-slate/50"
+                               x-text="detailText(sys.key)"></p>
                         </div>
                     </template>
                     {{-- Pregnancy + LMP. --}}

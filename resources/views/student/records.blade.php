@@ -25,17 +25,17 @@
                 'is_temp_flagged' => $v->vitalSigns?->is_temp_flagged ?? false,
                 'is_bp_flagged'   => $v->vitalSigns?->is_bp_flagged ?? false,
             ],
-            'screening'     => [
-                'vision'      => $v->screeningResponse?->vision ?? false,
-                'hearing'     => $v->screeningResponse?->hearing ?? false,
-                'nose'        => $v->screeningResponse?->nose ?? false,
-                'skin'        => $v->screeningResponse?->skin ?? false,
-                'respiratory' => $v->screeningResponse?->respiratory ?? false,
-                'heart'       => $v->screeningResponse?->heart ?? false,
-                'digestive'   => $v->screeningResponse?->digestive ?? false,
-                'bones'       => $v->screeningResponse?->bones ?? false,
-                'nervous'     => $v->screeningResponse?->nervous ?? false,
-            ],
+            // The form's nine rows (D-56): label, the student's Yes/No
+            // (null = unanswered) and any detail they typed under a Yes.
+            'screening'     => collect(\App\Models\ScreeningResponse::QUESTIONS)
+                ->map(fn ($question, $key) => [
+                    'key'    => $key,
+                    'label'  => $question['label'],
+                    'answer' => $v->screeningResponse?->{$key},
+                    'detail' => $v->screeningResponse?->detailFor($key),
+                ])
+                ->values()
+                ->all(),
         ])
         ->values()
         ->toArray();
@@ -311,33 +311,29 @@ function recordsPageData() {
                         </dl>
                     </div>
 
-                    {{-- Right: 9-system questionnaire --}}
+                    {{-- Right: the form's nine Physical Signs rows (D-56), with
+                         the student's own details under each Yes --}}
                     <div class="p-6">
                         <p class="mb-4 text-[11px] font-semibold uppercase
                                   tracking-widest text-hp-slate/40">Questionnaire</p>
 
                         <dl class="space-y-3">
-                            <template x-for="q in [
-                                {key: 'vision',      label: 'Vision'},
-                                {key: 'hearing',     label: 'Hearing'},
-                                {key: 'nose',        label: 'Nose / Throat'},
-                                {key: 'skin',        label: 'Skin'},
-                                {key: 'respiratory', label: 'Respiratory'},
-                                {key: 'heart',       label: 'Heart'},
-                                {key: 'digestive',   label: 'Digestive'},
-                                {key: 'bones',       label: 'Bones / Joints'},
-                                {key: 'nervous',     label: 'Nervous System'}
-                            ]" :key="q.key">
-                                <div class="flex items-center justify-between">
-                                    <dt class="text-sm text-hp-slate/55" x-text="q.label"></dt>
-                                    <dd>
+                            <template x-for="q in rec.screening" :key="q.key">
+                                <div class="flex items-start justify-between gap-3">
+                                    <dt class="min-w-0 text-sm text-hp-slate/55">
+                                        <span x-text="q.label"></span>
+                                        <span x-show="q.answer && q.detail"
+                                              class="mt-0.5 block break-words text-xs text-hp-slate/45"
+                                              x-text="q.detail"></span>
+                                    </dt>
+                                    <dd class="shrink-0">
                                         <span class="inline-flex items-center rounded-full
                                                      px-2.5 py-0.5 text-[11px] font-semibold
                                                      leading-none"
-                                              :class="rec.screening[q.key]
+                                              :class="q.answer
                                                       ? 'bg-hp-peach text-hp-orange'
                                                       : 'bg-hp-slate/10 text-hp-slate'"
-                                              x-text="rec.screening[q.key] ? 'Yes' : 'No'">
+                                              x-text="q.answer === null ? '—' : (q.answer ? 'Yes' : 'No')">
                                         </span>
                                     </dd>
                                 </div>

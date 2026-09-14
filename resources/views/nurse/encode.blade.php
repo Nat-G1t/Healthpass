@@ -28,37 +28,6 @@
     $sexLabel = match ($profile?->sex) { 'M' => 'Male', 'F' => 'Female', default => '—' };
 
     $capturedAt = $visit->checked_in_at ?? $visit->created_at;
-
-    // Kiosk answers pre-check the matching physical-sign row (D-22 as
-    // amended by D-25): YES *and* NO both pre-fill — the student already
-    // answered, so the row opens on their answer for the nurse to confirm
-    // or correct after the exam. Column → questionnaire key; GUT and BREAST
-    // have no kiosk counterpart (they stay unanswered → blank bubbles), and
-    // vision/hearing exist to help the nurse pick the "Eyes, Ears, Nose &
-    // Throat Disorders" case category (D-23), not to pre-fill a row.
-    $kioskPrefill = [
-        'ps_skin'         => 'skin',
-        'ps_abdomen_git'  => 'digestive',
-        'ps_heent'        => 'nose',
-        'ps_chest_lungs'  => 'respiratory',
-        'ps_extremities'  => 'bones',
-        'ps_heart_cvs'    => 'heart',
-        'ps_neurological' => 'nervous',
-    ];
-
-    // The 9 body systems, column → label. Mirrors SYSTEMS in
-    // resources/js/kiosk/state-machine.js — keep the two lists in step.
-    $systems = [
-        'vision'      => 'Vision / Eyes',
-        'hearing'     => 'Hearing / Ears',
-        'nose'        => 'Nose & Throat',
-        'skin'        => 'Skin',
-        'respiratory' => 'Respiratory / Breathing',
-        'heart'       => 'Heart / Circulation',
-        'digestive'   => 'Digestive / Stomach',
-        'bones'       => 'Bones & Joints',
-        'nervous'     => 'Nervous / Neurological',
-    ];
 @endphp
 
 {{-- ── Page header: back link, title, lifecycle badge ─────────────────────────── --}}
@@ -173,19 +142,35 @@
             @endif
         </x-hp.card>
 
-        {{-- ── Questionnaire — 9 systems + pregnancy/LMP (FR-KSK-10 data) ───── --}}
+        {{-- ── Questionnaire — the form's nine rows + pregnancy/LMP (FR-KSK-10, D-56) ── --}}
         <x-hp.card>
             <h3 class="text-sm font-semibold text-hp-slate">Health Questionnaire</h3>
+            <p class="mt-0.5 text-xs text-hp-slate/50">The student's own answers at the kiosk, with any details they typed.</p>
             @if ($sr)
                 <div class="mt-2 grid gap-x-8 sm:grid-cols-2">
-                    @foreach ($systems as $column => $label)
-                        <div class="flex items-center justify-between gap-3 border-b border-hp-slate/10 py-2">
-                            <span class="text-sm text-hp-slate/70">{{ $label }}</span>
-                            {{-- Kiosk colour language: orange = reported issue, green = all clear. --}}
-                            <span class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold
-                                         {{ $sr->{$column} ? 'bg-hp-orange/15 text-hp-orange' : 'bg-emerald-50 text-emerald-600' }}">
-                                {{ $sr->{$column} ? 'Yes' : 'No' }}
-                            </span>
+                    @foreach (\App\Models\ScreeningResponse::QUESTIONS as $key => $question)
+                        {{-- Block form on purpose: this view also has PHP
+                             blocks, and Blade pairs the one-line form with the
+                             NEXT block's closing tag, swallowing the markup
+                             in between. --}}
+                        @php $answer = $sr->{$key}; @endphp
+                        <div class="border-b border-hp-slate/10 py-2">
+                            <div class="flex items-center justify-between gap-3">
+                                <span class="text-sm text-hp-slate/70">{{ $question['label'] }}</span>
+                                @if ($answer === null)
+                                    <span class="text-xs text-hp-slate/40">—</span>
+                                @else
+                                    {{-- Kiosk colour language: orange = reported issue, green = all clear. --}}
+                                    <span class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold
+                                                 {{ $answer ? 'bg-hp-orange/15 text-hp-orange' : 'bg-emerald-50 text-emerald-600' }}">
+                                        {{ $answer ? 'Yes' : 'No' }}
+                                    </span>
+                                @endif
+                            </div>
+                            {{-- The student's typed detail, under its YES (D-56). --}}
+                            @if ($answer && $sr->detailFor($key) !== null)
+                                <p class="mt-1 text-xs text-hp-slate/60">{{ $sr->detailFor($key) }}</p>
+                            @endif
                         </div>
                     @endforeach
                     <div class="flex items-center justify-between gap-3 border-b border-hp-slate/10 py-2">
@@ -309,12 +294,14 @@
                             $saved = old($column, is_null($record?->{$column}) ? null : (string) (int) $record->{$column});
 
                             // Fresh form only: pre-check the row with the
-                            // student's kiosk answer — YES or NO (D-22/D-25,
-                            // see $kioskPrefill). Unmapped rows stay blank.
-                            if ($saved === null && ! $readOnly) {
-                                $kioskKey = $kioskPrefill[$column] ?? null;
-                                if ($kioskKey && $sr) {
-                                    $saved = $sr->{$kioskKey} ? '1' : '0';
+                            // student's own kiosk answer — YES or NO — for all
+                            // nine rows (D-22/D-25 as amended by D-56). The
+                            // kiosk asks the form's rows, so ps_<key> ← <key>.
+                            // A NULL answer leaves the row blank.
+                            if ($saved === null && ! $readOnly && $sr) {
+                                $kioskAnswer = $sr->{Str::after($column, 'ps_')};
+                                if ($kioskAnswer !== null) {
+                                    $saved = $kioskAnswer ? '1' : '0';
                                 }
                             }
                         @endphp
@@ -337,8 +324,16 @@
                 </div>
             </div>
 
+            {{-- Nurse Notes print under REMARKS (FR-PRT-02). A visit not yet
+                 encoded opens them pre-filled with the student's YES details,
+                 one "SKIN: …" line each in the form's order — the form says "If
+                 YES, give details under Remarks" (D-56). old() input wins and
+                 the nurse edits freely; a read-only record shows its saved notes only. --}}
+            @php
+                $notes = $readOnly ? $record?->nurse_notes : ($sr?->detailsAsNotes() ?: null);
+            @endphp
             <x-hp.textarea label="Nurse Notes" name="nurse_notes" rows="4" :disabled="$readOnly"
-                           placeholder="Observations, advice given, follow-ups…">{{ old('nurse_notes', $record?->nurse_notes) }}</x-hp.textarea>
+                           placeholder="Observations, advice given, follow-ups…">{{ old('nurse_notes', $notes) }}</x-hp.textarea>
 
             <div class="flex flex-col gap-2.5 pt-1">
                 @if ($readOnly)

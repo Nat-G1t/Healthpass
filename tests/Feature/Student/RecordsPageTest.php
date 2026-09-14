@@ -66,15 +66,15 @@ class RecordsPageTest extends TestCase
 
         ScreeningResponse::create([
             'clinic_visit_id' => $visit->id,
-            'vision' => false,
-            'hearing' => false,
-            'nose' => false,
             'skin' => false,
-            'respiratory' => false,
-            'heart' => false,
-            'digestive' => false,
-            'bones' => false,
-            'nervous' => false,
+            'abdomen_git' => false,
+            'heent' => false,
+            'gut' => false,
+            'chest_lungs' => false,
+            'extremities' => false,
+            'heart_cvs' => false,
+            'neurological' => false,
+            'breast' => false,
             'is_pregnant' => false,
         ]);
 
@@ -218,6 +218,27 @@ class RecordsPageTest extends TestCase
             ->get(route('student.records'))
             ->assertOk()
             ->assertSee('HP-2026-T022');
+    }
+
+    public function test_modal_data_carries_the_form_labels_and_the_students_details(): void
+    {
+        $student = $this->student();
+        $visit = $this->makeEncodedVisit($student, $this->nurse(), 'Fit', 'HP-2026-T040');
+        $visit->screeningResponse->update([
+            'abdomen_git' => true,
+            'details' => ['abdomen_git' => 'Stomach pain after meals'],
+        ]);
+
+        $response = $this->actingAs($student)->get(route('student.records'))->assertOk();
+
+        // D-56: the official form's labels (slash-free ones — @json escapes "/").
+        foreach (['SKIN', 'ABDOMEN (GIT)', 'HEENT', 'GUT', 'EXTREMITIES', 'NEUROLOGICAL', 'BREAST'] as $label) {
+            $response->assertSee($label, false);
+        }
+
+        $response->assertSee('Stomach pain after meals', false)
+            ->assertDontSee('Nervous System')
+            ->assertDontSee('Bones / Joints');
     }
 
     // ── 5. Mixed — pending visit beside encoded visit ─────────────────────────

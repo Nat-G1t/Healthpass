@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Kiosk;
 
+use App\Models\ScreeningResponse;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -23,16 +24,55 @@ use Illuminate\Validation\Rule;
  */
 final class KioskSubmitRequest extends FormRequest
 {
-    /** The nine body-system booleans (PRD data dictionary §6 / state-machine SYSTEMS). */
-    private const SYSTEMS = [
-        'vision', 'hearing', 'nose', 'skin', 'respiratory',
-        'heart', 'digestive', 'bones', 'nervous',
-    ];
+    /** Answer values the `boolean` rule reads as YES. */
+    private const YES_VALUES = [true, 1, '1'];
 
     /** The kiosk is public; identity was established earlier in the flow. */
     public function authorize(): bool
     {
         return true;
+    }
+
+    /**
+     * Clean the optional YES details before the rules run (D-56).
+     * prepareForValidation is a Form Request hook that may reshape the input
+     * first. The browser is never trusted, so whatever it sent:
+     *   • a detail is kept only for one of the nine known questions — unknown
+     *     keys are dropped;
+     *   • and only when that question was answered YES — a NO drops it;
+     *   • control characters (NUL, tab, newline, …) are stripped, then trimmed;
+     *   • nothing left → `details` becomes null.
+     * The 120-character cap is a RULE below, so an over-long detail is refused
+     * with a 422 rather than silently cut.
+     */
+    protected function prepareForValidation(): void
+    {
+        $screening = $this->input('screening');
+
+        // Anything that isn't an array is left alone for the `array` rules to refuse.
+        if (! is_array($screening) || ! is_array($screening['details'] ?? null)) {
+            return;
+        }
+
+        $details = [];
+
+        foreach (array_keys(ScreeningResponse::QUESTIONS) as $question) {
+            $text = $screening['details'][$question] ?? null;
+            $answeredYes = in_array($screening[$question] ?? null, self::YES_VALUES, true);
+
+            if ($text === null || ! $answeredYes) {
+                continue;
+            }
+
+            // A non-string is kept as-is so the `string` rule refuses it.
+            $text = is_string($text) ? $this->stripControlCharacters($text) : $text;
+
+            if ($text !== '') {
+                $details[$question] = $text;
+            }
+        }
+
+        $this->merge(['screening' => [...$screening, 'details' => $details === [] ? null : $details]]);
     }
 
     public function rules(): array
@@ -62,17 +102,30 @@ final class KioskSubmitRequest extends FormRequest
             'vitals.diastolic' => ['required', 'integer', "min:{$bounds['bp_diastolic']['min']}", "max:{$bounds['bp_diastolic']['max']}"],
             'vitals.heartRate' => ['required', 'integer', "min:{$bounds['heart_rate']['min']}", "max:{$bounds['heart_rate']['max']}"],
 
-            // Screening — all nine systems answered (true/false), plus pregnancy.
+            // Screening — the form's nine rows answered (true/false), plus pregnancy.
             'screening' => ['required', 'array'],
             'screening.isPregnant' => ['required', 'boolean'],
             // LMP required only when pregnant, never in the future (FR-KSK-10).
             'screening.lastMenstrualPeriod' => ['nullable', 'required_if:screening.isPregnant,true', 'date', 'before_or_equal:today'],
+
+            // Optional YES details (D-56), already cleaned by prepareForValidation().
+            'screening.details' => ['nullable', 'array'],
+            'screening.details.*' => ['string', 'max:'.ScreeningResponse::DETAIL_MAX_LENGTH],
         ];
 
-        foreach (self::SYSTEMS as $system) {
-            $rules["screening.{$system}"] = ['required', 'boolean'];
+        foreach (array_keys(ScreeningResponse::QUESTIONS) as $question) {
+            $rules["screening.{$question}"] = ['required', 'boolean'];
         }
 
         return $rules;
+    }
+
+    /**
+     * Remove Unicode control characters (\p{Cc}) and trim. preg_replace returns
+     * null for invalid UTF-8; that leaves nothing usable, so the detail is dropped.
+     */
+    private function stripControlCharacters(string $text): string
+    {
+        return trim((string) preg_replace('/\p{Cc}/u', '', $text));
     }
 }

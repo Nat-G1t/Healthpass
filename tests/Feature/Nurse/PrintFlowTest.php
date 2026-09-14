@@ -40,7 +40,8 @@ class PrintFlowTest extends TestCase
         return College::firstOrCreate(['code' => 'CCS'], ['name' => 'College of Computing Studies']);
     }
 
-    private function makeVisit(): ClinicVisit
+    /** @param  array<string, mixed>  $screening */
+    private function makeVisit(array $screening = []): ClinicVisit
     {
         $student = User::factory()->create(['role' => 'student', 'name' => 'Ana Cruz']);
         $student->studentProfile()->create([
@@ -84,20 +85,20 @@ class PrintFlowTest extends TestCase
             'is_bmi_flagged' => false,
         ]);
 
-        ScreeningResponse::create([
+        ScreeningResponse::create(array_merge([
             'clinic_visit_id' => $visit->id,
-            'vision' => false,
-            'hearing' => false,
-            'nose' => false,
             'skin' => false,
-            'respiratory' => false,
-            'heart' => false,
-            'digestive' => false,
-            'bones' => false,
-            'nervous' => false,
+            'abdomen_git' => false,
+            'heent' => false,
+            'gut' => false,
+            'chest_lungs' => false,
+            'extremities' => false,
+            'heart_cvs' => false,
+            'neurological' => false,
+            'breast' => false,
             'is_pregnant' => false,
             'last_menstrual_period' => null,
-        ]);
+        ], $screening));
 
         return $visit;
     }
@@ -209,6 +210,42 @@ class PrintFlowTest extends TestCase
         $this->actingAs($student)
             ->post(route('nurse.visits.print.preview', $visit), ['result' => 'Fit'])
             ->assertRedirect('/student/dashboard');
+    }
+
+    // ── 1b. D-56: a kiosk YES detail reaches REMARKS through Nurse Notes ─────
+
+    public function test_a_kiosk_yes_detail_reaches_remarks_through_nurse_notes(): void
+    {
+        $nurse = $this->nurse();
+        $visit = $this->makeVisit([
+            'skin' => true,
+            'details' => ['skin' => 'Itchy rash on left arm'],
+        ]);
+
+        // The encode screen pre-fills Nurse Notes with the detail line…
+        $this->actingAs($nurse)
+            ->get(route('nurse.visits.encode', $visit))
+            ->assertOk()
+            ->assertSee('SKIN: Itchy rash on left arm');
+
+        // …the nurse saves it as pre-filled (the textarea posts it back)…
+        $this->actingAs($nurse)
+            ->post(route('nurse.visits.encode.store', $visit), [
+                'result' => 'Fit',
+                'nurse_notes' => 'SKIN: Itchy rash on left arm',
+            ])
+            ->assertRedirect(route('nurse.queue'));
+
+        // …and the printed form carries it under REMARKS.
+        $html = $this->actingAs($nurse)
+            ->get(route('nurse.visits.print', $visit))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertMatchesRegularExpression(
+            '~<div class="remarks-text" id="remarks-text">SKIN: Itchy rash on left arm</div>~',
+            $html
+        );
     }
 
     // ── 2. Reprint (POST print, encoded visits) — re-stamps printed_at ───────

@@ -31,25 +31,36 @@ export const SCREENS = [
 export const VITAL_STEPS = 4;
 
 /**
- * The nine body systems of the screening questionnaire (FR-KSK-10). Pure DATA —
- * the Blade renders all nine cards from this list, so they are not nine copies
- * of markup. `key` is the canonical screening_responses boolean column (PRD data
- * dictionary §6); `label` is the on-screen title. Order matches the PRD.
+ * The questionnaire (FR-KSK-10, D-56): the official form's nine "Physical Signs
+ * Disorder of" rows, in the form's order. Pure DATA — the Blade renders all nine
+ * cards from this list, so they are not nine copies of markup. `key` is the
+ * screening_responses boolean column (and the suffix of the nurse's matching
+ * clearance_records.ps_* row); `label` is the form's wording VERBATIM; `helper`
+ * is the plain-language line shown under it.
+ *
+ * Mirrors ScreeningResponse::QUESTIONS (app/Models/ScreeningResponse.php) —
+ * keep the two lists in step.
  */
 export const SYSTEMS = [
-    { key: 'vision', label: 'Vision / Eyes' },
-    { key: 'hearing', label: 'Hearing / Ears' },
-    { key: 'nose', label: 'Nose & Throat' },
-    { key: 'skin', label: 'Skin' },
-    { key: 'respiratory', label: 'Respiratory / Breathing' },
-    { key: 'heart', label: 'Heart / Circulation' },
-    { key: 'digestive', label: 'Digestive / Stomach' },
-    { key: 'bones', label: 'Bones & Joints' },
-    { key: 'nervous', label: 'Nervous / Neurological' },
+    { key: 'skin', label: 'SKIN', helper: 'Rashes, wounds, itching or other skin problems' },
+    { key: 'abdomen_git', label: 'ABDOMEN (GIT)', helper: 'Stomach or digestive problems' },
+    { key: 'heent', label: 'HEENT', helper: 'Head, eyes, ears, nose or throat' },
+    // TODO(D-56): confirm with the clinic. GUT is ASSUMED to mean the
+    // genito-urinary tract; this helper line depends on that reading.
+    { key: 'gut', label: 'GUT', helper: 'Kidneys, bladder or urination' },
+    { key: 'chest_lungs', label: 'CHEST/LUNGS', helper: 'Breathing problems, cough or asthma' },
+    { key: 'extremities', label: 'EXTREMITIES', helper: 'Arms, legs, hands, feet or joints' },
+    { key: 'heart_cvs', label: 'HEART/CVS', helper: 'Heart or blood circulation' },
+    { key: 'neurological', label: 'NEUROLOGICAL', helper: 'Seizures, numbness, frequent headaches or nerve problems' },
+    { key: 'breast', label: 'BREAST', helper: 'Lumps, pain or other breast concerns' },
 ];
 
-// 9 system cards + the pregnancy item = 10 questions to answer (FR-KSK-10).
+// 9 form rows + the pregnancy item = 10 questions to answer (FR-KSK-10).
 export const QUESTION_COUNT = SYSTEMS.length + 1;
+
+// Longest optional detail under a YES answer — the same cap the server enforces
+// (ScreeningResponse::DETAIL_MAX_LENGTH, D-56).
+export const DETAIL_MAX = 120;
 
 // How long the "scanning" animation runs before a sensor reading settles to
 // "captured". Long enough to read the animation, short enough to feel snappy.
@@ -175,18 +186,26 @@ function freshState() {
         // `draft` collects them and commits only when the last is confirmed.
         pad: { open: false, step: null, fieldIndex: 0, value: '', error: '', draft: {} },
 
-        // 9-system screening + pregnancy (FR-KSK-10). `systems` maps a system
-        // key → true (Yes) | false (No); an unanswered system is simply absent.
+        // The form's nine rows + pregnancy (FR-KSK-10, D-56). `systems` maps a
+        // question key → true (Yes) | false (No); an unanswered one is simply
+        // absent. `details` maps a key → the optional text typed under a YES.
         // `isPregnant` is true | false | null (unanswered); `lmp` holds the Last
         // Menstrual Period as an ISO 'YYYY-MM-DD' string, required only when
         // pregnant. `calMonth` is the {year, month} the inline LMP calendar is
         // viewing (month is 0-based, matching JS Date).
         questionnaire: {
             systems: {},
+            details: {},
             isPregnant: null,
             lmp: null,
             calMonth: null,
         },
+
+        // The docked YES-details panel (D-56). `question` is the key being
+        // typed into (null = closed). `shift`/`caps` are the on-screen
+        // keyboard's modifiers while it types a detail — kept apart from
+        // state.login so the two keyboards never share a Caps Lock.
+        detailPanel: { question: null, shift: false, caps: false },
 
         // Final-submit request sub-state (FR-KSK-11/12). Mirrors login/scan;
         // `reference` holds the server-minted HP-YYYY-#### shown on Complete.
@@ -208,9 +227,10 @@ export function kioskMachine() {
         // Read once so client validation uses the SAME numbers as the server (FR-KSK-08).
         config: {},
 
-        // The nine screening systems, exposed so Blade can x-for over them
+        // The form's nine rows, exposed so Blade can x-for over them
         // (FR-KSK-10) — the cards are data-driven, not nine copies of markup.
         systemList: SYSTEMS,
+        detailMax: DETAIL_MAX, // shown as the details panel's "N / 120" counter
 
         // Web Serial UI status (FR-KSK-07). Lives on the COMPONENT, not in
         // `state`, because the physical sensor connection outlives one student:
@@ -227,7 +247,7 @@ export function kioskMachine() {
         _exitTaps: 0,
         _exitFirstTap: 0,
 
-        // Timers for the email keyboard's backspace long-press (see backspaceDown).
+        // Timers for the on-screen keyboard's backspace long-press (see backspaceDown).
         _bsRepeat: null,
         _bsClearTimer: null,
 
@@ -539,14 +559,45 @@ export function kioskMachine() {
             this.state.login.showPassword = !this.state.login.showPassword;
         },
 
-        /** Whether letters should currently be uppercase (Shift XOR Caps Lock). */
-        isUpper() {
-            return this.state.login.shift !== this.state.login.caps;
+        // ── On-screen keyboard targets (FR-KSK-02, FR-KSK-16, D-56) ──────────
+        // One keyboard partial types into two kinds of target, and every
+        // rendered keyboard passes its own, so a key never guesses where it
+        // belongs:
+        //   'login'  → state.login[field] — the email login AND the staff-exit
+        //              prompt (never on screen together);
+        //   'detail' → the YES detail open in the questionnaire's panel.
+
+        /** The object holding a target's Shift / Caps Lock modifiers. */
+        kbMods(target = 'login') {
+            return target === 'detail' ? this.state.detailPanel : this.state.login;
         },
 
-        /** Display label for a key — letters reflect the current Shift/Caps case. */
-        keyLabel(key) {
-            return /^[a-z]$/.test(key) && this.isUpper() ? key.toUpperCase() : key;
+        /** The text a target currently holds. */
+        kbText(target = 'login') {
+            if (target === 'detail') return this.detailText(this.state.detailPanel.question);
+            return this.state.login[this.state.login.field];
+        },
+
+        /** Replace a target's text. A detail stops growing at DETAIL_MAX. */
+        setKbText(target, value) {
+            if (target !== 'detail') {
+                this.state.login[this.state.login.field] = value;
+                return;
+            }
+            const question = this.state.detailPanel.question;
+            if (question === null || value.length > DETAIL_MAX) return;
+            this.state.questionnaire.details = { ...this.state.questionnaire.details, [question]: value };
+        },
+
+        /** Whether letters should currently be uppercase (Shift XOR Caps Lock). */
+        isUpper(target = 'login') {
+            const mods = this.kbMods(target);
+            return mods.shift !== mods.caps;
+        },
+
+        /** Display label for a key — letters reflect the target's Shift/Caps case. */
+        keyLabel(key, target = 'login') {
+            return /^[a-z]$/.test(key) && this.isUpper(target) ? key.toUpperCase() : key;
         },
 
         /**
@@ -562,68 +613,73 @@ export function kioskMachine() {
         },
 
         /**
-         * Virtual-keyboard key press (FR-KSK-02). Routes character keys to the
-         * focused field. Special keys: 'backspace', 'space', 'enter', plus the
-         * 'shift' (one-shot) and 'caps' (lock) modifiers.
+         * Virtual-keyboard key press (FR-KSK-02, D-56). Routes character keys to
+         * the keyboard's target (see kbText). Special keys: 'backspace',
+         * 'space', 'enter', plus the 'shift' (one-shot) and 'caps' (lock)
+         * modifiers.
          */
-        keyPress(key) {
-            const login = this.state.login;
+        keyPress(key, target = 'login') {
+            const mods = this.kbMods(target);
 
             if (key === 'enter') {
-                // The same keyboard drives both the student email login and the
-                // staff-exit prompt (FR-KSK-16); route Enter to whichever is open.
-                if (this.state.exit.open) this.submitExit();
+                // Enter finishes whichever flow owns this keyboard: the details
+                // panel closes; the credential keyboard submits the student email
+                // login or the staff-exit prompt (FR-KSK-16), whichever is open.
+                if (target === 'detail') this.closeDetail();
+                else if (this.state.exit.open) this.submitExit();
                 else this.submitLogin();
                 return;
             }
             if (key === 'shift') {
-                login.shift = !login.shift;
+                mods.shift = !mods.shift;
                 return;
             }
             if (key === 'caps') {
-                login.caps = !login.caps;
+                mods.caps = !mods.caps;
                 return;
             }
 
-            login.error = ''; // typing clears any stale error
-            this.state.exit.error = ''; // …in either context
-            const field = login.field;
+            if (target === 'login') {
+                this.state.login.error = ''; // typing clears any stale error
+                this.state.exit.error = ''; // …in either credential context
+            }
+            const text = this.kbText(target);
 
             if (key === 'backspace') {
-                login[field] = login[field].slice(0, -1);
+                this.setKbText(target, text.slice(0, -1));
                 return;
             }
             if (key === 'space') {
-                login[field] += ' ';
+                this.setKbText(target, text + ' ');
                 return;
             }
 
             // Letters honour the current case; digits/symbols are inserted as-is.
-            login[field] += this.keyLabel(key);
+            this.setKbText(target, text + this.keyLabel(key, target));
 
             // Shift is a one-shot modifier — it releases after a single key.
-            if (login.shift) login.shift = false;
+            if (mods.shift) mods.shift = false;
         },
 
-        // Backspace long-press (email keyboard). A quick tap deletes one
+        // Backspace long-press (on-screen keyboard). A quick tap deletes one
         // character; holding repeats with an accelerating speed; holding for a
-        // full 2 s clears the active field entirely. Driven by pointer events so
-        // it behaves the same on the touchscreen and a mouse.
-        backspaceDown() {
-            this.keyPress('backspace'); // immediate single delete on tap
-            // Hold for 2 s → wipe the whole field, then stop repeating.
+        // full 2 s clears the target's text entirely. Driven by pointer events
+        // so it behaves the same on the touchscreen and a mouse.
+        backspaceDown(target = 'login') {
+            this.keyPress('backspace', target); // immediate single delete on tap
+            // Hold for 2 s → wipe the whole text, then stop repeating.
             this._bsClearTimer = setTimeout(() => {
-                this.state.login[this.state.login.field] = '';
+                this.setKbText(target, '');
                 this.backspaceUp();
             }, 2000);
             // After a short initial hold, begin an accelerating repeat.
-            this._bsRepeat = setTimeout(() => this.backspaceTick(150), 400);
+            this._bsRepeat = setTimeout(() => this.backspaceTick(150, target), 400);
         },
 
-        backspaceTick(delay) {
-            this.keyPress('backspace');
+        backspaceTick(delay, target = 'login') {
+            this.keyPress('backspace', target);
             const next = Math.max(40, delay - 15); // speeds up to a 40 ms floor
-            this._bsRepeat = setTimeout(() => this.backspaceTick(next), delay);
+            this._bsRepeat = setTimeout(() => this.backspaceTick(next, target), delay);
         },
 
         backspaceUp() {
@@ -660,14 +716,18 @@ export function kioskMachine() {
             }
         },
 
-        // ── Shared keyboard helpers (email login + staff exit) ───────────────
-        // The on-screen keyboard's Enter key serves both flows; these expose the
-        // active flow's busy state so the key can disable + relabel correctly.
-        kbSending() {
+        // ── Shared keyboard Enter-key helpers ────────────────────────────────
+        // The credential keyboard's Enter serves the email login and the staff
+        // exit; these expose the active flow's busy state so the key can
+        // disable + relabel correctly. A details keyboard never sends anything
+        // — its Enter just closes the panel (D-56).
+        kbSending(target = 'login') {
+            if (target === 'detail') return false;
             return (this.state.exit.open ? this.state.exit.status : this.state.login.status) === 'sending';
         },
 
-        kbEnterLabel() {
+        kbEnterLabel(target = 'login') {
+            if (target === 'detail') return 'Done ⏎';
             if (this.kbSending()) return this.state.exit.open ? 'Exiting…' : 'Signing in…';
             return 'Enter ⏎';
         },
@@ -1093,10 +1153,19 @@ export function kioskMachine() {
                 : 'bg-emerald-50 text-emerald-600';
         },
 
-        // ── 9-system questionnaire (FR-KSK-10) ───────────────────────────────
-        /** Record a Yes (true) / No (false) answer for one system card. */
+        // ── Questionnaire: the form's nine rows (FR-KSK-10, D-56) ────────────
+        /**
+         * Record a Yes (true) / No (false) answer for one card. Switching to No
+         * clears any detail typed under the Yes, and closes its panel (D-56).
+         */
         setSystem(key, value) {
-            this.state.questionnaire.systems[key] = value;
+            const q = this.state.questionnaire;
+            q.systems[key] = value;
+            if (value === false) {
+                const { [key]: _cleared, ...kept } = q.details;
+                q.details = kept;
+                if (this.state.detailPanel.question === key) this.closeDetail();
+            }
             this.scrollToNextUnanswered(key);
         },
 
@@ -1123,9 +1192,42 @@ export function kioskMachine() {
             });
         },
 
-        /** A system's answer: true (Yes) | false (No) | undefined (unanswered). */
+        /** A question's answer: true (Yes) | false (No) | undefined (unanswered). */
         systemAnswer(key) {
             return this.state.questionnaire.systems[key];
+        },
+
+        // ── YES details (D-56 — the form: "If YES, give details under Remarks")
+        // Optional, ≤ DETAIL_MAX characters, never blocks Review. Typed in a
+        // full-width panel docked at the bottom of the questionnaire, because a
+        // card in the 2-column grid is too narrow to type in on the portrait
+        // panel. The text lives in state.questionnaire.details, so a reset to
+        // Welcome wipes it with everything else (FR-KSK-13).
+
+        /** The detail typed for a question, exactly as typed ('' if none). */
+        detailText(key) {
+            return this.state.questionnaire.details[key] ?? '';
+        },
+
+        /** The form label of the question whose panel is open ('' when closed). */
+        detailLabel() {
+            return SYSTEMS.find((s) => s.key === this.state.detailPanel.question)?.label ?? '';
+        },
+
+        /** Open the details panel — only for a question answered Yes. */
+        openDetail(key) {
+            if (this.systemAnswer(key) !== true) return;
+            this.state.detailPanel = { question: key, shift: false, caps: false };
+        },
+
+        /** Close the panel, trimming the detail; a blank one is removed, not kept. */
+        closeDetail() {
+            const question = this.state.detailPanel.question;
+            this.state.detailPanel = { question: null, shift: false, caps: false };
+            if (question === null) return;
+            const { [question]: typed = '', ...others } = this.state.questionnaire.details;
+            const text = typed.trim();
+            this.state.questionnaire.details = text === '' ? others : { ...others, [question]: text };
         },
 
         // ── Pregnancy + Last Menstrual Period (FR-KSK-10) ────────────────────
@@ -1264,15 +1366,22 @@ export function kioskMachine() {
         // ── Submit to clinic (FR-KSK-11 → stub) ──────────────────────────────
         /**
          * Assemble the full kiosk session for submission. Vitals are flattened
-         * to the columns the server will persist; screening maps each system to
-         * its boolean column (null if somehow unanswered) plus pregnancy/LMP.
-         * The AUTHORITATIVE flag booleans are computed server-side (§7.4) — the
-         * review screen's orange ⚑ are display-time hints only.
+         * to the columns the server will persist; screening maps each form row
+         * to its boolean column (null if somehow unanswered), plus the YES
+         * details and pregnancy/LMP. The AUTHORITATIVE flag booleans are
+         * computed server-side (§7.4) — the review screen's orange ⚑ are
+         * display-time hints only — and the server re-cleans the details too
+         * (KioskSubmitRequest, D-56): nothing here is trusted.
          */
         buildSubmission() {
             const q = this.state.questionnaire;
             const screening = {};
-            for (const s of SYSTEMS) screening[s.key] = q.systems[s.key] ?? null;
+            const details = {};
+            for (const s of SYSTEMS) {
+                screening[s.key] = q.systems[s.key] ?? null;
+                const text = this.detailText(s.key).trim();
+                if (q.systems[s.key] === true && text !== '') details[s.key] = text;
+            }
             return {
                 studentUserId: this.state.identity?.studentUserId ?? null,
                 loginMethod: this.state.identity?.loginMethod ?? null,
@@ -1293,6 +1402,7 @@ export function kioskMachine() {
                 },
                 screening: {
                     ...screening,
+                    details,
                     isPregnant: q.isPregnant,
                     lastMenstrualPeriod: q.lmp,
                 },

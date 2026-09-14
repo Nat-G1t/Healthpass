@@ -169,7 +169,8 @@ npm run dev                       # terminal 2
   (case categories were dropped by D-32); the University Physician signs
   the printed form.
 - **Kiosk never shows Fit/Unfit to the student.** It captures vitals +
-  the 9-system questionnaire and routes to the Nurse queue.
+  the official form's nine Physical Signs rows (D-56) and routes to the
+  Nurse queue.
 - **Manual vitals entry is a first-class kiosk path**, sensors are
   progressive enhancement. Every reading records `entry_method`.
 - **Clinic capacity is TWO config values, never constants in a controller

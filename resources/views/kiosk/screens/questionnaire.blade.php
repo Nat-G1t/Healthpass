@@ -1,13 +1,22 @@
-﻿{{-- Questionnaire (FR-KSK-10): a 2-column grid of nine body-system cards, each
-     answered Yes/No, plus a full-width pregnancy question whose "Yes" reveals an
+{{-- Questionnaire (FR-KSK-10, D-56): the official form's nine "Physical Signs
+     Disorder of" rows — SKIN … BREAST, in the form's order — as a 2-column grid
+     of cards, each with the form's label VERBATIM, one plain-language helper
+     line and Yes/No. Plus the form's pregnancy question, whose "Yes" reveals an
      inline month calendar for the Last Menstrual Period (future dates disabled,
-     LMP required when pregnant). The nine cards are rendered from `systemList`
-     (state-machine.js) — data, not nine copies of markup. The footer shows
-     "{N} of 10 answered" and Review & Submit stays disabled until all 10 are in.
+     LMP required when pregnant). The nine cards render from `systemList`
+     (state-machine.js SYSTEMS, mirroring ScreeningResponse::QUESTIONS) — data,
+     not nine copies of markup. The footer shows "{N} of 10 answered" and Review
+     & Submit stays disabled until all 10 are in.
+
+     YES details (the form: "If YES, give details under Remarks"): a Yes card
+     offers "Add details (optional)", which opens a FULL-WIDTH panel docked at the
+     bottom of this screen with the on-screen keyboard — a card in the 2-column
+     grid is too narrow to type in on the 1080×1920 portrait panel. Optional,
+     ≤ 120 characters, never blocks Review; switching to No clears it.
 
      Two columns (was three on the old landscape panel) so each card and its
-     Yes/No targets stay big on the 1080×1920 portrait screen; the middle area
-     scrolls if the LMP calendar is open. --}}
+     Yes/No targets stay big on the portrait screen; the middle area scrolls if
+     the LMP calendar is open. --}}
 <section class="kiosk-screen" x-show="state.screen === 'questionnaire'" x-cloak
          x-transition:enter="transition ease-hp-out duration-hp-base"
          x-transition:enter-start="opacity-0 translate-y-1"
@@ -17,21 +26,24 @@
         {{-- Header --}}
         <div class="flex flex-col items-center gap-2 text-center">
             <span class="rounded-full bg-hp-peach/40 px-3.5 py-1 text-xs font-semibold uppercase tracking-widest text-hp-orange">Questionnaire</span>
-            <h1 class="text-2xl font-semibold text-hp-slate">Have you had problems with any of these?</h1>
-            <p class="text-base text-hp-slate/60">Answer Yes or No for each. There are no wrong answers — this just helps the nurse.</p>
+            <h1 class="text-2xl font-semibold text-hp-slate">Physical Signs Disorder of:</h1>
+            <p class="text-base text-hp-slate/60">Answer YES or NO for each.</p>
         </div>
 
         {{-- Scrollable answer area (grid + pregnancy) --}}
         <div class="mt-5 flex-1 overflow-y-auto">
-            {{-- ── 2-column grid of nine system cards ───────────────────────── --}}
+            {{-- ── 2-column grid of the form's nine rows ────────────────────── --}}
             <div class="grid grid-cols-2 gap-3">
                 {{-- data-system-card lets setSystem() gently scroll the NEXT
                      unanswered card into view; hp-anim-pop lands on whichever
                      answer was just picked (§7). --}}
                 <template x-for="sys in systemList" :key="sys.key">
                     <div class="flex flex-col gap-2.5 rounded-xl bg-hp-white p-4 shadow-sm" :data-system-card="sys.key">
-                        <p class="text-base font-semibold leading-tight text-hp-slate" x-text="sys.label"></p>
-                        <div class="grid grid-cols-2 gap-2.5">
+                        <div>
+                            <p class="text-base font-semibold leading-tight text-hp-slate" x-text="sys.label"></p>
+                            <p class="mt-1 text-sm leading-snug text-hp-slate/55" x-text="sys.helper"></p>
+                        </div>
+                        <div class="mt-auto grid grid-cols-2 gap-2.5">
                             {{-- Yes = a reported issue → orange (matches the flag colour). --}}
                             <button
                                 type="button"
@@ -51,16 +63,30 @@
                                     : 'bg-hp-bg text-hp-slate/70 hover:bg-emerald-50'"
                             >No</button>
                         </div>
+
+                        {{-- Yes → optional detail (D-56). Once something is typed the
+                             card shows it (truncated) and tapping edits it. --}}
+                        <button
+                            type="button"
+                            x-show="systemAnswer(sys.key) === true"
+                            x-cloak
+                            @click="openDetail(sys.key)"
+                            class="flex min-w-0 items-center gap-2 rounded-lg border border-dashed border-hp-orange/50 px-3 py-2.5 text-left text-sm font-medium text-hp-orange transition hover:bg-hp-peach/20"
+                        >
+                            <span x-show="detailText(sys.key) === ''">+ Add details (optional)</span>
+                            <span x-show="detailText(sys.key) !== ''" class="min-w-0 flex-1 truncate text-hp-slate/80" x-text="detailText(sys.key)"></span>
+                            <span x-show="detailText(sys.key) !== ''" class="shrink-0">Edit</span>
+                        </button>
                     </div>
                 </template>
             </div>
 
-            {{-- ── Full-width pregnancy question (FR-KSK-10) ─────────────────── --}}
+            {{-- ── Full-width pregnancy question — the form's wording (FR-KSK-10) ── --}}
             <div class="mt-3 rounded-xl bg-hp-white p-4 shadow-sm">
                 <div class="flex items-center justify-between gap-4">
                     <p class="text-base font-semibold leading-tight text-hp-slate">
-                        Are you currently pregnant?
-                        <span class="block text-sm font-normal text-hp-slate/50">If yes, please select the first day of your last menstrual period.</span>
+                        Are you Pregnant?
+                        <span class="block text-sm font-normal text-hp-slate/50">If YES, when is the last menstrual period?</span>
                     </p>
                     <div class="grid shrink-0 grid-cols-2 gap-2.5">
                         <button
@@ -157,6 +183,45 @@
                 :disabled="!questionnaireComplete()"
                 class="rounded-2xl bg-hp-orange px-9 py-4 text-lg font-semibold text-hp-white shadow-sm transition hover:brightness-95 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-hp-slate/20 disabled:text-hp-slate/40 disabled:shadow-none"
             >Review &amp; Submit →</button>
+        </div>
+
+        {{-- ── YES-details panel (D-56) ─────────────────────────────────────── --}}
+        {{-- Dim backdrop over the grid — tapping it is the same as Done. --}}
+        <div x-show="state.detailPanel.question !== null" x-cloak
+             x-transition:enter="transition ease-hp-out duration-hp-fast"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             class="absolute inset-0 z-20 bg-hp-slate/30"
+             @click="closeDetail()"></div>
+
+        {{-- The docked panel: question label, the text, a counter, Done, and the
+             shared on-screen keyboard typing into this detail. --}}
+        <div x-show="state.detailPanel.question !== null" x-cloak
+             class="absolute inset-x-0 bottom-0 z-20 flex flex-col items-center gap-4 rounded-t-3xl bg-hp-bg px-8 pb-8 pt-6 shadow-2xl">
+            <div class="flex w-full max-w-2xl items-center justify-between gap-4">
+                <div class="min-w-0">
+                    <p class="text-xs font-semibold uppercase tracking-widest text-hp-orange">Add details (optional)</p>
+                    <p class="truncate text-xl font-semibold text-hp-slate" x-text="detailLabel()"></p>
+                </div>
+                <button
+                    type="button"
+                    @click="closeDetail()"
+                    class="shrink-0 rounded-2xl bg-hp-orange px-9 py-3 text-lg font-semibold text-hp-white shadow-sm transition hover:brightness-95 active:scale-[0.98]"
+                >Done</button>
+            </div>
+
+            {{-- Display-only text field, like the email field: the keyboard below is
+                 the only input. It wraps, so the whole detail stays readable. --}}
+            <div class="w-full max-w-2xl rounded-xl border-2 border-hp-orange bg-hp-white px-5 py-3">
+                <p class="min-h-[3rem] break-words text-base"
+                   :class="detailText(state.detailPanel.question) === '' ? 'text-hp-slate/40' : 'text-hp-slate'"
+                   x-text="detailText(state.detailPanel.question) || 'Type a few words for the nurse…'"></p>
+                <p class="mt-1 text-right text-xs font-medium text-hp-slate/50">
+                    <span x-text="detailText(state.detailPanel.question).length"></span> / <span x-text="detailMax"></span>
+                </p>
+            </div>
+
+            @include('kiosk.partials.credential-keyboard', ['target' => 'detail'])
         </div>
     </div>
 </section>

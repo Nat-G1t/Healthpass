@@ -152,15 +152,7 @@ class DemoClinicVisitSeeder extends Seeder
         ]);
         ScreeningResponse::create([
             'clinic_visit_id' => $v1->id,
-            'vision' => false,
-            'hearing' => false,
-            'nose' => false,
-            'skin' => false,
-            'respiratory' => false,
-            'heart' => false,
-            'digestive' => false,
-            'bones' => false,
-            'nervous' => false,
+            ...$this->screening(),
             'is_pregnant' => false,
         ]);
         ClearanceRecord::create([
@@ -199,15 +191,11 @@ class DemoClinicVisitSeeder extends Seeder
         ]);
         ScreeningResponse::create([
             'clinic_visit_id' => $v2->id,
-            'vision' => false,
-            'hearing' => false,
-            'nose' => false,
-            'skin' => false,
-            'respiratory' => true,  // flagged questionnaire answer
-            'heart' => true,  // flagged questionnaire answer
-            'digestive' => false,
-            'bones' => false,
-            'nervous' => false,
+            // Two YES answers — one with a typed detail, one without.
+            ...$this->screening([
+                'chest_lungs' => 'Dry cough for about a week',
+                'heart_cvs' => null,
+            ]),
             'is_pregnant' => false,
         ]);
         ClearanceRecord::create([
@@ -246,15 +234,7 @@ class DemoClinicVisitSeeder extends Seeder
         ]);
         ScreeningResponse::create([
             'clinic_visit_id' => $v3->id,
-            'vision' => false,
-            'hearing' => false,
-            'nose' => false,
-            'skin' => false,
-            'respiratory' => false,
-            'heart' => false,
-            'digestive' => true,  // flagged questionnaire answer
-            'bones' => false,
-            'nervous' => false,
+            ...$this->screening(['abdomen_git' => 'Stomach pain after meals']),
             'is_pregnant' => false,
         ]);
         ClearanceRecord::create([
@@ -293,15 +273,7 @@ class DemoClinicVisitSeeder extends Seeder
         ]);
         ScreeningResponse::create([
             'clinic_visit_id' => $v4->id,
-            'vision' => false,
-            'hearing' => false,
-            'nose' => false,
-            'skin' => false,
-            'respiratory' => false,
-            'heart' => false,
-            'digestive' => false,
-            'bones' => false,
-            'nervous' => false,
+            ...$this->screening(),
             'is_pregnant' => false,
         ]);
 
@@ -332,15 +304,12 @@ class DemoClinicVisitSeeder extends Seeder
         ]);
         ScreeningResponse::create([
             'clinic_visit_id' => $v5->id,
-            'vision' => false,
-            'hearing' => false,
-            'nose' => true,   // flagged answer
-            'skin' => false,
-            'respiratory' => true,   // flagged answer
-            'heart' => false,
-            'digestive' => false,
-            'bones' => false,
-            'nervous' => false,
+            // Captured, not yet encoded: opening it on the encode screen shows
+            // both details pre-filled into Nurse Notes (D-56).
+            ...$this->screening([
+                'heent' => 'Sore throat since Monday',
+                'chest_lungs' => 'Cough at night',
+            ]),
             'is_pregnant' => false,
         ]);
 
@@ -371,15 +340,7 @@ class DemoClinicVisitSeeder extends Seeder
         ]);
         ScreeningResponse::create([
             'clinic_visit_id' => $v6->id,
-            'vision' => false,
-            'hearing' => false,
-            'nose' => false,
-            'skin' => false,
-            'respiratory' => false,
-            'heart' => false,
-            'digestive' => false,
-            'bones' => false,
-            'nervous' => false,
+            ...$this->screening(),
             'is_pregnant' => false,
         ]);
 
@@ -643,16 +604,28 @@ class DemoClinicVisitSeeder extends Seeder
 
         ScreeningResponse::create([
             'clinic_visit_id' => $visit->id,
-            'vision' => false,
-            'hearing' => false,
-            'nose' => false,
-            'skin' => false,
-            'respiratory' => false,
-            'heart' => false,
-            'digestive' => false,
-            'bones' => false,
-            'nervous' => false,
+            ...$this->screening(),
             'is_pregnant' => false,
         ]);
+    }
+
+    /**
+     * The nine form answers for a demo visit (D-56): every row NO unless named
+     * in $yes. A YES may carry the detail the student typed at the kiosk, or
+     * null for a YES with nothing typed.
+     *
+     * @param  array<string, ?string>  $yes  question key => typed detail
+     * @return array<string, mixed>
+     */
+    private function screening(array $yes = []): array
+    {
+        $answers = [];
+        foreach (array_keys(ScreeningResponse::QUESTIONS) as $question) {
+            $answers[$question] = array_key_exists($question, $yes);
+        }
+
+        $details = array_filter($yes, fn (?string $detail) => $detail !== null);
+
+        return [...$answers, 'details' => $details === [] ? null : $details];
     }
 }

@@ -54,9 +54,9 @@ class KioskSubmitTest extends TestCase
                 'heartRate' => 72,
             ],
             'screening' => [
-                'vision' => false, 'hearing' => false, 'nose' => false,
-                'skin' => false, 'respiratory' => false, 'heart' => false,
-                'digestive' => false, 'bones' => false, 'nervous' => false,
+                'skin' => false, 'abdomen_git' => false, 'heent' => false,
+                'gut' => false, 'chest_lungs' => false, 'extremities' => false,
+                'heart_cvs' => false, 'neurological' => false, 'breast' => false,
                 'isPregnant' => false, 'lastMenstrualPeriod' => null,
             ],
         ];
@@ -117,6 +117,151 @@ class KioskSubmitTest extends TestCase
         $this->assertSame(0, ClinicVisit::count());
         $this->assertSame(0, VitalSigns::count());
         $this->assertSame(0, ScreeningResponse::count());
+    }
+
+    // ── The official form's nine questions + YES details (D-56) ──────────────
+
+    public function test_the_nine_form_answers_are_stored(): void
+    {
+        $this->submit($this->student()->id, ['screening' => ['gut' => true, 'breast' => true]])->assertOk();
+
+        $row = ScreeningResponse::first();
+        foreach (array_keys(ScreeningResponse::QUESTIONS) as $question) {
+            $this->assertSame(in_array($question, ['gut', 'breast'], true), $row->{$question}, $question);
+        }
+    }
+
+    public function test_each_of_the_nine_questions_is_a_required_boolean(): void
+    {
+        $student = $this->student();
+
+        foreach (array_keys(ScreeningResponse::QUESTIONS) as $question) {
+            $body = $this->payload($student->id);
+            unset($body['screening'][$question]);
+
+            $this->withSession(['kiosk.student_id' => $student->id, 'kiosk.login_method' => 'qr'])
+                ->postJson(route('kiosk.submit'), $body)
+                ->assertStatus(422)
+                ->assertJsonValidationErrors("screening.{$question}");
+
+            $this->submit($student->id, ['screening' => [$question => 'maybe']])
+                ->assertStatus(422)
+                ->assertJsonValidationErrors("screening.{$question}");
+        }
+
+        $this->assertSame(0, ClinicVisit::count());
+    }
+
+    public function test_an_old_self_report_questionnaire_payload_is_refused(): void
+    {
+        $student = $this->student();
+        $body = $this->payload($student->id);
+        $body['screening'] = [
+            'vision' => false, 'hearing' => false, 'nose' => false,
+            'skin' => false, 'respiratory' => false, 'heart' => false,
+            'digestive' => false, 'bones' => false, 'nervous' => false,
+            'isPregnant' => false, 'lastMenstrualPeriod' => null,
+        ];
+
+        $this->withSession(['kiosk.student_id' => $student->id, 'kiosk.login_method' => 'qr'])
+            ->postJson(route('kiosk.submit'), $body)
+            ->assertStatus(422);
+
+        $this->assertSame(0, ScreeningResponse::count());
+    }
+
+    public function test_a_yes_detail_is_stored_against_the_session_student(): void
+    {
+        $sessionStudent = $this->student();
+        $victim = $this->student();
+
+        // The body names another student; the detail still lands on the session's.
+        $this->withSession(['kiosk.student_id' => $sessionStudent->id, 'kiosk.login_method' => 'qr'])
+            ->postJson(route('kiosk.submit'), $this->payload($victim->id, ['screening' => [
+                'skin' => true,
+                'details' => ['skin' => 'Itchy rash on left arm'],
+            ]]))
+            ->assertOk();
+
+        $visit = ClinicVisit::first();
+        $this->assertSame($sessionStudent->id, $visit->student_id);
+        $this->assertSame(['skin' => 'Itchy rash on left arm'], $visit->screeningResponse->details);
+    }
+
+    public function test_details_for_a_no_answer_or_an_unknown_key_are_dropped(): void
+    {
+        $this->submit($this->student()->id, ['screening' => [
+            'skin' => true,
+            'gut' => false,
+            'details' => [
+                'skin' => 'Itchy rash on left arm',
+                'gut' => str_repeat('x', 500), // answered NO — dropped, never measured
+                'vision' => 'A pre-D-56 question', // unknown key
+                'isPregnant' => 'Not a physical-signs question', // unknown key
+            ],
+        ]])->assertOk();
+
+        $this->assertSame(['skin' => 'Itchy rash on left arm'], ScreeningResponse::first()->details);
+    }
+
+    public function test_a_detail_over_120_characters_is_refused(): void
+    {
+        $student = $this->student();
+
+        $this->submit($student->id, ['screening' => [
+            'skin' => true,
+            'details' => ['skin' => str_repeat('a', 121)],
+        ]])->assertStatus(422)->assertJsonValidationErrors('screening.details.skin');
+
+        $this->assertSame(0, ClinicVisit::count());
+
+        // Exactly at the cap is fine.
+        $this->submit($student->id, ['screening' => [
+            'skin' => true,
+            'details' => ['skin' => str_repeat('a', 120)],
+        ]])->assertOk();
+
+        $this->assertSame(120, mb_strlen(ScreeningResponse::first()->details['skin']));
+    }
+
+    public function test_control_characters_are_stripped_from_a_detail(): void
+    {
+        $this->submit($this->student()->id, ['screening' => [
+            'skin' => true,
+            'heent' => true,
+            'details' => [
+                'skin' => "Rash\u{0000} on\t arm\u{0085}\n",
+                'heent' => "\u{0007}\u{001B}", // nothing but control characters
+            ],
+        ]])->assertOk();
+
+        $this->assertSame(['skin' => 'Rash on arm'], ScreeningResponse::first()->details);
+    }
+
+    public function test_details_are_null_when_none_are_typed(): void
+    {
+        $student = $this->student();
+
+        $this->submit($student->id)->assertOk();
+        $this->assertNull(ScreeningResponse::latest('id')->first()->details);
+
+        // A YES whose detail is only blank space stores nothing either.
+        $this->submit($student->id, ['screening' => ['skin' => true, 'details' => ['skin' => '   ']]])->assertOk();
+        $this->assertNull(ScreeningResponse::latest('id')->first()->details);
+    }
+
+    public function test_a_detail_that_is_not_text_is_refused(): void
+    {
+        $student = $this->student();
+
+        $this->submit($student->id, ['screening' => [
+            'skin' => true,
+            'details' => ['skin' => ['nested' => 'array']],
+        ]])->assertStatus(422);
+
+        $this->submit($student->id, ['screening' => ['details' => 'just a string']])->assertStatus(422);
+
+        $this->assertSame(0, ClinicVisit::count());
     }
 
     // ── Identity is server-side, never trusted from the body (security) ───────

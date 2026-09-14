@@ -87,15 +87,15 @@ class EncodePageTest extends TestCase
 
         ScreeningResponse::create(array_merge([
             'clinic_visit_id' => $visit->id,
-            'vision' => false,
-            'hearing' => false,
-            'nose' => false,
             'skin' => false,
-            'respiratory' => true,
-            'heart' => false,
-            'digestive' => false,
-            'bones' => false,
-            'nervous' => false,
+            'abdomen_git' => false,
+            'heent' => false,
+            'gut' => false,
+            'chest_lungs' => true,
+            'extremities' => false,
+            'heart_cvs' => false,
+            'neurological' => false,
+            'breast' => false,
             'is_pregnant' => false,
             'last_menstrual_period' => null,
         ], $screening));
@@ -177,19 +177,35 @@ class EncodePageTest extends TestCase
     {
         $visit = $this->makeVisit();
 
+        $response = $this->actingAs($this->nurse())
+            ->get(route('nurse.visits.encode', $visit))
+            ->assertOk()
+            ->assertSee('Health Questionnaire')
+            ->assertSee('Currently pregnant')
+            ->assertDontSee('Vision / Eyes');
+
+        // D-56: each of the form's labels now appears twice — on the student's
+        // questionnaire card AND on the nurse's Physical Signs fieldset.
+        foreach (ScreeningResponse::QUESTIONS as $question) {
+            $this->assertGreaterThanOrEqual(
+                2,
+                substr_count($response->getContent(), e($question['label'])),
+                $question['label']
+            );
+        }
+    }
+
+    public function test_a_yes_detail_is_shown_under_its_answer(): void
+    {
+        $visit = $this->makeVisit('Detail Student', [], [
+            'skin' => true,
+            'details' => ['skin' => 'Itchy rash on left arm'],
+        ]);
+
         $this->actingAs($this->nurse())
             ->get(route('nurse.visits.encode', $visit))
             ->assertOk()
-            ->assertSee('Vision / Eyes')
-            ->assertSee('Hearing / Ears')
-            ->assertSee('Nose & Throat')
-            ->assertSee('Skin')
-            ->assertSee('Respiratory / Breathing')
-            ->assertSee('Heart / Circulation')
-            ->assertSee('Digestive / Stomach')
-            ->assertSee('Bones & Joints')
-            ->assertSee('Nervous / Neurological')
-            ->assertSee('Currently pregnant');
+            ->assertSeeInOrder(['Health Questionnaire', 'SKIN', 'Yes', 'Itchy rash on left arm', 'ABDOMEN (GIT)']);
     }
 
     public function test_flagged_vital_shows_flag_badge(): void
@@ -262,11 +278,48 @@ class EncodePageTest extends TestCase
         $this->assertDoesNotMatchRegularExpression('~name="ps_skin" value="1"[^>]*checked~', $html);
     }
 
-    public function test_physical_signs_without_a_kiosk_counterpart_stay_unanswered(): void
+    public function test_all_nine_physical_signs_precheck_yes_from_the_kiosk(): void
     {
-        // GUT and BREAST have no questionnaire counterpart — they must open
-        // fully blank (unanswered rows print as blank bubbles, D-22).
-        $visit = $this->makeVisit();
+        // D-56: the kiosk asks the form's own rows, so EVERY row — GUT and
+        // BREAST included — opens on the student's answer (ps_<key> ← <key>).
+        $allYes = array_fill_keys(array_keys(ScreeningResponse::QUESTIONS), true);
+        $visit = $this->makeVisit('All Yes', [], $allYes);
+
+        $html = $this->actingAs($this->nurse())
+            ->get(route('nurse.visits.encode', $visit))
+            ->assertOk()
+            ->getContent();
+
+        foreach (array_keys(ClearanceRecord::PHYSICAL_SIGNS) as $column) {
+            $this->assertMatchesRegularExpression('~name="'.$column.'" value="1"[^>]*checked~', $html, $column);
+            $this->assertDoesNotMatchRegularExpression('~name="'.$column.'" value="0"[^>]*checked~', $html, $column);
+        }
+    }
+
+    public function test_all_nine_physical_signs_precheck_no_from_the_kiosk(): void
+    {
+        $allNo = array_fill_keys(array_keys(ScreeningResponse::QUESTIONS), false);
+        $visit = $this->makeVisit('All No', [], $allNo);
+
+        $html = $this->actingAs($this->nurse())
+            ->get(route('nurse.visits.encode', $visit))
+            ->assertOk()
+            ->getContent();
+
+        foreach (array_keys(ClearanceRecord::PHYSICAL_SIGNS) as $column) {
+            $this->assertMatchesRegularExpression('~name="'.$column.'" value="0"[^>]*checked~', $html, $column);
+            $this->assertDoesNotMatchRegularExpression('~name="'.$column.'" value="1"[^>]*checked~', $html, $column);
+        }
+
+        // No details typed → nothing to pre-fill into Nurse Notes.
+        $this->assertMatchesRegularExpression('~<textarea[^>]*name="nurse_notes"[^>]*>\s*</textarea>~', $html);
+    }
+
+    public function test_a_null_kiosk_answer_leaves_its_row_blank(): void
+    {
+        // The columns are nullable (D-56). A NULL answer has nothing to
+        // pre-fill, so its row opens fully blank instead of guessing NO.
+        $visit = $this->makeVisit('Unanswered Rows', [], ['gut' => null, 'breast' => null]);
 
         $html = $this->actingAs($this->nurse())
             ->get(route('nurse.visits.encode', $visit))
@@ -277,6 +330,67 @@ class EncodePageTest extends TestCase
             $this->assertDoesNotMatchRegularExpression('~name="'.$column.'" value="1"[^>]*checked~', $html);
             $this->assertDoesNotMatchRegularExpression('~name="'.$column.'" value="0"[^>]*checked~', $html);
         }
+    }
+
+    // ── 2a. Nurse Notes pre-fill from the YES details (D-56) ──────────────────
+
+    public function test_nurse_notes_prefill_with_the_yes_details_in_form_order(): void
+    {
+        // Details arrive out of form order; the pre-fill still follows the form.
+        $visit = $this->makeVisit('Notes Student', [], [
+            'skin' => true,
+            'chest_lungs' => true,
+            'breast' => true,
+            'details' => [
+                'breast' => 'Small lump noticed last week',
+                'skin' => 'Itchy rash on left arm',
+                'chest_lungs' => 'Cough at night',
+            ],
+        ]);
+
+        $html = $this->actingAs($this->nurse())
+            ->get(route('nurse.visits.encode', $visit))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertMatchesRegularExpression(
+            '~<textarea[^>]*name="nurse_notes"[^>]*>SKIN: Itchy rash on left arm\nCHEST/LUNGS: Cough at night\nBREAST: Small lump noticed last week</textarea>~',
+            $html
+        );
+    }
+
+    public function test_old_input_wins_over_the_nurse_notes_prefill(): void
+    {
+        $visit = $this->makeVisit('Old Input', [], [
+            'skin' => true,
+            'details' => ['skin' => 'Itchy rash on left arm'],
+        ]);
+
+        $this->actingAs($this->nurse())
+            ->withSession(['_old_input' => ['nurse_notes' => 'Nurse rewrote this.']])
+            ->get(route('nurse.visits.encode', $visit))
+            ->assertOk()
+            ->assertSee('Nurse rewrote this.')
+            ->assertDontSee('SKIN: Itchy rash on left arm');
+    }
+
+    public function test_an_encoded_record_shows_its_saved_notes_not_the_prefill(): void
+    {
+        $nurse = $this->nurse();
+        $visit = $this->makeVisit('Encoded Notes', [], [
+            'skin' => true,
+            'details' => ['skin' => 'Itchy rash on left arm'],
+        ]);
+        $this->encode($visit, $nurse, ['nurse_notes' => null]);
+
+        $html = $this->actingAs($nurse)
+            ->get(route('nurse.visits.encode', $visit))
+            ->assertOk()
+            ->assertSee('Itchy rash on left arm') // still on the questionnaire card
+            ->getContent();
+
+        $this->assertStringNotContainsString('SKIN: Itchy rash on left arm', $html);
+        $this->assertMatchesRegularExpression('~<textarea[^>]*name="nurse_notes"[^>]*>\s*</textarea>~', $html);
     }
 
     public function test_physical_signs_fieldset_shows_all_nine_exam_rows(): void
@@ -331,9 +445,9 @@ class EncodePageTest extends TestCase
     public function test_encoded_visit_shows_saved_physical_signs(): void
     {
         $nurse = $this->nurse();
-        // Kiosk says respiratory issue, but the nurse saved NOTHING for
-        // chest/lungs — read-only must show the record, never the prefill.
-        $visit = $this->makeVisit('Examined Student', [], ['respiratory' => true]);
+        // Kiosk says chest/lungs YES, but the nurse saved NOTHING for that
+        // row — read-only must show the record, never the prefill.
+        $visit = $this->makeVisit('Examined Student', [], ['chest_lungs' => true]);
         $this->encode($visit, $nurse, ['ps_skin' => true, 'ps_heent' => false]);
 
         $html = $this->actingAs($nurse)
