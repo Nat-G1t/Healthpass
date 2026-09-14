@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 class BatchRequest extends Model
 {
@@ -180,6 +182,58 @@ class BatchRequest extends Model
         }
 
         return self::REASONS[$this->reason] ?? ucfirst($this->reason);
+    }
+
+    // ── Batch results (FR-ADM-12, D-55) ──────────────────────────────────────
+
+    /**
+     * D-55: has every student this batch still holds finished with the clinic?
+     *
+     * FINISHED means each non-withdrawn student is Completed (the nurse has
+     * encoded them) or Absent (no visit by the absent cutoff). A student at the
+     * clinic but not yet encoded keeps the batch open, even past the cutoff;
+     * withdrawn students are ignored, since they no longer hold a seat.
+     *
+     * Reads the SAME Appointment::clearanceProgress() the Batch Results popup
+     * rows show, so the Time of Completion column and the popup can never
+     * disagree. Callers eager-load
+     * batchRequestStudents.appointment.clinicVisit.clearanceRecord.
+     */
+    public function isResultsFinished(): bool
+    {
+        return $this->heldAppointments()->every(
+            fn (Appointment $appointment): bool => in_array($appointment->clearanceProgress(), ['completed', 'absent'], true),
+        );
+    }
+
+    /**
+     * D-55: when the batch finished — the time of the LAST encode among its
+     * students. Null while it is unfinished, and null when it finished with
+     * nobody Completed (everyone absent or withdrawn); the view words both.
+     */
+    public function resultsCompletedAt(): ?Carbon
+    {
+        if (! $this->isResultsFinished()) {
+            return null;
+        }
+
+        return $this->heldAppointments()
+            ->filter(fn (Appointment $appointment): bool => $appointment->clearanceProgress() === 'completed')
+            ->map(fn (Appointment $appointment): ?Carbon => $appointment->clinicVisit->clearanceRecord->encoded_at)
+            ->max();
+    }
+
+    /**
+     * Every roster row's appointment, minus the withdrawn ones.
+     *
+     * @return Collection<int, Appointment>
+     */
+    private function heldAppointments(): Collection
+    {
+        return $this->batchRequestStudents
+            ->map(fn (BatchRequestStudent $row): ?Appointment => $row->appointment)
+            ->filter(fn (?Appointment $appointment): bool => $appointment !== null
+                && $appointment->clearanceProgress() !== 'withdrawn');
     }
 
     // ── Relationships ────────────────────────────────────────────────────────

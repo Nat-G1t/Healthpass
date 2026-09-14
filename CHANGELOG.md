@@ -4,6 +4,38 @@
 
 ### Added
 
+* **Batch Results card on Batch Tracking, with an 8 PM absent rule** (D-55,
+  new FR-ADM-12). **No schema change, no new table, no new route, no new
+  package.** A College Admin who booked a cohort had to open each batch's
+  roster to see who had finished. **This reverses D-53's rejection of a
+  separate results view** — Nat wants every batch's outcome in one place.
+  - New **Batch Results** card above the requests list, rendered once the
+    college has an approved batch: every **approved** batch, newest clinic
+    date first, as Batch ID · Time of Completion · View. Time of Completion is
+    **In progress** until every non-withdrawn student is Completed or Absent,
+    then the **last encode** ("Sep 10, 2026 · 3:42 PM"), or **No one
+    attended**. The rule is on the model — `BatchRequest::isResultsFinished()`
+    and `resultsCompletedAt()` — and reads the same `clearanceProgress()` as
+    the popup, so the column and the popup cannot disagree.
+  - **View** opens a teleported popup: reference, service, clinic date, hour
+    span, and per student name, student no., hour, Status (*Not yet attended ·
+    At the clinic · Completed · Absent · Withdrawn*) and Result (Fit / Unfit /
+    —), dental included. Rows are built server-side in `index()` and embedded
+    with `Js::from()`. **Outcome only:** each row has exactly five keys, and
+    the query does not even select the clinical columns.
+  - **Absent replaces "Did not attend".** `clearanceProgress()`'s `missed` key
+    is renamed `absent` and no longer flips at midnight: a student with no
+    visit is absent once the **server clock** reaches new config
+    `healthpass.absent_cutoff` (`HEALTHPASS_ABSENT_CUTOFF`, default `20:00`)
+    on the clinic date.
+  - **Roster trimmed:** the batch roster loses D-53's Status and Result columns
+    and its "Clearance results" roll-up. The summary, Appointment, Time,
+    Withdraw, the cancelled notice and the withdrawal guidance stay, and
+    `show()` no longer loads the clinic visit or clearance record.
+  - `tests/Feature/Admin/BatchResultsTest.php` reworked (20 cases, including a
+    query-count guard) plus `tests/Unit/AppointmentClearanceProgressTest.php`
+    (8); `DemoBatchSeederTest` updated for the renamed key.
+
 * **Batches and self-bookings can no longer double-book a student** (D-54, new
   BR-25). **No schema change, no new table, no new package.** A student could
   self-book Sept 10, 9–10 AM and their College Admin could still put them in a

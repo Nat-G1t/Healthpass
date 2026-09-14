@@ -351,10 +351,11 @@ Progress steps: Consent → Account Info → Email Verify → Link ID
 - Two buttons: "View Tracking" + "Dashboard".
 
 #### Batch Tracking (`admin-batch-tracking`)
+- **Batch Results card** (D-55, FR-ADM-12), **above** the requests table and rendered only when the college has at least one approved batch: every **approved** batch, newest clinic date first, as **Batch ID · Time of Completion · View** (blank header). Time of Completion reads **In progress** until every non-withdrawn student is Completed or Absent, then the date and time of the batch's **last encode** (e.g. "Sep 10, 2026 · 3:42 PM"), or **No one attended** when nobody was completed. **View** opens a teleported popup — reference, service, clinic date, hour span, and per student: name, student no., hour, **Status** (Not yet attended / At the clinic / Completed / Absent / Withdrawn) and **Result** (Fit / Unfit / "—"; dental rows too). A student with no clinic visit is **Absent from 8:00 PM on the clinic date** (`healthpass.absent_cutoff`, server clock). **Outcome only** — no vitals, screening answers, nurse notes, physician details or visit reference. Rebuilt on every page load (no polling).
 - Table: Batch ID, Reason (truncated with ellipsis), Students, Submitted, Status (Pending shows as "Pending Director Approval"; `cancelled` shows as "Cancelled" — D-52).
 - **Rejection Reason** column (D-36) appears only when the list holds at least one rejected row.
 - **Cancel column** (D-52, FR-ADM-11): a trailing column with a **blank header**, rendered only when at least one row is cancellable, holding a Cancel control on **pending rows only** (every other row gets an em dash). Clicking it opens a confirmation dialog naming the reference, the student count and the requested clinic date. Blank-headed because it holds an action rather than a value — the same shape as the Withdraw column on the batch roster.
-- Batch ID links to the **batch roster** (D-40), which since **D-53** also reports each student's progress (Not yet attended / At the clinic / Completed / Did not attend / Withdrawn) and their clearance **Result** (Fit / Unfit), plus a roll-up and the batch's date, hour span and purpose.
+- Batch ID links to the **batch roster** (D-40): the batch's clinic date, hour span, purpose and student count, then each student's appointment, hour and the **Withdraw** action. The per-student Status / Result columns and results roll-up D-53 added here **moved to the Batch Results popup in D-55**.
 - "+ New Request" button (top-right).
 
 ---

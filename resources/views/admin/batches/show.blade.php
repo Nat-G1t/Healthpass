@@ -2,13 +2,18 @@
 
 @php
     // Appointments only exist once the Director has approved (BR-08), so the
-    // Appointment / Time / Status / Result / Withdraw columns are meaningless
-    // on a pending, rejected or cancelled batch — the roster there is just
-    // "who was submitted".
+    // Appointment / Time / Withdraw columns are meaningless on a pending,
+    // rejected or cancelled batch — the roster there is just "who was
+    // submitted".
+    //
+    // D-55: the Status and Result columns and the results roll-up D-53 put on
+    // this page are gone. Each student's outcome now lives on the Batch Results
+    // popup on Batch Tracking (FR-ADM-12), where every approved batch sits in
+    // one place; the roster is back to who is booked, when, and withdrawing.
     $isApproved = $batch->status === 'approved';
 
     $headers = $isApproved
-        ? ['Student', 'Student No.', 'Appointment', 'Time', 'Status', 'Result', '']
+        ? ['Student', 'Student No.', 'Appointment', 'Time', '']
         : ['Student', 'Student No.', 'Course & Year'];
 
     $rows = $batch->batchRequestStudents;
@@ -22,39 +27,6 @@
     $withdrawnCount = $rows->filter(
         fn ($row) => $row->appointment !== null && $row->appointment->status === 'cancelled'
     )->count();
-
-    // ── D-53: the results roll-up ────────────────────────────────────────────
-    // Counted from the SAME Appointment::clearanceProgress() and
-    // clearanceResult() the rows below use, so the summary and the table can
-    // never disagree — the rule lives in one place (the model) and both read it.
-    $progress = $rows->map(fn ($row) => $row->appointment?->clearanceProgress());
-
-    $fitCount = $rows->filter(fn ($row) => $row->appointment?->clearanceResult() === 'Fit')->count();
-    $unfitCount = $rows->filter(fn ($row) => $row->appointment?->clearanceResult() === 'Unfit')->count();
-    $toAttendCount = $progress->filter(fn (?string $p) => in_array($p, ['awaiting', 'in_clinic'], true))->count();
-    $missedCount = $progress->filter(fn (?string $p) => $p === 'missed')->count();
-
-    $resultParts = [];
-
-    if ($fitCount > 0) {
-        $resultParts[] = $fitCount.' Fit';
-    }
-
-    if ($unfitCount > 0) {
-        $resultParts[] = $unfitCount.' Unfit';
-    }
-
-    if ($toAttendCount > 0) {
-        $resultParts[] = $toAttendCount.' still to attend';
-    }
-
-    if ($missedCount > 0) {
-        $resultParts[] = $missedCount.' did not attend';
-    }
-
-    if ($withdrawnCount > 0) {
-        $resultParts[] = $withdrawnCount.' withdrawn';
-    }
 @endphp
 
 {{-- ── Flash messages ───────────────────────────────────────────────────────── --}}
@@ -135,27 +107,6 @@
             </dd>
         </div>
     </dl>
-
-    {{-- ── Results roll-up (FR-ADM-07 as amended by D-53) ───────────────────── --}}
-    {{-- Only on an approved batch: nothing else can have a result. --}}
-    @if ($isApproved)
-        <div class="mt-5 border-t border-hp-slate/10 pt-4">
-            <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
-                Clearance results
-            </dt>
-            <dd class="mt-1 text-sm font-semibold text-hp-slate">
-                {{-- Only reachable when the batch has no appointments at all —
-                     every appointment lands in one of the counted states. --}}
-                @if ($resultParts === [])
-                    <span class="font-normal text-hp-slate/60">
-                        Nothing to report — this batch has no appointments.
-                    </span>
-                @else
-                    {{ implode(' · ', $resultParts) }}
-                @endif
-            </dd>
-        </div>
-    @endif
 </x-hp.card>
 
 {{-- ── Cancelled notice (FR-ADM-11, D-52) ───────────────────────────────────── --}}
@@ -232,42 +183,6 @@
                         <x-hp.table-cell label="Time">
                             {{-- "—" on pre-D-37 appointments, which sit in no slot --}}
                             {{ $appointment?->timeRangeLabel() ?? '—' }}
-                        </x-hp.table-cell>
-
-                        <x-hp.table-cell label="Status">
-                            @if ($appointment === null)
-                                <span class="text-hp-slate/50">&mdash;</span>
-                            @else
-                                @php
-                                    // D-53: one key from the model, mapped here to the
-                                    // wording and the badge. Orange for the student who
-                                    // is at the clinic RIGHT NOW (the one state that is
-                                    // still moving), peach once it is done, slate for
-                                    // everything that is waiting or did not happen.
-                                    [$progressLabel, $progressVariant] = match ($appointment->clearanceProgress()) {
-                                        'withdrawn' => ['Withdrawn', 'rejected'],
-                                        'missed'    => ['Did not attend', 'rejected'],
-                                        'awaiting'  => ['Not yet attended', 'pending'],
-                                        'in_clinic' => ['At the clinic', 'live'],
-                                        'completed' => ['Completed', 'approved'],
-                                    };
-                                @endphp
-                                <x-hp.badge :variant="$progressVariant">{{ $progressLabel }}</x-hp.badge>
-                            @endif
-                        </x-hp.table-cell>
-
-                        <x-hp.table-cell label="Result">
-                            {{-- D-53 (amends PRD §6.6): the OUTCOME only. Vitals,
-                                 screening answers and nurse notes are not on this
-                                 page and no link from it reaches them — the College
-                                 Admin sees Fit or Unfit for their own college's
-                                 students and nothing more of the clinical record. --}}
-                            @php $result = $appointment?->clearanceResult(); @endphp
-                            @if ($result !== null)
-                                <x-hp.badge :variant="Str::lower($result)">{{ $result }}</x-hp.badge>
-                            @else
-                                <span class="text-hp-slate/50">&mdash;</span>
-                            @endif
                         </x-hp.table-cell>
 
                         <x-hp.table-cell label="">

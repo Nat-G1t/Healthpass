@@ -21,16 +21,17 @@ use Illuminate\Support\Collection;
 /**
  * DEV/DEMO ONLY — synthetic batch requests for the CCS College Admin.
  *
- * Seeds one batch per state so every branch of Batch Tracking (FR-ADM-05),
- * the batch roster (FR-ADM-07 / D-53) and the Activity Log (FR-ADM-10) can be
- * clicked through without a live Director, a live kiosk or a live nurse:
+ * Seeds one batch per state so every branch of Batch Tracking (FR-ADM-05), its
+ * Batch Results card and popup (FR-ADM-12 / D-55), the batch roster (FR-ADM-07)
+ * and the Activity Log (FR-ADM-10) can be clicked through without a live
+ * Director, a live kiosk or a live nurse:
  *
  *   BR-2026-901  PENDING    4 students — CANCELLABLE (D-52); Cancel button shown
  *   BR-2026-902  PENDING    2 students — CANCELLABLE; proves the column holds
  *                                        more than one row
- *   BR-2026-903  APPROVED   4 students, clinic day 4 days AGO — the results
- *                                        page in full: 1 Fit, 1 Unfit, 1 still
- *                                        with the nurse, 1 who never turned up
+ *   BR-2026-903  APPROVED   4 students, clinic day 4 days AGO — the Batch
+ *                                        Results popup in full: 1 Fit, 1 Unfit,
+ *                                        1 still with the nurse, 1 absent
  *   BR-2026-904  APPROVED   3 students, clinic day in 3 days — 2 not yet
  *                                        attended (both withdrawable), 1 already
  *                                        withdrawn
@@ -126,7 +127,7 @@ class DemoBatchSeeder extends Seeder
 
     /**
      * The results showcase: a clinic day that has already passed, with every
-     * outcome the roster can render sitting side by side.
+     * outcome the Batch Results popup can render sitting side by side.
      */
     private function seedApprovedWithResults(): void
     {
@@ -149,7 +150,7 @@ class DemoBatchSeeder extends Seeder
         $this->attachOne($batch, $carlo, $date, '08:00:00', appointmentStatus: 'scheduled');
         $this->capture($batch, $carlo, $date);
 
-        // Never turned up, and the clinic day has gone — "Did not attend".
+        // Never turned up, and the clinic day has gone — "Absent" (D-55).
         $this->attachOne($batch, $angel, $date, '08:00:00', appointmentStatus: 'scheduled');
     }
 
@@ -268,8 +269,8 @@ class DemoBatchSeeder extends Seeder
 
     /**
      * A kiosk visit CAPTURED but not yet encoded — vitals and screening
-     * answers present, no clearance record. The roster reads this as
-     * "At the clinic", and the Nurse Live Queue picks it up as real work.
+     * answers present, no clearance record. The Batch Results popup reads this
+     * as "At the clinic", and the Nurse Live Queue picks it up as real work.
      */
     private function capture(BatchRequest $batch, User $student, string $date): ClinicVisit
     {
@@ -347,7 +348,8 @@ class DemoBatchSeeder extends Seeder
         ]);
 
         // The nurse's encode is what completes the appointment
-        // (Nurse\EncodeController) — the roster reads that as "Completed".
+        // (Nurse\EncodeController) — the Batch Results popup reads that as
+        // "Completed".
         $visit->appointment?->update(['status' => 'completed']);
     }
 

@@ -76,7 +76,7 @@ class DemoBatchSeederTest extends TestCase
             ->sort()->values()->all();
 
         // One of each — the whole point of this fixture.
-        $this->assertSame(['completed', 'completed', 'in_clinic', 'missed'], $progress);
+        $this->assertSame(['absent', 'completed', 'completed', 'in_clinic'], $progress);
 
         $results = $batch->batchRequestStudents
             ->map(fn ($row) => $row->appointment?->clearanceResult())

@@ -165,8 +165,9 @@ class Appointment extends Model
     }
 
     /**
-     * D-53: how far this appointment has got, as ONE key the batch roster maps
-     * to a label and a badge (FR-ADM-07 as amended).
+     * How far this appointment has got, as ONE key the Batch Results popup maps
+     * to a label and a badge (FR-ADM-12, D-55 — introduced by D-53 for the
+     * roster, which no longer shows it).
      *
      * The College Admin who booked a graduation cohort needs to know who still
      * has to turn up, and `appointments.status` alone cannot tell them: the
@@ -177,8 +178,10 @@ class Appointment extends Model
      * "scheduled". The visit and its clearance record are what carry that.
      *
      *   withdrawn  — the admin pulled this seat (FR-ADM-07)
-     *   missed     — the clinic day has passed and no visit was ever recorded
-     *   awaiting   — booked for today or later, not at the kiosk yet
+     *   absent     — no visit, and the server clock has reached
+     *                `healthpass.absent_cutoff` (8:00 PM) on the clinic date,
+     *                or any later day (D-55 — was `missed`, flipped at midnight)
+     *   awaiting   — no visit yet, and it is still before that cutoff
      *   in_clinic  — vitals captured at the kiosk, waiting on the nurse
      *   completed  — the nurse has encoded it; clearanceResult() has a value
      *
@@ -186,8 +189,9 @@ class Appointment extends Model
      * writes it (the enum value predates the kiosk flow), so keying on it
      * would produce a state no real row can reach.
      *
-     * Reads $this->clinicVisit and its clearanceRecord — the roster eager-loads
-     * both, so a 60-student batch stays 3 queries rather than 121.
+     * Reads $this->clinicVisit and its clearanceRecord — Batch Tracking
+     * eager-loads both, so a 60-student batch stays a handful of queries
+     * rather than 121.
      */
     public function clearanceProgress(): string
     {
@@ -198,7 +202,12 @@ class Appointment extends Model
         $visit = $this->clinicVisit;
 
         if ($visit === null) {
-            return $this->scheduled_date->lt(today()) ? 'missed' : 'awaiting';
+            // D-55: a no-show may still turn up all clinic day, so they only
+            // become absent from the cutoff. Server clock only (like BR-23).
+            $absentFrom = $this->scheduled_date->copy()
+                ->setTimeFromTimeString((string) config('healthpass.absent_cutoff'));
+
+            return now()->gte($absentFrom) ? 'absent' : 'awaiting';
         }
 
         return $visit->clearanceRecord === null ? 'in_clinic' : 'completed';
@@ -209,9 +218,9 @@ class Appointment extends Model
      * 'Unfit', or null while there is nothing encoded yet.
      *
      * Outcome only. The vitals, the screening answers and the nurse's notes
-     * stay out of the College Admin's reach: PRD §6.6 as amended by D-53 opens
-     * exactly this one field to the admin of the student's own college, and
-     * nothing else on the record.
+     * stay out of the College Admin's reach: PRD §6.6 opens exactly this one
+     * field to the admin of the student's own college, and nothing else on the
+     * record — shown on the Batch Results popup since D-55.
      */
     public function clearanceResult(): ?string
     {

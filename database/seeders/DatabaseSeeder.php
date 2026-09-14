@@ -16,7 +16,7 @@ class DatabaseSeeder extends Seeder
             StudentSeeder::class,
             DemoClinicVisitSeeder::class, // DEV ONLY — remove when kiosk writes real visits
             // DEV ONLY — CCS batches in every state, for Batch Tracking,
-            // the batch results roster (D-53) and the D-52 cancel flow.
+            // its Batch Results card (D-55) and the D-52 cancel flow.
             // Runs AFTER DemoClinicVisitSeeder on purpose: that seeder skips
             // itself if any APT-2026-9xxx row exists, so it must go first.
             DemoBatchSeeder::class,

@@ -67,6 +67,13 @@ return [
     // in sync. Consumed server-side by StoreAppointmentRequest and the availability endpoint.
     'closing_hour' => 17,
 
+    // FR-ADM-12 (D-55): when a batch student who never reached the kiosk stops
+    // reading "Not yet attended" and becomes "Absent" on the Batch Results popup.
+    // 24h 'H:i' on the CLINIC DATE, server clock (Asia/Manila) — from 8:00 PM, so
+    // the clinic day and the evening after it have passed. Any later day is
+    // absent too. Decided on the server, never in the browser.
+    'absent_cutoff' => env('HEALTHPASS_ABSENT_CUTOFF', '20:00'),
+
     // §7.4, D-10: Rule-based flag thresholds — screening signals, not diagnoses.
     // All flag logic (kiosk badges, nurse queue, Director anomalies) reads ONLY from here. (NFR-7, BR-13)
     'thresholds' => [

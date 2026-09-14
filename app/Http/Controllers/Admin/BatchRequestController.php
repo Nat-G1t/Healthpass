@@ -10,6 +10,7 @@ use App\Http\Requests\Admin\StoreBatchRequestRequest;
 use App\Jobs\SendAppointmentWithdrawnMail;
 use App\Models\Appointment;
 use App\Models\BatchRequest;
+use App\Models\BatchRequestStudent;
 use App\Models\StudentProfile;
 use App\Services\ClinicScheduleService;
 use App\Services\ReferenceNumberService;
@@ -46,6 +47,12 @@ class BatchRequestController extends Controller
      * `reviewer` is eager-loaded for the D-36 rejection-reason modal (who
      * rejected it); with() means one extra query for the whole list instead
      * of one per rejected row.
+     *
+     * Above that list sits the Batch Results card (FR-ADM-12, D-55): every
+     * APPROVED batch, newest clinic date first, from its own query. It
+     * eager-loads everything Appointment::clearanceProgress() reads, so the
+     * page costs the same handful of queries whether a batch has 4 students or
+     * 60. The popup rows are built here, per batch, by resultsPopup().
      */
     public function index(): View
     {
@@ -57,7 +64,61 @@ class BatchRequestController extends Controller
             ->latest()
             ->get();
 
-        return view('admin.batches.index', compact('college', 'batchRequests'));
+        $approvedBatches = $college->batchRequests()
+            ->where('status', 'approved')
+            ->with([
+                'batchRequestStudents' => fn ($query) => $query->orderBy('id'),
+                'batchRequestStudents.student:id,name',
+                'batchRequestStudents.student.studentProfile:id,user_id,student_number',
+                'batchRequestStudents.appointment',
+                // Only the columns the status and completion rules read. The
+                // rest of the clinical record (notes, physician) is never even
+                // loaded for this page.
+                'batchRequestStudents.appointment.clinicVisit:id,appointment_id',
+                'batchRequestStudents.appointment.clinicVisit.clearanceRecord:id,clinic_visit_id,result,encoded_at',
+            ])
+            ->orderByDesc('scheduled_date')
+            ->orderByDesc('id')
+            ->get();
+
+        // Keyed by batch id, so each row's View button picks its own payload.
+        $resultPopups = $approvedBatches
+            ->mapWithKeys(fn (BatchRequest $batch): array => [$batch->id => $this->resultsPopup($batch)])
+            ->all();
+
+        return view('admin.batches.index', compact('college', 'batchRequests', 'approvedBatches', 'resultPopups'));
+    }
+
+    /**
+     * One batch's Batch Results popup (FR-ADM-12, D-55), as the plain array the
+     * view embeds with Js::from().
+     *
+     * OUTCOME ONLY (PRD §6.6): each row is the student's name, number, hour,
+     * the clearanceProgress() key and Fit/Unfit — nothing else. No vitals,
+     * screening answers, nurse notes, physician details or clinic-visit
+     * reference go into it, so none of them can reach the page source. The view
+     * owns the wording of each status key.
+     *
+     * @return array{ref: string, service: string, date: string, span: string, students: list<array{name: string, number: string, hour: string, status: ?string, result: ?string}>}
+     */
+    private function resultsPopup(BatchRequest $batch): array
+    {
+        return [
+            'ref' => $batch->reference_no,
+            'service' => $batch->service_type === 'medical' ? 'Medical Clearance' : 'Dental Check',
+            'date' => $batch->scheduled_date?->format('l, F j, Y') ?? '—',
+            'span' => $batch->requestedSpanLabel(),
+            'students' => $batch->batchRequestStudents
+                ->map(fn (BatchRequestStudent $row): array => [
+                    'name' => $row->student?->name ?? 'Unknown student',
+                    'number' => $row->student?->studentProfile?->student_number ?? '—',
+                    'hour' => $row->appointment?->timeRangeLabel() ?? '—',
+                    'status' => $row->appointment?->clearanceProgress(),
+                    'result' => $row->appointment?->clearanceResult(),
+                ])
+                ->values()
+                ->all(),
+        ];
     }
 
     public function create(): View
@@ -230,11 +291,10 @@ class BatchRequestController extends Controller
      * on one row of it. This is that page, and it is where the admin withdraws
      * a single student's appointment.
      *
-     * D-53 added the RESULT to it: each row now carries how far that student
-     * has got (booked / at the clinic / completed / did not attend) and, once
-     * the nurse has encoded it, Fit or Unfit. That last field is clinical, and
-     * PRD §6.6 was amended by D-53 to permit exactly it — the outcome and
-     * nothing else — to the admin of that student's own college.
+     * D-53 put each student's progress and Fit/Unfit result here as well; D-55
+     * moved both to the Batch Results popup on Batch Tracking (FR-ADM-12), so
+     * this page is back to who is booked, when, and the Withdraw action — and
+     * no longer loads any part of the clinical record.
      *
      * Scoped the same way as confirmation(): fetched through the managed
      * college's relationship, so another college's batch id 404s (FR-ADM-06).
@@ -252,11 +312,7 @@ class BatchRequestController extends Controller
                 'batchRequestStudents' => fn ($query) => $query->orderBy('id'),
                 'batchRequestStudents.student:id,name',
                 'batchRequestStudents.student.studentProfile:id,user_id,student_number,course,year_level',
-                // D-53: the clinic visit and its clearance record ride along —
-                // Appointment::clearanceProgress() and clearanceResult() read
-                // both, and eager-loading keeps a 60-student roster at a
-                // handful of queries instead of 121.
-                'batchRequestStudents.appointment.clinicVisit.clearanceRecord',
+                'batchRequestStudents.appointment',
             ])
             ->findOrFail($batchId);
 

@@ -203,10 +203,47 @@ students.
    approved date. → **Expect:** the visit **links to the appointment**
    (appears in the queue, not as a walk-in).
 9. Repeat for a second sampled student.
+10. Log back in as `admin.ccs@healthpass.test` and open **Batch Tracking**. →
+    **Expect:** a **Batch Results** card **above** the requests table, listing
+    the approved batch with **Time of Completion = In progress** (at least one
+    student has not been encoded yet). Pending, rejected and cancelled batches
+    are **not** in this card (D-55).
+11. Click **View** on that row. → **Expect:** a popup with the Batch ID,
+    service, clinic date and hour span, and one row per student: name, student
+    no., hour, **Status** and **Result**. A student taken through the kiosk but
+    not yet encoded reads **At the clinic** with Result "—"; a student not at the
+    kiosk yet reads **Not yet attended**. **No vital signs, questionnaire
+    answers, nurse notes or HP- reference appear anywhere in the popup.**
+12. Log in as `nurse@healthpass.test` and encode one sampled student (Fit or
+    Unfit). Back as the CCS admin, **reload** Batch Tracking and click View
+    again. → **Expect:** that student now reads **Completed** with the result
+    you encoded.
+13. **Absent rule (8 PM).** A student who never reaches the kiosk stays **Not
+    yet attended** all clinic day and reads **Absent from 8:00 PM** on the
+    clinic date. To test without waiting until evening, ask a developer to set
+    `HEALTHPASS_ABSENT_CUTOFF` in `.env` to a time a couple of minutes ahead
+    (e.g. `14:05`), run `php artisan config:clear`, and reload after that time.
+    → **Expect:** the no-shows read **Absent**. Once every student is Completed,
+    Absent or Withdrawn, Time of Completion shows the **date and time of the
+    last encode** (e.g. "Sep 10, 2026 · 3:42 PM"), or **No one attended** if
+    nobody was encoded. A student still **At the clinic** keeps the batch **In
+    progress** even after the cutoff. Ask the developer to remove the setting
+    afterwards.
+14. In the requests table, click the Batch ID to open the **batch roster**. →
+    **Expect:** clinic date, hour span, purpose and student count, and each
+    student's appointment and hour with **Withdraw** — but **no** Status or
+    Result columns and no "Clearance results" line (they live in the popup
+    now). Withdraw still works for a student who has not checked in.
+15. Narrow the browser to phone width (about 400 px) and repeat steps 10–11. →
+    **Expect:** the card and the popup table re-flow into stacked cards, the
+    popup scrolls, and nothing overflows sideways.
 
 **Pass criteria:** N selected students → exactly N appointments created on the
 chosen date, visible to those students, and sampled students complete the
-kiosk loop against their generated appointment.
+kiosk loop against their generated appointment. The Batch Results card lists
+only approved batches; its popup shows each student's status and Fit/Unfit and
+nothing else clinical; no-shows read Absent from 8 PM on the clinic day; and
+the completion time appears once every student is finished.
 
 ---
 
