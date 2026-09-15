@@ -77,7 +77,22 @@
                 </div>
 
                 <p class="max-w-sm text-base text-hp-slate/80" x-text="vitalMeta(state.vitalStep).instruction"></p>
-                <p class="text-sm text-hp-slate/40" x-text="serial.status === 'connected' ? 'Waiting for the sensor…' : 'Ready for entry.'"></p>
+                <p class="text-sm text-hp-slate/40" x-text="state.vitalStep === 4 ? 'Tap Start, then press START on the blood pressure monitor.' : (serial.status === 'connected' ? 'Waiting for the sensor…' : 'Ready for entry.')"></p>
+
+                {{-- D-59: the blood-pressure step listens for the Bluetooth
+                     monitor only after the student taps Start, then shows the
+                     waiting card below until the reading arrives. --}}
+                <template x-if="state.vitalStep === 4">
+                    <button
+                        type="button"
+                        @click="startBpWait()"
+                        class="inline-flex items-center gap-2 rounded-xl bg-hp-orange px-9 py-3 text-base font-semibold text-hp-white transition hover:brightness-95"
+                    >
+                        {{-- SVG, not "▶": Chromium draws that character as a blue emoji. --}}
+                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5z"></path></svg>
+                        Start
+                    </button>
+                </template>
 
                 {{-- Web Serial link (FR-KSK-07/FR-HW-05). On Chromium the first
                      "Connect sensor" tap is the user gesture requestPort needs;
@@ -123,6 +138,34 @@
                         class="rounded-lg bg-hp-slate/10 px-5 py-2.5 text-sm font-medium text-hp-slate/60 transition hover:bg-hp-slate/20"
                     >⚡ Simulate reading (dev)</button>
                 @endif
+            </div>
+
+            {{-- ── Phase: WAITING (blood pressure only, D-59) ──────────────── --}}
+            {{-- From tapping Start until the Bluetooth monitor's reading arrives.
+                 Same pulsing rings as scanning so it reads as "working". Cancel
+                 goes back to Start; the corner triple-tap pad still works; with
+                 no reading after bp_wait_seconds it goes back to Start itself. --}}
+            <div x-show="stepPhase() === 'waiting'" x-cloak
+                 x-transition:enter="transition ease-hp-out duration-hp-base"
+                 x-transition:enter-start="opacity-0"
+                 x-transition:enter-end="opacity-100"
+                 class="flex w-full flex-col items-center gap-4 rounded-2xl bg-hp-white p-8 shadow-sm">
+                <div class="relative grid h-20 w-20 place-items-center">
+                    <span class="k-pulse-ring absolute h-20 w-20 rounded-full bg-hp-orange/40"></span>
+                    <span class="k-pulse-ring absolute h-20 w-20 rounded-full bg-hp-orange/30" style="animation-delay: .6s"></span>
+                    <span class="relative grid h-16 w-16 animate-pulse place-items-center rounded-full bg-hp-orange text-hp-white">
+                        <svg class="h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 12h4l2-5 4 10 2-5h6"></path>
+                        </svg>
+                    </span>
+                </div>
+                <p class="text-lg font-semibold text-hp-slate">Waiting for the blood pressure monitor…</p>
+                <p class="max-w-sm text-sm text-hp-slate/50">Press START on the monitor and keep your arm still. Your reading will appear here.</p>
+                <button
+                    type="button"
+                    @click="endBpWait()"
+                    class="rounded-xl border border-hp-slate/20 px-7 py-3 text-base font-medium text-hp-slate transition hover:bg-hp-slate/5"
+                >Cancel</button>
             </div>
 
             {{-- ── Phase: SCANNING (animation) ──────────────────────────────── --}}

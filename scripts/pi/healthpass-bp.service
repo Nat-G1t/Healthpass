@@ -1,0 +1,29 @@
+# HealthPass — Bluetooth blood-pressure bridge (D-58; starts at boot since D-59).
+#
+# Runs scripts/pi/bp_read.py from the moment the Pi boots, so the monitor is
+# already being listened for when a nurse opens the kiosk, and restarts it if
+# it ever stops. Install and check it with docs/deployment-pi.md §4a.
+#
+# Settings (monitor address, where to POST, the kiosk key) come from
+# /etc/healthpass/bp-daemon.env — start from scripts/pi/bp-daemon.env.example.
+
+[Unit]
+Description=HealthPass Bluetooth BP monitor bridge
+Wants=bluetooth.target network-online.target
+After=bluetooth.target network-online.target
+
+[Service]
+# The Pi login user that paired the monitor. Change it if yours is not baldo.
+User=baldo
+# Lets the service talk to BlueZ without a desktop session.
+SupplementaryGroups=bluetooth
+EnvironmentFile=/etc/healthpass/bp-daemon.env
+# -u prints each log line straight away, so `journalctl -u healthpass-bp -f`
+# shows readings as they happen. The key reaches the script as the
+# HEALTHPASS_KIOSK_KEY environment variable, never on this command line.
+ExecStart=/usr/bin/python3 -u /var/www/healthpass/scripts/pi/bp_read.py --address ${BP_ADDRESS} --post-url ${BP_POST_URL}
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

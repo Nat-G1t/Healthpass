@@ -412,6 +412,79 @@ shortcut can stay; it's inert unless clicked.
 
 ---
 
+## 4a. Bluetooth BP monitor — start the bridge at boot (D-58, D-59)
+
+The A&D UA-651BLE cuff talks Bluetooth, so a small Python bridge,
+`scripts/pi/bp_read.py`, listens for it and POSTs each reading to HealthPass
+(PRD §11.4). It runs as a **system service that starts when the Pi boots** —
+before anyone logs in — so the monitor is already being listened for when a
+nurse opens the kiosk, and systemd restarts it if it ever stops. Nobody starts
+it by hand.
+
+> **Pair and flush once first.** The monitor must already be paired with the
+> Pi, and `python3 scripts/pi/bp_read.py --address <MAC> --flush` run once, so
+> the readings stored inside the monitor are marked as seen instead of posted.
+
+**1. Check Python has what the bridge needs** (as your login user):
+
+```bash
+/usr/bin/python3 -c "import bleak, requests; print('ok')"
+```
+
+`ok` → carry on. An `ImportError` → `sudo apt install python3-bleak python3-requests`
+(or, if bleak lives in a virtualenv, put that `python3` path in the service's
+`ExecStart`).
+
+**2. The settings file.** It holds the kiosk key, so only root can read it:
+
+```bash
+cd /var/www/healthpass
+sudo install -D -m 600 scripts/pi/bp-daemon.env.example /etc/healthpass/bp-daemon.env
+sudo nano /etc/healthpass/bp-daemon.env
+```
+
+Set `BP_ADDRESS` (the monitor), `BP_POST_URL` — `http://127.0.0.1/api/kiosk/bp-reading`
+on the Pi-local fallback, `https://<domain>/api/kiosk/bp-reading` on the hosted
+deploy — and `HEALTHPASS_KIOSK_KEY`, the **same value** as in that server's
+`.env`. On the Pi-local shape you can copy the key straight from the app:
+
+```bash
+KEY=$(sudo grep '^HEALTHPASS_KIOSK_KEY=' /var/www/healthpass/.env | cut -d= -f2- | tr -d '"\r')
+sudo sed -i "s|^HEALTHPASS_KIOSK_KEY=.*|HEALTHPASS_KIOSK_KEY=$KEY|" /etc/healthpass/bp-daemon.env
+```
+
+**3. Install and start the service.** It runs as the login user that paired
+the monitor — `User=baldo` in the unit file; change that line first if yours
+differs. **Stop any copy you started by hand in a terminal (Ctrl+C) first** —
+two bridges would fight over the one monitor.
+
+```bash
+sudo cp scripts/pi/healthpass-bp.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now healthpass-bp    # enable = every boot, --now = start now
+```
+
+**4. Check it.**
+
+```bash
+systemctl status healthpass-bp       # expect "active (running)"
+journalctl -u healthpass-bp -f       # live log; Ctrl+C stops watching, not the service
+```
+
+Take a measurement: the log shows `found …`, `connected …`, the reading's JSON
+and **`posted to HealthPass: 201`**. `403` means the key doesn't match the
+server's; `POST failed` means `BP_POST_URL` is wrong. Reboot once and check
+`systemctl status healthpass-bp` again without touching anything.
+
+**On the kiosk** the student taps **▶ Start** on the Blood Pressure step, then
+presses START on the monitor. The kiosk shows a waiting animation until the
+reading arrives, for up to 2 minutes (`healthpass.kiosk.bp_wait_seconds`).
+
+**After a `git pull`** the service is still running the old script — restart it
+(§6 includes the line).
+
+---
+
 ## 5. Staff access over the campus LAN
 
 The same Pi serves staff dashboards. No extra service — nginx/artisan already
@@ -467,6 +540,7 @@ sudo -u www-data php artisan config:cache
 sudo -u www-data php artisan route:cache
 sudo -u www-data php artisan view:cache
 sudo systemctl restart nginx php8.2-fpm     # or: healthpass-serve
+sudo systemctl restart healthpass-bp        # the BP bridge (§4a) runs from this checkout
 ```
 
 ---
@@ -640,7 +714,9 @@ Keep a working local install by following §§1–4 of this document. To switch 
 Pi from hosted to local:
 
 1. `KIOSK_URL="http://localhost/kiosk"` in the launcher (or its env), and point
-   the Bluetooth BP daemon at `http://127.0.0.1/api/kiosk/bp-reading` (D-58).
+   the Bluetooth BP bridge at `http://127.0.0.1/api/kiosk/bp-reading` (D-58):
+   set `BP_POST_URL` in `/etc/healthpass/bp-daemon.env`, then
+   `sudo systemctl restart healthpass-bp` (§4a).
 2. In the Pi's `.env`: `HEALTHPASS_KIOSK_ALLOW_LOOPBACK=true`,
    `APP_URL=http://localhost`, `TRUSTED_PROXIES=` (empty), and the same
    `HEALTHPASS_KIOSK_KEY` the BP daemon sends.

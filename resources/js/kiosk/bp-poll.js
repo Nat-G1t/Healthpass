@@ -8,9 +8,10 @@
  * state machine (state-machine.js) decides what a reading means.
  */
 
-// One poll every 2 s: a reading shows up moments after the cuff finishes, and
-// the server sees at most 30 requests a minute from the kiosk.
-export const BP_POLL_MS = 2000;
+// One poll a second (D-59; was 2 s): a reading shows up moments after the
+// daemon sends it. The kiosk only polls after the student taps Start, and at
+// most 60 requests a minute stays under the latest route's throttle of 90.
+export const BP_POLL_MS = 1000;
 
 /**
  * GET the latest reading. Resolves to { reachable, reading } and NEVER throws:

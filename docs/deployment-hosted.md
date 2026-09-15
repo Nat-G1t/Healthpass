@@ -356,9 +356,12 @@ With loopback trust off, the Pi's Chromium needs a **device token** (D-27):
 
 Then have Baldo re-grant the ESP32's serial port once on the new origin (§0).
 
-**Bluetooth BP daemon (D-58).** Point the Pi's BP daemon at
-`https://<domain>/api/kiosk/bp-reading` and give it the same
-`HEALTHPASS_KIOSK_KEY` as the server. Check it from the Pi — a wrong key
+**Bluetooth BP daemon (D-58).** The Pi's BP bridge starts at boot as the
+`healthpass-bp` service (`docs/deployment-pi.md` §4a, D-59). In
+`/etc/healthpass/bp-daemon.env` set
+`BP_POST_URL=https://<domain>/api/kiosk/bp-reading` and the same
+`HEALTHPASS_KIOSK_KEY` as the server, then `sudo systemctl restart healthpass-bp`.
+Check the endpoint from the Pi — a wrong key
 answers `403`, a working one `201`. Do it while no student is on the blood
 pressure step, since the test reading waits in the cache for 5 minutes:
 

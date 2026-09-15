@@ -34,6 +34,9 @@ export const VITAL_STEPS = 4;
 // The blood-pressure step — the one the Bluetooth monitor fills (D-58).
 const BP_STEP = 4;
 
+// Shown under Start when a BP wait runs out with no reading (D-59).
+const BP_WAIT_EXPIRED_NOTICE = 'No reading came from the blood pressure monitor. Tap Start to try again.';
+
 /**
  * The questionnaire (FR-KSK-10, D-56): the official form's nine "Physical Signs
  * Disorder of" rows, in the form's order. Pure DATA — the Blade renders all nine
@@ -131,7 +134,9 @@ export const VITALS = {
 };
 
 /**
- * A fresh, uncaptured step. phase: ready → scanning → captured. `values` holds
+ * A fresh, uncaptured step. phase: ready → scanning → captured; the blood-
+ * pressure step also has 'waiting', from tapping Start until the Bluetooth
+ * monitor's reading arrives (D-59). `values` holds
  * each field's reading by key (one key for most steps, three for BP); `method`
  * is the step's provenance for vital_signs.entry_method (FR-KSK-06).
  */
@@ -252,6 +257,8 @@ export function kioskMachine() {
         _bpTimer: null,
         _bpBaseline: undefined,
         _bpBusy: false,
+        // The bp_wait_seconds limit on one wait after Start (D-59).
+        _bpWaitTimer: null,
 
         // Tap bookkeeping for the disguised manual-entry gesture (see logoTap).
         _logoTaps: 0,
@@ -355,26 +362,66 @@ export function kioskMachine() {
         },
 
         // ── Bluetooth BP monitor (D-58, FR-KSK-07a) ──────────────────────────
-        /** Start the 2 s poll. A page without the URL (e.g. a test) doesn't poll. */
+        /** Start the poll timer (it asks only while the BP step waits). A page without the URL (e.g. a test) doesn't poll. */
         setupBpPoll() {
             if (!this.$refs.root.dataset.bpLatestUrl) return;
             this._bpTimer = setInterval(() => this.pollBpReading(), BP_POLL_MS);
         },
 
-        /** True while the BP step is on screen and still waiting for a reading. */
+        /** True while the BP step is on screen and waiting for the monitor (after Start). */
         isAwaitingBp() {
             return this.state.screen === 'vitals'
                 && this.state.vitalStep === BP_STEP
-                && this.stepPhase() === 'ready';
+                && this.stepPhase() === 'waiting';
+        },
+
+        /**
+         * The student tapped Start on the BP step (D-59): show the waiting
+         * animation and listen for the monitor. The poll taken right now is the
+         * BASELINE, so a reading that finished before the tap is never used.
+         * While waiting, the 90 s idle reset is paused (see bumpIdle) and the
+         * bp_wait_seconds limit stands in for it: with no reading by then, the
+         * step goes back to Start with a nudge. Returns the baseline poll, so a
+         * test can await it.
+         */
+        startBpWait() {
+            if (this.state.screen !== 'vitals' || this.state.vitalStep !== BP_STEP) return Promise.resolve();
+            if (this.stepPhase() !== 'ready' || this.state.pad.open) return Promise.resolve();
+            const s = this.currentStep();
+            s.phase = 'waiting';
+            s.notice = '';
+            this._bpBaseline = undefined;
+            this.clearIdle();
+            this.clearBpWaitTimer();
+            const secs = this.config.kiosk?.bpWaitSeconds ?? 120;
+            this._bpWaitTimer = setTimeout(() => this.endBpWait(BP_WAIT_EXPIRED_NOTICE), secs * 1000);
+            return this.pollBpReading();
+        },
+
+        /**
+         * Stop waiting and put the Start button back — from Cancel, the wait
+         * limit, Previous step or the manual pad. `notice` is shown under Start.
+         * The idle countdown resumes.
+         */
+        endBpWait(notice = '') {
+            this.clearBpWaitTimer();
+            const s = this.state.vitalSteps[BP_STEP];
+            if (s.phase !== 'waiting') return;
+            s.phase = 'ready';
+            s.notice = notice;
+            this.bumpIdle();
+        },
+
+        clearBpWaitTimer() {
+            if (this._bpWaitTimer) clearTimeout(this._bpWaitTimer);
+            this._bpWaitTimer = null;
         },
 
         /**
          * One poll tick; it only asks the server while the BP step waits. The
-         * first answer after the step starts waiting is the BASELINE: whatever
-         * is already there predates this student's measurement and is skipped.
-         * A later answer with a different received_at is a new reading. While
-         * the manual pad is open a new reading is left for a later tick, so it
-         * never lands on numbers someone is typing; cancelling the pad lets it in.
+         * first answer after Start is the BASELINE: whatever is already there
+         * predates this student's measurement and is skipped. A later answer
+         * with a different received_at is a new reading.
          */
         async pollBpReading() {
             if (!this.isAwaitingBp()) {
@@ -392,7 +439,7 @@ export function kioskMachine() {
                     return;
                 }
                 if (receivedAt === null || receivedAt === this._bpBaseline) return;
-                if (!this.isAwaitingBp() || this.state.pad.open) return;
+                if (!this.isAwaitingBp()) return;
                 this._bpBaseline = receivedAt; // seen: never used twice
                 await this.acceptBpReading(reading);
             } finally {
@@ -417,13 +464,16 @@ export function kioskMachine() {
             } catch {
                 return;
             }
-            if (!this.isAwaitingBp() || this.state.pad.open) return; // the screen moved on meanwhile
-            this.bumpIdle(); // a reading arriving counts as activity (FR-KSK-15)
+            if (!this.isAwaitingBp()) return; // Cancel, the wait limit or the pad got there first
+            this.clearBpWaitTimer();
             // A missing pulse is left out: the step then reads as incomplete and
             // shows the usual "try again or enter it manually" nudge.
             const forStep = { S: reading.systolic, D: reading.diastolic };
             if (reading.pulse != null) forStep.R = reading.pulse;
             this.receiveReading(forStep, { suspect: reading.suspect === true });
+            // The step has left 'waiting', so this restarts the idle countdown:
+            // a reading arriving counts as activity (FR-KSK-15).
+            this.bumpIdle();
         },
 
         // ── Navigation ───────────────────────────────────────────────────────
@@ -441,6 +491,7 @@ export function kioskMachine() {
         reset() {
             this.clearIdle();
             this.clearCompleteCountdown();
+            this.clearBpWaitTimer();
             // Drop the server-side kiosk identity too. This is the single choke
             // point for every abandon/finish path ("Not you?", consent Decline,
             // the 90s idle reset, Complete's Done + auto-reset), so clearing it
@@ -481,6 +532,13 @@ export function kioskMachine() {
         bumpIdle() {
             const screen = this.state.screen;
             if (screen === 'welcome' || screen === 'complete') {
+                this.clearIdle();
+                return;
+            }
+            // D-59: while the BP step waits for the monitor, the wait limit
+            // guards an abandoned kiosk instead, so a cuff measurement plus the
+            // Bluetooth transfer can never reset the session halfway.
+            if (this.isAwaitingBp()) {
                 this.clearIdle();
                 return;
             }
@@ -948,7 +1006,7 @@ export function kioskMachine() {
             return this.state.vitalSteps[this.state.vitalStep];
         },
 
-        /** Convenience: the current step's phase ('ready' | 'scanning' | 'captured'). */
+        /** Convenience: the current step's phase ('ready' | 'waiting' | 'scanning' | 'captured'). */
         stepPhase() {
             return this.currentStep().phase;
         },
@@ -1072,6 +1130,9 @@ export function kioskMachine() {
         openPad() {
             const meta = this.vitalMeta(this.state.vitalStep);
             if (!meta) return;
+            // D-59: the pad stays first-class while the BP step waits for the
+            // monitor — opening it stops the wait.
+            if (this.isAwaitingBp()) this.endBpWait();
             // Manual entry is a first-class path only BEFORE a reading is taken
             // (the 'ready' phase) — "just about to read each vital". Once the
             // step is captured (or mid-scan), the disguised gesture does nothing,
@@ -1167,6 +1228,7 @@ export function kioskMachine() {
         },
 
         prevVital() {
+            if (this.isAwaitingBp()) this.endBpWait(); // leaving the BP step stops listening (D-59)
             if (this.state.vitalStep > 1) this.state.vitalStep -= 1;
         },
 

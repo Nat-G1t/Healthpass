@@ -4,6 +4,25 @@
 
 ### Added
 
+* **Blood-pressure step: Start button, faster Bluetooth readings, bridge
+  starts at boot** (D-59). No schema change, no new route, no new package.
+  - The BP step shows **▶ Start**. Tapping it shows a waiting animation with
+    **Cancel**, and only then does the kiosk ask for the monitor's reading —
+    now every 1 s (was 2 s). The answer taken at the tap is the baseline.
+  - While waiting, the 90 s idle reset is paused. New
+    `healthpass.kiosk.bp_wait_seconds` (120) sends the step back to Start with
+    "Tap Start to try again". The manual pad and Previous step end the wait.
+  - The Bluetooth bridge is now in the repo as `scripts/pi/bp_read.py`: it
+    connects with the device the scan found (no second scan), stops after
+    1.5 s of silence (was 4 s) and posts before disconnecting. Payload
+    unchanged; the key can come from the `HEALTHPASS_KIOSK_KEY` environment
+    variable.
+  - New `scripts/pi/healthpass-bp.service` and
+    `scripts/pi/bp-daemon.env.example` start the bridge at boot
+    (`docs/deployment-pi.md` §4a).
+  - Tests: `tests/js/kiosk-bp-poll.test.js` covers Start, the wait limit,
+    Cancel, Previous step and the paused idle reset.
+
 * **Blood pressure from the A&D UA-651BLE Bluetooth monitor** (D-58, new
   FR-KSK-07a). **FLAGGED SCHEMA CHANGE — `vital_signs.bp_device_reading` JSON
   NULL, never backfilled; no new table, no new package.**

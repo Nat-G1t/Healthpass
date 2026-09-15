@@ -138,6 +138,13 @@ return [
         // claim it. An unclaimed reading expires on its own; a reading reaches
         // the database only when the student submits their visit.
         'bp_reading_ttl' => 300,
+
+        // D-59: after the student taps Start on the blood-pressure step, how
+        // many seconds the kiosk waits for the Bluetooth monitor before going
+        // back to the Start button. The 90 s idle reset is paused while it
+        // waits (the cuff plus the Bluetooth transfer can take about that
+        // long), so this limit is what still clears an abandoned kiosk.
+        'bp_wait_seconds' => 120,
     ],
 
 ];

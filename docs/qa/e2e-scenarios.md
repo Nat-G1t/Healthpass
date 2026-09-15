@@ -657,11 +657,12 @@ curl -i -X POST http://127.0.0.1:8080/api/kiosk/bp-reading \
 1. On the kiosk (`http://127.0.0.1:8080/kiosk`), log in with email as Carlo
    Cruz, agree to the privacy notice, and complete height, weight and
    temperature any way you like.
-2. On **Blood Pressure · Step 4 of 4**, wait for the instructions, then have
-   the developer run the command. → **Expect:** within about 2 seconds the
-   scanning animation plays and the card shows **128/82 mmHg**, heart rate
-   **72 bpm** and **From sensor**. Nothing about an irregular pulse appears
-   anywhere on the kiosk.
+2. On **Blood Pressure · Step 4 of 4**, tap **▶ Start**. → **Expect:** the card
+   changes to a pulsing animation, **"Waiting for the blood pressure monitor…"**
+   and a **Cancel** button. Now have the developer run the command.
+   → **Expect:** within about a second the scanning animation plays and the
+   card shows **128/82 mmHg**, heart rate **72 bpm** and **From sensor**.
+   Nothing about an irregular pulse appears anywhere on the kiosk.
 3. Continue, answer the questionnaire and **Submit to Clinic**.
 4. Log in as the **Nurse** and open Carlo's visit from the Live Queue.
    → **Expect:** Vital Signs shows **128/82 mmHg**, **Entry: Sensor** (or
@@ -671,30 +672,41 @@ curl -i -X POST http://127.0.0.1:8080/api/kiosk/bp-reading \
 **Steps — nothing carries over to the next student:**
 
 5. While the kiosk is on **Welcome**, have the developer run the command
-   again. Log in as Carlo and go through to Step 4. → **Expect:** Step 4 keeps
-   waiting — a reading sent before you reached the step is **not** used.
-   Triple-tap the logo and type the blood pressure by hand instead.
+   again. Log in as Carlo, go through to Step 4 and tap **▶ Start**.
+   → **Expect:** it keeps waiting — a reading sent before you tapped Start is
+   **not** used. Triple-tap the logo and type the blood pressure by hand
+   instead (opening the pad stops the waiting).
 
 **Steps — manual entry and the retake suggestion:**
 
-6. Start another session to Step 4. Triple-tap the logo so the number pad
-   opens, then have the developer run the command. → **Expect:** nothing
-   changes behind the pad. Type **120**, **80**, **70**, confirming each.
+6. Start another session to Step 4 and tap **▶ Start**. Triple-tap the logo
+   so the number pad opens, then have the developer run the command.
+   → **Expect:** nothing changes behind the pad. Type **120**, **80**, **70**, confirming each.
    → **Expect:** the card shows **120/80** and **Entered manually** — the
    reading did not replace it.
-7. Tap **↻ Retry**, then have the developer run the command with
-   `"suspect":true`. → **Expect:** the reading is captured, with a peach note:
-   **"The monitor noticed movement or a loose cuff. You can tap Retry to
+7. Tap **↻ Retry** and **▶ Start**, then have the developer run the command
+   with `"suspect":true`. → **Expect:** the reading is captured, with a peach
+   note: **"The monitor noticed movement or a loose cuff. You can tap Retry to
    measure again, or continue."** Both **Retry** and **Continue** still work.
+
+**Steps — Cancel and the 2-minute limit (D-59):**
+
+8. Tap **↻ Retry**, **▶ Start**, then **Cancel**. → **Expect:** **▶ Start** is
+   back, and running the command now changes nothing.
+9. Tap **▶ Start** and touch nothing for 2 minutes. → **Expect:** the kiosk
+   does **not** reset to Welcome while it waits; after 2 minutes the step shows
+   **▶ Start** again with "No reading came from the blood pressure monitor.
+   Tap Start to try again."
 
 **Steps — the endpoint refuses bad messages (developer):**
 
-8. Run the command with a wrong key. → **Expect:** `HTTP/1.1 403`.
-9. Run it with `"systolic":300`. → **Expect:** `HTTP/1.1 422` with a JSON body
-   naming `systolic`.
+10. Run the command with a wrong key. → **Expect:** `HTTP/1.1 403`.
+11. Run it with `"systolic":300`. → **Expect:** `HTTP/1.1 422` with a JSON body
+    naming `systolic`.
 
-**Pass criteria:** a reading sent while Step 4 waits fills it as a sensor
-reading; a reading sent before the step is never used; numbers being typed or
+**Pass criteria:** a reading sent after **▶ Start** fills Step 4 as a sensor
+reading; a reading sent before Start is never used; Cancel and the 2-minute
+limit bring Start back without resetting the session; numbers being typed or
 already typed are never replaced; the retake note appears only for a flagged
 reading and never blocks; the kiosk never mentions an irregular pulse while the
 nurse's encode page does; a wrong key gets 403 and impossible numbers get 422.
