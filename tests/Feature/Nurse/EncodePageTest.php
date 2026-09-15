@@ -500,4 +500,34 @@ class EncodePageTest extends TestCase
             ->assertOk()
             ->assertJsonPath('visits.0.encode_url', route('nurse.visits.encode', $visit));
     }
+
+    // ── Bluetooth BP irregular pulse (D-58) ───────────────────────────────────
+
+    public function test_irregular_pulse_from_the_bp_monitor_is_shown_to_the_nurse(): void
+    {
+        $visit = $this->makeVisit(vitals: [
+            'entry_method' => 'sensor',
+            'bp_device_reading' => [
+                'device_model' => 'A&D UA-651BLE',
+                'flags' => ['irregular_pulse' => true],
+                'suspect' => false,
+            ],
+        ]);
+
+        $this->actingAs($this->nurse())
+            ->get(route('nurse.visits.encode', $visit))
+            ->assertOk()
+            ->assertSee('Irregular pulse')
+            ->assertSee('Detected by the blood-pressure monitor during this reading.');
+    }
+
+    public function test_no_irregular_pulse_notice_without_a_device_record(): void
+    {
+        $visit = $this->makeVisit();
+
+        $this->actingAs($this->nurse())
+            ->get(route('nurse.visits.encode', $visit))
+            ->assertOk()
+            ->assertDontSee('Irregular pulse');
+    }
 }

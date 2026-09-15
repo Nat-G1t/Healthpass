@@ -93,6 +93,7 @@ onto a public box** — it ships `APP_DEBUG=true`.
 | `APP_URL` | `https://<domain>` | Verification and OTP links are generated from it |
 | `SESSION_SECURE_COOKIE` | `true` | Otherwise the session cookie can travel in clear and be stolen |
 | `HEALTHPASS_KIOSK_ALLOW_LOOPBACK` | `false` | A same-host proxy makes every visitor look like `127.0.0.1`; `true` here would open `/kiosk/scan` to the internet as a PII oracle |
+| `HEALTHPASS_KIOSK_KEY` | a long random value | The Pi's Bluetooth BP daemon sends it as `X-Kiosk-Key` (D-58). Unset, every BP reading is refused and staff type blood pressure by hand |
 | `TRUSTED_PROXIES` | the proxy IP(s) | See below — the single easiest thing to get wrong |
 | `LOG_LEVEL` | `warning` | `debug` logs can capture request payloads (PII) |
 
@@ -354,6 +355,18 @@ With loopback trust off, the Pi's Chromium needs a **device token** (D-27):
    enrollment: `https://<domain>/kiosk?device_token=…`.
 
 Then have Baldo re-grant the ESP32's serial port once on the new origin (§0).
+
+**Bluetooth BP daemon (D-58).** Point the Pi's BP daemon at
+`https://<domain>/api/kiosk/bp-reading` and give it the same
+`HEALTHPASS_KIOSK_KEY` as the server. Check it from the Pi — a wrong key
+answers `403`, a working one `201`. Do it while no student is on the blood
+pressure step, since the test reading waits in the cache for 5 minutes:
+
+```bash
+curl -i -X POST https://<domain>/api/kiosk/bp-reading \
+  -H "Content-Type: application/json" -H "X-Kiosk-Key: <key>" \
+  -d '{"systolic":128,"diastolic":82,"pulse":72,"unit":"mmHg","suspect":false,"flags":{}}'
+```
 
 ---
 

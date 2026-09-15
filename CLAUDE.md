@@ -81,6 +81,10 @@ Do not silently reconcile conflicts.
   terminal. Therefore **NEVER trust client-supplied identity or derived
   values on kiosk endpoints**: student identity binds server-side in the
   session at scan/login, and BMI/flags are always recomputed server-side.
+- **One kiosk endpoint sits outside `kiosk.access`:** `POST /api/kiosk/bp-reading`
+  (D-58, `routes/api.php`) is called by the Pi's Bluetooth BP daemon with no
+  session and authenticates by `X-Kiosk-Key` against `HEALTHPASS_KIOSK_KEY`.
+  The kiosk claims a reading into its session; submit trusts only that copy.
 - **Display sizing: responsive fill + zoom, portrait target 1080×1920**
   (D-26 — supersedes both the original fixed 800×480 letterbox and the 7″
   landscape target; the hardware is now a 15.6″ 1080p panel used in

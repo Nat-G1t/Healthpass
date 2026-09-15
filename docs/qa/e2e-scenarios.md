@@ -1,4 +1,4 @@
-# HealthPass — End-to-End UAT Scenarios (E2E-1…E2E-10)
+# HealthPass — End-to-End UAT Scenarios (E2E-1…E2E-11)
 
 Source: `docs/HealthPass_PRD.md` §13 (Acceptance & UAT). These are the
 Week-11 end-to-end acceptance runs, written as step-by-step checklists a
@@ -630,6 +630,74 @@ college's events never reach an admin; the tutorial dot survives just opening
 the page but not reaching Step 6 of 6; the badge moves to the icon when the
 rail is collapsed and stays on the name in the phone drawer; badges are orange
 even on the item you are currently on.
+
+---
+
+## E2E-11 — Blood pressure from the Bluetooth monitor (D-58)
+
+**Goal:** confirm a blood-pressure reading sent by the Pi's Bluetooth daemon
+fills the kiosk's blood-pressure step, that manual entry still works, and that
+the nurse sees the monitor's irregular-pulse indicator.
+
+**Accounts:** student `carlo.cruz@psu.edu.ph` and `nurse@healthpass.test`.
+
+**What stands in for the cuff:** a developer runs the command below in a
+terminal on the machine running the app — the real daemon sends exactly this
+message. `<key>` is `HEALTHPASS_KIOSK_KEY` from `.env`; the developer types it
+and it never goes into a chat or the QA sheet.
+
+```bash
+curl -i -X POST http://127.0.0.1:8080/api/kiosk/bp-reading \
+  -H "Content-Type: application/json" -H "X-Kiosk-Key: <key>" \
+  -d '{"systolic":128,"diastolic":82,"pulse":72,"unit":"mmHg","taken_at":"2026-09-15T14:30:05","entry_method":"device_ble","device_model":"A&D UA-651BLE","suspect":false,"flags":{"irregular_pulse":true}}'
+```
+
+**Steps — a reading fills the step:**
+
+1. On the kiosk (`http://127.0.0.1:8080/kiosk`), log in with email as Carlo
+   Cruz, agree to the privacy notice, and complete height, weight and
+   temperature any way you like.
+2. On **Blood Pressure · Step 4 of 4**, wait for the instructions, then have
+   the developer run the command. → **Expect:** within about 2 seconds the
+   scanning animation plays and the card shows **128/82 mmHg**, heart rate
+   **72 bpm** and **From sensor**. Nothing about an irregular pulse appears
+   anywhere on the kiosk.
+3. Continue, answer the questionnaire and **Submit to Clinic**.
+4. Log in as the **Nurse** and open Carlo's visit from the Live Queue.
+   → **Expect:** Vital Signs shows **128/82 mmHg**, **Entry: Sensor** (or
+   Mixed if you typed an earlier step) and an orange **⚑ Irregular pulse**
+   badge reading "Detected by the blood-pressure monitor during this reading."
+
+**Steps — nothing carries over to the next student:**
+
+5. While the kiosk is on **Welcome**, have the developer run the command
+   again. Log in as Carlo and go through to Step 4. → **Expect:** Step 4 keeps
+   waiting — a reading sent before you reached the step is **not** used.
+   Triple-tap the logo and type the blood pressure by hand instead.
+
+**Steps — manual entry and the retake suggestion:**
+
+6. Start another session to Step 4. Triple-tap the logo so the number pad
+   opens, then have the developer run the command. → **Expect:** nothing
+   changes behind the pad. Type **120**, **80**, **70**, confirming each.
+   → **Expect:** the card shows **120/80** and **Entered manually** — the
+   reading did not replace it.
+7. Tap **↻ Retry**, then have the developer run the command with
+   `"suspect":true`. → **Expect:** the reading is captured, with a peach note:
+   **"The monitor noticed movement or a loose cuff. You can tap Retry to
+   measure again, or continue."** Both **Retry** and **Continue** still work.
+
+**Steps — the endpoint refuses bad messages (developer):**
+
+8. Run the command with a wrong key. → **Expect:** `HTTP/1.1 403`.
+9. Run it with `"systolic":300`. → **Expect:** `HTTP/1.1 422` with a JSON body
+   naming `systolic`.
+
+**Pass criteria:** a reading sent while Step 4 waits fills it as a sensor
+reading; a reading sent before the step is never used; numbers being typed or
+already typed are never replaced; the retake note appears only for a flagged
+reading and never blocks; the kiosk never mentions an irregular pulse while the
+nurse's encode page does; a wrong key gets 403 and impossible numbers get 422.
 
 ---
 

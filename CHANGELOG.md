@@ -4,6 +4,31 @@
 
 ### Added
 
+* **Blood pressure from the A&D UA-651BLE Bluetooth monitor** (D-58, new
+  FR-KSK-07a). **FLAGGED SCHEMA CHANGE — `vital_signs.bp_device_reading` JSON
+  NULL, never backfilled; no new table, no new package.**
+  - New `POST /api/kiosk/bp-reading` (new `routes/api.php`: no session, no
+    CSRF) for the Pi's BP daemon, authenticated by `X-Kiosk-Key` against new
+    `HEALTHPASS_KIOSK_KEY` — every reading is refused while it is unset.
+    Ranges come from `healthpass.validation`, plus systolic > diastolic. A
+    reading waits in the cache for `healthpass.kiosk.bp_reading_ttl` (300 s).
+  - api routes always answer errors as JSON (the daemon sends no JSON Accept
+    header), set in `bootstrap/app.php`.
+  - New `GET /kiosk/bp-reading/latest` and `POST /kiosk/bp-reading/claim`
+    behind `kiosk.access`. While the BP step waits, the kiosk polls every 2 s
+    (`resources/js/kiosk/bp-poll.js`), skips a reading that was already there,
+    claims a new one into its session and captures it as a `sensor` reading.
+    It never overwrites a captured step or numbers being typed on the pad, and
+    a failed poll shows nothing.
+  - A reading the monitor flagged (movement, loose cuff, arm position) shows a
+    non-blocking retake suggestion on the captured card.
+  - Submit stores the claimed reading's device record (irregular pulse, raw
+    hex, device model) when the submitted numbers match — from the session,
+    never the request body. Scan, login, reset, exit and submit forget it.
+  - The nurse encode page shows **Irregular pulse** for such a reading.
+  - Tests: new `KioskBpReadingTest`, new `KioskSubmitTest` and
+    `EncodePageTest` cases, new `tests/js/kiosk-bp-poll.test.js`.
+
 * **Unread badges on the sidebar menu** (D-57, new FR-UI-05). **FLAGGED SCHEMA
   CHANGE — `users.nav_seen_at` JSON NULL, never backfilled; no new table, no
   new package.**

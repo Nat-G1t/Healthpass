@@ -469,7 +469,7 @@ then nurse-edited).
 
 ### KIOSK (separate Blade route — 1080×1920 portrait, panel fills the viewport with `--k-zoom` scaling; D-26 supersedes the original 800×480 letterbox)
 
-The kiosk is a **touch-first fullscreen app**. It auto-resets to Welcome 12 seconds after a student submits. In production the simulated sensor readings are replaced by **Web Serial** reads from the microcontroller, and **every vital step also offers first-class manual entry** (an "Enter manually" action opening a numeric on-screen pad; same validation ranges; provenance recorded in `vital_signs.entry_method` — Decision D-7 / FR-KSK-06). The kiosk runs at `localhost` on the Pi so Web Serial has a secure context.
+The kiosk is a **touch-first fullscreen app**. It auto-resets to Welcome 12 seconds after a student submits. In production the simulated sensor readings are replaced by **Web Serial** reads from the microcontroller, and **every vital step also offers first-class manual entry** (an "Enter manually" action opening a numeric on-screen pad; same validation ranges; provenance recorded in `vital_signs.entry_method` — Decision D-7 / FR-KSK-06). The kiosk runs at `localhost` on the Pi so Web Serial has a secure context. Blood pressure can also come from an A&D UA-651BLE **Bluetooth** monitor: a daemon on the Pi posts each reading to the server, and the kiosk picks it up while the BP step waits, keeping the monitor's irregular-pulse indicator for the nurse (D-58).
 
 **Screen flow:**
 ```
@@ -680,6 +680,7 @@ entry_method          enum('sensor','manual','mixed') DEFAULT 'sensor'  -- prove
 is_temp_flagged       boolean DEFAULT false
 is_bp_flagged         boolean DEFAULT false
 is_bmi_flagged        boolean DEFAULT false
+bp_device_reading     json NULL             -- Bluetooth BP monitor's record of the reading (irregular_pulse flag, raw hex, device_model …); NULL if typed/serial, never backfilled (D-58)
 created_at, updated_at
 ```
 

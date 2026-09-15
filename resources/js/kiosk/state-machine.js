@@ -1,6 +1,7 @@
 // Explicit .js extension so the module also resolves under Node's test runner
 // (`npm run test:js`), which — unlike Vite — does not guess extensions.
 import { createSerialReader } from './serial.js';
+import { BP_POLL_MS, fetchLatestBpReading } from './bp-poll.js';
 import { prefersReducedMotion } from '../shared/motion.js';
 
 /**
@@ -29,6 +30,9 @@ export const SCREENS = [
 ];
 
 export const VITAL_STEPS = 4;
+
+// The blood-pressure step — the one the Bluetooth monitor fills (D-58).
+const BP_STEP = 4;
 
 /**
  * The questionnaire (FR-KSK-10, D-56): the official form's nine "Physical Signs
@@ -137,6 +141,7 @@ function vitalStep() {
         method: null, // 'sensor' | 'manual'
         notice: '', // non-blocking nudge (e.g. sensor degraded to manual)
         values: {}, // field key → number, filled on capture
+        suspect: false, // D-58: the BP monitor itself flagged the captured reading
     };
 }
 
@@ -239,6 +244,15 @@ export function kioskMachine() {
         serial: { supported: false, status: 'idle', notice: '' },
         _serial: null, // the createSerialReader() instance (I/O lives here)
 
+        // Bluetooth BP poll bookkeeping (D-58). On the component, not in
+        // `state`, for the same reason as the serial link: the poll outlives one
+        // student. `_bpBaseline` is the received_at already on the server when
+        // the BP step started waiting (undefined = not waiting), so only a NEWER
+        // reading is used — never one left over from the previous student.
+        _bpTimer: null,
+        _bpBaseline: undefined,
+        _bpBusy: false,
+
         // Tap bookkeeping for the disguised manual-entry gesture (see logoTap).
         _logoTaps: 0,
         _lastLogoTap: 0,
@@ -268,6 +282,7 @@ export function kioskMachine() {
                 else this.clearCompleteCountdown();
             });
             this.setupSerial();
+            this.setupBpPoll();
             this.focusWedge();
         },
 
@@ -337,6 +352,78 @@ export function kioskMachine() {
                 error: 'Sensor problem. You can enter each vital manually.',
             };
             this.serial.notice = notices[status] ?? '';
+        },
+
+        // ── Bluetooth BP monitor (D-58, FR-KSK-07a) ──────────────────────────
+        /** Start the 2 s poll. A page without the URL (e.g. a test) doesn't poll. */
+        setupBpPoll() {
+            if (!this.$refs.root.dataset.bpLatestUrl) return;
+            this._bpTimer = setInterval(() => this.pollBpReading(), BP_POLL_MS);
+        },
+
+        /** True while the BP step is on screen and still waiting for a reading. */
+        isAwaitingBp() {
+            return this.state.screen === 'vitals'
+                && this.state.vitalStep === BP_STEP
+                && this.stepPhase() === 'ready';
+        },
+
+        /**
+         * One poll tick; it only asks the server while the BP step waits. The
+         * first answer after the step starts waiting is the BASELINE: whatever
+         * is already there predates this student's measurement and is skipped.
+         * A later answer with a different received_at is a new reading. While
+         * the manual pad is open a new reading is left for a later tick, so it
+         * never lands on numbers someone is typing; cancelling the pad lets it in.
+         */
+        async pollBpReading() {
+            if (!this.isAwaitingBp()) {
+                this._bpBaseline = undefined;
+                return;
+            }
+            if (this._bpBusy) return;
+            this._bpBusy = true;
+            try {
+                const { reachable, reading } = await fetchLatestBpReading(this.$refs.root.dataset.bpLatestUrl);
+                if (!reachable) return; // a failed poll proves nothing, so it can't be the baseline
+                const receivedAt = reading?.received_at ?? null;
+                if (this._bpBaseline === undefined) {
+                    this._bpBaseline = receivedAt;
+                    return;
+                }
+                if (receivedAt === null || receivedAt === this._bpBaseline) return;
+                if (!this.isAwaitingBp() || this.state.pad.open) return;
+                this._bpBaseline = receivedAt; // seen: never used twice
+                await this.acceptBpReading(reading);
+            } finally {
+                this._bpBusy = false;
+            }
+        },
+
+        /**
+         * Use a new reading. Claim it into this kiosk session first, so the
+         * server keeps the device's record (irregular pulse and all) for submit
+         * and never trusts the browser with it. Then feed the numbers through
+         * the SAME sensor path Web Serial uses, so the reading scans,
+         * range-checks and captures like any other. A refused claim (expired,
+         * or another session took it) or a failed request is ignored quietly.
+         */
+        async acceptBpReading(reading) {
+            try {
+                const { response, data } = await this.kioskPost(this.$refs.root.dataset.bpClaimUrl, {
+                    received_at: reading.received_at,
+                });
+                if (!response.ok || !data.ok) return;
+            } catch {
+                return;
+            }
+            if (!this.isAwaitingBp() || this.state.pad.open) return; // the screen moved on meanwhile
+            this.bumpIdle(); // a reading arriving counts as activity (FR-KSK-15)
+            // A missing pulse is left out: the step then reads as incomplete and
+            // shows the usual "try again or enter it manually" nudge.
+            const forStep = { S: reading.systolic, D: reading.diastolic };
+            if (reading.pulse != null) forStep.R = reading.pulse;
+            this.receiveReading(forStep, { suspect: reading.suspect === true });
         },
 
         // ── Navigation ───────────────────────────────────────────────────────
@@ -903,8 +990,9 @@ export function kioskMachine() {
          * The dev "Simulate reading" button calls this SAME function, so manual
          * testing exercises the exact production path. Readings are grouped by the
          * step they belong to, so BP's three values capture together.
+         * `suspect` (D-58) marks a reading the BP monitor itself flagged.
          */
-        receiveReading(reading) {
+        receiveReading(reading, { suspect = false } = {}) {
             const byStep = {};
             for (const [sensorKey, raw] of Object.entries(reading)) {
                 const found = this.findField(sensorKey);
@@ -912,7 +1000,7 @@ export function kioskMachine() {
                 (byStep[found.step] ??= []).push({ field: found.field, value: Number(raw) });
             }
             for (const [step, items] of Object.entries(byStep)) {
-                this.captureStepFromSensor(Number(step), items);
+                this.captureStepFromSensor(Number(step), items, suspect);
             }
         },
 
@@ -930,7 +1018,7 @@ export function kioskMachine() {
          * (FR-KSK-07): an incomplete or out-of-range reading is never a dead end —
          * it falls back to ready with a nudge to retry or enter it manually.
          */
-        captureStepFromSensor(step, items) {
+        captureStepFromSensor(step, items, suspect = false) {
             const s = this.state.vitalSteps[step];
             const meta = VITALS[step];
             s.phase = 'scanning';
@@ -947,6 +1035,7 @@ export function kioskMachine() {
                 for (const i of items) values[i.field.key] = i.value;
                 s.values = values;
                 s.method = 'sensor';
+                s.suspect = suspect;
                 s.phase = 'captured';
                 s.notice = '';
             }, SCAN_MS);

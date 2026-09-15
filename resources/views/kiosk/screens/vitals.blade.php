@@ -193,6 +193,17 @@
                     ></span>
                 </div>
 
+                {{-- D-58: the Bluetooth BP monitor itself flagged this reading
+                     (movement, a loose cuff or arm position). A suggestion, not
+                     a block: Retry and Continue both still work, so the reading
+                     can be kept. Neutral wording — never a health assessment
+                     (FR-KSK-14). --}}
+                <p
+                    x-show="currentStep().suspect"
+                    x-cloak
+                    class="max-w-sm rounded-lg bg-hp-peach/40 px-4 py-2 text-sm font-medium text-hp-orange"
+                >The monitor noticed movement or a loose cuff. You can tap Retry to measure again, or continue.</p>
+
                 {{-- ── BMI panel (step 2 only) — computed, never entered (FR-KSK-09). ── --}}
                 {{-- x-if re-creates the node each time it appears, so the
                      fade-up replays; styling stays NEUTRAL (FR-KSK-14). --}}

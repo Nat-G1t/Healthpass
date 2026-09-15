@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Kiosk;
 
+use App\Http\Controllers\Kiosk\BpReadingController;
 use App\Models\Appointment;
 use App\Models\ClinicVisit;
 use App\Models\College;
@@ -665,6 +666,87 @@ class KioskSubmitTest extends TestCase
         $visit = ClinicVisit::first();
         $this->assertNull($visit->course);
         $this->assertSame($college->id, $visit->college_id);
+    }
+
+    // ── Bluetooth BP device record (D-58) ─────────────────────────────────────
+
+    /** A reading as BpReadingController caches it — the same 118/76, 72 payload() submits. */
+    private function claimedBpReading(): array
+    {
+        return [
+            'systolic' => 118,
+            'diastolic' => 76,
+            'pulse' => 72,
+            'mean_arterial' => 90,
+            'taken_at' => '2026-09-15T14:30:05',
+            'device_model' => 'A&D UA-651BLE',
+            'raw' => '16800052006100ea07090f0e1e0548000400',
+            'flags' => ['body_movement' => false, 'cuff_too_loose' => false, 'irregular_pulse' => true, 'pulse_out_of_range' => false, 'improper_position' => false],
+            'suspect' => false,
+            'received_at' => '2026-09-15T14:30:07.123456+08:00',
+        ];
+    }
+
+    /** Submit with a Bluetooth reading already claimed into the kiosk session. */
+    private function submitWithClaimedBp(int $studentId, array $overrides = [])
+    {
+        return $this->withSession([
+            'kiosk.student_id' => $studentId,
+            'kiosk.login_method' => 'qr',
+            BpReadingController::SESSION_KEY => $this->claimedBpReading(),
+        ])->postJson(route('kiosk.submit'), $this->payload($studentId, $overrides));
+    }
+
+    public function test_claimed_bluetooth_reading_is_stored_with_its_irregular_pulse(): void
+    {
+        $this->submitWithClaimedBp($this->student()->id)->assertOk();
+
+        $vitals = VitalSigns::first();
+        $this->assertSame('sensor', $vitals->entry_method); // a Bluetooth reading is a sensor reading
+        $this->assertTrue($vitals->hasIrregularPulse());
+        $this->assertSame('A&D UA-651BLE', $vitals->bp_device_reading['device_model']);
+        $this->assertSame('16800052006100ea07090f0e1e0548000400', $vitals->bp_device_reading['raw']);
+    }
+
+    public function test_bp_retaken_by_hand_after_a_claim_stores_no_device_record(): void
+    {
+        $this->submitWithClaimedBp($this->student()->id, [
+            'vitalMethods' => ['sensor', 'sensor', 'sensor', 'manual'],
+            'vitals' => ['systolic' => 124, 'diastolic' => 80],
+        ])->assertOk();
+
+        $vitals = VitalSigns::first();
+        $this->assertNull($vitals->bp_device_reading);
+        $this->assertFalse($vitals->hasIrregularPulse());
+        $this->assertSame('mixed', $vitals->entry_method);
+    }
+
+    public function test_typed_bp_without_a_claim_stays_manual_with_no_device_record(): void
+    {
+        $this->submit($this->student()->id, ['vitalMethods' => ['manual', 'manual', 'manual', 'manual']])
+            ->assertOk();
+
+        $vitals = VitalSigns::first();
+        $this->assertSame('manual', $vitals->entry_method);
+        $this->assertNull($vitals->bp_device_reading);
+    }
+
+    /** The device record comes from the session only — a request body can't forge one. */
+    public function test_device_record_in_the_request_body_is_ignored(): void
+    {
+        $this->submit($this->student()->id, [
+            'bpReading' => $this->claimedBpReading(),
+            'bp_device_reading' => $this->claimedBpReading(),
+        ])->assertOk();
+
+        $this->assertNull(VitalSigns::first()->bp_device_reading);
+    }
+
+    public function test_submit_forgets_the_claimed_reading(): void
+    {
+        $this->submitWithClaimedBp($this->student()->id)
+            ->assertOk()
+            ->assertSessionMissing(BpReadingController::SESSION_KEY);
     }
 
     // ── entry_method roll-up (FR-KSK-06) ──────────────────────────────────────

@@ -142,6 +142,9 @@
         data-reset-url="{{ route('kiosk.reset') }}"
         data-exit-url="{{ route('kiosk.exit') }}"
         data-token-url="{{ route('kiosk.token') }}"
+        {{-- D-58: Bluetooth BP monitor — polled while the BP step waits. --}}
+        data-bp-latest-url="{{ route('kiosk.bp-reading.latest') }}"
+        data-bp-claim-url="{{ route('kiosk.bp-reading.claim') }}"
         data-csrf="{{ csrf_token() }}"
         {{-- Plausibility ranges (FR-KSK-08) + flag thresholds (BR-13) straight
              from config/healthpass.php, so client badges/checks match the server. --}}

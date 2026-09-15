@@ -639,9 +639,11 @@ if the venue's internet fails (`docs/deployment-hosted.md` §7).
 Keep a working local install by following §§1–4 of this document. To switch the
 Pi from hosted to local:
 
-1. `KIOSK_URL="http://localhost/kiosk"` in the launcher (or its env).
+1. `KIOSK_URL="http://localhost/kiosk"` in the launcher (or its env), and point
+   the Bluetooth BP daemon at `http://127.0.0.1/api/kiosk/bp-reading` (D-58).
 2. In the Pi's `.env`: `HEALTHPASS_KIOSK_ALLOW_LOOPBACK=true`,
-   `APP_URL=http://localhost`, `TRUSTED_PROXIES=` (empty).
+   `APP_URL=http://localhost`, `TRUSTED_PROXIES=` (empty), and the same
+   `HEALTHPASS_KIOSK_KEY` the BP daemon sends.
 3. `sudo -u www-data php artisan config:cache`
 4. Restart the kiosk service / relaunch Chromium.
 

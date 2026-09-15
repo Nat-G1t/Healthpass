@@ -25,6 +25,7 @@ class VitalSigns extends Model
         'is_temp_flagged',
         'is_bp_flagged',
         'is_bmi_flagged',
+        'bp_device_reading',
     ];
 
     protected function casts(): array
@@ -40,6 +41,8 @@ class VitalSigns extends Model
             'is_temp_flagged' => 'boolean',
             'is_bp_flagged' => 'boolean',
             'is_bmi_flagged' => 'boolean',
+            // D-58: the Bluetooth BP monitor's record of the reading, or null.
+            'bp_device_reading' => 'array',
         ];
     }
 
@@ -86,6 +89,16 @@ class VitalSigns extends Model
             fn (array $flag): string => "{$flag['label']} — {$flag['value']}",
             $this->flagDetails(),
         );
+    }
+
+    /**
+     * Whether the Bluetooth BP monitor reported an irregular pulse for this
+     * visit's reading (D-58). False when BP was typed or came over serial. Not a
+     * §7.4 flag — it counts toward no analytics; the nurse simply sees it.
+     */
+    public function hasIrregularPulse(): bool
+    {
+        return (bool) ($this->bp_device_reading['flags']['irregular_pulse'] ?? false);
     }
 
     // ── Relationships ────────────────────────────────────────────────────────

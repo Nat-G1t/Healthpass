@@ -30,6 +30,13 @@ use Illuminate\View\View;
 final class KioskController extends Controller
 {
     /**
+     * Everything a kiosk session binds server-side for ONE student: the
+     * identity from scan/login, and a Bluetooth BP reading the kiosk claimed
+     * (D-58). Always forgotten together.
+     */
+    private const SESSION_KEYS = ['kiosk.student_id', 'kiosk.login_method', BpReadingController::SESSION_KEY];
+
+    /**
      * Render the kiosk shell (responsive-fill panel + Alpine state machine).
      */
     public function index(): View
@@ -87,6 +94,9 @@ final class KioskController extends Controller
         // the scan can't ride the newly-bound identity (regenerate keeps the CSRF
         // token, so the long-lived kiosk page's baked token stays valid).
         $request->session()->regenerate();
+        // A new student starts clean: nothing an abandoned session left behind
+        // (such as a claimed BP reading, D-58) may carry over to them.
+        $request->session()->forget(self::SESSION_KEYS);
         $request->session()->put([
             'kiosk.student_id' => $profile->user_id,
             'kiosk.login_method' => 'qr',
@@ -171,6 +181,7 @@ final class KioskController extends Controller
         // signed in. Rotate the session id on this identity change (session-
         // fixation defense; regenerate keeps the CSRF token).
         $request->session()->regenerate();
+        $request->session()->forget(self::SESSION_KEYS); // same clean start as scan()
         $request->session()->put([
             'kiosk.student_id' => $user->studentProfile->user_id,
             'kiosk.login_method' => 'email',
@@ -222,12 +233,15 @@ final class KioskController extends Controller
             ...$request->validated(),
             'studentUserId' => (int) $studentId,
             'loginMethod' => $loginMethod,
+            // D-58: the Bluetooth BP reading claimed in THIS session (or null) —
+            // from the session, never the body, like the identity above.
+            'bpReading' => $request->session()->get(BpReadingController::SESSION_KEY),
         ]);
 
         // Identity is single-use: forget it so a replayed POST cannot mint a
         // second visit without a fresh scan/login (the kiosk browser session is
-        // shared across every student on the Pi).
-        $request->session()->forget(['kiosk.student_id', 'kiosk.login_method']);
+        // shared across every student on the Pi). The claimed BP reading goes too.
+        $request->session()->forget(self::SESSION_KEYS);
 
         return response()->json([
             'ok' => true,
@@ -236,7 +250,7 @@ final class KioskController extends Controller
     }
 
     /**
-     * Forget the kiosk identity (FR-KSK-13/15 support).
+     * Forget the kiosk identity and any claimed BP reading (FR-KSK-13/15 support).
      *
      * Called by the Alpine state machine's reset() on every abandon/finish path
      * ("Not you?", consent Decline, the 90s idle reset, and the Complete
@@ -245,7 +259,7 @@ final class KioskController extends Controller
      */
     public function reset(Request $request): JsonResponse
     {
-        $request->session()->forget(['kiosk.student_id', 'kiosk.login_method']);
+        $request->session()->forget(self::SESSION_KEYS);
 
         return response()->json(['ok' => true]);
     }
@@ -296,7 +310,7 @@ final class KioskController extends Controller
         // preserves session data, so without this a stale kiosk.student_id would
         // survive into the nurse's authenticated session and a later /kiosk/submit
         // could mint a visit for the wrong student (FR-KSK-13).
-        $request->session()->forget(['kiosk.student_id', 'kiosk.login_method']);
+        $request->session()->forget(self::SESSION_KEYS);
 
         // Establish a real authenticated session (the kiosk routes run in the web
         // group, so a session is available) and regenerate the id to prevent

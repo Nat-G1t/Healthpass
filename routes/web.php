@@ -11,6 +11,7 @@ use App\Http\Controllers\Director\AnomaliesController as DirectorAnomaliesContro
 use App\Http\Controllers\Director\BatchApprovalController as DirectorBatchApprovalController;
 use App\Http\Controllers\Director\DashboardController as DirectorDashboardController;
 use App\Http\Controllers\Director\StaffAccountController as DirectorStaffAccountController;
+use App\Http\Controllers\Kiosk\BpReadingController;
 use App\Http\Controllers\Kiosk\KioskController;
 use App\Http\Controllers\Nurse\DashboardController as NurseDashboardController;
 use App\Http\Controllers\Nurse\EncodeController as NurseEncodeController;
@@ -340,6 +341,18 @@ Route::prefix('kiosk')->name('kiosk.')->middleware('kiosk.access')->group(functi
     Route::post('/exit', [KioskController::class, 'exit'])
         ->middleware('throttle:10,1,kiosk-exit')
         ->name('exit');
+    // Bluetooth BP monitor (D-58). The Pi daemon POSTs readings to
+    // /api/kiosk/bp-reading (routes/api.php); the kiosk page polls `latest`
+    // every 2 s while the BP step waits, then `claim`s a new reading into THIS
+    // kiosk session so submit can trust it. Both stay inside kiosk.access, so a
+    // reading can't be read from anywhere but an allowed terminal. `latest` gets
+    // a roomier bucket: one poll every 2 s is already 30 a minute.
+    Route::get('/bp-reading/latest', [BpReadingController::class, 'latest'])
+        ->middleware('throttle:90,1,kiosk-bp-latest')
+        ->name('bp-reading.latest');
+    Route::post('/bp-reading/claim', [BpReadingController::class, 'claim'])
+        ->middleware('throttle:30,1,kiosk-bp-claim')
+        ->name('bp-reading.claim');
 });
 
 // ── Dev component showcase (local only) ──────────────────────────────────────

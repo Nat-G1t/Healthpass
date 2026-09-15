@@ -33,7 +33,9 @@ final class SubmitKioskVisit
     public function __construct(private ReferenceNumberService $references) {}
 
     /**
-     * @param  array  $data  The validated payload from KioskSubmitRequest.
+     * @param  array  $data  The validated payload from KioskSubmitRequest, plus
+     *                       the SERVER-bound studentUserId, loginMethod and
+     *                       bpReading (the claimed Bluetooth reading or null, D-58).
      */
     public function handle(array $data): ClinicVisit
     {
@@ -79,6 +81,9 @@ final class SubmitKioskVisit
                 'bp_systolic' => $vitals['systolic'],
                 'bp_diastolic' => $vitals['diastolic'],
                 'entry_method' => $this->entryMethod($data['vitalMethods']),
+                // D-58: the Bluetooth monitor's own record of the BP reading
+                // (irregular pulse, raw bytes, …), or null.
+                'bp_device_reading' => $this->bpDeviceReading($data['bpReading'] ?? null, $vitals),
                 // §7.4 flag rules — computed here, stored as queryable booleans (BR-14).
                 'is_temp_flagged' => (float) $vitals['temperature'] > $thresholds['temperature_max'],
                 'is_bp_flagged' => (int) $vitals['systolic'] >= $thresholds['bp_systolic']
@@ -182,6 +187,32 @@ final class SubmitKioskVisit
             ->sort(fn (Appointment $a, Appointment $b): int => [$distance($a), $a->scheduled_time] <=> [$distance($b), $b->scheduled_time])
             ->first()
             ->id;
+    }
+
+    /**
+     * The Bluetooth monitor's record of this visit's BP reading (D-58), or null.
+     *
+     * $claimed comes from the SERVER session — the reading the kiosk claimed —
+     * never from the request body, so a tampered payload can neither invent a
+     * device record nor hide an irregular pulse. It is kept only when the
+     * submitted numbers ARE that reading's numbers: a BP step retaken by hand
+     * after the claim stores nothing device-related.
+     */
+    private function bpDeviceReading(?array $claimed, array $vitals): ?array
+    {
+        if ($claimed === null) {
+            return null;
+        }
+
+        $sameNumbers = (int) $vitals['systolic'] === $claimed['systolic']
+            && (int) $vitals['diastolic'] === $claimed['diastolic']
+            && (int) $vitals['heartRate'] === $claimed['pulse'];
+
+        if (! $sameNumbers) {
+            return null;
+        }
+
+        return Arr::only($claimed, ['device_model', 'raw', 'taken_at', 'mean_arterial', 'flags', 'suspect', 'received_at']);
     }
 
     /** BMI = weight(kg) ÷ height(m)², 1 decimal — matches the kiosk display (FR-KSK-09). */

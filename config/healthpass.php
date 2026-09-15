@@ -126,6 +126,18 @@ return [
         // silent sensor waits before the kiosk nudges toward manual entry.
         'serial_baud' => 9600,
         'serial_timeout_ms' => 10000,
+
+        // D-58: the A&D UA-651BLE Bluetooth blood-pressure monitor. A daemon on
+        // the Pi reads the cuff and POSTs each reading to /api/kiosk/bp-reading
+        // with this shared secret in its X-Kiosk-Key header. EMPTY means the
+        // endpoint refuses every request, so an unset key can never be "matched"
+        // by an empty header. Give the daemon the SAME value.
+        'device_key' => env('HEALTHPASS_KIOSK_KEY'),
+
+        // D-58: seconds a posted reading waits in the cache for the kiosk to
+        // claim it. An unclaimed reading expires on its own; a reading reaches
+        // the database only when the student submits their visit.
+        'bp_reading_ttl' => 300,
     ],
 
 ];

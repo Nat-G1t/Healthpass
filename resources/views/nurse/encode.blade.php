@@ -137,6 +137,15 @@
                         </div>
                     @endforeach
                 </div>
+                {{-- D-58: the Bluetooth BP monitor's own irregular-heartbeat
+                     indicator, kept from the device reading. Shown to the nurse
+                     only — the kiosk never displays it. --}}
+                @if ($vs->hasIrregularPulse())
+                    <p class="mt-3 flex flex-wrap items-center gap-2 text-sm text-hp-slate">
+                        <x-hp.badge variant="flagged">⚑ Irregular pulse</x-hp.badge>
+                        Detected by the blood-pressure monitor during this reading.
+                    </p>
+                @endif
             @else
                 <p class="mt-3 text-sm text-hp-slate/40">No vitals recorded for this visit.</p>
             @endif

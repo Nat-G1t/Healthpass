@@ -10,10 +10,13 @@ use App\Http\Middleware\RequirePasswordChange;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Request;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
+        // D-58: device-to-server routes (/api prefix, no session, no CSRF).
+        api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
@@ -50,5 +53,11 @@ return Application::configure(basePath: dirname(__DIR__))
         // App\Providers\AppServiceProvider::boot() instead.
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        // D-58: routes/api.php is called by devices (the Pi's BP daemon), not
+        // browsers, and they don't send `Accept: application/json`. Without this
+        // a failed validation there would answer with a 302 redirect instead of
+        // a 422 JSON body. Every other request keeps Laravel's default choice.
+        $exceptions->shouldRenderJsonWhen(
+            fn (Request $request): bool => $request->is('api/*') || $request->expectsJson()
+        );
     })->create();
