@@ -4,6 +4,7 @@ use App\Http\Middleware\EnsureAccountIsActive;
 use App\Http\Middleware\EnsureCollegeScope;
 use App\Http\Middleware\EnsureRole;
 use App\Http\Middleware\KioskAccess;
+use App\Http\Middleware\MarkNavSeen;
 use App\Http\Middleware\RecordLastActive;
 use App\Http\Middleware\RequirePasswordChange;
 use Illuminate\Foundation\Application;
@@ -21,6 +22,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => EnsureRole::class,
             'kiosk.access' => KioskAccess::class,
             'college.scope' => EnsureCollegeScope::class,
+            // D-57: clears a sidebar badge when its page is opened.
+            'nav.seen' => MarkNavSeen::class,
         ]);
 
         // Both run on every web request, appended to the group (not aliased)

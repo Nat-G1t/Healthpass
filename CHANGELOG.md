@@ -4,6 +4,36 @@
 
 ### Added
 
+* **Unread badges on the sidebar menu** (D-57, new FR-UI-05). **FLAGGED SCHEMA
+  CHANGE — `users.nav_seen_at` JSON NULL, never backfilled; no new table, no
+  new package.**
+  - Badged items: Student **My Appointments** (batch appointments the college
+    booked or withdrew), **My Records** (encoded results) and **Kiosk
+    Tutorial** (a dot until the walkthrough is finished); College Admin
+    **Batch Tracking** (Director decisions + encodes for the college's batch
+    students) and **Activity Log** (entries minus your own); Nurse **Live
+    Queue**; Director **Batch Approvals** and **Flagged Anomalies**. Live Queue
+    and Batch Approvals are **work counts** — opening them doesn't clear them.
+  - Solid orange: a dot for 1, the number for 2–9, **9+** from 10, nothing at
+    0 — top-right of the label (expanded sidebar, phone drawer) or of the icon
+    (collapsed rail), orange even on the active item. Screen readers hear
+    "N unread". Refreshed on page load only.
+  - New `App\Support\NavBadges` computes the counts for the user's role,
+    reusing each page's own query; a **view composer** in
+    `AppServiceProvider::boot()` hands them to the sidebar.
+  - New `MarkNavSeen` middleware (`nav.seen:<route name>`) on the five
+    since-last-seen pages: the stamp is on the user before the page renders
+    (so the page you're on shows no badge) and saved only after a successful
+    GET, via the query builder so `updated_at` never moves. A key never
+    stamped counts from the account's `created_at`.
+  - Kiosk Tutorial: reaching **Step 6 of 6** POSTs to new
+    `POST /student/tutorial/complete` (idempotent, 204, `tutorial-complete`
+    throttle).
+  - Migration `2026_09_15_000002_add_nav_seen_at_to_users_table` — a dev DB
+    needs `php artisan migrate`.
+  - Tests: new `tests/Feature/NavBadgesTest.php` (17) and
+    `tests/Feature/NavBadgeRenderingTest.php` (5). New QA scenario E2E-10.
+
 * **The kiosk questionnaire asks the official form's physical signs** (D-56).
   **FLAGGED SCHEMA CHANGE — no new table, no new package.** The kiosk used to
   ask nine self-report systems (vision, hearing, nose…) that were not the

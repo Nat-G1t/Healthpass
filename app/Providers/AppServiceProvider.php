@@ -2,8 +2,11 @@
 
 namespace App\Providers;
 
+use App\Support\NavBadges;
 use App\Support\TrustedProxies;
+use Illuminate\Contracts\View\View as ViewContract;
 use Illuminate\Http\Middleware\TrustProxies;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -32,5 +35,15 @@ class AppServiceProvider extends ServiceProvider
         if ($proxies !== []) {
             TrustProxies::at($proxies);
         }
+
+        // D-57: the sidebar's unread badges. A VIEW COMPOSER is a callback
+        // Laravel runs every time the named view renders — here the sidebar
+        // layout every signed-in page shares — so the counts reach it without
+        // each controller passing them, and no query lives in Blade.
+        View::composer('components.layout.sidebar', function (ViewContract $view): void {
+            $user = auth()->user();
+
+            $view->with('navBadges', $user === null ? [] : NavBadges::forUser($user));
+        });
     }
 }

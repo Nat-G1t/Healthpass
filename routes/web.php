@@ -23,6 +23,7 @@ use App\Http\Controllers\Student\DashboardController as StudentDashboardControll
 use App\Http\Controllers\Student\MyAppointmentsController as StudentMyAppointmentsController;
 use App\Http\Controllers\Student\ProfileController as StudentProfileController;
 use App\Http\Controllers\Student\RecordsController as StudentRecordsController;
+use App\Http\Controllers\Student\TutorialCompletionController;
 use App\Http\Middleware\EnsureRole;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
@@ -85,11 +86,21 @@ Route::middleware(['auth', 'role:student'])
         // FR-STU-14 (D-51): every upcoming appointment, each cancellable on its
         // own. Deliberately NOT under /appointments/... — that prefix already
         // belongs to the booking page and carries an {appointment} wildcard.
-        Route::get('/my-appointments', StudentMyAppointmentsController::class)->name('my-appointments');
-        Route::get('/records', StudentRecordsController::class)->name('records');
+        //
+        // nav.seen (D-57): opening the page marks its sidebar badge as seen —
+        // the argument is the badge's key. See App\Http\Middleware\MarkNavSeen.
+        Route::get('/my-appointments', StudentMyAppointmentsController::class)
+            ->middleware('nav.seen:student.my-appointments')->name('my-appointments');
+        Route::get('/records', StudentRecordsController::class)
+            ->middleware('nav.seen:student.records')->name('records');
         // Kiosk Tutorial (FR-STU-11): static walkthrough, no data to prepare —
         // Route::view renders the Blade view directly, no controller needed.
         Route::view('/tutorial', 'student.tutorial')->name('tutorial');
+        // D-57: the walkthrough POSTs here on reaching its last step, which
+        // clears the tutorial's sidebar dot. Its own throttle bucket, for the
+        // same shared-counter reason as appt-store above.
+        Route::post('/tutorial/complete', TutorialCompletionController::class)
+            ->middleware('throttle:10,1,tutorial-complete')->name('tutorial.complete');
         Route::get('/id-profile', [StudentProfileController::class, 'show'])->name('id-profile');
         Route::patch('/id-profile', [StudentProfileController::class, 'update'])->name('id-profile.update');
         Route::post('/id-profile/link-id', [StudentProfileController::class, 'linkId'])->name('id-profile.link-id');
@@ -131,7 +142,8 @@ Route::middleware(['auth', 'role:college_admin', 'college.scope'])
             ->middleware('throttle:15,1,batch-store')->name('batches.store');
         // Batch Tracking + post-submit confirmation (FR-ADM-04/05). Both fetch
         // through managedCollege(), so foreign batch ids 404.
-        Route::get('/batches', [AdminBatchRequestController::class, 'index'])->name('batches.index');
+        Route::get('/batches', [AdminBatchRequestController::class, 'index'])
+            ->middleware('nav.seen:admin.batches.index')->name('batches.index');
         Route::get('/batches/{batch}/confirmation', [AdminBatchRequestController::class, 'confirmation'])
             ->whereNumber('batch')->name('batches.confirmation');
         // Batch roster (FR-ADM-07, D-40): the students in one batch and the
@@ -169,7 +181,8 @@ Route::middleware(['auth', 'role:college_admin', 'college.scope'])
         // on them. Read-only and DERIVED from batch_requests; there is no
         // activity_logs table and nothing writes an audit row, so the log
         // cannot drift from the rows Batch Tracking renders.
-        Route::get('/activity', AdminActivityLogController::class)->name('activity');
+        Route::get('/activity', AdminActivityLogController::class)
+            ->middleware('nav.seen:admin.activity')->name('activity');
     });
 
 // ── Nurse (FR-AUTH-03) ───────────────────────────────────────────────────────
@@ -229,7 +242,8 @@ Route::middleware(['auth', 'role:director'])
         // Flagged Anomalies (FR-ANL-05): stat cards + the flagged-visits
         // table. Flags surface from CAPTURE (FR-ANL-07) — un-encoded visits
         // are included, unlike every case statistic on Analytics.
-        Route::get('/anomalies', [DirectorAnomaliesController::class, 'index'])->name('anomalies');
+        Route::get('/anomalies', [DirectorAnomaliesController::class, 'index'])
+            ->middleware('nav.seen:director.anomalies')->name('anomalies');
         // Read-only record detail behind each table row's "View" link.
         Route::get('/anomalies/{visit}', [DirectorAnomaliesController::class, 'show'])
             ->whereNumber('visit')->name('anomalies.show');

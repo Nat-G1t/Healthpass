@@ -1,4 +1,4 @@
-# HealthPass — End-to-End UAT Scenarios (E2E-1…E2E-9)
+# HealthPass — End-to-End UAT Scenarios (E2E-1…E2E-10)
 
 Source: `docs/HealthPass_PRD.md` §13 (Acceptance & UAT). These are the
 Week-11 end-to-end acceptance runs, written as step-by-step checklists a
@@ -529,6 +529,107 @@ refused on **Book** (never on tapping a date or hour) with the college-admin
 message and no batch reference; a non-overlapping hour on the same day books
 normally; the mini calendar disables past and FULL days and its month arrows
 work.
+
+---
+
+## E2E-10 — Sidebar unread badges (D-57)
+
+**Goal:** confirm each role's menu badges count the right things, clear when
+their page is opened (or stay, for the two work counts), and sit in the right
+place in the expanded sidebar, the collapsed rail and the phone drawer.
+
+**Accounts:** student `carlo.cruz@psu.edu.ph` (CCS), the CCS Admin
+`admin.ccs@healthpass.test`, the CEA Admin `admin.cea@healthpass.test`,
+`nurse@healthpass.test` and `director@healthpass.test`.
+
+**What a badge looks like:** a solid orange circle at the top-right corner of
+a menu item's name. **One** new thing is a small dot with no number; **2–9**
+shows the number; **10 or more** shows **9+**; nothing new shows no badge at
+all. Badges only change when a page loads — reload if you are waiting for one.
+
+**Run this before 3:00 PM** — the batch below is for today, and an hour that
+has already ended cannot be booked.
+
+**Before you start — clear everyone's badges:** log in once as each account
+above and open every menu item that shows a badge (except **Live Queue** and
+**Batch Approvals**, which don't clear by opening). Write down the Nurse's
+Live Queue number and the Director's Batch Approvals number.
+
+**Steps — College Admin:**
+
+1. Log in as the **CCS admin**. New Batch Request → today's date → any
+   reason → **Medical** → a start hour that has not ended yet → tick **Carlo
+   Cruz** → Submit. (If a clash popup lists Carlo, Close it and pick another
+   hour.) → **Expect:** the confirmation screen. **Activity Log shows no
+   badge** — your own submission is not news to you. Log out.
+
+**Steps — Director:**
+
+2. Log in as the **Director**. → **Expect:** Batch Approvals is **one higher**
+   than the number you wrote down (a dot if it went from 0 to 1).
+3. Open **Batch Approvals**. → **Expect:** its badge is **still there** on this
+   page. Approve the new CCS batch. → **Expect:** on the page that loads,
+   Batch Approvals is back to the number you wrote down. Log out.
+
+**Steps — College Admin again:**
+
+4. Log in as the **CCS admin**. → **Expect:** **Batch Tracking** and **Activity
+   Log** each show a **dot** (the Director's approval).
+5. Open **Batch Tracking**. → **Expect:** on this page Batch Tracking has no
+   badge; Activity Log still has its dot. Open **Activity Log**. → **Expect:**
+   its badge is gone too. Log out.
+6. Log in as the **CEA admin**. → **Expect:** no new badge — another college's
+   batch never counts. Log out.
+
+**Steps — Student:**
+
+7. Log in as **Carlo Cruz**. → **Expect:** **My Appointments** shows a dot
+   (the college booked him). Open it. → **Expect:** the badge is gone.
+8. **Kiosk Tutorial** shows a dot. Open it but do **not** click Get Started;
+   click Dashboard. → **Expect:** the dot is **still there**.
+9. Open Kiosk Tutorial → **Get Started** → **Next** until the card reads
+   **"Step 6 of 6"** (Finishing up). Reload the page. → **Expect:** the dot is
+   **gone**, and it stays gone after logging out and back in.
+
+**Steps — Nurse:**
+
+10. On the kiosk (`http://127.0.0.1:8080/kiosk`), log in with email as Carlo
+    Cruz and complete a screening with **manual** vitals, entering blood
+    pressure **150 / 95**. Submit to Clinic.
+11. Log in as the **Nurse**. → **Expect:** Live Queue is **one higher** than
+    the number you wrote down. Open **Live Queue**. → **Expect:** the badge
+    **stays**. Encode Carlo's visit as **Fit** → Save & Close. → **Expect:** on
+    the page that loads, Live Queue is back to your number. Log out.
+
+**Steps — the results reach everyone:**
+
+12. Log in as the **Director**. → **Expect:** **Flagged Anomalies** shows a dot
+    (Carlo's high blood pressure). Open it. → **Expect:** the badge is gone.
+13. Log in as the **CCS admin**. → **Expect:** **Batch Tracking** shows a dot
+    (Carlo's result was encoded). **Activity Log** has no badge — an encode is
+    not an activity entry.
+14. Log in as **Carlo Cruz**. → **Expect:** **My Records** shows a dot. Open
+    it. → **Expect:** the badge is gone.
+
+**Steps — where the badge sits (any account with a badge showing):**
+
+15. On a desktop-width window, click the **☰** button at the top of the
+    sidebar to collapse it to icons. → **Expect:** the badge is at the
+    **top-right corner of the icon**. Expand it again → the badge is back at
+    the top-right of the **name**.
+16. Narrow the window to phone width (or Chrome DevTools → device toolbar,
+    e.g. iPhone 12). Open the menu with ☰. → **Expect:** the badge is at the
+    top-right of the item's **name** in the drawer.
+17. *(Optional — needs 10 or more pending batch requests, e.g. submitted by
+    several college admins.)* Log in as the Director. → **Expect:** Batch
+    Approvals shows **9+**.
+
+**Pass criteria:** every badge in steps 1–14 appears, clears or stays exactly
+as described; your own actions never badge your own Activity Log; another
+college's events never reach an admin; the tutorial dot survives just opening
+the page but not reaching Step 6 of 6; the badge moves to the icon when the
+rail is collapsed and stays on the name in the phone drawer; badges are orange
+even on the item you are currently on.
 
 ---
 

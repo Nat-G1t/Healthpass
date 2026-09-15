@@ -243,6 +243,17 @@ Home, Calendar, FileText, QrCode, Plus, List, Activity, Edit, BarChart, Alert, C
 | Nurse | Live Queue · Encode Result · Enable Kiosk Mode (Kiosk Devices: enroll/revoke trusted terminals, D-27) |
 | Clinic Director | Dashboard · Batch Approvals · Analytics · Flagged Anomalies |
 
+**Unread badges (D-57, FR-UI-05):** a solid orange badge on a menu item — a dot for 1, the number for 2–9, "9+" from 10, nothing at 0 — at the top-right of the item's label (expanded sidebar, phone drawer) or of its icon (collapsed rail). Orange even on the active item. Refreshed on page load only; no polling.
+
+| Role | Badged item → what it counts |
+|---|---|
+| Student | My Appointments → batch appointments the college booked or withdrew since last seen · My Records → results encoded since last seen · Kiosk Tutorial → a dot until the walkthrough reaches its last step (opening the page doesn't clear it) |
+| College Admin | Batch Tracking → Director decisions + results encoded for the college's batch students, since last seen · Activity Log → entries since last seen, minus the viewer's own submissions and cancellations |
+| Nurse | Live Queue → visits waiting right now (a work count — opening the page doesn't clear it, encoding does) |
+| Clinic Director | Batch Approvals → pending requests (a work count) · Flagged Anomalies → flagged visits captured since last seen |
+
+"Last seen" = when the user last opened that page: stamped in `users.nav_seen_at` before the page renders (so the page you're on shows no badge); a page never opened counts from the account's `created_at`. Every other item has no badge. Counts come from `App\Support\NavBadges`, handed to the sidebar by a view composer.
+
 ---
 
 ## 7. Page-by-page build specification

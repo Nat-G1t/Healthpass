@@ -49,6 +49,9 @@ class User extends Authenticatable
             'password' => 'hashed',
             'must_change_password' => 'boolean',
             'last_active_at' => 'datetime',
+            // D-57: page => last-seen timestamp. Deliberately NOT fillable — it
+            // is written only by App\Support\NavBadges::store().
+            'nav_seen_at' => 'array',
         ];
     }
 

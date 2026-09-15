@@ -63,6 +63,10 @@
         ->take(2)
         ->implode('');
 
+    // D-57 unread badges: [route name => count], handed in by the view
+    // composer in AppServiceProvider (no queries here).
+    $badges = $navBadges ?? [];
+
     $roleLabel = match ($user?->role) {
         'student'       => 'Student',
         'college_admin' => 'College Admin',
@@ -132,6 +136,12 @@
 
         .hp-user-meta { transition: opacity 150ms ease; }
 
+        /* D-57 unread badges. Every badged item renders two: one on its label
+           (expanded rail + phone drawer — it disappears with the label when
+           the rail collapses) and one on its icon, shown ONLY in the
+           collapsed rail below. */
+        .hp-nav-badge-icon { display: none; }
+
         /* ── Desktop (lg+): the sidebar PUSHES content (collapsible rail) ───
            This is the original behaviour. The rail "collapsed" look only
            exists here — phones always get the full-width drawer above. */
@@ -155,6 +165,7 @@
                 padding: 10px 6px;
             }
             html.sidebar-collapsed .hp-nav-label { display: none; }
+            html.sidebar-collapsed .hp-nav-badge-icon { display: flex; }
 
             /* Collapsed footer: initials circle above the logout icon. */
             html.sidebar-collapsed .hp-user-row {
@@ -245,6 +256,19 @@
                     $opensNewTab = $item[3] ?? false;
                     // A new-tab link is never "active" — it leaves the app shell.
                     $isActive = ! $opensNewTab && request()->routeIs($routeName);
+
+                    // D-57 unread badge: 0 draws nothing, 1 a plain dot,
+                    // 2–9 the number, 10 or more "9+". Always solid orange,
+                    // even on the active (peach) item.
+                    $badgeCount = $badges[$routeName] ?? 0;
+                    $badgeText = match (true) {
+                        $badgeCount > 9 => '9+',
+                        $badgeCount > 1 => (string) $badgeCount,
+                        default => '',
+                    };
+                    $badgeClasses = $badgeCount > 1
+                        ? 'h-4 min-w-4 rounded-full bg-hp-orange px-1 text-[10px] font-semibold leading-none text-hp-white'
+                        : 'h-2 w-2 rounded-full bg-hp-orange';
                 @endphp
                 <a
                     href="{{ route($routeName) }}"
@@ -254,13 +278,31 @@
                                ? 'bg-hp-peach text-hp-orange font-semibold'
                                : 'text-hp-slate/70 hover:bg-hp-slate/8 hover:text-hp-slate font-medium' }}"
                 >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" stroke-width="2"
-                         stroke-linecap="round" stroke-linejoin="round"
-                         class="shrink-0">
-                        <path d="{{ $iconPath }}"/>
-                    </svg>
-                    <span class="hp-nav-label">{{ $label }}</span>
+                    {{-- The wrapper pins the collapsed rail's badge to the icon's top-right corner. --}}
+                    <span class="relative flex shrink-0">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="2"
+                             stroke-linecap="round" stroke-linejoin="round"
+                             class="shrink-0">
+                            <path d="{{ $iconPath }}"/>
+                        </svg>
+                        @if ($badgeCount > 0)
+                            {{-- No display utility here: .hp-nav-badge-icon decides when it shows. --}}
+                            <span data-nav-badge="icon" data-nav-badge-for="{{ $routeName }}" aria-hidden="true"
+                                  class="hp-nav-badge-icon absolute left-full top-0 -translate-x-1/2 -translate-y-1/2 items-center justify-center ring-2 ring-hp-white {{ $badgeClasses }}">{{ $badgeText }}</span>
+                        @endif
+                    </span>
+                    <span class="hp-nav-label relative">
+                        {{ $label }}
+                        @if ($badgeCount > 0)
+                            <span data-nav-badge="label" data-nav-badge-for="{{ $routeName }}" aria-hidden="true"
+                                  class="absolute left-full top-0 ml-0.5 inline-flex -translate-y-1/2 items-center justify-center {{ $badgeClasses }}">{{ $badgeText }}</span>
+                        @endif
+                    </span>
+                    @if ($badgeCount > 0)
+                        {{-- The one count a screen reader hears; both badges above are visual only. --}}
+                        <span class="sr-only">{{ $badgeCount }} unread</span>
+                    @endif
                 </a>
             @endforeach
         </nav>

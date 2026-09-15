@@ -63,14 +63,41 @@
     ];
 @endphp
 
+{{--
+    D-57: reaching the LAST step ("Step 6 of 6: Finishing up") finishes the
+    tutorial — complete() tells the server once, and the sidebar's Kiosk
+    Tutorial dot is gone from the next page load on. Opening the page alone
+    finishes nothing. A failed request is logged and retried the next time the
+    student reaches the last step; the server ignores repeats anyway.
+--}}
 <div
     class="mx-auto max-w-4xl"
     x-data="{
-        state: { step: 1 },
+        state: { step: 1, completionSent: false },
         first: 1,
         last: {{ count($steps) + 1 }},
-        next() { if (this.state.step < this.last) this.state.step++ },
+        completeUrl: @js(route('student.tutorial.complete')),
+        next() {
+            if (this.state.step < this.last) this.state.step++
+            if (this.state.step === this.last) this.complete()
+        },
         prev() { if (this.state.step > this.first) this.state.step-- },
+        complete() {
+            if (this.state.completionSent) return
+            this.state.completionSent = true
+            fetch(this.completeUrl, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content,
+                },
+            })
+                .then((response) => { if (! response.ok) throw new Error('HTTP ' + response.status) })
+                .catch((error) => {
+                    this.state.completionSent = false
+                    console.error('The finished Kiosk Tutorial was not recorded:', error)
+                })
+        },
     }"
 >
 
