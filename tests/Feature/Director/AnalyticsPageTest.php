@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Director;
 
 use App\Models\Appointment;
+use App\Models\BatchRequest;
 use App\Models\ClearanceRecord;
 use App\Models\ClinicVisit;
 use App\Models\College;
@@ -156,33 +157,61 @@ class AnalyticsPageTest extends TestCase
         $this->assertSame(2, $response->viewData('totalVisits'));
     }
 
-    public function test_purpose_buckets_including_not_specified(): void
+    /** D-62: an appointment on a batch with the given form + reason. */
+    private function batchAppointment(User $student, string $date, string $formType, string $reason): Appointment
     {
-        // 2 OJT-purposed visits, 1 appointment with NO purpose and 1 legacy
-        // visit with no appointment at all — both land in "Not specified"
-        // (D-61 renamed the old "Walk-in / not specified" bucket).
+        static $seq = 1;
+
+        $batch = BatchRequest::create([
+            'reference_no' => sprintf('BR-2026-%03d', $seq++),
+            'college_id' => $this->ccs->id,
+            'requested_by' => $this->director->id,
+            'form_type' => $formType,
+            'reason' => $reason,
+            'reason_detail' => $reason === 'others' ? 'Quiz bee' : null,
+            'service_type' => 'medical',
+            'requested_date' => $date,
+            'scheduled_date' => $date,
+            'status' => 'approved',
+        ]);
+
+        return Appointment::factory()->medical()->onDate($date)->create([
+            'student_id' => $student->id,
+            'status' => 'completed',
+            'source' => 'batch',
+            'batch_request_id' => $batch->id,
+        ]);
+    }
+
+    public function test_purpose_rows_follow_the_batch_reason(): void
+    {
+        // D-62: the batch reason IS the purpose. 2 OJT visits (assessment),
+        // 1 field trip (clearance), one "Others" on EACH form — same printed
+        // label, so they merge into one bar — plus a retired pre-D-62 reason
+        // and a legacy visit with no appointment, both "Not specified".
         $student = $this->makeStudent($this->ccs);
 
-        $ojt = fn () => Appointment::factory()
-            ->withPurpose('On-the-job Training')
-            ->onDate('2026-05-05')
-            ->create(['student_id' => $student->id, 'status' => 'completed']);
-        $this->makeVisit($student, $this->ccs, '2026-05-05', appointmentId: $ojt()->id);
-        $this->makeVisit($student, $this->ccs, '2026-05-06', appointmentId: $ojt()->id);
+        $visit = function (string $date, string $formType, string $reason) use ($student): void {
+            $this->makeVisit($student, $this->ccs, $date,
+                appointmentId: $this->batchAppointment($student, $date, $formType, $reason)->id);
+        };
 
-        $purposeless = Appointment::factory()
-            ->medical()
-            ->onDate('2026-05-07')
-            ->create(['student_id' => $student->id, 'status' => 'completed']);
-        $this->makeVisit($student, $this->ccs, '2026-05-07', appointmentId: $purposeless->id);
-        $this->makeVisit($student, $this->ccs, '2026-05-08'); // legacy, pre-D-61 walk-in row
+        $visit('2026-05-04', 'assessment', 'ojt');
+        $visit('2026-05-05', 'assessment', 'ojt');
+        $visit('2026-05-06', 'clearance', 'fieldtrip');
+        $visit('2026-05-07', 'clearance', 'others');
+        $visit('2026-05-08', 'assessment', 'others');
+        $visit('2026-05-11', 'clearance', 'graduation'); // retired key
+        $this->makeVisit($student, $this->ccs, '2026-05-12'); // legacy, no appointment
 
         $response = $this->page('?month=2026-05')->assertOk();
 
-        // Sorted by count desc; the 2–2 tie breaks alphabetically.
+        // Sorted by count desc; ties break alphabetically.
         $this->assertSame([
             ['label' => 'Not specified', 'count' => 2],
             ['label' => 'On-the-job Training', 'count' => 2],
+            ['label' => 'Others, Specify', 'count' => 2],
+            ['label' => 'Field Trip/Educational Tour', 'count' => 1],
         ], $response->viewData('purposeRows'));
     }
 

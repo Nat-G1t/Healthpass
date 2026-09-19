@@ -52,6 +52,7 @@ class BatchApprovalsPageTest extends TestCase
             'reference_no' => 'BR-'.now()->year.'-'.$seq++,
             'college_id' => $college->id,
             'requested_by' => $this->admin->id,
+            'form_type' => 'assessment',   // D-62: 'ojt' is an Assessment reason
             'reason' => 'ojt',
             'service_type' => 'medical',
             // D-37: a batch needs an hour span to be approvable, exactly as
@@ -74,6 +75,42 @@ class BatchApprovalsPageTest extends TestCase
             ->assertSee($ceaBatch->reference_no)
             ->assertSee('CCS')
             ->assertSee('CEA');
+    }
+
+    public function test_the_form_type_column_sits_immediately_before_reason(): void
+    {
+        // D-62: the Director sees which form each batch uses.
+        $this->makeBatch($this->ccs);
+        $this->makeBatch($this->cea, ['form_type' => 'clearance', 'reason' => 'outbound']);
+
+        $html = $this->actingAs($this->director)
+            ->get('/director/batches')
+            ->assertOk()
+            ->assertSee('Medical Assessment Form')
+            ->assertSee('Medical Clearance')
+            ->assertSee('Outbound Activities')
+            ->getContent();
+
+        // Two adjacent header cells: Form Type, then Reason.
+        $this->assertMatchesRegularExpression('~>Form Type</th>\s*<th[^>]*>Reason</th>~', $html);
+    }
+
+    public function test_both_decision_modals_receive_the_form_type(): void
+    {
+        $this->makeBatch($this->ccs, ['requested_date' => now()->addDays(3)->toDateString()]);
+
+        $html = $this->actingAs($this->director)
+            ->get('/director/batches')
+            ->assertOk()
+            ->assertSee('Form: <strong x-text="batch?.form"></strong>', false)
+            ->assertSee('Form: <strong x-text="rejectTarget?.form"></strong>', false)
+            ->getContent();
+
+        // Js::from() payloads for Approve and Reject both carry the label.
+        // Js::from() writes every quote as a backslash-u0022 escape; undo it
+        // (the escape is built from pieces to keep it readable here).
+        $decoded = str_replace(chr(92).'u0022', '"', $html);   // chr(92) = backslash
+        $this->assertSame(2, substr_count($decoded, '"form":"Medical Assessment Form"'));
     }
 
     public function test_pending_rows_have_decision_buttons_and_decided_rows_are_static(): void

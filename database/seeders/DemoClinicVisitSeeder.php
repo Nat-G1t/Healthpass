@@ -40,9 +40,9 @@ use Illuminate\Support\Facades\DB;
  *     college batch (BR-2026-707…) — since D-61 that is the only way a
  *     visit happens: no self-bookings, no walk-ins. A student holds one seat
  *     per batch, so a student's second visit in a month goes on their
- *     college's second batch of that month, and so on. (Batch appointments
- *     carry no purpose, so Visits by Purpose reads "Not specified" until the
- *     batch reason becomes the purpose — prompt 03 / D-62.);
+ *     college's second batch of that month, and so on. The batches cycle
+ *     through both D-62 forms and their reasons, and the batch reason is
+ *     the purpose Visits by Purpose counts;
  *   • a deterministic sprinkle of BP / fever / BMI flags (FR-ANL-10);
  *   • BMI values across all four FR-ANL-12 buckets;
  *   • a few CAPTURED (un-encoded) July visits — these still count
@@ -91,8 +91,15 @@ class DemoClinicVisitSeeder extends Seeder
     /** BR-2026-701…706 are the My-Records batches; the analytics spread starts here. */
     private const FIRST_SPREAD_BATCH = 707;
 
-    /** Batch reasons the demo batches cycle through ('others' needs detail text, so it is left out). */
-    private const DEMO_REASONS = ['graduation', 'ojt', 'enrollment', 'scholarship', 'sports', 'fieldtrip'];
+    /**
+     * [form type, reason] pairs the demo batches cycle through — both D-62
+     * forms, so the Live Queue badge and Visits by Purpose show a mix
+     * ('others' needs detail text, so it is left out).
+     */
+    private const DEMO_REASONS = [
+        ['assessment', 'ojt'], ['clearance', 'fieldtrip'], ['assessment', 'rle'],
+        ['clearance', 'outbound'], ['assessment', 'sports'], ['assessment', 'off_campus'],
+    ];
 
     /** The Director whose approval every demo batch carries. */
     private User $director;
@@ -148,7 +155,7 @@ class DemoClinicVisitSeeder extends Seeder
             'student_id' => $juan->id,
             'college_id' => $ccs->id,
             'course' => $juanCourse,
-            'appointment_id' => $this->recordsPageSeat(1, $juan, $ccs, '2026-01-10 09:02:00', 'completed', 'graduation'),
+            'appointment_id' => $this->recordsPageSeat(1, $juan, $ccs, '2026-01-10 09:02:00', 'completed', ['clearance', 'fieldtrip']),
             'login_method' => 'qr',
             'status' => 'encoded',
             'privacy_consent_at' => Carbon::parse('2026-01-10 08:55:00'),
@@ -176,6 +183,7 @@ class DemoClinicVisitSeeder extends Seeder
         ClearanceRecord::create([
             'clinic_visit_id' => $v1->id,
             'encoded_by' => $nurse->id,
+            ...$v1->batchPurpose(),   // D-62: as the real encode copies it
             'result' => 'Fit',
             'physician_name' => 'REYNALDO S. ALIPIO, MD',
             'physician_license_no' => '60252',
@@ -188,7 +196,7 @@ class DemoClinicVisitSeeder extends Seeder
             'student_id' => $juan->id,
             'college_id' => $ccs->id,
             'course' => $juanCourse,
-            'appointment_id' => $this->recordsPageSeat(2, $juan, $ccs, '2026-03-05 09:15:00', 'completed', 'ojt'),
+            'appointment_id' => $this->recordsPageSeat(2, $juan, $ccs, '2026-03-05 09:15:00', 'completed', ['assessment', 'ojt']),
             'login_method' => 'qr',
             'status' => 'encoded',
             'privacy_consent_at' => Carbon::parse('2026-03-05 09:10:00'),
@@ -220,6 +228,7 @@ class DemoClinicVisitSeeder extends Seeder
         ClearanceRecord::create([
             'clinic_visit_id' => $v2->id,
             'encoded_by' => $nurse->id,
+            ...$v2->batchPurpose(),   // D-62: as the real encode copies it
             'result' => 'Unfit',
             'physician_name' => 'REYNALDO S. ALIPIO, MD',
             'physician_license_no' => '60252',
@@ -232,7 +241,7 @@ class DemoClinicVisitSeeder extends Seeder
             'student_id' => $maria->id,
             'college_id' => $ccs->id,
             'course' => $mariaCourse,
-            'appointment_id' => $this->recordsPageSeat(3, $maria, $ccs, '2026-02-03 11:00:00', 'completed', 'scholarship'),
+            'appointment_id' => $this->recordsPageSeat(3, $maria, $ccs, '2026-02-03 11:00:00', 'completed', ['assessment', 'sports']),
             'login_method' => 'qr',
             'status' => 'encoded',
             'privacy_consent_at' => Carbon::parse('2026-02-03 10:50:00'),
@@ -260,6 +269,7 @@ class DemoClinicVisitSeeder extends Seeder
         ClearanceRecord::create([
             'clinic_visit_id' => $v3->id,
             'encoded_by' => $nurse->id,
+            ...$v3->batchPurpose(),   // D-62: as the real encode copies it
             'result' => 'Fit',
             'physician_name' => 'REYNALDO S. ALIPIO, MD',
             'physician_license_no' => '60252',
@@ -272,7 +282,7 @@ class DemoClinicVisitSeeder extends Seeder
             'student_id' => $juan->id,
             'college_id' => $ccs->id,
             'course' => $juanCourse,
-            'appointment_id' => $this->recordsPageSeat(4, $juan, $ccs, '2026-06-15 08:45:00', 'scheduled', 'sports'),
+            'appointment_id' => $this->recordsPageSeat(4, $juan, $ccs, '2026-06-15 08:45:00', 'scheduled', ['assessment', 'sports']),
             'login_method' => 'qr',
             'status' => 'captured',
             'privacy_consent_at' => Carbon::parse('2026-06-15 08:40:00'),
@@ -304,7 +314,7 @@ class DemoClinicVisitSeeder extends Seeder
             'student_id' => $maria->id,
             'college_id' => $ccs->id,
             'course' => $mariaCourse,
-            'appointment_id' => $this->recordsPageSeat(5, $maria, $ccs, '2026-05-10 09:00:00', 'scheduled', 'fieldtrip'),
+            'appointment_id' => $this->recordsPageSeat(5, $maria, $ccs, '2026-05-10 09:00:00', 'scheduled', ['clearance', 'fieldtrip']),
             'login_method' => 'qr',
             'status' => 'captured',
             'privacy_consent_at' => Carbon::parse('2026-05-10 08:55:00'),
@@ -341,7 +351,7 @@ class DemoClinicVisitSeeder extends Seeder
             'student_id' => $maria->id,
             'college_id' => $ccs->id,
             'course' => $mariaCourse,
-            'appointment_id' => $this->recordsPageSeat(6, $maria, $ccs, '2026-06-20 08:30:00', 'scheduled', 'enrollment'),
+            'appointment_id' => $this->recordsPageSeat(6, $maria, $ccs, '2026-06-20 08:30:00', 'scheduled', ['clearance', 'outbound']),
             'login_method' => 'qr',
             'status' => 'captured',
             'privacy_consent_at' => Carbon::parse('2026-06-20 08:25:00'),
@@ -563,6 +573,7 @@ class DemoClinicVisitSeeder extends Seeder
                 'clinic_visit_id' => $visit->id,
                 'encoded_by' => $nurse->id,
                 'result' => $visitSeq % 6 === 5 ? 'Unfit' : 'Fit',
+                ...$visit->batchPurpose(),   // D-62: as the real encode copies it
                 'physician_name' => 'REYNALDO S. ALIPIO, MD',
                 'physician_license_no' => '60252',
                 'encoded_at' => $checkedIn->copy()->addHours(2),
@@ -583,7 +594,7 @@ class DemoClinicVisitSeeder extends Seeder
         College $college,
         string $checkedIn,
         string $appointmentStatus,
-        string $reason,
+        array $reason,   // [form type, reason] (D-62)
     ): int {
         $checkedInAt = Carbon::parse($checkedIn);
 
@@ -615,7 +626,7 @@ class DemoClinicVisitSeeder extends Seeder
         Carbon $date,
         string $slot,
         int $studentCount,
-        string $reason,
+        array $reason,   // [form type, reason] (D-62)
     ): BatchRequest {
         $submittedAt = $date->copy()->subDays(5)->setTime(10, 0);
         $approvedAt = $date->copy()->subDays(2)->setTime(14, 0);
@@ -624,7 +635,8 @@ class DemoClinicVisitSeeder extends Seeder
             'reference_no' => $reference,
             'college_id' => $college->id,
             'requested_by' => $this->admins[$college->id]->id,
-            'reason' => $reason,
+            'form_type' => $reason[0],
+            'reason' => $reason[1],
             'service_type' => 'medical',
             'requested_date' => $date->toDateString(),
             'requested_time' => $slot,

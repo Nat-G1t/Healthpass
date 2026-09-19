@@ -65,6 +65,7 @@ class AppointmentEmailTest extends TestCase
             'reference_no' => 'BR-'.now()->year.'-'.$seq++,
             'college_id' => $this->ccs->id,
             'requested_by' => $this->admin->id,
+            'form_type' => 'assessment',   // D-62: 'ojt' is an Assessment reason
             'reason' => 'ojt',
             'service_type' => 'medical',
             'requested_date' => now()->addDays(7)->toDateString(),
@@ -249,13 +250,17 @@ class AppointmentEmailTest extends TestCase
     {
         $student = User::factory()->create(['role' => 'student']);
 
-        // purpose_other is typed by the student; reason_detail by a College
-        // Admin. Neither may reach the recipient's webmail as live markup.
+        // reason_detail is typed by a College Admin and is the purpose the
+        // email shows (D-62). It may not reach the recipient's webmail as
+        // live markup.
+        $batch = $this->makeBatchWithStudents(0, [
+            'reason' => 'others',
+            'reason_detail' => '<script>alert("xss")</script>',
+        ]);
         $appointment = Appointment::factory()->create([
             'student_id' => $student->id,
-            'source' => 'self',
-            'purpose' => 'Others',
-            'purpose_other' => '<script>alert("xss")</script>',
+            'source' => 'batch',
+            'batch_request_id' => $batch->id,
         ]);
 
         $body = (new AppointmentScheduledMail($appointment))->render();

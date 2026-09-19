@@ -87,6 +87,13 @@
         </div>
         <div>
             <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+                Form
+            </dt>
+            {{-- D-62: the official form the clinic uses for this batch --}}
+            <dd class="mt-1 text-sm font-semibold text-hp-slate">{{ $batch->formTypeLabel() }}</dd>
+        </div>
+        <div>
+            <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
                 Purpose
             </dt>
             {{-- The batch's own reason (BR-06), or the admin's typed text when

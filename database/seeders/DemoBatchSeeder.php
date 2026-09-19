@@ -118,10 +118,10 @@ class DemoBatchSeeder extends Seeder
     /** Two pending batches — the only state D-52 lets the admin cancel. */
     private function seedPending(): void
     {
-        $batch = $this->makeBatch('901', 'pending', 'graduation', 4, days: 5, slot: '09:00:00');
+        $batch = $this->makeBatch('901', 'pending', 'assessment', 'ojt', 4, days: 5, slot: '09:00:00');
         $this->attach($batch, $this->students->take(4));
 
-        $batch = $this->makeBatch('902', 'pending', 'ojt', 2, days: 7, slot: '13:00:00');
+        $batch = $this->makeBatch('902', 'pending', 'clearance', 'fieldtrip', 2, days: 7, slot: '13:00:00');
         $this->attach($batch, $this->students->take(2));
     }
 
@@ -132,7 +132,7 @@ class DemoBatchSeeder extends Seeder
     private function seedApprovedWithResults(): void
     {
         $date = now()->subDays(4)->toDateString();
-        $batch = $this->makeBatch('903', 'approved', 'graduation', 4, days: -4, slot: '08:00:00');
+        $batch = $this->makeBatch('903', 'approved', 'assessment', 'rle', 4, days: -4, slot: '08:00:00');
 
         [$juan, $maria, $carlo, $angel] = $this->students->take(4)->all();
 
@@ -158,7 +158,7 @@ class DemoBatchSeeder extends Seeder
     private function seedApprovedUpcoming(): void
     {
         $date = now()->addDays(3)->toDateString();
-        $batch = $this->makeBatch('904', 'approved', 'fieldtrip', 3, days: 3, slot: '10:00:00');
+        $batch = $this->makeBatch('904', 'approved', 'clearance', 'outbound', 3, days: 3, slot: '10:00:00');
 
         [$juan, $maria, $carlo] = $this->students->take(3)->all();
 
@@ -171,14 +171,14 @@ class DemoBatchSeeder extends Seeder
     /** A Director rejection, so the Reason column renders beside Cancel. */
     private function seedRejected(): void
     {
-        $batch = $this->makeBatch('905', 'rejected', 'sports', 3, days: 9, slot: '11:00:00');
+        $batch = $this->makeBatch('905', 'rejected', 'assessment', 'sports', 3, days: 9, slot: '11:00:00');
         $this->attach($batch, $this->students->take(3));
     }
 
     /** Already cancelled by the college (D-52) — the end state of FR-ADM-11. */
     private function seedCancelled(): void
     {
-        $batch = $this->makeBatch('906', 'cancelled', 'enrollment', 2, days: 6, slot: '14:00:00');
+        $batch = $this->makeBatch('906', 'cancelled', 'clearance', 'fieldtrip', 2, days: 6, slot: '14:00:00');
         $this->attach($batch, $this->students->take(2));
     }
 
@@ -192,6 +192,7 @@ class DemoBatchSeeder extends Seeder
     private function makeBatch(
         string $seq,
         string $status,
+        string $formType,   // D-62
         string $reason,
         int $studentCount,
         int $days,
@@ -204,6 +205,7 @@ class DemoBatchSeeder extends Seeder
             'reference_no' => 'BR-2026-'.$seq,
             'college_id' => $this->ccs->id,
             'requested_by' => $this->admin->id,
+            'form_type' => $formType,
             'reason' => $reason,
             'service_type' => 'medical',
             'requested_date' => $date,
@@ -340,6 +342,7 @@ class DemoBatchSeeder extends Seeder
             'clinic_visit_id' => $visit->id,
             'encoded_by' => $this->nurse->id,
             'result' => $result,
+            ...$visit->batchPurpose(),   // D-62: as the real encode copies it
             'nurse_notes' => $result === 'Unfit'
                 ? 'Blood pressure above threshold on two readings. Advised to consult before clearance is re-issued.'
                 : null,

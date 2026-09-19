@@ -40,20 +40,6 @@ class AppointmentFactory extends Factory
         return $this->state(['service_type' => 'medical']);
     }
 
-    /**
-     * D-28: an appointment carrying the student's chosen clearance purpose.
-     * Leaving purpose null (the default) models a batch / pre-D-28
-     * appointment that falls back to the nurse dropdown.
-     */
-    public function withPurpose(string $purpose, ?string $purposeOther = null): static
-    {
-        return $this->state([
-            'service_type' => 'medical',
-            'purpose' => $purpose,
-            'purpose_other' => $purposeOther,
-        ]);
-    }
-
     public function cancelled(): static
     {
         return $this->state(['status' => 'cancelled']);

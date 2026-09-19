@@ -48,13 +48,23 @@ class StoreBatchRequestRequest extends FormRequest
         // Non-null is guaranteed by the `college.scope` middleware.
         $collegeId = $this->user()->managedCollege->id;
 
+        // is_string: a crafted form_type[]=… must fail validation, not crash
+        // the array lookup below.
+        $formType = $this->input('form_type');
+        $reasonsForForm = is_string($formType) ? (BatchRequest::REASONS_BY_FORM[$formType] ?? []) : [];
+
         return [
-            'reason' => ['required', Rule::in(array_keys(BatchRequest::REASONS))],
+            // D-62: the clinic form comes first — it decides which reasons are
+            // valid, so a clearance reason posted with an assessment form (or
+            // any reason with no form) is refused.
+            'form_type' => ['required', Rule::in(array_keys(BatchRequest::FORM_TYPES))],
+            'reason' => ['required', Rule::in(array_keys($reasonsForForm))],
             'reason_detail' => [
                 'required_if:reason,'.BatchRequest::REASON_OTHERS,
                 'nullable',
                 'string',
-                'max:500',
+                // Prints on the form's "Others, Specify:" line (D-62).
+                'max:120',
             ],
             // D-29: the admin proposes the clinic date (they know the
             // cohort's event); the Director confirms it at approval (D-36).
@@ -76,8 +86,11 @@ class StoreBatchRequestRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'form_type.required' => 'Please choose the form the clinic will use.',
+            'form_type.in' => 'Invalid form.',
             'reason.required' => 'Please choose a reason for this batch request.',
-            'reason.in' => 'Invalid reason.',
+            'reason.in' => 'That reason is not on the chosen form.',
+            'reason_detail.max' => 'Please keep the specified reason to 120 characters — it prints on one line of the form.',
             'reason_detail.required_if' => 'Please specify the reason when choosing "Others".',
             'requested_date.required' => 'Please pick the date your students should visit the clinic.',
             'requested_date.date_format' => 'Invalid requested date.',

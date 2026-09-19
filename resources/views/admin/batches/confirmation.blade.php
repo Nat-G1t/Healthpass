@@ -49,6 +49,14 @@
             </dd>
         </div>
 
+        {{-- Form type (D-62) — the official form the clinic will use --}}
+        <div class="flex items-start justify-between gap-4">
+            <dt class="text-sm text-hp-slate/50">Form</dt>
+            <dd class="text-right text-sm font-semibold text-hp-slate">
+                {{ $batch->formTypeLabel() }}
+            </dd>
+        </div>
+
         {{-- Reason --}}
         <div class="flex items-start justify-between gap-4">
             <dt class="text-sm text-hp-slate/50">Reason</dt>

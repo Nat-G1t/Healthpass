@@ -73,7 +73,7 @@ Only **students** self-register. `nurse`, `college_admin`, and `director` accoun
 | Approve / reject batch requests (all colleges) | | | | ✓ |
 | Use the kiosk (vitals + screening) | ✓ | | | |
 | View the live nurse queue | | | ✓ | |
-| Encode Fit/Unfit + case categories + purpose | | | ✓ | |
+| Encode Fit/Unfit + case categories (purpose read-only from the batch, D-62) | | | ✓ | |
 | Preview / print clearance form | | | ✓ | |
 | View own clearance records | ✓ | | | |
 | View analytics + flagged anomalies | | | | ✓ |
@@ -136,7 +136,7 @@ Nurse sees visit in Live Queue
          └── Opens Encode Result screen
                     │ (views vitals with flags, questionnaire answers)
                     │
-                    └── Sets Fit/Unfit + case categories (0..n) + purpose + notes
+                    └── Sets Fit/Unfit + case categories (0..n) + notes (purpose = the batch reason, D-62)
                     │
                     └── Preview & Print clearance form (official PamSU form)
                     │
@@ -160,7 +160,8 @@ Director analytics and flagged anomalies update from encoded records
 
 ### Batch requests
 - A College Admin can only request for their own college (enforced server-side).
-- A reason is required. If reason = `others`, a detail textarea is required.
+- **A clinic form is required first (D-62):** `clearance` (Medical Clearance) or `assessment` (Medical Assessment Form). It drives the kiosk questions, the encode fields and the printed document.
+- A reason is required and must come from **the chosen form's** list (`BatchRequest::REASONS_BY_FORM`, the paper's exact labels) — Medical Clearance: Field Trip/Educational Tour, Outbound Activities, Others, Specify; Medical Assessment Form: Off Campus Procedure, Sports Activities, On-the-job Training, Related Learning Experience, Others, Specify. If reason = `others`, a detail textarea is required (max 120 — it prints on the "Others, Specify:" line). The batch reason IS the purpose printed on the form.
 - At least one student must be selected.
 - **No double-booking (D-54, BR-25).** A batch holds its **whole** requested hour span for every student on it from submission — `pending` or `approved`, and still the whole span after approval. A clash is an **hour overlap** against another pending/approved batch the student is on (D-61 retired the self-booking clash). **First come wins:** the later booking — a batch submission or the Director's approval — is refused. Rejected/cancelled batches and a student withdrawn from an approved batch hold nothing; pre-D-37 rows with no hour never clash.
 - **Director approval generates one appointment per listed student automatically** — it appears on each student's dashboard (Next Appointment card) and in their email, and they proceed directly to the kiosk. Since D-61 this is the only way an appointment is created.
@@ -186,7 +187,7 @@ Flags appear in the nurse queue's "Flags" column and the Director's Flagged Anom
 - Only the **Nurse** encodes (4 roles total — no Doctor login).
 - The encode form is titled "Doctor's Assessment" in the UI but is nurse-operated.
 - `result` = Fit or Unfit (required to save).
-- Case categories (0..n, D-23) and purpose are optional (can save without them). Purpose is **nurse-entered only when the visit's appointment carries no student-supplied purpose** (a legacy no-appointment visit / batch / pre-D-28); when the student chose a purpose at booking, encode hides its purpose input and carries that choice onto the clearance record (D-28).
+- Case categories (0..n, D-23) are optional. **The purpose is not nurse-entered (D-62):** it is the batch's reason, shown read-only and copied onto the clearance record on Save (label → `purpose`, specify text → `purpose_other`; NULL with no batch). A posted purpose is ignored.
 - The printed form carries the **pre-printed physician signature: REYNALDO S. ALIPIO, MD, License No. 60252**.
 - **Respiratory Rate** is intentionally blank on the print form — it is not a captured vital.
 
@@ -333,7 +334,8 @@ Students are scheduled only through their college (a batch request the Clinic Di
 
 #### New Batch Request (`admin-new-batch`)
 - College banner (auto, read-only).
-- **Reason dropdown** (required). If `others` selected: textarea "Please specify" appears below.
+- **"Choose the form the clinic will use" card** (D-62), on top of the page: two radio tiles styled as cards — **Medical Assessment Form** (left) and **Medical Clearance** (right) — each with a preview image (`public/images/forms/`) and a short guidance text. Keyboard-accessible; the tiles stack at phone width.
+- **Reason dropdown** (required) — **disabled until a form is chosen**; its options are the chosen form's purposes, and changing the form clears the reason and the detail. If `others` selected: textarea "Please specify" (max 120) appears below. `old()` restores form, reason and detail after a validation error or the clash popup.
 - **Requested clinic date** (D-29) — a compact **month calendar** since **D-54**, with the (D-61-removed) student booking calendar's look and rules: month header with prev/next, weekday row, past days disabled, FULL days greyed and unselectable, today unavailable after closing (BR-20) or once no hour is left (BR-23), non-booking weekdays disabled, same legend. "Today" is the server's date. It still submits `requested_date` through a hidden input; its month data comes from `GET /admin/batches/availability` (`full_days`, `cutoff_days`), built by `ClinicScheduleService` (the student calendar that shared them went with D-61).
 - **Clash popup** (D-54, BR-25): if any selected student is already scheduled during the batch's span — on another pending/approved batch overlapping it (D-61 retired the self-booking case) — the submit comes back with a teleported popup, **"Some students are already scheduled at this time"**, listing every clashing student (name, student no., and what they clash with, e.g. "on batch BR-2026-004, 9:00 AM – 11:00 AM"). **Remove these students from the batch** deselects exactly those students and closes; **Close** keeps the selection so the date or start hour can be changed instead. Reason, service, date, start hour and selection are all restored.
 - **Student multi-select** (scoped to admin's college):
@@ -341,7 +343,7 @@ Students are scheduled only through their college (a batch request the Clinic Di
   - Select All / Clear links.
   - Scrollable checkbox list (max-height 260px): each row = name (600) + student number + course/year (muted). Selected rows = peach background.
   - Counter: "(N of M selected)".
-- "Submit Request (N)" — disabled until reason + ≥ 1 student selected.
+- "Submit Request (N)" — disabled until form + reason + ≥ 1 student selected.
 
 #### Request Submitted (`admin-new-batch-confirm`)
 - Success check icon.
@@ -350,10 +352,10 @@ Students are scheduled only through their college (a batch request the Clinic Di
 
 #### Batch Tracking (`admin-batch-tracking`)
 - **Batch Results card** (D-55, FR-ADM-12), **above** the requests table and rendered only when the college has at least one approved batch: every **approved** batch, newest clinic date first, as **Batch ID · Time of Completion · View** (blank header). Time of Completion reads **In progress** until every non-withdrawn student is Completed or Absent, then the date and time of the batch's **last encode** (e.g. "Sep 10, 2026 · 3:42 PM"), or **No one attended** when nobody was completed. **View** opens a teleported popup — reference, service, clinic date, hour span, and per student: name, student no., hour, **Status** (Not yet attended / At the clinic / Completed / Absent / Withdrawn) and **Result** (Fit / Unfit / "—"). A student with no clinic visit is **Absent from 8:00 PM on the clinic date** (`healthpass.absent_cutoff`, server clock). **Outcome only** — no vitals, screening answers, nurse notes, physician details or visit reference. Rebuilt on every page load (no polling).
-- Table: Batch ID, Reason (truncated with ellipsis), Students, Submitted, Status (Pending shows as "Pending Director Approval"; `cancelled` shows as "Cancelled" — D-52).
+- Table: Batch ID, **Form Type (D-62)**, Reason (truncated with ellipsis), Students, Submitted, Status (Pending shows as "Pending Director Approval"; `cancelled` shows as "Cancelled" — D-52).
 - **Rejection Reason** column (D-36) appears only when the list holds at least one rejected row.
 - **Cancel column** (D-52, FR-ADM-11): a trailing column with a **blank header**, rendered only when at least one row is cancellable, holding a Cancel control on **pending rows only** (every other row gets an em dash). Clicking it opens a confirmation dialog naming the reference, the student count and the requested clinic date. Blank-headed because it holds an action rather than a value — the same shape as the Withdraw column on the batch roster.
-- Batch ID links to the **batch roster** (D-40): the batch's clinic date, hour span, purpose and student count, then each student's appointment, hour and the **Withdraw** action. The per-student Status / Result columns and results roll-up D-53 added here **moved to the Batch Results popup in D-55**.
+- Batch ID links to the **batch roster** (D-40): the batch's clinic date, hour span, form (D-62), purpose and student count, then each student's appointment, hour and the **Withdraw** action. The per-student Status / Result columns and results roll-up D-53 added here **moved to the Batch Results popup in D-55**.
 - "+ New Request" button (top-right).
 
 ---
@@ -376,7 +378,7 @@ Students are scheduled only through their college (a batch request the Clinic Di
   - **Right column** — "Doctor's Assessment" card:
     - **Fit / Unfit** selector (two cards; selected = peach bg + orange border).
     - **Medical Case Categories** multi-select checkboxes (D-23 — a case can span several systems; each persists as a `clearance_case_categories` row): Alimentary System, Respiratory System, Musculo-Skeletal System, Integumentary System, Urinary System, Metabolic Endocrine System, Cardiovascular System, Eyes, Ears, Nose & Throat Disorders. The kiosk's **vision/hearing answers are decision support** for the "Eyes, Ears, Nose & Throat Disorders" pick — they have no physical-sign row of their own. *(Those two kiosk questions were removed by D-56.)*
-    - **Purpose / Cleared For** dropdown: Off Campus Procedure, On-the-job Training, Field Trip/Educational Tour, Sports Activities, **Others, Specify…** — picking Others reveals a required text input for the exact event (max 120 chars, stored in `clearance_records.purpose_other`, D-24). **Shown only when the visit's appointment carries no student-supplied purpose** (a legacy no-appointment visit / batch / pre-D-28). When the student chose the purpose at booking (D-28), this input is replaced by a read-only echo of their choice and the value is copied onto the clearance record on Save. Shares the `<x-hp.purpose-fieldset>` component with the student booking page.
+    - **Purpose / Cleared For** — **read-only since D-62**: the batch reason's label (plus its specify text for Others), copied onto the clearance record on Save. The page header shows the form-type badge (Medical Clearance / Medical Assessment Form). The nurse picker and the `<x-hp.purpose-fieldset>` component are gone (D-24/D-28 superseded).
     - **Physical Signs Disorder of** (D-22): nine Yes/No rows — SKIN, ABDOMEN (GIT), HEENT, GUT, CHEST/LUNGS, EXTREMITIES, HEART/CVS, NEUROLOGICAL, BREAST. The physician examines the student at the clinic; the nurse records the findings. Each row optional — an unanswered row prints as blank bubbles on the form. Stored in `clearance_records.ps_*`. **Kiosk pre-fill (D-56):** the kiosk asks these same nine rows, so every row — GUT and BREAST included — opens pre-checked with the student's answer, **YES and NO alike** (`ps_<key>` ← `<key>`), for the nurse to confirm or correct after the exam; a NULL kiosk answer leaves the row blank. *(Before D-56 the kiosk asked different self-report systems, mapped skin→SKIN, digestive→ABDOMEN (GIT), nose→HEENT, respiratory→CHEST/LUNGS, bones→EXTREMITIES, heart→HEART/CVS, nervous→NEUROLOGICAL, and GUT/BREAST always opened blank.)*
     - **Nurse Notes** textarea (optional) — prints under REMARKS. For a visit not yet encoded it opens **pre-filled with the student's YES details**, one `SKIN: <detail>` line each in the form's order (D-56); `old()` input wins and the nurse edits freely. A read-only encoded record shows its saved notes only.
     - "Preview & Print Medical Clearance" button (ghost style, full width, Download icon).
@@ -397,7 +399,7 @@ Students are scheduled only through their college (a batch request the Clinic Di
 - Physical signs table: YES/NO radio columns for SKIN, ABDOMEN(GIT), HEENT, GUT, CHEST/LUNGS (left col) + EXTREMITIES, HEART/CVS, NEUROLOGICAL, BREAST (right col) — shaded from the nurse-encoded exam findings (`clearance_records.ps_*`, D-22); unanswered rows print blank.
 - Remarks / notes line — nurse notes only; case details are the physician's hand-written annotation (D-22).
 - Pregnancy question (YES/NO radio + LMP line) — pre-filled from the kiosk questionnaire (`screening_responses`).
-- Fitness declaration: "He/She is physically/mentally ☐ FIT ☐ UNFIT to undergo in:" + purpose bubbles incl. "Others, Specify: ___" — an Others purpose shades that bubble and prints the specified event on the line, clipped to fit (D-24). The college is NOT printed anywhere on the form (D-25).
+- Fitness declaration: "He/She is physically/mentally ☐ FIT ☐ UNFIT to undergo in:" + purpose bubbles — **the visit's form type's purposes (D-62)**, the saved batch-reason label shaded — incl. "Others, Specify: ___" — an Others purpose shades that bubble and prints the specified event on the line, clipped to fit (D-24). The college is NOT printed anywhere on the form (D-25).
 - Pre-printed physician: **REYNALDO S. ALIPIO, MD · University Physician · License No. 60252**
 - Date line + form code bottom-right.
 - Print via `window.print()`.
@@ -425,7 +427,7 @@ then nurse-edited).
 
 #### Batch Approvals (`director-approvals`)
 - Full-width card with header "College Batch Requests" + description.
-- Each batch as a row: Batch ID (orange, 700) + status badge, college name (600), reason (italic, in quotes), count + submitted date.
+- Each batch as a row: Batch ID (orange, 700) + status badge, college name (600), **Form Type (D-62, immediately before the reason)**, reason (italic, in quotes), count + submitted date. The approve and reject modals each show a "Form:" line.
 - **Pending rows only** show: "Reject" (ghost sm) + "Approve" (primary sm) buttons.
 - **On Approve** (confirm-only since **Decision D-36**, superseding D-29's adjust clause): the modal shows the College Admin's `requested_date` **read-only** — there is no date picker. In one DB transaction: set `batch_requests.status` → `Approved`, stamp `reviewed_by`/`reviewed_at` and `batch_requests.scheduled_date` **= the `requested_date` read from the LOCKED row** (never from the request body), **auto-create one `appointments` record per student listed in `batch_request_students`** (service = batch request's service type, date = the requested date, `source` = `batch`), and update each `batch_request_students.appointment_id`. Two kinds of batch cannot be approved at all — one whose `requested_date` is NULL (pre-D-29), and one whose `requested_date` has already passed (confirm-only can't move it, and a cohort must never be scheduled into the past). For both, Approve is disabled with a one-line notice **and** the endpoint refuses the POST; the Director rejects with a reason instead. A batch requested for today is still confirmable. **D-37 adds two things:** the modal also shows the batch's **clinic hour span read-only** (e.g. 7:00 AM – 10:00 AM (3 slots)), and capacity becomes a **hard block** — if any hour in that span has reached the hourly cap of 12 — **or has already ended, for a batch requested for today (BR-23)** — approval is refused in the UI *and* at the endpoint (capacity re-checked under lock), with the Director directed to reject-and-resubmit. A batch with no hour span (`requested_time` NULL, pre-D-37) is a further un-approvable case. The fan-out writes `scheduled_time` onto every generated appointment, 12 per hour in pivot-row id order. **D-54 adds one more un-approvable case:** a batch any of whose students is already scheduled during its span (BR-25 — another pending/approved batch overlapping it; D-61 retired the self-booking case). Submission already refuses such a batch, so this only catches a pre-D-54 batch or a race; it is re-checked under the row lock and refused with a flash naming up to three of the students ("… N student(s) are already scheduled during its hours: A, B, C and N more. Reject it with a reason so the college can resubmit."), creating nothing.
 - **On Reject** (D-36): a **written reason is required** (10–500 chars, `RejectBatchRequest`). Update `batch_requests.status` → `Rejected` and store `batch_requests.rejection_reason`. No appointments created. This is also the escape hatch when the Director can't take the requested date — "date unavailable, please resubmit for &lt;X&gt;" — since the date can no longer be adjusted at approval. The College Admin reads the reason on Batch Tracking.
@@ -591,8 +593,7 @@ id                    bigint PK
 reference_no          varchar(20) UNIQUE    -- APT-YYYY-####
 student_id            bigint FK → users.id
 service_type          enum('medical','dental')  -- always 'medical' since D-60; the value is kept so pre-D-60 rows read back
-purpose               varchar(50) NULL  -- student-chosen clearance purpose at self-booking: four locked values or 'Others'; Rule::in validation is the gate; NULL for batch/pre-D-28 rows (D-28)
-purpose_other         varchar(120) NULL -- the Others specify-event text; required when purpose='Others' (D-28)
+-- purpose / purpose_other were DROPPED by D-62 (D-28's student-chosen purpose; the purpose now comes from the batch)
 scheduled_date        date
 scheduled_time        time NULL             -- D-37: the one-hour clinic slot ('07:00:00' .. '16:00:00', canonical 'H:i:s'); REQUIRED on every booking from D-37 onwards, NULL on pre-D-37 rows which were deliberately NOT backfilled (they belong to no slot, render as "—", and are counted only by the daily cap)
 status                enum('scheduled','checked_in','completed','cancelled') DEFAULT 'scheduled'
@@ -610,8 +611,9 @@ id                    bigint PK
 reference_no          varchar(20) UNIQUE    -- BR-YYYY-###
 college_id            bigint FK → colleges.id
 requested_by          bigint FK → users.id  -- the college_admin
-reason                enum('graduation','ojt','enrollment','scholarship','sports','fieldtrip','others')
-reason_detail         text NULL             -- used when reason = 'others'
+form_type             enum('clearance','assessment') DEFAULT 'clearance'  -- D-62: the official clinic form; drives kiosk, encode and print. Pre-D-62 batches all used the clearance, so no backfill
+reason                varchar(30)           -- D-62 (was an enum): a key of BatchRequest::REASONS_BY_FORM[form_type]; validation is the gate
+reason_detail         text NULL             -- used when reason = 'others'; max 120 since D-62 (prints on the "Others, Specify:" line)
 service_type          enum('medical','dental')  -- always 'medical' since D-60; the server never reads it from the request
 requested_date        date NULL             -- admin-proposed clinic date, set at submission (D-29); NULL only on pre-D-29 batches. Picked on a mini calendar since D-54
 requested_time        time NULL             -- D-37: admin-chosen START hour of the batch's span (canonical 'H:i:s')
@@ -703,8 +705,8 @@ result                enum('Fit','Unfit')
 -- No case_category: the case-category concept was dropped by D-32 (the
 -- nurse encodes Fit/Unfit only). The clearance_case_categories child table
 -- added by D-23 was removed with it.
-purpose               varchar(50) NULL  -- four locked values or 'Others'; Rule::in validation is the gate (D-24)
-purpose_other         varchar(120) NULL -- the Others specify-event text; required when purpose='Others' (D-24)
+purpose               varchar(50) NULL  -- D-62: the batch reason's printed label, copied at encode (NULL with no batch)
+purpose_other         varchar(120) NULL -- D-62: the batch's "Others, Specify" text, copied at encode
 nurse_notes           text NULL
 -- "Physical Signs Disorder of" exam findings (D-22): physician examines,
 -- nurse records on the encode screen; NULL = not examined (prints blank)

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Nurse;
 
+use App\Models\Appointment;
+use App\Models\BatchRequest;
 use App\Models\ClearanceRecord;
 use App\Models\ClinicVisit;
 use App\Models\College;
@@ -110,7 +112,7 @@ class PrintViewTest extends TestCase
             'clinic_visit_id' => $visit->id,
             'encoded_by' => $nurse->id,
             'result' => 'Fit',
-            'purpose' => 'On-the-job Training',
+            'purpose' => 'Field Trip/Educational Tour',   // D-62: a clearance label
             'nurse_notes' => 'Advised rest and hydration.',
             'encoded_at' => now(),
         ], $overrides));
@@ -196,7 +198,7 @@ class PrintViewTest extends TestCase
             ->assertSee('Respiratory Rate')
             // Result + purpose + notes
             ->assertSee('FIT')
-            ->assertSee('On-the-job Training')
+            ->assertSee('Field Trip/Educational Tour')
             ->assertSee('Advised rest and hydration.')
             // Encode date on the form's Date line
             ->assertSee($record->encoded_at->format('F j, Y'))
@@ -310,30 +312,76 @@ class PrintViewTest extends TestCase
             ->assertSee('License No. 60252');
     }
 
-    public function test_all_locked_purposes_print_as_options(): void
+    /** D-62: put the visit on an approved batch with this form + reason. */
+    private function attachBatch(ClinicVisit $visit, string $formType, string $reason, ?string $detail = null): void
+    {
+        static $seq = 1;
+
+        $batch = BatchRequest::create([
+            'reference_no' => sprintf('BR-2026-%03d', $seq++),
+            'college_id' => $this->college()->id,
+            'requested_by' => $this->nurse()->id,
+            'form_type' => $formType,
+            'reason' => $reason,
+            'reason_detail' => $detail,
+            'service_type' => 'medical',
+            'requested_date' => today()->toDateString(),
+            'scheduled_date' => today()->toDateString(),
+            'status' => 'approved',
+        ]);
+        $appointment = Appointment::factory()->medical()->create([
+            'student_id' => $visit->student_id,
+            'source' => 'batch',
+            'batch_request_id' => $batch->id,
+        ]);
+        $visit->update(['appointment_id' => $appointment->id]);
+    }
+
+    public function test_a_clearance_batch_prints_the_three_clearance_purposes(): void
     {
         $nurse = $this->nurse();
         $visit = $this->makeVisit();
-        $this->encode($visit, $nurse, ['purpose' => null, 'nurse_notes' => null]);
+        $this->attachBatch($visit, 'clearance', 'outbound');
+        $this->encode($visit, $nurse, ['purpose' => 'Outbound Activities', 'nurse_notes' => null]);
 
         $response = $this->actingAs($nurse)
             ->get(route('nurse.visits.print', $visit))
-            ->assertOk();
+            ->assertOk()
+            ->assertSeeInOrder(['Field Trip/Educational Tour', 'Outbound Activities', 'Others, Specify:'])
+            // Nothing from the Assessment form's list.
+            ->assertDontSee('On-the-job Training')
+            ->assertDontSee('Related Learning Experience')
+            ->assertDontSee('Case Category:');
 
-        // The purpose list is pre-printed on the form even when none is set.
-        foreach (ClearanceRecord::PURPOSES as $purpose) {
-            $response->assertSee($purpose);
-        }
-        $response->assertSee('Others, Specify');
-        $response->assertDontSee('Case Category:');
+        // The saved label shades its own bubble, and only that one.
+        $html = $response->getContent();
+        $this->assertMatchesRegularExpression('~<span class="bb">●</span> Outbound Activities~u', $html);
+        $this->assertDoesNotMatchRegularExpression('~<span class="bb">●</span> Field Trip/Educational Tour~u', $html);
+    }
+
+    public function test_an_assessment_batch_prints_the_assessment_purposes(): void
+    {
+        // Interim (until D-67/D-71 rebuild the templates): the same form, but
+        // with the Assessment form's purpose list.
+        $nurse = $this->nurse();
+        $visit = $this->makeVisit();
+        $this->attachBatch($visit, 'assessment', 'rle');
+        $this->encode($visit, $nurse, ['purpose' => 'Related Learning Experience']);
+
+        $this->actingAs($nurse)
+            ->get(route('nurse.visits.print', $visit))
+            ->assertOk()
+            ->assertSeeInOrder(['Off Campus Procedure', 'Sports Activities', 'On-the-job Training', 'Related Learning Experience', 'Others, Specify:'])
+            ->assertDontSee('Outbound Activities');
     }
 
     public function test_others_purpose_shades_its_bubble_and_prints_the_specified_event(): void
     {
         $nurse = $this->nurse();
         $visit = $this->makeVisit();
+        $this->attachBatch($visit, 'clearance', 'others', 'Regional quiz bee at PSU Lubao');
         $this->encode($visit, $nurse, [
-            'purpose' => ClearanceRecord::PURPOSE_OTHERS,
+            'purpose' => 'Others, Specify',
             'purpose_other' => 'Regional quiz bee at PSU Lubao',
         ]);
 

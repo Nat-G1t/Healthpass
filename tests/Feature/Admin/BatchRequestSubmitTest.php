@@ -52,6 +52,7 @@ class BatchRequestSubmitTest extends TestCase
         $students = StudentProfile::factory()->count($count)->forCollege($this->ccs)->create();
 
         return $this->actingAs($this->admin)->post('/admin/batches', array_merge([
+            'form_type' => 'assessment',
             'reason' => 'ojt',
             'requested_date' => now()->addDays(7)->toDateString(),
             'requested_time' => '07:00:00', // D-37: start hour of the batch span
@@ -69,7 +70,8 @@ class BatchRequestSubmitTest extends TestCase
 
         $this->actingAs($this->admin)
             ->post('/admin/batches', [
-                'reason' => 'graduation',
+                'form_type' => 'clearance',
+                'reason' => 'fieldtrip',
                 'requested_date' => $requestedDate,
                 'requested_time' => '08:00:00',
                 'students' => $students->pluck('id')->all(),
@@ -83,7 +85,8 @@ class BatchRequestSubmitTest extends TestCase
         $this->assertSame('pending', $batch->status);
         $this->assertSame($this->ccs->id, $batch->college_id);
         $this->assertSame($this->admin->id, $batch->requested_by);
-        $this->assertSame('graduation', $batch->reason);
+        $this->assertSame('clearance', $batch->form_type);   // D-62
+        $this->assertSame('fieldtrip', $batch->reason);
         $this->assertSame('medical', $batch->service_type);
         // D-29: the admin's proposed date is stored at submission…
         $this->assertSame($requestedDate, $batch->requested_date->toDateString());
@@ -292,6 +295,7 @@ class BatchRequestSubmitTest extends TestCase
         return $this->actingAs($this->admin)
             ->from('/admin/batches/create')
             ->post('/admin/batches', array_merge([
+                'form_type' => 'assessment',
                 'reason' => 'ojt',
                 'requested_date' => '2026-09-10',
                 'requested_time' => '09:00:00',
@@ -316,6 +320,7 @@ class BatchRequestSubmitTest extends TestCase
             'reference_no' => $reference,
             'college_id' => $this->ccs->id,
             'requested_by' => $this->admin->id,
+            'form_type' => 'assessment',
             'reason' => 'ojt',
             'service_type' => 'medical',
             'requested_date' => '2026-09-10',
@@ -507,6 +512,7 @@ class BatchRequestSubmitTest extends TestCase
 
         $this->actingAs($this->admin)
             ->post('/admin/batches', [
+                'form_type' => 'assessment',
                 'reason' => 'ojt',
                 'students' => [$own->id, $foreign->id],
             ])
@@ -557,6 +563,7 @@ class BatchRequestSubmitTest extends TestCase
             'reference_no' => 'BR-'.now()->year.'-900',
             'college_id' => $this->cea->id,
             'requested_by' => $ceaAdmin->id,
+            'form_type' => 'assessment',
             'reason' => 'ojt',
             'service_type' => 'medical',
         ]);

@@ -50,7 +50,7 @@ class QueueController extends Controller
         if ($encodedId !== null) {
             $ghost = ClinicVisit::query()
                 ->where('status', 'encoded')
-                ->with(['student:id,name', 'college:id,name', 'vitalSigns'])
+                ->with(['student:id,name', 'college:id,name', 'vitalSigns', 'appointment:id,batch_request_id', 'appointment.batchRequest:id,form_type'])
                 ->find($encodedId);
         }
         if ($ghost !== null) {
@@ -103,6 +103,9 @@ class QueueController extends Controller
             'name' => $visit->student->name ?? '—',
             'initials' => $this->initials($visit->student->name ?? ''),
             'college' => $visit->college->name ?? '—',
+            // D-62: which official form this student is on ('clearance' |
+            // 'assessment'); the row shows it as a small badge.
+            'form_type' => $visit->formType(),
             // Vitals summary + flags are the server-frozen values (never client-recomputed).
             'vitals' => $vs ? [
                 'temperature_c' => $vs->temperature_c,

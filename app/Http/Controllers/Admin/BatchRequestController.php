@@ -99,12 +99,13 @@ class BatchRequestController extends Controller
      * reference go into it, so none of them can reach the page source. The view
      * owns the wording of each status key.
      *
-     * @return array{ref: string, date: string, span: string, students: list<array{name: string, number: string, hour: string, status: ?string, result: ?string}>}
+     * @return array{ref: string, form: string, date: string, span: string, students: list<array{name: string, number: string, hour: string, status: ?string, result: ?string}>}
      */
     private function resultsPopup(BatchRequest $batch): array
     {
         return [
             'ref' => $batch->reference_no,
+            'form' => $batch->formTypeLabel(),   // D-62
             'date' => $batch->scheduled_date?->format('l, F j, Y') ?? '—',
             'span' => $batch->requestedSpanLabel(),
             'students' => $batch->batchRequestStudents
@@ -249,6 +250,7 @@ class BatchRequestController extends Controller
                 'reference_no' => $refs->generateBatchRef(),
                 'college_id' => $college->id, // from the session scope — never the request (BR-05)
                 'requested_by' => $request->user()->id,
+                'form_type' => $request->validated('form_type'),   // D-62
                 'reason' => $request->validated('reason'),
                 'reason_detail' => $request->validated('reason_detail'),
                 // D-60: dental is gone. The server always writes 'medical' and

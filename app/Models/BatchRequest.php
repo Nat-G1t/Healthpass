@@ -17,19 +17,22 @@ class BatchRequest extends Model
     use HasFactory;
 
     /**
-     * The locked batch reasons (FR-ADM-02 / BR-06): DB enum value => label
-     * shown in the UI. One source of truth for the form options, the
-     * validation rule, and display — the keys must match the `reason`
-     * enum in the batch_requests migration exactly.
+     * D-62: the two official clinic forms a batch can use, DB value => name.
+     * The College Admin picks one per batch; it drives the kiosk questions,
+     * the encode fields and the printed document for every student on it.
      */
-    public const REASONS = [
-        'graduation' => 'Graduation Clearance',
-        'ojt' => 'OJT / Practicum',
-        'enrollment' => 'General Enrollment',
-        'scholarship' => 'Scholarship',
-        'sports' => 'Sports / Athletics',
-        'fieldtrip' => 'Field Trip / Educational Tour',
-        'others' => 'Others',
+    public const FORM_TYPES = ['clearance' => 'Medical Clearance', 'assessment' => 'Medical Assessment Form'];
+
+    /**
+     * D-62 / BR-06: the batch reasons each form offers, key => label. The
+     * reason IS the purpose printed on the form, so every label matches the
+     * paper exactly — don't reword them. One source of truth for the form
+     * options, the validation rule, the encode copy, the print bubbles and
+     * the Visits by Purpose chart.
+     */
+    public const REASONS_BY_FORM = [
+        'clearance' => ['fieldtrip' => 'Field Trip/Educational Tour', 'outbound' => 'Outbound Activities', 'others' => 'Others, Specify'],
+        'assessment' => ['off_campus' => 'Off Campus Procedure', 'sports' => 'Sports Activities', 'ojt' => 'On-the-job Training', 'rle' => 'Related Learning Experience', 'others' => 'Others, Specify'],
     ];
 
     /** The one reason that additionally requires reason_detail (BR-06). */
@@ -49,10 +52,21 @@ class BatchRequest extends Model
         'cancelled' => 'Cancelled',
     ];
 
+    /**
+     * Model-side default, mirroring the column default: `$attributes` is what
+     * Eloquent puts on a NEW model before anything is set, so a batch created
+     * without a form type reads 'clearance' straight away instead of NULL
+     * until it is re-fetched.
+     */
+    protected $attributes = [
+        'form_type' => 'clearance',
+    ];
+
     protected $fillable = [
         'reference_no',
         'college_id',
         'requested_by',
+        'form_type',
         'reason',
         'reason_detail',
         'service_type',
@@ -174,6 +188,22 @@ class BatchRequest extends Model
             ->elapsedSlotsIn($this->requested_date->toDateString(), $this->requestedSpan());
     }
 
+    /** "Medical Clearance" / "Medical Assessment Form" (D-62). */
+    public function formTypeLabel(): string
+    {
+        return self::FORM_TYPES[$this->form_type] ?? ucfirst((string) $this->form_type);
+    }
+
+    /**
+     * The reason's printed label from this batch's form ("Others, Specify"
+     * for others), or NULL for a key the form doesn't offer — a pre-D-62
+     * reason such as 'graduation'.
+     */
+    public function reasonLabel(): ?string
+    {
+        return self::REASONS_BY_FORM[$this->form_type][$this->reason] ?? null;
+    }
+
     /** Human-readable reason: the label, or the admin's own text for "others". */
     public function reasonText(): string
     {
@@ -181,7 +211,7 @@ class BatchRequest extends Model
             return $this->reason_detail;
         }
 
-        return self::REASONS[$this->reason] ?? ucfirst($this->reason);
+        return $this->reasonLabel() ?? ucfirst($this->reason);
     }
 
     // ── Batch results (FR-ADM-12, D-55) ──────────────────────────────────────

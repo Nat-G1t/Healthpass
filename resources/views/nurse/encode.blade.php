@@ -38,6 +38,10 @@
     </a>
     <div class="mt-2 flex flex-wrap items-center gap-2.5">
         <h2 class="text-xl font-semibold text-hp-slate">Doctor's Assessment</h2>
+        {{-- D-62: the official form this student's batch uses. --}}
+        <x-hp.badge variant="neutral" data-form-type="{{ $visit->formType() }}">
+            {{ \App\Models\BatchRequest::FORM_TYPES[$visit->formType()] }}
+        </x-hp.badge>
         @if ($readOnly)
             <x-hp.badge variant="neutral">Encoded</x-hp.badge>
         @else
@@ -207,7 +211,7 @@
     <x-hp.card class="lg:sticky lg:top-20">
         <h3 class="text-sm font-semibold text-hp-slate">Assessment</h3>
         <p class="mt-0.5 text-xs text-hp-slate/50">
-            Result is required; category and purpose are optional (BR-16).
+            Result is required; notes are optional. The purpose comes from the batch (BR-16).
         </p>
 
         {{-- Save & Close POSTs the assessment (FR-NRS-04). Fields re-populate
@@ -251,40 +255,26 @@
                 @enderror
             </div>
 
-            {{-- Purpose — the four locked values plus the form's "Others,
-                 Specify" line, extracted into <x-hp.purpose-fieldset> (it was
-                 shared with student booking until D-61). The enclosing x-data seeds `purpose` and
-                 `purposeOther`; the component x-models both.
-
-                 D-28 fallback: this input only shows when the visit's
-                 appointment carries NO student-supplied purpose (a batch, a
-                 legacy visit with no appointment, or a pre-D-28 booking). When the student already chose a purpose at
-                 booking, $purposeFromBooking is true → the whole fieldset is
-                 hidden and EncodeController copies the student's choice onto the
-                 clearance record on save (print populates unchanged). --}}
+            {{-- Purpose (D-62) — the College Admin's batch reason IS the
+                 printed purpose, so the nurse no longer picks one. Shown
+                 read-only: the saved record's copy once encoded, otherwise the
+                 batch's, which Save & Close copies onto the record. --}}
             @php
-                $savedPurpose = old('purpose', $record?->purpose);
-                // A booked appointment's student-supplied purpose supersedes the
-                // nurse dropdown. Null on legacy no-appointment visits and purposeless appointments.
-                $bookingPurpose = $visit->appointment?->purpose;
-                $purposeFromBooking = filled($bookingPurpose);
+                $purpose = $record
+                    ? ['purpose' => $record->purpose, 'purpose_other' => $record->purpose_other]
+                    : $visit->batchPurpose();
             @endphp
-            @if ($purposeFromBooking)
-                {{-- Read-only echo of the student's choice — no input to encode. --}}
-                <div class="space-y-1">
-                    <span class="text-sm font-semibold text-hp-slate">Purpose</span>
-                    <p class="text-sm text-hp-slate/80">
-                        {{ $bookingPurpose === \App\Models\ClearanceRecord::PURPOSE_OTHERS
-                            ? $visit->appointment->purpose_other
-                            : $bookingPurpose }}
+            <div class="space-y-1">
+                <span class="text-sm font-semibold text-hp-slate">Purpose</span>
+                @if ($purpose['purpose'])
+                    <p class="text-sm text-hp-slate/80" data-purpose>
+                        {{ $purpose['purpose'] }}@if ($purpose['purpose_other']): {{ $purpose['purpose_other'] }}@endif
                     </p>
-                    <p class="text-xs text-hp-slate/45">Chosen by the student at booking — carried to the printed form.</p>
-                </div>
-            @else
-                <div x-data="{ purpose: @js($savedPurpose ?? ''), purposeOther: @js(old('purpose_other', $record?->purpose_other) ?? '') }">
-                    <x-hp.purpose-fieldset :disabled="$readOnly" />
-                </div>
-            @endif
+                    <p class="text-xs text-hp-slate/45">From the college's batch request — printed on the form.</p>
+                @else
+                    <p class="text-sm text-hp-slate/40" data-purpose>Not specified</p>
+                @endif
+            </div>
 
             {{-- Physical Signs Disorder of (D-22): the physician examines the
                  student at the clinic; the nurse records the findings here.

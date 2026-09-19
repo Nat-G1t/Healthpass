@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Nurse;
 
 use App\Models\Appointment;
+use App\Models\BatchRequest;
 use App\Models\ClearanceRecord;
 use App\Models\ClinicVisit;
 use App\Models\College;
@@ -12,13 +13,15 @@ use App\Models\ScreeningResponse;
 use App\Models\User;
 use App\Models\VitalSigns;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
  * FR-NRS-03 — Encode Result ("Doctor's Assessment"):
  * a captured visit opens the editable assessment form (identity + vitals with
- * flags + all questionnaire answers, Result required, Purpose/Notes
- * optional); an encoded visit renders the same screen read-only with Reprint.
+ * flags + all questionnaire answers, Result required, Notes optional, the
+ * batch's purpose read-only — D-62); an encoded visit renders the same screen
+ * read-only with Reprint.
  */
 class EncodePageTest extends TestCase
 {
@@ -121,6 +124,33 @@ class EncodePageTest extends TestCase
     }
 
     // ── 1. Access control ─────────────────────────────────────────────────────
+
+    /** D-62: put the visit on an approved batch with this form + reason. */
+    private function attachBatch(ClinicVisit $visit, string $formType, string $reason, ?string $detail = null): BatchRequest
+    {
+        static $seq = 1;
+
+        $batch = BatchRequest::create([
+            'reference_no' => sprintf('BR-2026-%03d', $seq++),
+            'college_id' => $this->college()->id,
+            'requested_by' => $this->nurse()->id,
+            'form_type' => $formType,
+            'reason' => $reason,
+            'reason_detail' => $detail,
+            'service_type' => 'medical',
+            'requested_date' => today()->toDateString(),
+            'scheduled_date' => today()->toDateString(),
+            'status' => 'approved',
+        ]);
+        $appointment = Appointment::factory()->medical()->create([
+            'student_id' => $visit->student_id,
+            'source' => 'batch',
+            'batch_request_id' => $batch->id,
+        ]);
+        $visit->update(['appointment_id' => $appointment->id]);
+
+        return $batch;
+    }
 
     public function test_guest_is_redirected_to_login(): void
     {
@@ -235,17 +265,22 @@ class EncodePageTest extends TestCase
             ->assertSee('May 20, 2026');
     }
 
-    public function test_purpose_options_are_the_locked_prd_list(): void
+    public function test_the_header_shows_the_form_type_and_the_batch_purpose_read_only(): void
     {
+        // D-62: the purpose is the batch reason — shown, never picked.
         $visit = $this->makeVisit();
+        $this->attachBatch($visit, 'assessment', 'others', 'Regional quiz bee at PSU Lubao');
 
-        $response = $this->actingAs($this->nurse())
+        $this->actingAs($this->nurse())
             ->get(route('nurse.visits.encode', $visit))
-            ->assertOk();
-
-        foreach (ClearanceRecord::PURPOSES as $purpose) {
-            $response->assertSee($purpose);
-        }
+            ->assertOk()
+            ->assertSee('data-form-type="assessment"', false)
+            ->assertSee('Medical Assessment Form')
+            ->assertSee('Others, Specify: Regional quiz bee at PSU Lubao')
+            ->assertSee("From the college's batch request", false)
+            // No purpose picker any more.
+            ->assertDontSee('name="purpose"', false)
+            ->assertDontSee('name="purpose_other"', false);
     }
 
     public function test_kiosk_yes_answer_prechecks_the_matching_physical_sign(): void
@@ -408,36 +443,19 @@ class EncodePageTest extends TestCase
         }
     }
 
-    // ── 2b. Purpose carried from booking (D-28) ───────────────────────────────
+    // ── 2b. D-62: a visit with no batch ───────────────────────────────────────
 
-    public function test_purpose_input_is_hidden_when_the_appointment_carries_a_purpose(): void
+    public function test_a_visit_with_no_batch_reads_as_a_clearance_with_no_purpose(): void
     {
-        // The student chose the purpose at booking — encode shows a read-only
-        // echo, not the dropdown, and does not let the nurse re-pick it.
-        $visit = $this->makeVisit();
-        $appointment = Appointment::factory()->withPurpose('Sports Activities')->create();
-        $visit->update(['appointment_id' => $appointment->id]);
-
-        $this->actingAs($this->nurse())
-            ->get(route('nurse.visits.encode', $visit))
-            ->assertOk()
-            ->assertSee('Chosen by the student at booking')
-            ->assertSee('Sports Activities')
-            // The editable dropdown's placeholder option is gone.
-            ->assertDontSee('— Optional —');
-    }
-
-    public function test_a_visit_with_no_appointment_still_shows_the_purpose_dropdown(): void
-    {
-        // No appointment (or a purposeless one) → the nurse-entered dropdown
-        // stays exactly as before.
+        // A legacy visit with no appointment: Medical Clearance, "Not specified".
         $visit = $this->makeVisit();
 
         $this->actingAs($this->nurse())
             ->get(route('nurse.visits.encode', $visit))
             ->assertOk()
-            ->assertSee('— Optional —')
-            ->assertDontSee('Chosen by the student at booking');
+            ->assertSee('data-form-type="clearance"', false)
+            ->assertSee('Not specified')
+            ->assertDontSee('name="purpose"', false);
     }
 
     // ── 3. Encoded visit — read-only + Reprint ────────────────────────────────
@@ -499,6 +517,57 @@ class EncodePageTest extends TestCase
             ->get(route('nurse.queue.feed'))
             ->assertOk()
             ->assertJsonPath('visits.0.encode_url', route('nurse.visits.encode', $visit));
+    }
+
+    public function test_queue_feed_carries_the_form_type(): void
+    {
+        $assessment = $this->makeVisit('Assessment Student');
+        $this->attachBatch($assessment, 'assessment', 'ojt');
+        $this->makeVisit('Legacy Student'); // no batch → clearance
+
+        $this->actingAs($this->nurse())
+            ->get(route('nurse.queue.feed'))
+            ->assertOk()
+            ->assertJsonPath('visits.0.form_type', 'assessment')
+            ->assertJsonPath('visits.1.form_type', 'clearance');
+    }
+
+    public function test_queue_page_shows_a_form_type_badge_per_row(): void
+    {
+        $visit = $this->makeVisit('Assessment Student');
+        $this->attachBatch($visit, 'assessment', 'ojt');
+        $this->makeVisit('Legacy Student');
+
+        $this->actingAs($this->nurse())
+            ->get(route('nurse.queue'))
+            ->assertOk()
+            ->assertSeeInOrder(['Assessment Student', 'Assessment', 'Legacy Student', 'Clearance']);
+    }
+
+    public function test_the_queue_feed_does_not_query_per_row_for_the_form_type(): void
+    {
+        // Eager-loaded in scopeLiveQueue: the query count must not grow with
+        // the number of rows (no N+1 on appointment → batchRequest).
+        $nurse = $this->nurse();
+        $count = function () use ($nurse): int {
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+            $this->actingAs($nurse)->get(route('nurse.queue.feed'))->assertOk();
+            // SELECTs only: the first request also stamps users.last_active_at.
+            $n = collect(DB::getQueryLog())
+                ->filter(fn (array $q): bool => str_starts_with($q['query'], 'select'))
+                ->count();
+            DB::disableQueryLog();
+
+            return $n;
+        };
+
+        $this->attachBatch($this->makeVisit('One'), 'assessment', 'ojt');
+        $one = $count();
+
+        $this->attachBatch($this->makeVisit('Two'), 'clearance', 'fieldtrip');
+        $this->attachBatch($this->makeVisit('Three'), 'assessment', 'rle');
+        $this->assertSame($one, $count());
     }
 
     // ── Bluetooth BP irregular pulse (D-58) ───────────────────────────────────

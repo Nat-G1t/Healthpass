@@ -55,6 +55,9 @@ function batchForm() {
 
     return {
         // ── Form fields (seeded from old() after a failed validation) ──────
+        // D-62: the clinic form comes first; it decides the reason list.
+        formType:      @js(old('form_type', '')),
+        reasonsByForm: @js(\App\Models\BatchRequest::REASONS_BY_FORM),
         reason:        @js(old('reason', '')),
         reasonDetail:  @js(old('reason_detail', '') ?? ''),
         // D-29: the admin proposes the clinic date (defaults to today).
@@ -160,9 +163,21 @@ function batchForm() {
             this.selected = [];
         },
 
+        // ── D-62 form chooser ───────────────────────────────────────────────
+        /** The chosen form's reasons (key → printed label), or none yet. */
+        get reasonsForForm() {
+            return this.reasonsByForm[this.formType] ?? {};
+        },
+
+        /** A reason from the other form is never valid — start the pick over. */
+        onFormChange() {
+            this.reason = '';
+            this.reasonDetail = '';
+        },
+
         // ── Submit gating (BR-06/07 — the server re-checks all of this) ────
         get reasonReady() {
-            if (!this.reason) return false;
+            if (!this.formType || !this.reason) return false;
             return this.reason !== this.reasonOthers || this.reasonDetail.trim() !== '';
         },
 
@@ -341,6 +356,59 @@ function batchForm() {
 <form method="POST" action="{{ route('admin.batches.store') }}" x-data="batchForm()">
     @csrf
 
+    {{-- ── D-62: the form the clinic will use ───────────────────────────────
+         Two radio buttons styled as tiles (the input is visually hidden but
+         still focusable, so arrow keys / Space pick a tile). The choice drives
+         the Reason list below and, later, the kiosk questions, the encode
+         fields and the printed document. --}}
+    @php
+        $formTiles = [
+            'assessment' => [
+                'image' => 'images/forms/medical-assessment-preview.png',
+                'copy' => "A full health assessment: medical and family history, immunizations and a physician's physical examination. Two pages, printed back-to-back on long bond paper. Best for On-the-job Training, Related Learning Experience, Sports Activities and Off-campus Procedures.",
+            ],
+            'clearance' => [
+                'image' => 'images/forms/medical-clearance-preview.png',
+                'copy' => "A one-page fitness clearance from the student's vital signs and a short health check. Best for Field Trips / Educational Tours, Outbound Activities and other short events.",
+            ],
+        ];
+    @endphp
+    <x-hp.card class="mb-6">
+        <fieldset>
+            <legend class="text-sm font-semibold text-hp-slate">Choose the form the clinic will use</legend>
+            <p class="mt-0.5 text-xs text-hp-slate/50">Every student in this batch will be examined on this form.</p>
+
+            <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                @foreach ($formTiles as $value => $tile)
+                    <label class="block cursor-pointer" data-form-tile="{{ $value }}">
+                        <input type="radio" name="form_type" value="{{ $value }}"
+                               x-model="formType" @change="onFormChange()" class="peer sr-only">
+                        <div class="relative h-full rounded-xl border-2 border-hp-slate/15 p-4 transition-colors
+                                    hover:border-hp-orange/50
+                                    peer-checked:border-hp-orange peer-checked:bg-hp-peach/20
+                                    peer-focus-visible:ring-2 peer-focus-visible:ring-hp-orange peer-focus-visible:ring-offset-2">
+                            <span x-show="formType === @js($value)" x-cloak
+                                  class="absolute right-3 top-3 inline-flex h-6 w-6 items-center justify-center rounded-full bg-hp-orange text-white">
+                                <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                                </svg>
+                            </span>
+                            <div class="flex h-56 items-center justify-center rounded-lg bg-hp-bg p-2">
+                                <img src="{{ asset($tile['image']) }}" alt="Preview of the {{ \App\Models\BatchRequest::FORM_TYPES[$value] }}"
+                                     class="max-h-full max-w-full object-contain shadow-sm" loading="lazy">
+                            </div>
+                            <p class="mt-3 text-sm font-semibold text-hp-slate">{{ \App\Models\BatchRequest::FORM_TYPES[$value] }}</p>
+                            <p class="mt-1 text-xs leading-relaxed text-hp-slate/60">{{ $tile['copy'] }}</p>
+                        </div>
+                    </label>
+                @endforeach
+            </div>
+            @error('form_type')
+                <p class="mt-2 text-xs text-red-600">{{ $message }}</p>
+            @enderror
+        </fieldset>
+    </x-hp.card>
+
     <div class="grid grid-cols-1 gap-6 xl:grid-cols-3">
 
         {{-- ── Left column: request details ─────────────────────────────── --}}
@@ -350,13 +418,18 @@ function batchForm() {
                 <h3 class="mb-4 text-sm font-semibold text-hp-slate">Request Details</h3>
 
                 <div class="space-y-4">
-                    {{-- Reason (FR-ADM-02 / BR-06) --}}
+                    {{-- Reason (FR-ADM-02 / BR-06) — D-62: the chosen form's
+                         purposes, so it stays disabled until a form is picked.
+                         `disabled` is rendered server-side too, so the page
+                         never flashes an enabled, empty select. :selected keeps
+                         an old() reason picked once x-for builds the options. --}}
                     <div>
-                        <x-hp.select label="Reason" name="reason" x-model="reason">
-                            <option value="">— Select a reason —</option>
-                            @foreach (\App\Models\BatchRequest::REASONS as $value => $label)
-                                <option value="{{ $value }}">{{ $label }}</option>
-                            @endforeach
+                        <x-hp.select label="Reason" name="reason" x-model="reason"
+                                     :disabled="! old('form_type')" x-bind:disabled="!formType">
+                            <option value="" x-text="formType ? '— Select a reason —' : '— Choose a form first —'">— Choose a form first —</option>
+                            <template x-for="(label, key) in reasonsForForm" :key="key">
+                                <option :value="key" x-text="label" :selected="key === reason"></option>
+                            </template>
                         </x-hp.select>
                         @error('reason')
                             <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
@@ -366,7 +439,7 @@ function batchForm() {
                     {{-- "Please specify" — required iff reason = others (BR-06) --}}
                     <div x-show="reason === reasonOthers" x-cloak>
                         <x-hp.textarea label="Please specify" name="reason_detail"
-                                       x-model="reasonDetail" rows="3" maxlength="500"
+                                       x-model="reasonDetail" rows="3" maxlength="120"
                                        placeholder="Describe the reason for this batch request" />
                         @error('reason_detail')
                             <p class="mt-1 text-xs text-red-600">{{ $message }}</p>

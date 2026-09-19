@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Models\BatchRequest;
 use App\Models\ClinicVisit;
 use App\Models\College;
 use App\Models\VitalSigns;
@@ -209,9 +210,15 @@ final class ClinicAnalytics
 
     /**
      * Visits by Purpose (inside the FR-ANL-09 card): the month's visits
-     * bucketed by their linked appointment's purpose. A legacy visit with no
-     * linked appointment (pre-D-61) or an appointment without a purpose falls
-     * into the "Not specified" bucket — the LEFT JOIN yields NULL for both.
+     * bucketed by their batch's reason — since D-62 the batch reason IS the
+     * printed purpose. Joined clinic_visits → appointments → batch_requests
+     * with LEFT JOINs, so a legacy visit with no appointment or no batch
+     * yields NULL and lands in "Not specified", as does a retired pre-D-62
+     * reason the form lists don't know.
+     *
+     * Grouped by (form_type, reason) because a key's label belongs to its
+     * form; rows that share a label ("Others, Specify" is on both forms) are
+     * then merged into one bar.
      *
      * @return array{purposeRows: list<array{label: string, count: int}>, purposeMax: int}
      */
@@ -219,15 +226,18 @@ final class ClinicAnalytics
     {
         $counts = $this->visitsInScope()
             ->leftJoin('appointments', 'appointments.id', '=', 'clinic_visits.appointment_id')
-            ->groupBy('appointments.purpose')
-            ->select('appointments.purpose', DB::raw('count(*) as visits'))
+            ->leftJoin('batch_requests', 'batch_requests.id', '=', 'appointments.batch_request_id')
+            ->groupBy('batch_requests.form_type', 'batch_requests.reason')
+            ->select('batch_requests.form_type', 'batch_requests.reason', DB::raw('count(*) as visits'))
             ->toBase()
             ->get();
 
         $rows = $counts
-            ->map(fn (object $row) => [
-                'label' => $row->purpose ?? self::PURPOSE_NOT_SPECIFIED_LABEL,
-                'count' => (int) $row->visits,
+            ->groupBy(fn (object $row): string => BatchRequest::REASONS_BY_FORM[$row->form_type][$row->reason]
+                ?? self::PURPOSE_NOT_SPECIFIED_LABEL)
+            ->map(fn (Collection $group, string $label): array => [
+                'label' => $label,
+                'count' => (int) $group->sum('visits'),
             ])
             ->sortBy('label')          // stable tie-break…
             ->sortByDesc('count')      // …under the count ordering

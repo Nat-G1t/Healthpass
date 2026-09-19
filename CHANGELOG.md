@@ -4,6 +4,41 @@
 
 ### Added
 
+* **The College Admin picks the clinic form; the batch reason is the printed
+  purpose** (D-62; supersedes D-24 and D-28). Requested by the clinic on
+  2026-09-18; **pending adviser sign-off**. **Flagged schema change**
+  (migration `2026_09_19_000001_add_form_type_to_batch_requests_table`):
+  `batch_requests.form_type` ENUM('clearance','assessment') DEFAULT
+  'clearance' (no backfill — every earlier batch used the clearance);
+  `batch_requests.reason` ENUM → VARCHAR(30); `appointments.purpose` and
+  `purpose_other` dropped.
+  - **New Batch Request:** a top card, "Choose the form the clinic will use",
+    with two keyboard-accessible tiles (Medical Assessment Form left, Medical
+    Clearance right) showing a preview (`public/images/forms/`) and guidance.
+    The Reason select is disabled until a form is chosen, lists that form's
+    purposes, and clears (with its detail) on a form change.
+  - **Reasons follow the paper:** `BatchRequest::FORM_TYPES` and
+    `REASONS_BY_FORM` replace `REASONS`. Clearance — Field Trip/Educational
+    Tour, Outbound Activities, Others, Specify; Assessment — Off Campus
+    Procedure, Sports Activities, On-the-job Training, Related Learning
+    Experience, Others, Specify. The specify text is max 120 (was 500).
+  - **Form type shown on** the confirmation page, Director Batch Approvals
+    ("Form Type" column before "Reason", plus both modals), Batch Tracking,
+    the roster summary, the Batch Results popup header, a Clearance /
+    Assessment badge on each Live Queue row (page + JSON feed, eager-loaded)
+    and the encode page header. New `ClinicVisit::formType()` and
+    `batchPurpose()`; `BatchRequest::formTypeLabel()` and `reasonLabel()`.
+  - **Encode:** the nurse purpose picker and `<x-hp.purpose-fieldset>` are
+    removed; the purpose shows read-only and Save & Close (and Preview &
+    Print) copy the batch reason's label + specify text onto the clearance
+    record. `StoreClearanceRequest` has no purpose rules; a posted purpose is
+    ignored. `ClearanceRecord::PURPOSES` / `PURPOSE_OTHERS` deleted.
+  - **Print (interim until D-67):** the purpose bubbles are the visit's form
+    type's list.
+  - **Analytics:** Visits by Purpose groups by the batch's reason (Director,
+    College Admin and the monthly report).
+  - Demo seeders use the new reasons and a mix of both form types.
+
 * **Students are scheduled only through their college** (D-61; supersedes D-16
   and D-51, and D-28's student-purpose clause). Requested by the clinic
   (nurses, University Physician, Clinic Director) on 2026-09-18; **pending

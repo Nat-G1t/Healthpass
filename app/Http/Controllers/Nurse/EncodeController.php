@@ -18,9 +18,9 @@ use Illuminate\View\View;
  *
  * One screen, two modes, decided by the visit's status (BR-11):
  *
- *  - `captured` → the editable assessment form (Result required, Purpose /
- *    Notes optional). Save & Close and Preview & Print are wired in
- *    FR-NRS-04/05.
+ *  - `captured` → the editable assessment form (Result required, Notes
+ *    optional; the Purpose is the batch reason, shown read-only — D-62).
+ *    Save & Close and Preview & Print are wired in FR-NRS-04/05.
  *  - `encoded`  → the SAME screen read-only, showing the saved clearance
  *    record with a Reprint button. Encoding is one-time (FR-NRS-04), so an
  *    encoded visit can never be edited back into the queue.
@@ -39,7 +39,7 @@ class EncodeController extends Controller
         $visit->load([
             'student.studentProfile',
             'college',           // capture-time snapshot (FR-STU-09/D-17), NOT the profile's current college
-            'appointment',       // D-28: its purpose (if any) supersedes the encode dropdown
+            'appointment.batchRequest', // D-62: form type + the read-only purpose
             'vitalSigns',
             'screeningResponse',
             'clearanceRecord.encoder',
@@ -81,25 +81,14 @@ class EncodeController extends Controller
                 $validated = $request->validated();
                 unset($validated['printed']);
 
-                // D-28 purpose carry-through: when the visit came from a booked
-                // appointment whose student chose a purpose at booking, that
-                // choice is authoritative — the encode screen hid its own purpose
-                // input, so copy the student's purpose onto the clearance record
-                // (the print view reads $record->purpose unchanged). Legacy
-                // no-appointment visits and purposeless appointments (every batch)
-                // fall through to the nurse-entered
-                // purpose already in $validated.
-                $appointment = $visit->appointment;
-                if ($appointment && filled($appointment->purpose)) {
-                    $validated['purpose'] = $appointment->purpose;
-                    $validated['purpose_other'] = $appointment->purpose_other;
-                }
-
                 // physician_name / physician_license_no are intentionally NOT
                 // set here — the column defaults (§7.5: REYNALDO S. ALIPIO, MD
                 // / 60252) fill them, keeping the migration the single source.
                 ClearanceRecord::create([
                     ...$validated,
+                    // D-62: the purpose is the batch reason, never nurse input —
+                    // its printed label (+ specify text). NULL with no batch.
+                    ...$visit->batchPurpose(),
                     'clinic_visit_id' => $visit->id,
                     'encoded_by' => $request->user()->id,
                     'encoded_at' => now(),

@@ -40,6 +40,11 @@ const BTN_GHOST =
     'bg-transparent text-hp-slate border-[1.5px] border-hp-slate/30 hover:bg-hp-slate/8 focus-visible:ring-hp-slate';
 const BADGE = 'inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold leading-none bg-hp-peach text-hp-orange';
 
+// D-62: the small form-type chip beside the name (mirrors queue-row.blade.php).
+const FORM_CHIP =
+    'ml-1 inline-flex items-center rounded-full bg-hp-slate/10 px-2 py-0.5 align-middle text-[10px] font-semibold text-hp-slate';
+const FORM_LABELS = { clearance: 'Clearance', assessment: 'Assessment' };
+
 const FLAGGED = 'font-bold text-hp-orange';
 const NORMAL = 'text-hp-slate/70';
 
@@ -93,7 +98,8 @@ function buildRow(visit) {
         '<td class="py-4 pl-4 pr-6 whitespace-nowrap"><div class="flex items-center gap-3">' +
         '<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-hp-peach text-xs font-bold text-hp-orange">' +
         `${esc(visit.initials)}</div><div class="min-w-0">` +
-        `<p class="text-sm font-semibold text-hp-slate">${esc(visit.name)}</p>` +
+        `<p class="text-sm font-semibold text-hp-slate">${esc(visit.name)} ` +
+        `<span class="${FORM_CHIP}" data-cell="form-type">${esc(FORM_LABELS[visit.form_type] ?? 'Clearance')}</span></p>` +
         '<span class="queue-next-tag mt-0.5 inline-flex items-center rounded-full bg-hp-orange px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-white">Next</span>' +
         `<p class="queue-ref font-mono text-[11px] text-hp-slate/35">${esc(visit.reference_no)}</p>` +
         '</div></div></td>' +

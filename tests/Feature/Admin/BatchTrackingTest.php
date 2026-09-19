@@ -90,6 +90,18 @@ class BatchTrackingTest extends TestCase
             ->assertDontSee('Pending Director Approval');
     }
 
+    public function test_tracking_shows_a_form_type_column_before_reason(): void
+    {
+        // D-62
+        $this->makeBatch($this->ccs, ['form_type' => 'clearance', 'reason' => 'fieldtrip']);
+
+        $this->actingAs($this->admin)
+            ->get('/admin/batches')
+            ->assertOk()
+            ->assertSeeInOrder(['Form Type', 'Reason'])
+            ->assertSeeInOrder(['Medical Clearance', 'Field Trip/Educational Tour']);
+    }
+
     public function test_tracking_shows_student_count_and_submitted_date(): void
     {
         $batch = $this->makeBatch($this->ccs);

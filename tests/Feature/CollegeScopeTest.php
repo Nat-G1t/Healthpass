@@ -56,6 +56,7 @@ class CollegeScopeTest extends TestCase
     private function batchPayload(array $overrides = []): array
     {
         return array_merge([
+            'form_type' => 'assessment',
             'reason' => 'ojt',
             'service_type' => 'medical',
             'requested_date' => now()->addDays(7)->toDateString(),
@@ -70,6 +71,7 @@ class CollegeScopeTest extends TestCase
             'reference_no' => 'BR-2026-'.str_pad((string) random_int(1, 999), 3, '0', STR_PAD_LEFT),
             'college_id' => $college->id,
             'requested_by' => $this->admin->id,
+            'form_type' => 'assessment',
             'reason' => 'ojt',
             'service_type' => 'medical',
             'status' => 'pending',

@@ -349,14 +349,22 @@
         <span class="bb" style="margin-left: 6px;">{{ $record->result === 'Unfit' ? '●' : '' }}</span> <b>UNFIT</b>
         <span>to undergo in:</span>
     </div>
+    {{-- D-62: the purposes are the visit's FORM TYPE's list (the batch reason
+         labels, BatchRequest::REASONS_BY_FORM); the saved label shades its
+         bubble. Interim until prompt 08 rebuilds this template. --}}
+    @php
+        $purposeLabels = \App\Models\BatchRequest::REASONS_BY_FORM[$visit->formType()];
+        $othersLabel = $purposeLabels[\App\Models\BatchRequest::REASON_OTHERS];
+        $isOthers = $record->purpose === $othersLabel;
+    @endphp
     <ul class="purposes">
-        @foreach (\App\Models\ClearanceRecord::PURPOSES as $purpose)
+        @foreach ($purposeLabels as $purpose)
+            @continue($purpose === $othersLabel)
             <li><span class="bb">{{ $record->purpose === $purpose ? '●' : '' }}</span> {{ $purpose }}</li>
         @endforeach
-        @php $isOthers = $record->purpose === \App\Models\ClearanceRecord::PURPOSE_OTHERS; @endphp
         {{-- nowrap + hidden: a long specified event clips on the line instead
              of wrapping and growing the one-page layout (FR-PRT-05). --}}
-        <li><span class="bb">{{ $isOthers ? '●' : '' }}</span> Others, Specify:
+        <li><span class="bb">{{ $isOthers ? '●' : '' }}</span> {{ $othersLabel }}:
             <span class="line" style="max-width: 180px; font-size: 8.5pt; white-space: nowrap; overflow: hidden; vertical-align: bottom; min-width: 120px;">{{ $isOthers ? $record->purpose_other : '' }}</span></li>
     </ul>
 

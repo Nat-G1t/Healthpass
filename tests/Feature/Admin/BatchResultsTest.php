@@ -95,7 +95,8 @@ class BatchResultsTest extends TestCase
             'reference_no' => 'BR-2026-'.$seq++,
             'college_id' => ($college ?? $this->ccs)->id,
             'requested_by' => $this->admin->id,
-            'reason' => 'graduation',
+            'form_type' => 'clearance',    // D-62
+            'reason' => 'fieldtrip',
             'service_type' => 'medical',   // D-60: the only service
             'requested_date' => $date,
             'requested_time' => '09:00:00',
@@ -512,9 +513,10 @@ class BatchResultsTest extends TestCase
         $response->assertSee('Thursday, September 10, 2026');
         $response->assertSee('Hour span');
         $response->assertSee('9:00 AM');
+        $response->assertSee('Form');
+        $response->assertSee('Medical Clearance');   // D-62 form type
         $response->assertSee('Purpose');
-        $response->assertSee('Graduation Clearance');
-        $response->assertSee('Medical Clearance');
+        $response->assertSee('Field Trip/Educational Tour');
     }
 
     public function test_a_pending_batch_roster_still_lists_course_and_year(): void

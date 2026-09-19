@@ -18,8 +18,6 @@ class Appointment extends Model
         'reference_no',
         'student_id',
         'service_type',
-        'purpose',
-        'purpose_other',
         'scheduled_date',
         'scheduled_time',
         'status',
@@ -71,28 +69,15 @@ class Appointment extends Model
 
     /**
      * Why this clearance is being sought, as one human-readable line, or NULL
-     * when nothing was recorded (a batch-generated or pre-D-28 row).
+     * for a legacy appointment with no batch behind it.
      *
-     * The two sources are genuinely different columns: a self-booked
-     * appointment carries the student's own `purpose` (D-28, with
-     * `purpose_other` holding the free-text event when they picked "Others"),
-     * while a batch-generated one carries none at all — its reason lives on the
-     * College Admin's batch request. One accessor so callers never have to know
-     * which of the two they are holding.
+     * D-62: the purpose is the College Admin's batch reason — the student's
+     * own booking purpose (D-28) went with self-booking (D-61), and its
+     * columns were dropped.
      */
     public function purposeText(): ?string
     {
-        if ($this->source === 'batch') {
-            return $this->batchRequest?->reasonText();
-        }
-
-        if ($this->purpose === null) {
-            return null;
-        }
-
-        return $this->purpose === ClearanceRecord::PURPOSE_OTHERS
-            ? ($this->purpose_other ?? $this->purpose)
-            : $this->purpose;
+        return $this->batchRequest?->reasonText();
     }
 
     /**

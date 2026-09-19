@@ -178,6 +178,10 @@ npm run dev                       # terminal 2
 - **Students never self-schedule and never walk in (D-61)** — only
   Director-approved college batches create appointments; the kiosk refuses
   a student with no appointment today.
+- **Every batch names its form (D-62)** — `clearance` (Medical Clearance) or
+  `assessment` (Medical Assessment Form); the form type drives the kiosk
+  questions, the encode fields and the printed document, and the batch
+  reason is the printed purpose.
 - **Manual vitals entry is a first-class kiosk path**, sensors are
   progressive enhancement. Every reading records `entry_method`.
 - **Clinic capacity is TWO config values, never constants in a controller

@@ -21,26 +21,9 @@ class ClearanceRecord extends Model
      */
     public const RESULTS = ['Fit', 'Unfit'];
 
-    /**
-     * Clearance purposes (FR-NRS-03) — the locked PRD list; validation is
-     * the real gate (SQLite in tests doesn't enforce the MySQL enum).
-     *
-     * @var list<string>
-     */
-    public const PURPOSES = [
-        'Off Campus Procedure',
-        'On-the-job Training',
-        'Field Trip/Educational Tour',
-        'Sports Activities',
-    ];
-
-    /**
-     * The official form's fifth purpose line, "Others, Specify: ___" — the
-     * nurse picks it and types the event into `purpose_other`. Kept out of
-     * PURPOSES so the four locked values stay a clean list for loops and
-     * future analytics.
-     */
-    public const PURPOSE_OTHERS = 'Others';
+    // D-62: the purpose lists live on BatchRequest::REASONS_BY_FORM — the
+    // batch reason IS the printed purpose, copied here at encode as its label
+    // (`purpose`) plus the admin's specify text (`purpose_other`).
 
     /**
      * The official form's "Physical Signs Disorder of" rows, column → label

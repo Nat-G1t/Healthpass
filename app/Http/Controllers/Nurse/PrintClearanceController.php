@@ -51,6 +51,8 @@ class PrintClearanceController extends Controller
 
         $record = new ClearanceRecord([
             ...$validated,
+            // D-62: the batch reason, exactly as Save & Close will store it.
+            ...$visit->batchPurpose(),
             // DB defaults only fill on save — a transient record needs the
             // physician block (FR-PRT-04) and encode date set explicitly.
             'physician_name' => ClearanceRecord::PHYSICIAN_NAME,
@@ -86,6 +88,7 @@ class PrintClearanceController extends Controller
         $visit->load([
             'student.studentProfile',
             'college',          // capture-time snapshot (FR-STU-09/D-17)
+            'appointment.batchRequest', // D-62: the form type's purpose list
             'vitalSigns',
             'screeningResponse', // shades the Physical Signs + pregnancy fields (D-22)
             'clearanceRecord',

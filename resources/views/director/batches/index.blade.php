@@ -72,6 +72,8 @@
                         <tr class="border-b border-hp-slate/10 text-[11px] uppercase tracking-widest text-hp-slate/40">
                             <th class="py-2.5 pr-4 font-semibold">Batch ID</th>
                             <th class="py-2.5 pr-4 font-semibold">College</th>
+                            {{-- D-62: Form Type immediately before Reason — the reason list is the form's --}}
+                            <th class="py-2.5 pr-4 font-semibold">Form Type</th>
                             <th class="py-2.5 pr-4 font-semibold">Reason</th>
                             <th class="py-2.5 pr-4 font-semibold">Students</th>
                             <th class="py-2.5 pr-4 font-semibold">Requested Date</th>
@@ -90,6 +92,7 @@
                                     </div>
                                 </td>
                                 <td class="py-3 pr-4">{{ $batch->college->code }}</td>
+                                <td class="py-3 pr-4 whitespace-nowrap">{{ $batch->formTypeLabel() }}</td>
                                 <td class="py-3 pr-4">&ldquo;{{ Str::limit($batch->reasonText(), 60) }}&rdquo;</td>
                                 <td class="py-3 pr-4">{{ $batch->batch_request_students_count }}</td>
                                 {{-- Admin-proposed clinic date (D-29); "—" on pre-D-29 batches --}}
@@ -133,6 +136,7 @@
                                                 <button type="button"
                                                     @click="openApprove({{ Illuminate\Support\Js::from([
                                                         'ref' => $batch->reference_no,
+                                                        'form' => $batch->formTypeLabel(),
                                                         'students' => $batch->batch_request_students_count,
                                                         'requested' => $batch->requested_date->toDateString(),
                                                         'time' => $batch->requested_time,
@@ -152,6 +156,7 @@
                                             <button type="button"
                                                 @click="openReject({{ Illuminate\Support\Js::from([
                                                     'ref' => $batch->reference_no,
+                                                    'form' => $batch->formTypeLabel(),
                                                     'url' => route('director.batches.reject', $batch),
                                                 ]) }})"
                                                 class="inline-flex items-center justify-center gap-2 rounded-full
@@ -250,6 +255,10 @@
                     One appointment will be created for each of the
                     <strong x-text="batch?.students"></strong> students in this batch,
                     on the date the college requested.
+                </p>
+                {{-- D-62: the form those students will be examined on --}}
+                <p class="mt-1.5 text-sm text-hp-slate/70">
+                    Form: <strong x-text="batch?.form"></strong>
                 </p>
 
                 {{-- D-36: read-only confirmation, NOT an input. The server takes
@@ -360,6 +369,10 @@
                 <h2 id="reject-batch-title" class="text-lg font-semibold text-hp-slate">
                     Reject <span x-text="rejectTarget?.ref"></span>?
                 </h2>
+                {{-- D-62: the form the batch asked for --}}
+                <p class="mt-1 text-sm text-hp-slate/70">
+                    Form: <strong x-text="rejectTarget?.form"></strong>
+                </p>
                 <p class="mt-1.5 text-sm text-hp-slate/70">
                     No appointments are created. The college admin sees this reason on
                     Batch Tracking, so write what they need to do — e.g.
@@ -411,7 +424,7 @@
     function batchApprovals() {
         return {
             // ── Approve (confirm-only since D-36) ────────────────────────
-            // { ref, students, requested, time, blocks, spanLabel, url } of the row being approved
+            // { ref, form, students, requested, time, blocks, spanLabel, url } of the row being approved
             batch: null,
             submitting: false,                        // disables Approve after first click
             booked: null,                             // null until the capacity fetch answers
@@ -420,7 +433,7 @@
             elapsedSlots: [],                         // BR-23: hours in the span that have ended
 
             // ── Reject (reason required since D-36) ─────────────────────
-            rejectTarget: null,                       // { ref, url } of the row being rejected
+            rejectTarget: null,                       // { ref, form, url } of the row being rejected
             reason: '',
             rejecting: false,
             reasonMin: {{ $reasonMin }},

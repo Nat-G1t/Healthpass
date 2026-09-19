@@ -212,9 +212,9 @@ students.
 
 1. Log in as `admin.ccs@healthpass.test`. → **Expect:** the Admin Dashboard
    with a banner naming **College of Computing Studies** and stat cards.
-2. Go to **New Batch Request**. Choose a **Reason** (e.g. "OJT/practicum"),
-   **Service Type = medical**, and a **Requested Clinic Date** (defaults to
-   today; past dates disabled — D-29).
+2. Go to **New Batch Request**. Pick the **Medical Assessment Form** tile, then
+   the Reason **On-the-job Training** (D-62), and a **Requested Clinic Date**
+   (defaults to today; past dates disabled — D-29).
 3. In the student picker, use **Select All** (or tick several). → **Expect:**
    only **CCS** students are listed; selected rows highlight peach; a
    "(N of M selected)" counter updates. **You must not be able to find a CEA
@@ -784,6 +784,81 @@ and a student with none (e.g. `angel.garcia@psu.edu.ph`).
 
 **Pass criteria:** no page, button or link lets a student book or cancel; the
 removed URLs are 404; the Next Appointment card stays visible and read-only.
+
+---
+
+## E2E-14 — The College Admin chooses the clinic form (D-62)
+
+**Goal:** the New Batch Request page makes the admin pick one of the two
+official forms first, and the Reason list follows that choice.
+
+**Account:** CCS Admin `admin.ccs@healthpass.test`.
+
+**Steps:**
+
+1. Open **New Batch Request**. → **Expect:** a card on top titled **"Choose
+   the form the clinic will use"** with two tiles — **Medical Assessment Form**
+   on the left, **Medical Clearance** on the right — each with a picture of the
+   form and a short description. The **Reason** dropdown is greyed out and
+   reads "— Choose a form first —".
+2. Press **Tab** until a tile is focused, then use the **arrow keys**. →
+   **Expect:** a visible orange focus ring; the arrow keys move the selection
+   between the two tiles (they are radio buttons).
+3. Click **Medical Clearance**. → **Expect:** the tile gets an orange border
+   and a check mark; the Reason dropdown turns on and lists exactly **Field
+   Trip/Educational Tour, Outbound Activities, Others, Specify**.
+4. Pick **Others, Specify** and type an event in "Please specify". → **Expect:**
+   the box stops accepting text at 120 characters.
+5. Click **Medical Assessment Form**. → **Expect:** the Reason resets to
+   "— Select a reason —", the specify box disappears (and is empty if you pick
+   Others again), and the list is exactly **Off Campus Procedure, Sports
+   Activities, On-the-job Training, Related Learning Experience, Others,
+   Specify**.
+6. *(Developer-assisted, optional.)* Pick **On-the-job Training**, a date and
+   a start hour but **no** student, remove the Submit button's `disabled`
+   attribute in devtools and click it. → **Expect:** the page comes back with
+   an error, **Medical Assessment Form** still chosen and **On-the-job
+   Training** still selected.
+7. Select a student and **Submit**. → **Expect:** the confirmation screen shows
+   **Form: Medical Assessment Form** and **Reason: On-the-job Training**. Batch
+   Tracking shows a **Form Type** column just before **Reason**.
+8. Repeat step 1–3 at phone width (~390 px). → **Expect:** the two tiles stack
+   one above the other, nothing is cut off.
+
+**Pass criteria:** no reason can be picked before a form; each form offers only
+its own reasons, worded exactly as on the paper; switching forms clears the
+reason; the choice survives a failed submit and appears on the confirmation and
+tracking pages.
+
+---
+
+## E2E-15 — The Director sees each batch's form (D-62)
+
+**Goal:** Batch Approvals tells the Director which form a batch uses before
+they approve or reject it.
+
+**Account:** Director `director@healthpass.test` (after `migrate:fresh --seed`,
+which seeds pending batches on both forms).
+
+**Steps:**
+
+1. Open **Batch Approvals**. → **Expect:** a **Form Type** column placed
+   **immediately before Reason**; the seeded pending batches show **Medical
+   Assessment Form** (BR-2026-901, "On-the-job Training") and **Medical
+   Clearance** (BR-2026-902, "Field Trip/Educational Tour").
+2. Click **Approve** on BR-2026-902. → **Expect:** the modal carries a line
+   **Form: Medical Clearance**. Cancel.
+3. Click **Reject** on BR-2026-901. → **Expect:** the modal carries **Form:
+   Medical Assessment Form**. Cancel.
+4. Narrow the window to phone width. → **Expect:** the table scrolls sideways
+   and the Form Type column is still there, before Reason.
+5. Log in as the nurse and open the **Live Queue** with a visit captured on
+   each form. → **Expect:** each row shows a small **Clearance** or
+   **Assessment** badge next to the student's name, and the encode page header
+   shows the form name and the purpose read-only (no purpose dropdown).
+
+**Pass criteria:** the Form Type column sits right before Reason, both modals
+name the form, and the nurse sees the same form on the queue and encode page.
 
 ---
 

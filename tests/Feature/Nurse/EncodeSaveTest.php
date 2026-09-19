@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Nurse;
 
 use App\Models\Appointment;
+use App\Models\BatchRequest;
 use App\Models\ClearanceRecord;
 use App\Models\ClinicVisit;
 use App\Models\College;
@@ -160,16 +161,23 @@ class EncodeSaveTest extends TestCase
         $this->assertDatabaseCount('clearance_records', 0);
     }
 
-    public function test_purpose_must_come_from_the_locked_list(): void
+    public function test_a_posted_purpose_is_ignored_on_a_visit_with_no_batch(): void
     {
+        // D-62: no purpose rule — a posted purpose never reaches validated(),
+        // so it cannot be saved; with no batch the record's purpose is NULL.
         $visit = $this->makeVisit();
 
         $this->save($this->nurse(), $visit, [
             'result' => 'Fit',
             'purpose' => 'Vacation',
-        ])->assertSessionHasErrors(['purpose']);
+            'purpose_other' => 'tampered',
+        ])->assertSessionHasNoErrors();
 
-        $this->assertDatabaseCount('clearance_records', 0);
+        $this->assertDatabaseHas('clearance_records', [
+            'clinic_visit_id' => $visit->id,
+            'purpose' => null,
+            'purpose_other' => null,
+        ]);
     }
 
     public function test_invalid_physical_sign_value_is_blocked(): void
@@ -232,14 +240,12 @@ class EncodeSaveTest extends TestCase
 
         $this->save($nurse, $visit, [
             'result' => 'Unfit',
-            'purpose' => 'On-the-job Training',
             'nurse_notes' => 'Advised rest and follow-up in one week.',
         ])->assertRedirect(route('nurse.queue'));
 
         $this->assertDatabaseHas('clearance_records', [
             'clinic_visit_id' => $visit->id,
             'result' => 'Unfit',
-            'purpose' => 'On-the-job Training',
             'nurse_notes' => 'Advised rest and follow-up in one week.',
         ]);
     }
@@ -345,68 +351,69 @@ class EncodeSaveTest extends TestCase
             ->assertDontSeeText('Pending');
     }
 
-    // ── 7. "Others, Specify" purpose ──────────────────────────────────────────
+    // ── 7. D-62: the batch reason is the purpose ──────────────────────────────
 
-    public function test_others_purpose_saves_with_its_specify_text(): void
+    /** A batch appointment with this form + reason (and specify text). */
+    private function batchAppointment(string $formType, string $reason, ?string $detail = null): Appointment
     {
-        $visit = $this->makeVisit();
+        static $seq = 1;
 
-        $this->save($this->nurse(), $visit, [
-            'result' => 'Fit',
-            'purpose' => ClearanceRecord::PURPOSE_OTHERS,
-            'purpose_other' => 'Regional quiz bee at PSU Lubao',
-        ])->assertRedirect(route('nurse.queue'));
+        $batch = BatchRequest::create([
+            'reference_no' => sprintf('BR-2026-%03d', $seq++),
+            'college_id' => $this->college()->id,
+            'requested_by' => $this->nurse()->id,
+            'form_type' => $formType,
+            'reason' => $reason,
+            'reason_detail' => $detail,
+            'service_type' => 'medical',
+            'requested_date' => today()->toDateString(),
+            'scheduled_date' => today()->toDateString(),
+            'status' => 'approved',
+        ]);
 
-        $this->assertDatabaseHas('clearance_records', [
-            'clinic_visit_id' => $visit->id,
-            'purpose' => 'Others',
-            'purpose_other' => 'Regional quiz bee at PSU Lubao',
+        return Appointment::factory()->medical()->create([
+            'source' => 'batch',
+            'batch_request_id' => $batch->id,
         ]);
     }
 
-    public function test_others_purpose_without_specify_text_is_blocked(): void
+    public function test_save_copies_the_batch_reason_label_as_the_purpose(): void
     {
-        $visit = $this->makeVisit();
+        $visit = $this->makeVisit($this->batchAppointment('assessment', 'ojt'));
 
-        $this->save($this->nurse(), $visit, [
-            'result' => 'Fit',
-            'purpose' => ClearanceRecord::PURPOSE_OTHERS,
-        ])->assertSessionHasErrors('purpose_other');
-
-        $this->assertDatabaseCount('clearance_records', 0);
-    }
-
-    public function test_stray_specify_text_is_dropped_for_a_listed_purpose(): void
-    {
-        // The nurse typed a specify text, then switched back to a listed
-        // purpose — prepareForValidation clears the leftover.
-        $visit = $this->makeVisit();
-
-        $this->save($this->nurse(), $visit, [
-            'result' => 'Fit',
-            'purpose' => 'Sports Activities',
-            'purpose_other' => 'leftover text',
-        ])->assertRedirect(route('nurse.queue'));
+        $this->save($this->nurse(), $visit, ['result' => 'Fit'])
+            ->assertRedirect(route('nurse.queue'));
 
         $this->assertDatabaseHas('clearance_records', [
             'clinic_visit_id' => $visit->id,
-            'purpose' => 'Sports Activities',
+            'purpose' => 'On-the-job Training',
             'purpose_other' => null,
         ]);
     }
 
-    // ── 8. D-28 purpose carry-through from booking ────────────────────────────
-
-    public function test_booking_purpose_carries_onto_the_clearance_record(): void
+    public function test_an_others_batch_copies_its_specify_text(): void
     {
-        // The student chose the purpose at booking, so the encode screen hid its
-        // own purpose input — the payload carries no purpose. The controller must
-        // copy the appointment's choice onto the clearance record for the print.
-        $appointment = Appointment::factory()->withPurpose('Field Trip/Educational Tour')->create();
-        $visit = $this->makeVisit($appointment);
+        $visit = $this->makeVisit($this->batchAppointment('clearance', 'others', 'Regional quiz bee at PSU Lubao'));
 
-        $this->save($this->nurse(), $visit, ['result' => 'Fit'])
-            ->assertRedirect(route('nurse.queue'));
+        $this->save($this->nurse(), $visit, ['result' => 'Fit']);
+
+        $this->assertDatabaseHas('clearance_records', [
+            'clinic_visit_id' => $visit->id,
+            'purpose' => 'Others, Specify',
+            'purpose_other' => 'Regional quiz bee at PSU Lubao',
+        ]);
+    }
+
+    public function test_a_posted_purpose_never_overrides_the_batch(): void
+    {
+        // A crafted request cannot re-pick the purpose the college chose.
+        $visit = $this->makeVisit($this->batchAppointment('clearance', 'fieldtrip'));
+
+        $this->save($this->nurse(), $visit, [
+            'result' => 'Fit',
+            'purpose' => 'On-the-job Training',
+            'purpose_other' => 'tampered',
+        ])->assertSessionHasNoErrors();
 
         $this->assertDatabaseHas('clearance_records', [
             'clinic_visit_id' => $visit->id,
@@ -415,74 +422,34 @@ class EncodeSaveTest extends TestCase
         ]);
     }
 
-    public function test_booking_others_purpose_carries_with_its_specify_text(): void
+    public function test_the_batch_purpose_reaches_the_printed_form(): void
     {
-        $appointment = Appointment::factory()
-            ->withPurpose(ClearanceRecord::PURPOSE_OTHERS, 'Regional quiz bee at PSU Lubao')
-            ->create();
-        $visit = $this->makeVisit($appointment);
-
-        $this->save($this->nurse(), $visit, ['result' => 'Fit'])
-            ->assertRedirect(route('nurse.queue'));
-
-        $this->assertDatabaseHas('clearance_records', [
-            'clinic_visit_id' => $visit->id,
-            'purpose' => 'Others',
-            'purpose_other' => 'Regional quiz bee at PSU Lubao',
-        ]);
-    }
-
-    public function test_booking_purpose_is_authoritative_over_a_submitted_purpose(): void
-    {
-        // Defense in depth: even if a purpose somehow rides the encode POST, the
-        // student's booking choice wins — the nurse never re-picks it here.
-        $appointment = Appointment::factory()->withPurpose('Sports Activities')->create();
-        $visit = $this->makeVisit($appointment);
-
-        $this->save($this->nurse(), $visit, [
-            'result' => 'Fit',
-            'purpose' => 'On-the-job Training',
-            'purpose_other' => 'tampered',
-        ])->assertRedirect(route('nurse.queue'));
-
-        $this->assertDatabaseHas('clearance_records', [
-            'clinic_visit_id' => $visit->id,
-            'purpose' => 'Sports Activities',
-            'purpose_other' => null,
-        ]);
-    }
-
-    public function test_booking_purpose_reaches_the_printed_form(): void
-    {
-        // End-to-end (D-28): appointment purpose → clearance record → print,
-        // with zero print-template changes.
         $nurse = $this->nurse();
-        $appointment = Appointment::factory()->withPurpose('Off Campus Procedure')->create();
-        $visit = $this->makeVisit($appointment);
+        $visit = $this->makeVisit($this->batchAppointment('clearance', 'outbound'));
 
         $this->save($nurse, $visit, ['result' => 'Fit']);
 
-        $this->actingAs($nurse)
+        $html = $this->actingAs($nurse)
             ->get(route('nurse.visits.print', $visit))
             ->assertOk()
-            ->assertSee('Off Campus Procedure');
+            ->getContent();
+
+        // The saved label's bubble is the shaded one.
+        $this->assertMatchesRegularExpression('~<span class="bb">●</span> Outbound Activities~', $html);
     }
 
-    public function test_purposeless_appointment_falls_back_to_the_nurse_entered_purpose(): void
+    public function test_the_print_preview_uses_the_batch_purpose_too(): void
     {
-        // Batch-booked / pre-D-28 appointments carry no purpose → the encode
-        // dropdown still applies and the nurse's choice is saved.
-        $appointment = Appointment::factory()->medical()->create(); // purpose null
-        $visit = $this->makeVisit($appointment);
+        // Preview & Print (before save) must show exactly what Save stores.
+        $nurse = $this->nurse();
+        $visit = $this->makeVisit($this->batchAppointment('clearance', 'others', 'Quiz bee'));
 
-        $this->save($this->nurse(), $visit, [
-            'result' => 'Fit',
-            'purpose' => 'On-the-job Training',
-        ])->assertRedirect(route('nurse.queue'));
+        $html = $this->actingAs($nurse)
+            ->post(route('nurse.visits.print.preview', $visit), ['result' => 'Fit', 'purpose' => 'On-the-job Training'])
+            ->assertOk()
+            ->getContent();
 
-        $this->assertDatabaseHas('clearance_records', [
-            'clinic_visit_id' => $visit->id,
-            'purpose' => 'On-the-job Training',
-        ]);
+        $this->assertMatchesRegularExpression('~<span class="bb">●</span> Others, Specify:~', $html);
+        $this->assertStringContainsString('Quiz bee', $html);
     }
 }

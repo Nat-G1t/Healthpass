@@ -10,9 +10,11 @@ use Illuminate\Validation\Rule;
 
 /**
  * FR-NRS-04 / BR-16 — the Save & Close payload: `result` (Fit/Unfit) is the
- * one required field; purpose is optional but must come from the locked PRD
- * list (the model constants — SQLite in tests doesn't enforce the MySQL
- * enums, so validation is the real gate).
+ * one required field.
+ *
+ * There is deliberately NO purpose rule (D-62): the purpose is the batch
+ * reason, which EncodeController copies from the batch itself. A posted
+ * `purpose` is not validated, so it never reaches validated() and is ignored.
  */
 class StoreClearanceRequest extends FormRequest
 {
@@ -22,28 +24,11 @@ class StoreClearanceRequest extends FormRequest
         return true;
     }
 
-    /**
-     * prepareForValidation runs before the rules: a Form Request hook for
-     * normalizing input. Here it drops a stray specify-text unless the
-     * purpose actually is Others — e.g. the nurse typed one, then switched
-     * back to a listed purpose before saving.
-     */
-    protected function prepareForValidation(): void
-    {
-        if ($this->input('purpose') !== ClearanceRecord::PURPOSE_OTHERS) {
-            $this->merge(['purpose_other' => null]);
-        }
-    }
-
     /** @return array<string, mixed> */
     public function rules(): array
     {
         $rules = [
             'result' => ['required', Rule::in(['Fit', 'Unfit'])],
-            // The four locked purposes plus the form's "Others, Specify" line;
-            // picking Others requires the specify text.
-            'purpose' => ['nullable', Rule::in([...ClearanceRecord::PURPOSES, ClearanceRecord::PURPOSE_OTHERS])],
-            'purpose_other' => ['nullable', 'required_if:purpose,'.ClearanceRecord::PURPOSE_OTHERS, 'string', 'max:120'],
             // max keeps runaway notes from breaking the one-page print (FR-PRT).
             'nurse_notes' => ['nullable', 'string', 'max:2000'],
             // Set to 1 by the encode screen once Preview & Print has fired, so
@@ -68,7 +53,6 @@ class StoreClearanceRequest extends FormRequest
         return [
             'result.required' => 'Select Fit or Unfit before saving.',
             'result.in' => 'Result must be Fit or Unfit.',
-            'purpose_other.required_if' => 'Specify the event for an "Others" purpose.',
         ];
     }
 }

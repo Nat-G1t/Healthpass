@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Admin;
 
 use App\Models\Appointment;
+use App\Models\BatchRequest;
 use App\Models\College;
 use App\Models\StudentProfile;
 use App\Models\User;
@@ -47,6 +48,7 @@ class BatchRequestCreateTest extends TestCase
         $student = StudentProfile::factory()->forCollege($this->ccs)->create();
 
         return array_merge([
+            'form_type' => 'assessment',
             'reason' => 'ojt',
             'requested_date' => now()->addDays(7)->toDateString(),
             'requested_time' => '07:00:00', // D-37: start hour of the batch span
@@ -62,9 +64,121 @@ class BatchRequestCreateTest extends TestCase
             ->get('/admin/batches/create')
             ->assertOk()
             ->assertSee('New Batch Request')
-            ->assertSee('Submit Batch Request')
-            ->assertSee('Graduation Clearance')
-            ->assertSee('Field Trip / Educational Tour');
+            ->assertSee('Submit Batch Request');
+    }
+
+    // ── D-62: the form chooser ───────────────────────────────────────────────
+
+    public function test_create_page_renders_both_form_tiles_and_a_disabled_reason_select(): void
+    {
+        $response = $this->actingAs($this->admin)
+            ->get('/admin/batches/create')
+            ->assertOk()
+            ->assertSee('Choose the form the clinic will use')
+            // Assessment tile first (left), clearance second (right) — the mock-up.
+            ->assertSeeInOrder(['data-form-tile="assessment"', 'data-form-tile="clearance"'], false)
+            ->assertSee('images/forms/medical-assessment-preview.png', false)
+            ->assertSee('images/forms/medical-clearance-preview.png', false)
+            ->assertSee('Medical Assessment Form')
+            ->assertSee('Medical Clearance');
+
+        // The reason select is rendered disabled until a form is chosen.
+        // ` disabled="disabled"` — the real attribute, not the Tailwind
+        // `disabled:` classes or Alpine's `x-bind:disabled`.
+        $this->assertMatchesRegularExpression('/<select[^>]*name="reason"[^>]*\sdisabled="disabled"/s', $response->getContent());
+    }
+
+    public function test_the_reason_select_is_enabled_when_old_input_restores_a_form(): void
+    {
+        // After a failed submit old() brings the form back, so the select must
+        // not start disabled (Alpine would enable it anyway, but no flash).
+        $response = $this->actingAs($this->admin)
+            ->withSession(['_old_input' => ['form_type' => 'clearance', 'reason' => 'outbound']])
+            ->get('/admin/batches/create')
+            ->assertOk()
+            ->assertSee("formType:      'clearance'", false);
+
+        $this->assertDoesNotMatchRegularExpression('/<select[^>]*name="reason"[^>]*\sdisabled="disabled"/s', $response->getContent());
+    }
+
+    public function test_the_form_type_is_required(): void
+    {
+        $this->actingAs($this->admin)
+            ->post('/admin/batches', $this->validPayload(['form_type' => null]))
+            ->assertSessionHasErrors(['form_type', 'reason']);
+    }
+
+    public function test_an_unknown_form_type_is_rejected(): void
+    {
+        $this->actingAs($this->admin)
+            ->post('/admin/batches', $this->validPayload(['form_type' => 'dental']))
+            ->assertSessionHasErrors('form_type');
+    }
+
+    public function test_an_array_form_type_is_a_validation_error_not_a_crash(): void
+    {
+        $this->actingAs($this->admin)
+            ->post('/admin/batches', $this->validPayload(['form_type' => ['clearance']]))
+            ->assertSessionHasErrors(['form_type', 'reason']);
+    }
+
+    public function test_a_reason_from_the_other_form_is_rejected(): void
+    {
+        // 'fieldtrip' is a Medical Clearance purpose, not an Assessment one.
+        $this->actingAs($this->admin)
+            ->post('/admin/batches', $this->validPayload(['form_type' => 'assessment', 'reason' => 'fieldtrip']))
+            ->assertSessionHasErrors('reason');
+
+        $this->actingAs($this->admin)
+            ->post('/admin/batches', $this->validPayload(['form_type' => 'clearance', 'reason' => 'ojt']))
+            ->assertSessionHasErrors('reason');
+    }
+
+    public function test_a_retired_pre_d62_reason_is_rejected(): void
+    {
+        $this->actingAs($this->admin)
+            ->post('/admin/batches', $this->validPayload(['form_type' => 'clearance', 'reason' => 'graduation']))
+            ->assertSessionHasErrors('reason');
+    }
+
+    public function test_every_reason_of_each_form_is_accepted(): void
+    {
+        foreach (BatchRequest::REASONS_BY_FORM as $formType => $reasons) {
+            foreach (array_keys($reasons) as $reason) {
+                $this->actingAs($this->admin)
+                    ->post('/admin/batches', $this->validPayload([
+                        'form_type' => $formType,
+                        'reason' => $reason,
+                        'reason_detail' => $reason === 'others' ? 'Regional quiz bee' : null,
+                    ]))
+                    ->assertSessionHasNoErrors();
+            }
+        }
+
+        $this->assertSame(8, BatchRequest::count());
+    }
+
+    public function test_the_specify_text_is_capped_at_120_characters(): void
+    {
+        $this->actingAs($this->admin)
+            ->post('/admin/batches', $this->validPayload(['reason' => 'others', 'reason_detail' => str_repeat('x', 121)]))
+            ->assertSessionHasErrors('reason_detail');
+
+        $this->actingAs($this->admin)
+            ->post('/admin/batches', $this->validPayload(['reason' => 'others', 'reason_detail' => str_repeat('x', 120)]))
+            ->assertSessionHasNoErrors();
+    }
+
+    public function test_the_chosen_form_type_is_stored(): void
+    {
+        $this->actingAs($this->admin)
+            ->post('/admin/batches', $this->validPayload(['form_type' => 'clearance', 'reason' => 'outbound']))
+            ->assertSessionHasNoErrors();
+
+        $batch = BatchRequest::sole();
+        $this->assertSame('clearance', $batch->form_type);
+        $this->assertSame('outbound', $batch->reason);
+        $this->assertSame('Outbound Activities', $batch->reasonText());
     }
 
     public function test_create_page_lists_only_own_college_students(): void
@@ -153,7 +267,7 @@ class BatchRequestCreateTest extends TestCase
     {
         $this->actingAs($this->admin)
             ->post('/admin/batches', [])
-            ->assertSessionHasErrors(['reason', 'requested_date', 'students']);
+            ->assertSessionHasErrors(['form_type', 'reason', 'requested_date', 'students']);
     }
 
     // ── D-29: the admin proposes the clinic date ─────────────────────────────
@@ -204,7 +318,8 @@ class BatchRequestCreateTest extends TestCase
         // Form Request nulls it before validation (mirrors D-28 booking).
         $this->actingAs($this->admin)
             ->post('/admin/batches', $this->validPayload([
-                'reason' => 'graduation',
+                'form_type' => 'clearance',
+                'reason' => 'fieldtrip',
                 'reason_detail' => 'stray text that should be ignored',
             ]))
             ->assertSessionHasNoErrors();
@@ -276,12 +391,13 @@ class BatchRequestCreateTest extends TestCase
 
         $this->actingAs($this->admin)
             ->post('/admin/batches', [
-                'reason' => 'graduation',
+                'form_type' => 'clearance',
+                'reason' => 'fieldtrip',
                 'requested_date' => now()->addDays(7)->toDateString(),
                 'requested_time' => '07:00:00',
                 'students' => $students->pluck('id')->all(),
             ])
             ->assertSessionHasNoErrors()
-            ->assertRedirect(route('admin.batches.confirmation', \App\Models\BatchRequest::sole()));
+            ->assertRedirect(route('admin.batches.confirmation', BatchRequest::sole()));
     }
 }

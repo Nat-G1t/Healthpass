@@ -56,7 +56,9 @@ class ClinicVisit extends Model
     {
         return $query
             ->where('status', 'captured')
-            ->with(['student:id,name', 'college:id,name', 'vitalSigns'])
+            // appointment.batchRequest: the D-62 form-type badge on every row,
+            // loaded here so the page and the feed never query per row (N+1).
+            ->with(['student:id,name', 'college:id,name', 'vitalSigns', 'appointment:id,batch_request_id', 'appointment.batchRequest:id,form_type'])
             ->orderBy('checked_in_at')
             ->orderBy('id');
     }
@@ -77,6 +79,39 @@ class ClinicVisit extends Model
                 ->orWhere('is_temp_flagged', true)
                 ->orWhere('is_bmi_flagged', true);
         });
+    }
+
+    // ── D-62 form type ───────────────────────────────────────────────────────
+
+    /**
+     * Which official form this visit follows — 'clearance' or 'assessment' —
+     * read from the batch that scheduled it (appointment → batchRequest).
+     * A legacy visit with no batch behind it used the Medical Clearance.
+     *
+     * No snapshot column: a batch's form type cannot change once submitted.
+     * Callers that loop over visits eager-load `appointment.batchRequest`.
+     */
+    public function formType(): string
+    {
+        return $this->appointment?->batchRequest?->form_type ?? 'clearance';
+    }
+
+    /**
+     * The purpose the clearance record stores (D-62): the batch reason's
+     * printed LABEL in `purpose`, the admin's specify text in
+     * `purpose_other`. Both NULL for a visit with no batch. Shared by Save &
+     * Close and Preview & Print, so what previews is exactly what saves.
+     *
+     * @return array{purpose: ?string, purpose_other: ?string}
+     */
+    public function batchPurpose(): array
+    {
+        $batch = $this->appointment?->batchRequest;
+
+        return [
+            'purpose' => $batch?->reasonLabel(),
+            'purpose_other' => $batch?->reason === BatchRequest::REASON_OTHERS ? $batch->reason_detail : null,
+        ];
     }
 
     // ── Relationships ────────────────────────────────────────────────────────
