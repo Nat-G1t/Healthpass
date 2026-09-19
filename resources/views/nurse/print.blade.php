@@ -178,6 +178,8 @@
         border-bottom: 1px solid #1a1a1a;
         padding: 0 8px;
     }
+    /* D-64: nurse-encoded — an empty ruled line the width of a printed name. */
+    .physician .name.blank { min-width: 220px; height: 1.2em; }
     .physician .title { font-size: 10pt; margin-top: 2px; }
     .print-date { margin: 10px 0 0 34px; }
 
@@ -364,13 +366,20 @@
             <span class="line" style="max-width: 180px; font-size: 8.5pt; white-space: nowrap; overflow: hidden; vertical-align: bottom; min-width: 120px;">{{ $isOthers ? $record->purpose_other : '' }}</span></li>
     </ul>
 
-    {{-- ── Physician block — pre-printed identity, blank line for wet signing
-         (FR-PRT-04 / BR-17); values come from the record, whose DB defaults
-         are the single source (§7.5). Date = encode date (FR-PRT-02). ──────── --}}
+    {{-- ── Physician block — blank line for wet signing (FR-PRT-04 / BR-17).
+         D-64: the name and license print only when a physician's own account
+         encoded the record; a nurse's record (both NULL) prints a blank name
+         line and a blank license for the physician to fill in by hand.
+         Date = encode date (FR-PRT-02). ──────────────────────────────────── --}}
     <div class="physician">
         <div class="sig-space"></div>
-        <div class="name">{{ $record->physician_name }}</div>
-        <div class="title">University Physician<br>License No. {{ $record->physician_license_no }}</div>
+        @if ($record->physician_name)
+            <div class="name">{{ $record->physician_name }}</div>
+            <div class="title">University Physician<br>License No. {{ $record->physician_license_no }}</div>
+        @else
+            <div class="name blank"></div>
+            <div class="title">University Physician<br>License No. ________</div>
+        @endif
     </div>
 
     <div class="print-date">

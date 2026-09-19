@@ -200,7 +200,7 @@ class EncodePageTest extends TestCase
             ->assertSee('Fit')
             ->assertSee('Unfit')
             ->assertSee('Purpose')
-            ->assertSee('Nurse Notes')
+            ->assertSee('Clinic Notes')
             ->assertSee('Preview & Print')
             ->assertSee('Save & Close')
             ->assertDontSee('Reprint');

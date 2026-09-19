@@ -6,8 +6,10 @@ namespace Tests\Feature\Seeders;
 
 use App\Models\Appointment;
 use App\Models\BatchRequestStudent;
+use App\Models\ClearanceRecord;
 use App\Models\ClinicVisit;
 use App\Models\College;
+use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\DemoClinicVisitSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -96,6 +98,21 @@ class DemoClinicVisitSeederTest extends TestCase
     {
         $this->assertGreaterThan(0, ClinicVisit::count());
         $this->assertSame(0, ClinicVisit::whereNull('appointment_id')->count());
+    }
+
+    /** D-64: the physician is seeded, and their records carry the printed block. */
+    public function test_a_share_of_records_is_encoded_by_the_physician(): void
+    {
+        $physician = User::where('role', 'physician')->sole();
+        $this->assertSame('60252', $physician->license_number);
+
+        $byPhysician = ClearanceRecord::where('encoded_by', $physician->id);
+        $this->assertGreaterThan(0, (clone $byPhysician)->count());
+        $this->assertSame(0, (clone $byPhysician)->where('physician_name', '!=', 'REYNALDO S. ALIPIO, MD')->count());
+
+        // Everyone else's records leave the block blank.
+        $this->assertGreaterThan(0, ClearanceRecord::where('encoded_by', '!=', $physician->id)->count());
+        $this->assertSame(0, ClearanceRecord::where('encoded_by', '!=', $physician->id)->whereNotNull('physician_name')->count());
     }
 
     public function test_demo_seeder_is_idempotent(): void

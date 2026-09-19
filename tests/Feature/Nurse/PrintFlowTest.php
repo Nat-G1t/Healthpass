@@ -136,12 +136,24 @@ class PrintFlowTest extends TestCase
             ->assertOk()
             ->assertSee('MEDICAL CLEARANCE')
             ->assertSee('Preview-only observation.')
-            // Physician block filled from the model constants, not DB defaults
-            // (the transient record was never saved).
-            ->assertSee(ClearanceRecord::PHYSICIAN_NAME)
-            ->assertSee('License No. '.ClearanceRecord::PHYSICIAN_LICENSE_NO)
+            // D-64: a nurse is previewing, so the physician block is blank.
+            ->assertSee('License No. ________')
+            ->assertDontSee(', MD')
             // The marker the encode screen's print script keys on.
             ->assertSee('data-hp-print-doc', false);
+    }
+
+    public function test_a_physician_preview_prints_their_own_name_and_license(): void
+    {
+        $visit = $this->makeVisit();
+        $physician = User::factory()->physician('Ana B. Cruz', '123456')->create();
+
+        // Same rule as Save & Close, applied to the signed-in user (D-64).
+        $this->actingAs($physician)
+            ->post(route('nurse.visits.print.preview', $visit), ['result' => 'Fit'])
+            ->assertOk()
+            ->assertSee('ANA B. CRUZ, MD')
+            ->assertSee('License No. 123456');
     }
 
     public function test_preview_shades_the_posted_result_and_physical_signs(): void

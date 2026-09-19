@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Director;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Director\StoreStaffAccountRequest;
 use App\Http\Requests\Director\UpdateStaffCollegeRequest;
+use App\Http\Requests\Director\UpdateStaffLicenseRequest;
 use App\Jobs\SendStaffAccountCreatedMail;
 use App\Jobs\SendStaffTransferredMail;
 use App\Models\College;
@@ -27,13 +28,15 @@ use Illuminate\View\View;
  * ALONGSIDE the seeder; the seeder is unchanged and stays the bootstrap for the
  * very first Director account.
  *
- * D-47 gives the Director super-admin CAPABILITIES rather than adding a fifth
- * role: users.role stays the four-value enum FR-AUTH-02 mandates, so this
- * feature needs no migration at all.
+ * D-47 gives the Director super-admin CAPABILITIES rather than a role of its
+ * own. D-64 later added `physician` to users.role (now five values); the
+ * Director provisions physicians here, with a license number, and can correct
+ * that license afterwards.
  *
  * Three rules run through everything below:
  *
- *  1. ANTI-ESCALATION — only college_admin and nurse can be created or touched.
+ *  1. ANTI-ESCALATION — only college_admin, nurse and physician can be created
+ *     or touched.
  *     Never another director, never a student. Enforced server-side in
  *     StoreStaffAccountRequest and in guardManageable(), not by the UI.
  *  2. ONE CREDENTIAL PATH — the joining password is generated exactly as
@@ -59,7 +62,7 @@ class StaffAccountController extends Controller
      *
      * @var list<string>
      */
-    public const MANAGEABLE_ROLES = ['college_admin', 'nurse'];
+    public const MANAGEABLE_ROLES = ['college_admin', 'nurse', 'physician'];
 
     /** The staff roster, plus the one-time credential if one was just issued. */
     public function index(): View
@@ -82,7 +85,7 @@ class StaffAccountController extends Controller
         ]);
     }
 
-    /** Create a College Admin or Nurse and issue their one-time password. */
+    /** Create a College Admin, Nurse or Physician and issue their one-time password. */
     public function store(StoreStaffAccountRequest $request): RedirectResponse
     {
         $validated = $request->validated();
@@ -101,6 +104,10 @@ class StaffAccountController extends Controller
             // a nurse never carries a managed college.
             'managed_college_id' => $validated['role'] === 'college_admin'
                 ? $validated['managed_college_id']
+                : null,
+            // Same belt and braces: only a physician carries a license (D-64).
+            'license_number' => $validated['role'] === 'physician'
+                ? $validated['license_number']
                 : null,
             'status' => 'active',
             'must_change_password' => true,
@@ -185,6 +192,25 @@ class StaffAccountController extends Controller
         return redirect()
             ->route('director.staff.index')
             ->with('status', $user->name.' now manages '.$to->code.'. They have been emailed about the change.');
+    }
+
+    /**
+     * Correct a physician's license number (D-64). Records they already
+     * encoded keep the license copied at encode time; only new ones change.
+     */
+    public function license(UpdateStaffLicenseRequest $request, User $user): RedirectResponse
+    {
+        $this->guardManageable($request, $user);
+
+        // Only a physician has a license — refuse rather than write the column
+        // onto a nurse or a college admin.
+        abort_unless($user->isPhysician(), 403);
+
+        $user->update(['license_number' => $request->validated()['license_number']]);
+
+        return redirect()
+            ->route('director.staff.index')
+            ->with('status', "{$user->name}'s license number is now {$user->license_number}. Records they encode from now on print it.");
     }
 
     /**

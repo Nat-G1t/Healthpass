@@ -12,6 +12,7 @@ use App\Models\VitalSigns;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Route;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -78,6 +79,7 @@ class StaffAccountTest extends TestCase
             ]],
             ['patch', route('director.staff.status', $target), ['status' => 'inactive']],
             ['patch', route('director.staff.college', $target), ['managed_college_id' => $this->coe->id]],
+            ['patch', route('director.staff.license', $target), ['license_number' => '123456']],
         ];
     }
 
@@ -279,7 +281,12 @@ class StaffAccountTest extends TestCase
             ->patch(route('director.staff.college', $other), ['managed_college_id' => $this->ccs->id])
             ->assertForbidden();
 
+        $this->actingAs($this->director)
+            ->patch(route('director.staff.license', $other), ['license_number' => '123456'])
+            ->assertForbidden();
+
         $this->assertSame('active', $other->refresh()->status);
+        $this->assertNull($other->license_number);
     }
 
     public function test_a_student_cannot_be_targeted_by_the_write_endpoints(): void
@@ -624,5 +631,137 @@ class StaffAccountTest extends TestCase
         $this->assertTrue($positions['Bianca Admin'] < $positions['Yolanda Admin']);
         $this->assertTrue($positions['Yolanda Admin'] < $positions['Abel Nurse']);
         $this->assertTrue($positions['Abel Nurse'] < $positions['Zena Nurse']);
+    }
+
+    // ── Physicians (D-64) ────────────────────────────────────────────────────
+
+    public function test_director_can_create_a_physician_with_a_license(): void
+    {
+        [$physician] = $this->createAccount([
+            'role' => 'physician',
+            'name' => 'Ana B. Cruz',
+            'email' => 'physician2@dhvsu.edu.ph',
+            'license_number' => '0123456',
+        ]);
+
+        $this->assertSame('physician', $physician->role);
+        $this->assertSame('0123456', $physician->license_number);
+        $this->assertNull($physician->managed_college_id);
+        $this->assertTrue($physician->must_change_password);
+    }
+
+    /** @return array<string, array{0: array<string, mixed>, 1: string}> */
+    public static function badPhysicianPayloads(): array
+    {
+        return [
+            'physician without a license' => [['role' => 'physician'], 'license_number'],
+            'license with letters' => [['role' => 'physician', 'license_number' => 'PRC60252'], 'license_number'],
+            'license too short' => [['role' => 'physician', 'license_number' => '123'], 'license_number'],
+            'license too long' => [['role' => 'physician', 'license_number' => '12345678901'], 'license_number'],
+            'license on a nurse' => [['role' => 'nurse', 'license_number' => '60252'], 'license_number'],
+            'license on a college admin' => [['role' => 'college_admin', 'managed_college_id' => 1, 'license_number' => '60252'], 'license_number'],
+            'physician with a college' => [['role' => 'physician', 'license_number' => '60252', 'managed_college_id' => 1], 'managed_college_id'],
+            'director is still refused' => [['role' => 'director'], 'role'],
+        ];
+    }
+
+    /**
+     * A data provider feeds the same test several input sets — each row above
+     * runs as its own case, named by its key.
+     */
+    #[DataProvider('badPhysicianPayloads')]
+    public function test_invalid_physician_input_is_rejected(array $payload, string $errorField): void
+    {
+        $this->actingAs($this->director)
+            ->post(route('director.staff.store'), [
+                'name' => 'Bad Input',
+                'email' => 'bad.input@dhvsu.edu.ph',
+                ...$payload,
+            ])
+            ->assertSessionHasErrors($errorField);
+
+        $this->assertDatabaseMissing('users', ['email' => 'bad.input@dhvsu.edu.ph']);
+    }
+
+    public function test_the_list_shows_a_physicians_license_and_role(): void
+    {
+        User::factory()->physician('Reynaldo S. Alipio', '60252')->create();
+
+        $this->actingAs($this->director)
+            ->get(route('director.staff.index'))
+            ->assertOk()
+            ->assertSee('Reynaldo S. Alipio')
+            ->assertSee('Physician')
+            ->assertSee('License No. 60252')
+            ->assertSee('<option value="physician">Physician</option>', false);
+    }
+
+    public function test_the_director_can_correct_a_physicians_license(): void
+    {
+        $physician = User::factory()->physician(license: '60252')->create();
+
+        $this->actingAs($this->director)
+            ->patch(route('director.staff.license', $physician), ['license_number' => '60253'])
+            ->assertRedirect(route('director.staff.index'))
+            ->assertSessionHas('status');
+
+        $this->assertSame('60253', $physician->refresh()->license_number);
+    }
+
+    public function test_a_bad_license_correction_is_rejected_into_its_own_error_bag(): void
+    {
+        $physician = User::factory()->physician(license: '60252')->create();
+
+        $this->actingAs($this->director)
+            ->from(route('director.staff.index'))
+            ->patch(route('director.staff.license', $physician), ['license_number' => '6O252'])
+            ->assertRedirect(route('director.staff.index'))
+            ->assertSessionHasErrors('license_number', null, 'license');
+
+        $this->assertSame('60252', $physician->refresh()->license_number);
+    }
+
+    public function test_the_license_correction_only_targets_physicians(): void
+    {
+        $student = User::factory()->create(['role' => 'student']);
+
+        foreach ([$this->nurse(), $this->admin(), $student] as $target) {
+            $this->actingAs($this->director)
+                ->patch(route('director.staff.license', $target), ['license_number' => '123456'])
+                ->assertForbidden();
+
+            $this->assertNull($target->refresh()->license_number);
+        }
+    }
+
+    public function test_the_license_correction_has_its_own_throttle_bucket(): void
+    {
+        $physician = User::factory()->physician()->create();
+
+        // 30 per minute on the staff-license bucket…
+        for ($i = 0; $i < 30; $i++) {
+            $this->actingAs($this->director)
+                ->patch(route('director.staff.license', $physician), ['license_number' => (string) (60000 + $i)])
+                ->assertRedirect();
+        }
+        $this->actingAs($this->director)
+            ->patch(route('director.staff.license', $physician), ['license_number' => '70000'])
+            ->assertStatus(429);
+
+        // …which the status endpoint does not share.
+        $this->actingAs($this->director)
+            ->patch(route('director.staff.status', $physician), ['status' => 'inactive'])
+            ->assertRedirect(route('director.staff.index'));
+    }
+
+    public function test_a_physician_is_refused_on_every_endpoint(): void
+    {
+        $target = $this->admin();
+        $physician = User::factory()->physician()->create();
+
+        foreach ($this->endpoints($target) as [$method, $url, $payload]) {
+            $this->actingAs($physician)->{$method}($url, $payload)
+                ->assertRedirect('/nurse/dashboard');
+        }
     }
 }

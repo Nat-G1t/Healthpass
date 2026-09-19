@@ -1,7 +1,7 @@
 {{-- Discreet staff-exit prompt (FR-KSK-16). Hidden until the corner gesture
      (5 taps within ~3 s) opens it; overlays whatever screen is active so a nurse
      can end the session at any point. Reuses the login fields + shared keyboard
-     (state.login) for the nurse's credentials. A valid nurse is authenticated
+     (state.login) for the staff credentials. A valid nurse or physician (D-64) is authenticated
      server-side and the page navigates to the queue; Cancel just dismisses it.
      This is the ONLY way out of /kiosk — students have no nav otherwise. --}}
 <div
@@ -26,7 +26,7 @@
             <span class="w-20"></span>{{-- spacer to keep the badge centred --}}
         </div>
 
-        <p class="text-center text-base text-hp-slate/70">Enter nurse credentials to leave kiosk mode.</p>
+        <p class="text-center text-base text-hp-slate/70">Enter clinic staff credentials to leave kiosk mode.</p>
 
         {{-- ── Fields (stacked full-width for portrait) ─────────────────────── --}}
         <div class="grid w-full grid-cols-1 gap-3">
@@ -37,7 +37,7 @@
                 class="flex flex-col items-start rounded-xl border-2 bg-hp-white px-5 py-3 text-left transition"
                 :class="state.login.field === 'email' ? 'border-hp-orange' : 'border-hp-slate/15'"
             >
-                <span class="text-xs font-semibold uppercase tracking-wider text-hp-slate/50">Nurse Email</span>
+                <span class="text-xs font-semibold uppercase tracking-wider text-hp-slate/50">Staff Email</span>
                 <span
                     class="block min-h-[1.5rem] w-full overflow-x-auto whitespace-nowrap text-base text-hp-slate [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                     x-text="state.login.email || ' '"

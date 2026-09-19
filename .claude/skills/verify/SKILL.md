@@ -16,6 +16,8 @@ MySQL (XAMPP) must already be running — check with `php artisan migrate:status
 
 - `admin.<code>@healthpass.test` — college admin per college (e.g. `admin.coe@`)
 - `nurse@healthpass.test`, `director@healthpass.test`
+- `physician@healthpass.test` — Reynaldo S. Alipio, license 60252 (D-64);
+  same Clinic Dashboard pages as the nurse
 - Students: see `database/seeders/StudentSeeder.php`
 
 ## Browser driving (Playwright)

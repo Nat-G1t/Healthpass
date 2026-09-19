@@ -194,7 +194,7 @@ class AnomaliesPageTest extends TestCase
             ->assertSee('Juan Santos')
             ->assertSee('38.1')
             ->assertSee('Pending encode')
-            ->assertSee('Awaiting nurse encode');
+            ->assertSee('Awaiting clinic encode');
     }
 
     public function test_detail_page_shows_the_encoded_assessment(): void
@@ -207,6 +207,6 @@ class AnomaliesPageTest extends TestCase
             ->assertOk()
             ->assertSee('145/93')
             ->assertSee('Fit')
-            ->assertDontSee('Awaiting nurse encode');
+            ->assertDontSee('Awaiting clinic encode');
     }
 }

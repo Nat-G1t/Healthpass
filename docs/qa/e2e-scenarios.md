@@ -1,4 +1,4 @@
-# HealthPass — End-to-End UAT Scenarios (E2E-1…E2E-13)
+# HealthPass — End-to-End UAT Scenarios (E2E-1…E2E-17)
 
 Source: `docs/HealthPass_PRD.md` §13 (Acceptance & UAT). These are the
 Week-11 end-to-end acceptance runs, written as step-by-step checklists a
@@ -29,7 +29,8 @@ to use, what to click, and what you should see.
 
 | Role | Email | Notes |
 |---|---|---|
-| Nurse | `nurse@healthpass.test` | Dashboard (encode history) + Live Queue + Encode |
+| Nurse | `nurse@healthpass.test` | Clinic Dashboard (encode history) + Live Queue + Encode |
+| Physician (D-64) | `physician@healthpass.test` | Same pages as the nurse; name + license print on records they encode |
 | Clinic Director | `director@healthpass.test` | Approvals + Analytics |
 | CCS College Admin | `admin.ccs@healthpass.test` | Pattern: `admin.<code>@healthpass.test` |
 | CEA College Admin | `admin.cea@healthpass.test` | For cross-college tests |
@@ -866,6 +867,84 @@ which seeds pending batches on both forms).
 
 **Pass criteria:** the Form Type column sits right before Reason, both modals
 name the form, and the nurse sees the same form on the queue and encode page.
+
+---
+
+## E2E-16 — Physician and nurse encodes print different physician blocks (D-64)
+
+**Goal:** the physician's name and license print only on records the physician
+encoded; a nurse's record prints a blank block for the wet signature, and the
+shared history shows who encoded each one.
+
+**Accounts:** Physician `physician@healthpass.test`, Nurse
+`nurse@healthpass.test` (after `migrate:fresh --seed`). You need **two
+captured visits** in the Live Queue — run the kiosk twice (E2E-1 steps) with
+two students who have an appointment today.
+
+**Steps:**
+
+1. Log in as the **physician**. → **Expect:** you land on **Clinic Dashboard**;
+   the sidebar's first item reads **Clinic Dashboard** and the role under your
+   name reads **Physician**. The sidebar also shows Live Queue and Enable Kiosk
+   Mode.
+2. Open **Live Queue** → **Encode Result** on the first visit. → **Expect:** the
+   notes box is labelled **Clinic Notes**.
+3. Choose **Fit**, click **Preview & Print**. → **Expect:** the preview's
+   physician block reads **REYNALDO S. ALIPIO, MD**, "University Physician",
+   **License No. 60252**. Close the print dialog, then **Save & Close**.
+4. Log out and log in as the **nurse**. Encode the second visit (Fit), **Preview
+   & Print**. → **Expect:** the physician block has a **blank name line**,
+   "University Physician" and **License No. ________**. Save & Close.
+5. Still as the nurse, open **Clinic Dashboard**. → **Expect:** the two new rows
+   at the top; **Encoded by** shows "Reynaldo S. Alipio" with a **Physician**
+   badge on one and "Head Nurse" with a **Nurse** badge on the other.
+6. Click the physician's row. → **Expect:** the read-only notice reads
+   "encoded by **Reynaldo S. Alipio** (Physician)"; **Reprint** shows the
+   physician's name on the form.
+7. Log in as the physician again and open **Clinic Dashboard**. → **Expect:**
+   the same rows and badges as step 5.
+
+**Pass criteria:** the name and license print only on the physician's record;
+the nurse's record prints blank lines; both roles see the same history with a
+role badge per row.
+
+---
+
+## E2E-17 — The Director creates a physician and corrects the license (D-64)
+
+**Goal:** the Director can provision a physician with a license number, the
+rules on that number hold, and a typo can be corrected afterwards.
+
+**Account:** Director `director@healthpass.test`.
+
+**Steps:**
+
+1. Open **Staff Accounts**. Set **Role** to **Physician**. → **Expect:** a
+   **License No.** field appears, plus the hint "Enter the name without 'Dr.' or
+   'MD'; the form adds ', MD'." The College picker is hidden.
+2. Enter name "Ana B. Cruz", an unused email, and License No. **PRC123**.
+   Click **Create account**. → **Expect:** refused — "The license number must be
+   4 to 10 digits, numbers only."
+3. Clear the license and submit. → **Expect:** refused — "A physician needs a
+   license number…".
+4. Enter License No. **1234567** and submit. → **Expect:** the one-time password
+   panel; the list shows "Ana B. Cruz", role **Physician**, and **License No.
+   1234567** under it.
+5. Set **Role** to **Nurse**. → **Expect:** the License No. field disappears
+   (a nurse can't be given one).
+6. On Ana's row click **Correct**. → **Expect:** a dialog "Correct the license
+   number?" with the current number filled in. Press **Esc**. → **Expect:** the
+   dialog closes and nothing changes.
+7. Click **Correct** again, type **7654321**, click **Save license**. →
+   **Expect:** the green message "Ana B. Cruz's license number is now 7654321…";
+   the row shows **License No. 7654321**.
+8. Click **Correct**, type **76A** and save. → **Expect:** a red banner "License
+   not changed: …4 to 10 digits…"; the row still shows 7654321, and the New
+   staff account form shows no error.
+9. Nurse and College Admin rows have **no Correct** link.
+
+**Pass criteria:** a physician can't be created without a valid 4–10 digit
+license, only physicians carry one, and the correction updates the list.
 
 ---
 

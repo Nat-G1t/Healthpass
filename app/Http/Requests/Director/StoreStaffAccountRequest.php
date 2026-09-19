@@ -25,10 +25,19 @@ class StoreStaffAccountRequest extends FormRequest
      * The ONLY roles the Director may create (D-47). Never `director` (that
      * would let one Director mint another and is the classic privilege-
      * escalation path), never `student` (students self-register — FR-REG).
+     * `physician` joined with D-64.
      *
      * @var list<string>
      */
-    public const PROVISIONABLE_ROLES = ['college_admin', 'nurse'];
+    public const PROVISIONABLE_ROLES = ['college_admin', 'nurse', 'physician'];
+
+    /**
+     * A PRC license number as the form prints it: digits only, 4–10 long
+     * (D-64). Shared with UpdateStaffLicenseRequest so both paths agree.
+     *
+     * @var list<string>
+     */
+    public const LICENSE_RULES = ['string', 'digits_between:4,10'];
 
     public function authorize(): bool
     {
@@ -47,13 +56,22 @@ class StoreStaffAccountRequest extends FormRequest
             // A college_admin MUST have a college: `college.scope` 403s an admin
             // with a null managed_college_id on every /admin route (FR-AUTH-06),
             // so creating one without a college would create a dead account.
-            // A nurse must NOT have one — nurses are clinic-wide.
+            // Clinic staff (nurse, physician) must NOT have one — they are
+            // clinic-wide.
             'managed_college_id' => [
                 'nullable',
                 Rule::requiredIf(fn (): bool => $this->input('role') === 'college_admin'),
-                Rule::prohibitedIf(fn (): bool => $this->input('role') === 'nurse'),
+                Rule::prohibitedIf(fn (): bool => $this->input('role') !== 'college_admin'),
                 'integer',
                 Rule::exists('colleges', 'id'),
+            ],
+            // D-64: the license prints under a physician's name on the records
+            // they encode — required for a physician, refused for anyone else.
+            'license_number' => [
+                'nullable',
+                Rule::requiredIf(fn (): bool => $this->input('role') === 'physician'),
+                Rule::prohibitedIf(fn (): bool => $this->input('role') !== 'physician'),
+                ...self::LICENSE_RULES,
             ],
         ];
     }
@@ -62,15 +80,18 @@ class StoreStaffAccountRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'role.in' => 'You can only create College Admin and Nurse accounts.',
+            'role.in' => 'You can only create College Admin, Nurse and Physician accounts.',
             'managed_college_id.required' => 'Pick the college this admin will manage — an admin without one cannot open any Admin page.',
-            'managed_college_id.prohibited' => 'A nurse is clinic-wide and has no managed college.',
+            'managed_college_id.prohibited' => 'Clinic staff work clinic-wide and have no managed college.',
+            'license_number.required' => 'A physician needs a license number — it prints on the records they encode.',
+            'license_number.prohibited' => 'Only a physician has a license number.',
+            'license_number.digits_between' => 'The license number must be 4 to 10 digits, numbers only.',
         ];
     }
 
     /** @return array<string, string> */
     public function attributes(): array
     {
-        return ['managed_college_id' => 'college'];
+        return ['managed_college_id' => 'college', 'license_number' => 'license number'];
     }
 }

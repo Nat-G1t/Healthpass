@@ -69,7 +69,8 @@ final class NavBadges
             'college_admin' => self::collegeAdmin($user),
             // Work count: the Live Queue's own query. reorder() drops its
             // ORDER BY, which a COUNT has no use for.
-            'nurse' => ['nurse.queue' => ClinicVisit::liveQueue()->reorder()->count()],
+            // D-64: the physician shares the nurse's Clinic Dashboard.
+            'nurse', 'physician' => ['nurse.queue' => ClinicVisit::liveQueue()->reorder()->count()],
             'director' => self::director($user),
             default => [],
         };

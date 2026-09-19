@@ -42,7 +42,7 @@
                 <h3 class="text-sm font-semibold text-hp-slate">Flagged Visits</h3>
                 <p class="mt-1 text-xs text-hp-slate/50">
                     Vitals over a flag threshold &mdash; screening signals, not diagnoses.
-                    Includes visits still awaiting the nurse (flags surface from capture).
+                    Includes visits still awaiting the clinic's encode (flags surface from capture).
                 </p>
             </div>
             <div class="flex items-center gap-3">

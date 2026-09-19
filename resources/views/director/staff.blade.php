@@ -4,8 +4,9 @@
 <div class="mb-6">
     <h2 class="text-xl font-semibold text-hp-slate">Staff Accounts</h2>
     <p class="mt-0.5 text-sm text-hp-slate/50">
-        Create College Admin and Nurse accounts, move an admin between colleges, and
-        deactivate anyone who has left. Accounts are never deleted — their records
+        Create College Admin, Nurse and Physician accounts, move an admin between
+        colleges, correct a physician's license number, and deactivate anyone who
+        has left. Accounts are never deleted — their records
         stay in the system. A staff member who forgets their password recovers it
         themselves with "Forgot password" on the login page (FR-AUTH-10).
     </p>
@@ -15,6 +16,14 @@
 @if (session('status'))
     <div data-hp-flash class="mb-5 rounded-lg border border-hp-orange/30 bg-hp-peach/40 px-4 py-3 text-sm font-medium text-hp-slate">
         {{ session('status') }}
+    </div>
+@endif
+
+{{-- A refused license correction (D-64). Its own error bag, so the message
+     never lands on the New staff account form's License No. field. --}}
+@if ($errors->license->any())
+    <div class="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        License not changed: {{ $errors->license->first('license_number') }}
     </div>
 @endif
 
@@ -73,9 +82,10 @@
 <div class="grid gap-6 lg:grid-cols-3">
 
     {{-- ── New staff account ────────────────────────────────────────────────
-         `role` drives whether the college picker is enabled. A DISABLED select is
-         not submitted at all, which is exactly what the request's `prohibited`
-         rule wants for a nurse — the server re-checks either way. --}}
+         `role` drives whether the college picker and the license field are
+         enabled. A DISABLED field is not submitted at all, which is exactly what
+         the request's `prohibited` rules want for every other role — the server
+         re-checks either way. --}}
     <x-hp.card class="h-fit lg:col-span-1" x-data="{ role: '{{ old('role', 'college_admin') }}' }">
         <h3 class="text-sm font-semibold text-hp-slate">New staff account</h3>
         <p class="mt-1 text-[13px] text-hp-slate/60">
@@ -90,12 +100,17 @@
                          :error="$errors->first('role')">
                 <option value="college_admin">College Admin</option>
                 <option value="nurse">Nurse</option>
+                <option value="physician">Physician</option>
             </x-hp.select>
 
             <x-hp.input label="Full name" name="name" type="text" maxlength="120" required
                         value="{{ old('name') }}"
                         placeholder="e.g. Maria Santos"
                         :error="$errors->first('name')" />
+            {{-- D-64: the print adds ", MD" itself (NAME, MD). --}}
+            <p x-show="role === 'physician'" x-cloak class="-mt-2 text-[12px] text-hp-slate/50">
+                Enter the name without 'Dr.' or 'MD'; the form adds ', MD'.
+            </p>
 
             <x-hp.input label="Email" name="email" type="email" maxlength="191" required
                         value="{{ old('email') }}"
@@ -118,9 +133,24 @@
                 </p>
             </div>
 
-            <p x-show="role === 'nurse'" x-cloak
+            {{-- D-64: prints under the physician's name on every record they
+                 encode. Required for a physician, refused for anyone else. --}}
+            <div x-show="role === 'physician'" x-cloak>
+                <x-hp.input label="License No." name="license_number" type="text"
+                            inputmode="numeric" pattern="[0-9]{4,10}" maxlength="10"
+                            x-bind:disabled="role !== 'physician'"
+                            x-bind:required="role === 'physician'"
+                            value="{{ old('license_number') }}"
+                            placeholder="e.g. 60252"
+                            :error="$errors->first('license_number')" />
+                <p class="mt-1 text-[12px] text-hp-slate/50">
+                    Digits only, 4 to 10. Prints on the records this physician encodes.
+                </p>
+            </div>
+
+            <p x-show="role === 'nurse' || role === 'physician'" x-cloak
                class="rounded-lg bg-hp-slate/5 px-3 py-2 text-[12px] text-hp-slate/60">
-                Nurses work clinic-wide and are not tied to a college.
+                Nurses and physicians work clinic-wide and are not tied to a college.
             </p>
 
             <x-hp.button type="submit" variant="primary" size="md" class="w-full"
@@ -133,7 +163,7 @@
     {{-- ── Existing accounts ────────────────────────────────────────────────── --}}
     <x-hp.card class="lg:col-span-2">
         <h3 class="mb-4 text-sm font-semibold text-hp-slate">
-            College Admins &amp; Nurses
+            College Admins, Nurses &amp; Physicians
             <span class="ml-1 font-normal text-hp-slate/50">({{ $accounts->count() }})</span>
         </h3>
 
@@ -153,7 +183,11 @@
                         </x-hp.table-cell>
 
                         <x-hp.table-cell label="Role">
-                            {{ $account->role === 'college_admin' ? 'College Admin' : 'Nurse' }}
+                            {{ $account->roleLabel() }}
+                            @if ($account->isPhysician())
+                                {{-- D-64: the license, with its correction dialog. --}}
+                                <x-license-correct-confirm :account="$account" />
+                            @endif
                         </x-hp.table-cell>
 
                         <x-hp.table-cell label="College">

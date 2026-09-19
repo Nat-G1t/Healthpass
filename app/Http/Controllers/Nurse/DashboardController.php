@@ -100,7 +100,7 @@ class DashboardController extends Controller
                 'clinicVisit:id,reference_no,student_id,college_id,course',
                 'clinicVisit.student:id,name',
                 'clinicVisit.college:id,code,name',
-                'encoder:id,name',
+                'encoder:id,name,role', // role → the Nurse / Physician badge (D-64)
             ])
             ->when($month !== null, fn (Builder $query) => $query->whereBetween('encoded_at', $this->monthBounds($month)))
             ->when($result !== null, fn (Builder $query) => $query->where('result', $result))

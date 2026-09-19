@@ -9,9 +9,9 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 /**
- * Staff accounts (FR-AUTH-05): `nurse`, `college_admin`, and `director` are
- * created HERE, never by self-registration — there is no public staff
- * registration path, and D-35 rejected adding one.
+ * Staff accounts (FR-AUTH-05): `nurse`, `physician` (D-64), `college_admin`,
+ * and `director` are created HERE, never by self-registration — there is no
+ * public staff registration path, and D-35 rejected adding one.
  *
  * Two modes, chosen by HEALTHPASS_SEED_STAFF_ONE_TIME:
  *
@@ -52,6 +52,15 @@ class StaffSeeder extends Seeder
             'role' => 'nurse',
             'name' => 'Head Nurse',
             'email' => 'nurse@'.$domain,
+        ], $oneTime);
+
+        // University Physician (D-64) — shares the Clinic Dashboard with the
+        // nurse; their name and license print on the records THEY encode.
+        $issued[] = $this->createStaff([
+            'role' => 'physician',
+            'name' => 'Reynaldo S. Alipio',
+            'license_number' => '60252',
+            'email' => 'physician@'.$domain,
         ], $oneTime);
 
         // One college admin per college — each scoped to their college

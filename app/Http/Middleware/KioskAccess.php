@@ -24,7 +24,8 @@ use Symfony\Component\HttpFoundation\Response;
  *   (a) it carries a valid, un-revoked DEVICE token — a browser a nurse enrolled
  *       via "Enable Kiosk Mode" (FR-NRS-06); the token rides a long-lived cookie,
  *       or is provisioned once via a `?device_token=…` query param (Pi launcher),
- *   (b) it is an authenticated ACTIVE nurse (browsing from a staff machine), OR
+ *   (b) it is an authenticated ACTIVE nurse or physician (clinic staff, D-64)
+ *       browsing from a staff machine, OR
  *   (c) it comes from loopback AND config allows loopback (the Pi-local shape).
  * Everyone else gets a friendly branded 403 page (kiosk.restricted).
  *
@@ -62,7 +63,7 @@ class KioskAccess
         }
 
         if ($this->hasValidDeviceCookie($request)
-            || $this->isActiveNurse($request)
+            || $this->isActiveClinicStaff($request)
             || $this->isAllowedLoopback($request)) {
             return $next($request);
         }
@@ -84,12 +85,12 @@ class KioskAccess
         return is_string($token) && KioskDevice::findActiveByToken($token) !== null;
     }
 
-    /** An authenticated, active nurse — the only staff role that may open the kiosk. */
-    private function isActiveNurse(Request $request): bool
+    /** An authenticated, active nurse or physician — the clinic staff roles that may open the kiosk (D-64). */
+    private function isActiveClinicStaff(Request $request): bool
     {
         $user = $request->user();
 
-        return $user !== null && $user->role === 'nurse' && $user->status === 'active';
+        return $user !== null && $user->isClinicStaff() && $user->status === 'active';
     }
 
     /**

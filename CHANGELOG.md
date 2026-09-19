@@ -4,6 +4,50 @@
 
 ### Added
 
+* **Physician accounts with license numbers; the Clinic Dashboard is shared
+  by nurse and physician** (D-64; supersedes D-2, amends D-47). Requested by
+  the clinic on 2026-09-18; **pending adviser sign-off**. **Flagged schema
+  change** (migrations `2026_09_20_000003_add_physician_role_to_users_table`
+  and `2026_09_20_000004_make_physician_block_nullable_on_clearance_records_table`):
+  `users.role` gains `physician`; new `users.license_number` VARCHAR(20) NULL;
+  `clearance_records.physician_name` / `physician_license_no` lose their
+  defaults and become NULL-able (NULL = a nurse encoded). Reseed the dev DB.
+  - **Access:** `role:nurse,physician` on the `/nurse/*` group (`EnsureRole`
+    is now variadic and sends a physician home to `/nurse/dashboard`). New
+    `User::isClinicStaff()`, `isPhysician()` and `roleLabel()`; used by
+    `KioskAccess`, the kiosk staff exit, `NavBadges` and the sidebar. URLs
+    and route names are unchanged.
+  - **Labels:** "Clinic Dashboard" (sidebar + page title), "Clinic Notes"
+    (column stays `nurse_notes`), sidebar role label Nurse / Physician, kiosk
+    exit prompt "clinic staff", Director anomaly detail "Clinic Assessment".
+  - **Staff Accounts:** Physician in the role dropdown; License No. field for
+    physicians only (required, 4–10 digits, prohibited for other roles); name
+    hint; the list shows the license; new license correction
+    (`PATCH /director/staff/{user}/license`, `staff-license` throttle bucket,
+    `UpdateStaffLicenseRequest` with its own `license` error bag, physician
+    targets only) through the new `<x-license-correct-confirm>` dialog. The
+    welcome email labels the role "Physician".
+  - **Encode + print:** `ClearanceRecord::physicianBlockFor()` stamps the
+    block from the encoder — a physician gets `UPPER(name), MD` and their
+    license, a nurse gets NULLs; the preview applies the same rule to the
+    signed-in user. `PHYSICIAN_NAME` / `PHYSICIAN_LICENSE_NO` deleted. The
+    print shows the name block only when set, otherwise a blank name line and
+    "License No. ________" (interim until D-67).
+  - **Shared history:** Encoded by shows the name plus a Nurse / Physician
+    badge; the read-only encode notice names the encoder's role. A separate
+    clinic logs page was considered and dropped.
+  - **Seeders:** `StaffSeeder` adds "Reynaldo S. Alipio" (license 60252,
+    `physician@<staff domain>`, D-35 one-time mode honoured);
+    `DemoClinicVisitSeeder` encodes every third spread record and one
+    My-Records visit as the physician. New `UserFactory::physician()` state.
+  - **SQLite:** the enum `->change()` rebuilds `users`, which trips foreign
+    keys once other rows point at it, so that migration runs outside a
+    transaction with SQLite FK checks paused (round-trip test with data).
+  - Tests: physician access to every clinic page, other roles refused,
+    create/validate/correct physicians, license throttle bucket, encode and
+    preview stamping, conditional print block, history badges, kiosk exit and
+    access, seeder share, migration round trip.
+
 * **The kiosk and encode use the new forms' twelve Physical Signs rows**
   (D-63; supersedes D-56's row list, keeps its detail and pre-fill
   mechanics). Requested by the clinic on 2026-09-18 — both new forms print

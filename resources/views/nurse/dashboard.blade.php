@@ -1,7 +1,8 @@
-<x-layout.sidebar title="Nurse Dashboard">
+<x-layout.sidebar title="Clinic Dashboard">
 
     {{-- FR-NRS-09 (D-44) — stat tiles on top, the clinic-wide encode history
-         directly below. This is the nurse's landing page: once a visit is
+         directly below. This is the landing page for nurses and physicians
+         alike (D-64), who read the same rows: once a visit is
          encoded it drops out of the Live Queue, and this is where it lands. --}}
 
     {{-- ── Stat tiles ───────────────────────────────────────────────────────
@@ -158,8 +159,16 @@
                                 </x-hp.badge>
                             </x-hp.table-cell>
 
+                            {{-- D-64: name + a role badge, so a shared history
+                                 shows at a glance whether a nurse or the
+                                 physician encoded (and so what prints). --}}
                             <x-hp.table-cell label="Encoded by">
                                 {{ $record->encoder?->name ?? '—' }}
+                                @if ($record->encoder)
+                                    <x-hp.badge :variant="$record->encoder->isPhysician() ? 'positive' : 'neutral'" class="ml-1">
+                                        {{ $record->encoder->roleLabel() }}
+                                    </x-hp.badge>
+                                @endif
                             </x-hp.table-cell>
 
                             <x-hp.table-cell label="Encoded at">

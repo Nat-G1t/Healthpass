@@ -17,6 +17,7 @@ class User extends Authenticatable
 
     protected $fillable = [
         'role',
+        'license_number',
         'name',
         'email',
         'email_verified_at',
@@ -53,6 +54,39 @@ class User extends Authenticatable
             // is written only by App\Support\NavBadges::store().
             'nav_seen_at' => 'array',
         ];
+    }
+
+    /**
+     * The two roles that work the Clinic Dashboard (`/nurse/*`) and encode
+     * Fit/Unfit (D-64). Use this, never `role === 'nurse'`, for clinic access.
+     *
+     * @var list<string>
+     */
+    public const CLINIC_STAFF_ROLES = ['nurse', 'physician'];
+
+    /** Display label per role — the sidebar, the staff list and the badges. */
+    public const ROLE_LABELS = [
+        'student' => 'Student',
+        'college_admin' => 'College Admin',
+        'nurse' => 'Nurse',
+        'physician' => 'Physician',
+        'director' => 'Clinic Director',
+    ];
+
+    /** A nurse or a physician (D-64) — the Clinic Dashboard's users. */
+    public function isClinicStaff(): bool
+    {
+        return in_array($this->role, self::CLINIC_STAFF_ROLES, true);
+    }
+
+    public function isPhysician(): bool
+    {
+        return $this->role === 'physician';
+    }
+
+    public function roleLabel(): string
+    {
+        return self::ROLE_LABELS[$this->role] ?? '';
     }
 
     // ── Relationships ────────────────────────────────────────────────────────
@@ -99,7 +133,7 @@ class User extends Authenticatable
         return $this->hasMany(BatchRequestStudent::class, 'student_id');
     }
 
-    /** Clearance records encoded by this nurse. */
+    /** Clearance records encoded by this nurse or physician. */
     public function clearanceRecordsEncoded(): HasMany
     {
         return $this->hasMany(ClearanceRecord::class, 'encoded_by');

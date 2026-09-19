@@ -46,6 +46,24 @@ class KioskExitTest extends TestCase
         $this->assertAuthenticatedAs($nurse);
     }
 
+    public function test_valid_physician_is_authenticated_and_redirected_to_queue(): void
+    {
+        // D-64: the physician shares the Clinic Dashboard, so may leave kiosk mode.
+        $physician = User::factory()->physician()->create([
+            'email' => 'physician@healthpass.test',
+            'password' => Hash::make('password'),
+        ]);
+
+        $this->postJson(route('kiosk.exit'), [
+            'email' => 'physician@healthpass.test',
+            'password' => 'password',
+        ])
+            ->assertOk()
+            ->assertJson(['ok' => true, 'redirect' => route('nurse.queue')]);
+
+        $this->assertAuthenticatedAs($physician);
+    }
+
     public function test_wrong_password_is_rejected_and_stays_guest(): void
     {
         $this->user('nurse', email: 'nurse@healthpass.test');

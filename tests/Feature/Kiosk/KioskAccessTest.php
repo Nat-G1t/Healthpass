@@ -132,6 +132,18 @@ class KioskAccessTest extends TestCase
             ->assertJson(['ok' => true]);
     }
 
+    /** D-64: the physician is clinic staff too, admitted like a nurse. */
+    public function test_active_physician_from_lan_is_allowed(): void
+    {
+        $this->scannableStudent('PHYS-OK');
+        $physician = User::factory()->physician()->create(['status' => 'active']);
+
+        $this->actingAs($physician)
+            ->scanFrom(self::LAN_IP, ['token' => 'PHYS-OK'])
+            ->assertOk()
+            ->assertJson(['ok' => true]);
+    }
+
     /** An enrolled device's cookie lets a LAN terminal reach even /kiosk/scan. */
     public function test_enrolled_device_cookie_is_allowed_from_lan(): void
     {

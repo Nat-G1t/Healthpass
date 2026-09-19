@@ -270,12 +270,13 @@ final class KioskController extends Controller
      * The kiosk has no nav and the Pi runs Chromium in --kiosk mode, so a student
      * cannot leave /kiosk on their own. To END a shift a staff member taps the
      * hidden corner gesture (5 taps within ~3 s) which opens this prompt. We
-     * authenticate the NURSE here — not just check a password — so the redirect
-     * actually lands inside the (auth-gated) nurse queue instead of bouncing to
-     * the login page. An email is required to know WHICH nurse to sign in.
+     * authenticate the staff member here — not just check a password — so the
+     * redirect actually lands inside the (auth-gated) nurse queue instead of
+     * bouncing to the login page. An email is required to know WHO to sign in.
      *
-     * NURSE-ONLY by design: the kiosk lives at the clinic and hands off to the
-     * nurse queue, so only an active nurse account may unlock it. As with the
+     * CLINIC-STAFF-ONLY by design: the kiosk lives at the clinic and hands off
+     * to the nurse queue, so only an active nurse or physician (D-64) may
+     * unlock it. As with the
      * student login, every failure returns the same generic message and runs a
      * constant-time hash check so the response never reveals whether an email
      * exists or which role it has.
@@ -289,7 +290,7 @@ final class KioskController extends Controller
 
         $invalid = response()->json([
             'ok' => false,
-            'message' => 'Those credentials don\'t match a nurse account.',
+            'message' => 'Those credentials don\'t match a clinic staff account.',
         ], 422);
 
         $user = User::where('email', $validated['email'])->first();
@@ -301,7 +302,8 @@ final class KioskController extends Controller
             return $invalid;
         }
 
-        if ($user->role !== 'nurse' || $user->status !== 'active') {
+        // D-64: a nurse or a physician may leave kiosk mode.
+        if (! $user->isClinicStaff() || $user->status !== 'active') {
             return $invalid;
         }
 

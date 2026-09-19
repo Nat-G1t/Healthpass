@@ -77,7 +77,7 @@ Do not silently reconcile conflicts.
 - The kiosk route is **public** (no Laravel auth) — identity is established
   inside the flow via QR scan / email login.
 - **Kiosk endpoints are network-restricted** (loopback or authenticated
-  nurse — `KioskAccess` middleware) but auth-less for the person at the
+  clinic staff, nurse or physician — `KioskAccess` middleware) but auth-less for the person at the
   terminal. Therefore **NEVER trust client-supplied identity or derived
   values on kiosk endpoints**: student identity binds server-side in the
   session at scan/login, and BMI/flags are always recomputed server-side.
@@ -168,13 +168,14 @@ npm run dev                       # terminal 2
   system is scheduling + digital clearance with simple rule-based vital
   flagging only. (BP flag threshold locked at **140/90**; other
   thresholds per PRD business rules.)
-- **Four roles only:** Student, College Admin, Nurse, Clinic Director.
-  There is **no Doctor role** — the Nurse encodes **Fit/Unfit only**
-  (case categories were dropped by D-32); the University Physician signs
-  the printed form.
+- **Five roles:** Student, College Admin, Nurse, Physician (D-64), Clinic
+  Director. Nurse and Physician share the Clinic Dashboard (`/nurse/*`) and
+  encode Fit/Unfit; the physician's name/license print only on records a
+  physician encoded. (Case categories were dropped by D-32.) Check clinic
+  access with `User::isClinicStaff()`, never `role === 'nurse'`.
 - **Kiosk never shows Fit/Unfit to the student.** It captures vitals +
   the official form's twelve Physical Signs rows (D-63) and routes to the
-  Nurse queue.
+  clinic queue (nurse or physician).
 - **Students never self-schedule and never walk in (D-61)** — only
   Director-approved college batches create appointments; the kiosk refuses
   a student with no appointment today.

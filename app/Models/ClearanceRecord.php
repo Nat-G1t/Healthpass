@@ -51,15 +51,25 @@ class ClearanceRecord extends Model
     ];
 
     /**
-     * Physician block defaults (FR-PRT-04 / §7.5). The DB column defaults in
-     * the clearance_records migration remain the source for SAVED records;
-     * these constants exist for the print PREVIEW, which renders a transient
-     * (never-saved) record that no DB default can fill. Keep in step with
-     * the migration.
+     * The physician block (FR-PRT-04 / BR-17, D-64) for a record this user
+     * encodes. A physician's own encode prints their name and license; a
+     * nurse's prints nothing, leaving a blank line for a wet signature. Used
+     * by Save & Close, the print preview and the demo seeder, so the rule
+     * lives in one place.
+     *
+     * @return array{physician_name: ?string, physician_license_no: ?string}
      */
-    public const PHYSICIAN_NAME = 'REYNALDO S. ALIPIO, MD';
+    public static function physicianBlockFor(User $encoder): array
+    {
+        if (! $encoder->isPhysician()) {
+            return ['physician_name' => null, 'physician_license_no' => null];
+        }
 
-    public const PHYSICIAN_LICENSE_NO = '60252';
+        return [
+            'physician_name' => mb_strtoupper($encoder->name).', MD',
+            'physician_license_no' => $encoder->license_number,
+        ];
+    }
 
     protected $fillable = [
         'clinic_visit_id',

@@ -947,7 +947,7 @@ export function kioskMachine() {
                     return;
                 }
                 this.state.exit.status = 'error';
-                this.state.exit.error = data.message ?? 'Those credentials don\'t match a nurse account.';
+                this.state.exit.error = data.message ?? 'Those credentials don\'t match a clinic staff account.';
             } catch {
                 this.state.exit.status = 'error';
                 this.state.exit.error = 'Network problem. Please try again.';

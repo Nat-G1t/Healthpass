@@ -44,4 +44,14 @@ class UserFactory extends Factory
             'email_verified_at' => null,
         ]);
     }
+
+    /** A University Physician account (D-64): the role plus a license number. */
+    public function physician(string $name = 'Reynaldo S. Alipio', string $license = '60252'): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => 'physician',
+            'name' => $name,
+            'license_number' => $license,
+        ]);
+    }
 }

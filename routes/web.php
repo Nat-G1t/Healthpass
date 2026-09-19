@@ -172,9 +172,11 @@ Route::middleware(['auth', 'role:college_admin', 'college.scope'])
             ->middleware('nav.seen:admin.activity')->name('activity');
     });
 
-// ── Nurse (FR-AUTH-03) ───────────────────────────────────────────────────────
+// ── Clinic Dashboard: Nurse + Physician (FR-AUTH-03, D-64) ────────────────────
+// Both clinic roles share every page below. The URLs and route names stay
+// `/nurse/...` / `nurse.*` — only the labels say "Clinic".
 
-Route::middleware(['auth', 'role:nurse'])
+Route::middleware(['auth', 'role:nurse,physician'])
     ->prefix('nurse')
     ->name('nurse.')
     ->group(function () {
@@ -248,9 +250,9 @@ Route::middleware(['auth', 'role:director'])
         Route::post('/batches/{batch}/reject', [DirectorBatchApprovalController::class, 'reject'])
             ->whereNumber('batch')->middleware('throttle:20,1,batch-reject')->name('batches.reject');
         // Staff Accounts (FR-AUTH-10, D-47): the Director provisions the
-        // college_admin and nurse accounts that used to need a developer running
-        // StaffSeeder on the server. NOT a fifth role — a capability layer on
-        // the existing director role, so users.role is untouched.
+        // college_admin, nurse and physician (D-64) accounts that used to need a
+        // developer running StaffSeeder on the server. A capability layer on
+        // the existing director role, not a role of its own.
         //
         // Every write below carries its OWN throttle bucket (the 3rd arg). For an
         // authenticated user the inline throttle keys on the user id with NO
@@ -268,6 +270,10 @@ Route::middleware(['auth', 'role:director'])
             ->whereNumber('user')->middleware('throttle:30,1,staff-status')->name('staff.status');
         Route::patch('/staff/{user}/college', [DirectorStaffAccountController::class, 'college'])
             ->whereNumber('user')->middleware('throttle:30,1,staff-college')->name('staff.college');
+        // Correct a physician's license number (D-64). Its own bucket, like
+        // the two above — see the shared-authed-bucket note on this group.
+        Route::patch('/staff/{user}/license', [DirectorStaffAccountController::class, 'license'])
+            ->whereNumber('user')->middleware('throttle:30,1,staff-license')->name('staff.license');
     });
 
 // ── Kiosk (Module KSK, FR-KSK-01..16) — PUBLIC clinic terminal ───────────────

@@ -40,8 +40,8 @@ class StaffAccountCreatedMail extends Mailable
             view: 'mail.staff-account-created',
             with: [
                 'staffName' => $this->staff->name,
-                'roleLabel' => $this->staff->role === 'nurse' ? 'Nurse' : 'College Admin',
-                // Null for a nurse — they work clinic-wide, not inside a college.
+                'roleLabel' => $this->staff->roleLabel(),
+                // Null for clinic staff — they work clinic-wide, not inside a college.
                 'collegeName' => $this->staff->managedCollege?->name,
                 'loginUrl' => route('login'),
             ],

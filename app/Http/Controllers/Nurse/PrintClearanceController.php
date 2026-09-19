@@ -53,10 +53,9 @@ class PrintClearanceController extends Controller
             ...$validated,
             // D-62: the batch reason, exactly as Save & Close will store it.
             ...$visit->batchPurpose(),
-            // DB defaults only fill on save — a transient record needs the
-            // physician block (FR-PRT-04) and encode date set explicitly.
-            'physician_name' => ClearanceRecord::PHYSICIAN_NAME,
-            'physician_license_no' => ClearanceRecord::PHYSICIAN_LICENSE_NO,
+            // D-64: the same physician-block rule Save & Close applies, for the
+            // signed-in user who will be the encoder.
+            ...ClearanceRecord::physicianBlockFor($request->user()),
             'encoded_at' => now(),
         ]);
 

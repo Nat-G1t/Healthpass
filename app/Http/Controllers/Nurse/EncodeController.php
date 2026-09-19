@@ -81,11 +81,11 @@ class EncodeController extends Controller
                 $validated = $request->validated();
                 unset($validated['printed']);
 
-                // physician_name / physician_license_no are intentionally NOT
-                // set here — the column defaults (§7.5: REYNALDO S. ALIPIO, MD
-                // / 60252) fill them, keeping the migration the single source.
                 ClearanceRecord::create([
                     ...$validated,
+                    // D-64: a physician's own encode prints their name and
+                    // license; a nurse's leaves the block blank (both NULL).
+                    ...ClearanceRecord::physicianBlockFor($request->user()),
                     // D-62: the purpose is the batch reason, never nurse input —
                     // its printed label (+ specify text). NULL with no batch.
                     ...$visit->batchPurpose(),

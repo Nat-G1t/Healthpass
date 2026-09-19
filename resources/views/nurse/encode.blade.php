@@ -67,7 +67,8 @@
     <div class="mb-5 rounded-xl border border-hp-peach bg-hp-peach/30 px-4 py-3 text-sm text-hp-slate">
         This visit has already been encoded
         @if ($record)
-            by <span class="font-semibold">{{ $record->encoder->name ?? '—' }}</span>
+            {{-- D-64: name + role, so a physician's encode reads as theirs. --}}
+            by <span class="font-semibold">{{ $record->encoder->name ?? '—' }}</span>@if ($record->encoder) ({{ $record->encoder->roleLabel() }})@endif
             on {{ $record->encoded_at?->format('M j, Y g:i A') ?? '—' }}
         @endif
         — the assessment below is read-only. Use <span class="font-semibold">Reprint</span> for another copy.
@@ -323,7 +324,8 @@
                 </div>
             </div>
 
-            {{-- Nurse Notes print under REMARKS (FR-PRT-02). A visit not yet
+            {{-- Clinic Notes (D-64 label; the column stays nurse_notes) print
+                 under REMARKS (FR-PRT-02). A visit not yet
                  encoded opens them pre-filled with the student's YES details,
                  one "SKIN: …" line each in the form's order — the form says "If
                  YES, give details under Remarks" (D-56). old() input wins and
@@ -331,7 +333,7 @@
             @php
                 $notes = $readOnly ? $record?->nurse_notes : ($sr?->detailsAsNotes() ?: null);
             @endphp
-            <x-hp.textarea label="Nurse Notes" name="nurse_notes" rows="4" :disabled="$readOnly"
+            <x-hp.textarea label="Clinic Notes" name="nurse_notes" rows="4" :disabled="$readOnly"
                            placeholder="Observations, advice given, follow-ups…">{{ old('nurse_notes', $notes) }}</x-hp.textarea>
 
             <div class="flex flex-col gap-2.5 pt-1">

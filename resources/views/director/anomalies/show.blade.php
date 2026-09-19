@@ -40,16 +40,16 @@
             </dl>
         </x-hp.card>
 
-        {{-- ── Nurse assessment ─────────────────────────────────────────── --}}
+        {{-- ── Clinic assessment (nurse or physician, D-64) ─────────────────────────────────────────── --}}
         <x-hp.card>
-            <h3 class="mb-4 text-sm font-semibold text-hp-slate">Nurse Assessment</h3>
+            <h3 class="mb-4 text-sm font-semibold text-hp-slate">Clinic Assessment</h3>
 
             @if ($visit->clearanceRecord === null)
                 <div class="flex flex-col items-center py-8 text-center">
-                    <p class="text-sm font-medium text-hp-slate/60">Awaiting nurse encode</p>
+                    <p class="text-sm font-medium text-hp-slate/60">Awaiting clinic encode</p>
                     <p class="mt-1 text-xs text-hp-slate/40">
                         This visit is still in the Live Queue &mdash; case category and
-                        result appear once the nurse encodes it.
+                        result appear once clinic staff encode it.
                     </p>
                 </div>
             @else

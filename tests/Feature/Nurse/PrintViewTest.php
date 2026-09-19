@@ -299,20 +299,35 @@ class PrintViewTest extends TestCase
         );
     }
 
-    public function test_physician_block_is_preprinted_from_record_defaults(): void
+    public function test_physician_block_prints_the_name_on_a_physician_record(): void
     {
-        $nurse = $this->nurse();
+        $physician = User::factory()->physician()->create();
         $visit = $this->makeVisit();
-        $this->encode($visit, $nurse);
+        $this->encode($visit, $physician, ClearanceRecord::physicianBlockFor($physician));
 
-        // The migration defaults (§7.5) fill physician_name / license — the
-        // view must read them from the record, not hardcode them.
-        $this->actingAs($nurse)
+        // D-64: read from the record, which the encode stamped.
+        $this->actingAs($this->nurse())
             ->get(route('nurse.visits.print', $visit))
             ->assertOk()
             ->assertSee('REYNALDO S. ALIPIO, MD')
             ->assertSee('University Physician')
             ->assertSee('License No. 60252');
+    }
+
+    public function test_physician_block_is_blank_on_a_nurse_record(): void
+    {
+        $nurse = $this->nurse();
+        $visit = $this->makeVisit();
+        $this->encode($visit, $nurse); // no physician fields → both NULL
+
+        // D-64: blank name line for a wet signature, license left to fill in.
+        $this->actingAs($nurse)
+            ->get(route('nurse.visits.print', $visit))
+            ->assertOk()
+            ->assertSee('University Physician')
+            ->assertSee('License No. ________')
+            ->assertSee('class="name blank"', false)
+            ->assertDontSee('REYNALDO');
     }
 
     /** D-62: put the visit on an approved batch with this form + reason. */

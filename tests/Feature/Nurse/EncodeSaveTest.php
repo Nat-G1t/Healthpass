@@ -224,16 +224,51 @@ class EncodeSaveTest extends TestCase
             ->assertSessionHas('status');
 
         $this->assertSame('encoded', $visit->fresh()->status);
-        // Purpose optional (BR-16); physician block pre-filled (§7.5).
+        // Purpose optional (BR-16); a NURSE's encode leaves the physician
+        // block blank (D-64) — both columns NULL.
         $this->assertDatabaseHas('clearance_records', [
             'clinic_visit_id' => $visit->id,
             'encoded_by' => $nurse->id,
             'result' => 'Fit',
             'purpose' => null,
+            'physician_name' => null,
+            'physician_license_no' => null,
+        ]);
+        $this->assertNotNull($visit->fresh()->clearanceRecord->encoded_at);
+    }
+
+    public function test_a_physician_encode_stamps_their_name_and_license(): void
+    {
+        $physician = User::factory()->physician('Reynaldo S. Alipio', '60252')->create();
+        $visit = $this->makeVisit();
+
+        $this->save($physician, $visit, ['result' => 'Fit'])
+            ->assertRedirect(route('nurse.queue'));
+
+        // D-64: upper-cased name + ", MD", and the license, copied at encode time.
+        $this->assertDatabaseHas('clearance_records', [
+            'clinic_visit_id' => $visit->id,
+            'encoded_by' => $physician->id,
             'physician_name' => 'REYNALDO S. ALIPIO, MD',
             'physician_license_no' => '60252',
         ]);
-        $this->assertNotNull($visit->fresh()->clearanceRecord->encoded_at);
+    }
+
+    public function test_the_physician_block_is_not_client_settable(): void
+    {
+        $nurse = $this->nurse();
+        $visit = $this->makeVisit();
+
+        // A forged post cannot put a physician's name on a nurse's record.
+        $this->save($nurse, $visit, [
+            'result' => 'Fit',
+            'physician_name' => 'FORGED, MD',
+            'physician_license_no' => '99999',
+        ])->assertRedirect(route('nurse.queue'));
+
+        $record = ClearanceRecord::firstWhere('clinic_visit_id', $visit->id);
+        $this->assertNull($record->physician_name);
+        $this->assertNull($record->physician_license_no);
     }
 
     public function test_full_payload_is_saved(): void

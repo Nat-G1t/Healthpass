@@ -22,6 +22,7 @@ Run `php artisan migrate:fresh --seed` to restore this state at any time.
 |---|---|---|---|
 | Director | `director@healthpass.test` | `password` | Full analytics + batch approvals |
 | Nurse | `nurse@healthpass.test` | `password` | Live Queue + Encode Result |
+| Physician | `physician@healthpass.test` | `password` | Same Clinic Dashboard as the nurse; license 60252 prints on their encodes (D-64) |
 | Admin — COE | `admin.coe@healthpass.test` | `password` | College of Education |
 | Admin — CEA | `admin.cea@healthpass.test` | `password` | College of Architecture and Engineering |
 | Admin — CBS | `admin.cbs@healthpass.test` | `password` | College of Business Studies |

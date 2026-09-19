@@ -138,6 +138,9 @@ class DemoClinicVisitSeeder extends Seeder
         $juan = User::where('email', 'juan.santos@psu.edu.ph')->firstOrFail();
         $maria = User::where('email', 'maria.reyes@psu.edu.ph')->firstOrFail();
         $nurse = User::where('email', 'nurse@healthpass.test')->firstOrFail();
+        // D-64: visit 2 is encoded by the physician, so My Records and the
+        // print show both physician blocks — printed name vs. blank line.
+        $physician = User::where('email', 'physician@healthpass.test')->firstOrFail();
 
         // Both demo students are CCS. clinic_visits.college_id became NOT NULL
         // with the D-17 snapshot migration (2026_06_30), so every seeded visit
@@ -185,8 +188,7 @@ class DemoClinicVisitSeeder extends Seeder
             'encoded_by' => $nurse->id,
             ...$v1->batchPurpose(),   // D-62: as the real encode copies it
             'result' => 'Fit',
-            'physician_name' => 'REYNALDO S. ALIPIO, MD',
-            'physician_license_no' => '60252',
+            ...ClearanceRecord::physicianBlockFor($nurse), // D-64: nurse → blank block
             'encoded_at' => Carbon::parse('2026-01-10 10:30:00'),
         ]);
 
@@ -227,11 +229,10 @@ class DemoClinicVisitSeeder extends Seeder
         ]);
         ClearanceRecord::create([
             'clinic_visit_id' => $v2->id,
-            'encoded_by' => $nurse->id,
+            'encoded_by' => $physician->id,
             ...$v2->batchPurpose(),   // D-62: as the real encode copies it
             'result' => 'Unfit',
-            'physician_name' => 'REYNALDO S. ALIPIO, MD',
-            'physician_license_no' => '60252',
+            ...ClearanceRecord::physicianBlockFor($physician), // D-64: name + license print
             'encoded_at' => Carbon::parse('2026-03-05 10:45:00'),
         ]);
 
@@ -271,8 +272,7 @@ class DemoClinicVisitSeeder extends Seeder
             'encoded_by' => $nurse->id,
             ...$v3->batchPurpose(),   // D-62: as the real encode copies it
             'result' => 'Fit',
-            'physician_name' => 'REYNALDO S. ALIPIO, MD',
-            'physician_license_no' => '60252',
+            ...ClearanceRecord::physicianBlockFor($nurse), // D-64: nurse → blank block
             'encoded_at' => Carbon::parse('2026-02-03 12:15:00'),
         ]);
 
@@ -399,6 +399,7 @@ class DemoClinicVisitSeeder extends Seeder
         }
 
         $nurse = User::where('email', 'nurse@healthpass.test')->firstOrFail();
+        $physician = User::where('email', 'physician@healthpass.test')->firstOrFail();
         $colleges = College::all()->keyBy('code');
 
         // One round-robin slot per weight unit — walking this list with a
@@ -422,7 +423,7 @@ class DemoClinicVisitSeeder extends Seeder
 
         // All-or-nothing: a mid-loop failure must not leave a partial band
         // behind, or the marker above would skip the re-run forever.
-        DB::transaction(function () use ($colleges, $nurse, $slots, $studentsByCollege): void {
+        DB::transaction(function () use ($colleges, $nurse, $physician, $slots, $studentsByCollege): void {
             $this->purgeStaleAnalyticsBands();
 
             $visitSeq = 0;
@@ -479,7 +480,8 @@ class DemoClinicVisitSeeder extends Seeder
                         batch: $batches[$visit['batch']],
                         student: $visit['student'],
                         college: $colleges[$visit['code']],
-                        nurse: $nurse,
+                        // D-64: every third record is the physician's own encode.
+                        encoder: $visitSeq % 3 === 1 ? $physician : $nurse,
                         // A few July visits stay captured — the nurse hasn't encoded yet.
                         isCaptured: $yearMonth === '2026-07' && $visit['i'] % 5 === 0,
                     );
@@ -538,7 +540,7 @@ class DemoClinicVisitSeeder extends Seeder
         BatchRequest $batch,
         User $student,
         College $college,
-        User $nurse,
+        User $encoder,
         bool $isCaptured,
     ): void {
         $checkedIn = $batch->scheduled_date->copy()
@@ -571,11 +573,10 @@ class DemoClinicVisitSeeder extends Seeder
         if (! $isCaptured) {
             ClearanceRecord::create([
                 'clinic_visit_id' => $visit->id,
-                'encoded_by' => $nurse->id,
+                'encoded_by' => $encoder->id,
                 'result' => $visitSeq % 6 === 5 ? 'Unfit' : 'Fit',
                 ...$visit->batchPurpose(),   // D-62: as the real encode copies it
-                'physician_name' => 'REYNALDO S. ALIPIO, MD',
-                'physician_license_no' => '60252',
+                ...ClearanceRecord::physicianBlockFor($encoder), // D-64
                 'encoded_at' => $checkedIn->copy()->addHours(2),
             ]);
         }

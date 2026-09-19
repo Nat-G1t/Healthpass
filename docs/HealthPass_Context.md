@@ -49,7 +49,7 @@ HealthPass is a **single Laravel application** (plus a clinic kiosk that is a Bl
 
 **Out of scope**
 - AI / predictive risk profiling (fully dropped from earlier paper iterations)
-- Doctor role / teleconsultation
+- ~~Doctor role~~ / teleconsultation — *the University Physician got a `physician` account with D-64 (v1.40); teleconsultation stays out*
 - Payments, pharmacy, inventory
 - Laboratory results or referrals
 - Student self-booking, a student appointments list, and kiosk walk-ins (D-61 — a student asks their college office, offline, to include them in a batch request)
@@ -60,24 +60,28 @@ HealthPass is a **single Laravel application** (plus a clinic kiosk that is a Bl
 
 ## 3. Roles and permissions
 
-Only **students** self-register. `nurse`, `college_admin`, and `director` accounts are seeded or admin-provisioned.
+Only **students** self-register. `nurse`, `physician` (D-64), `college_admin`, and `director` accounts are seeded or provisioned by the Director (Staff Accounts, FR-AUTH-10).
+
+**Five roles since D-64.** The **Nurse** and the **University Physician** share the **Clinic Dashboard** (`/nurse/*` — URLs and route names unchanged): the same pages, the same encode history, the same powers. The only difference is the printout: the physician's name and license print on records the **physician** encoded; a nurse's records print a blank block for the physician's wet signature.
 
 **Important:** Each college has its **own dedicated College Admin account**, scoped exclusively to that college. A College Admin can only see, request, and track batch requests for their own college.
 
-| Capability | Student | College Admin | Nurse | Director |
-|---|---|---|---|---|
-| Self-register, edit profile, hold kiosk QR | ✓ | | | |
-| ~~Book a solo appointment (Medical Clearance)~~ — removed by D-61 | | | | |
-| Submit batch clearance request (own college only) | | ✓ | | |
-| View own college's students and batch requests only | | ✓ | | |
-| Approve / reject batch requests (all colleges) | | | | ✓ |
-| Use the kiosk (vitals + screening) | ✓ | | | |
-| View the live nurse queue | | | ✓ | |
-| Encode Fit/Unfit + case categories (purpose read-only from the batch, D-62) | | | ✓ | |
-| Preview / print clearance form | | | ✓ | |
-| View own clearance records | ✓ | | | |
-| View analytics + flagged anomalies | | | | ✓ |
-| Seed colleges / provision staff accounts | (admin seed) | | | |
+| Capability | Student | College Admin | Nurse | Physician (D-64) | Director |
+|---|---|---|---|---|---|
+| Self-register, edit profile, hold kiosk QR | ✓ | | | | |
+| ~~Book a solo appointment (Medical Clearance)~~ — removed by D-61 | | | | | |
+| Submit batch clearance request (own college only) | | ✓ | | | |
+| View own college's students and batch requests only | | ✓ | | | |
+| Approve / reject batch requests (all colleges) | | | | | ✓ |
+| Use the kiosk (vitals + screening) | ✓ | | | | |
+| View the live nurse queue | | | ✓ | ✓ | |
+| Encode Fit/Unfit + case categories (purpose read-only from the batch, D-62) | | | ✓ | ✓ | |
+| Preview / print clearance form | | | ✓ | ✓ | |
+| Enable Kiosk Mode · kiosk staff exit | | | ✓ | ✓ | |
+| View own clearance records | ✓ | | | | |
+| View analytics + flagged anomalies | | | | | ✓ |
+| Provision staff accounts (College Admin / Nurse / Physician) and correct a physician's license | | | | | ✓ |
+| Seed colleges / the first Director | (admin seed) | | | | |
 
 **Colleges (12 total):**
 
@@ -184,11 +188,11 @@ Director analytics and flagged anomalies update from encoded records
 Flags appear in the nurse queue's "Flags" column and the Director's Flagged Anomalies screen. BMI = weight(kg) ÷ height(m)².
 
 ### Clearance encoding
-- Only the **Nurse** encodes (4 roles total — no Doctor login).
-- The encode form is titled "Doctor's Assessment" in the UI but is nurse-operated.
+- ~~Only the **Nurse** encodes (4 roles total — no Doctor login).~~ **D-64:** a **nurse or the University Physician** encodes (5 roles total); `encoded_by` records who.
+- The encode form is titled "Doctor's Assessment" in the UI and is operated by clinic staff (nurse or physician).
 - `result` = Fit or Unfit (required to save).
 - Case categories (0..n, D-23) are optional. **The purpose is not nurse-entered (D-62):** it is the batch's reason, shown read-only and copied onto the clearance record on Save (label → `purpose`, specify text → `purpose_other`; NULL with no batch). A posted purpose is ignored.
-- The printed form carries the **pre-printed physician signature: REYNALDO S. ALIPIO, MD, License No. 60252**.
+- ~~The printed form carries the **pre-printed physician signature: REYNALDO S. ALIPIO, MD, License No. 60252**.~~ **D-64:** the physician block prints the encoder's name (`UPPER(name), MD`) and license **only when a physician encoded**; a nurse's record prints a blank name line and "License No. ________" for the wet signature.
 - **Respiratory Rate** is intentionally blank on the print form — it is not a captured vital.
 
 ### Reference number formats
@@ -360,7 +364,9 @@ Students are scheduled only through their college (a batch request the Clinic Di
 
 ---
 
-### NURSE
+### NURSE + PHYSICIAN — the Clinic Dashboard (D-64)
+
+Every page in this section is shared by the nurse and the University Physician. The sidebar's first item is **Clinic Dashboard** (the stat tiles + the clinic-wide encode history, D-44), and the sidebar role label reads "Nurse" or "Physician". The history's **Encoded by** column shows the encoder's name plus a **Nurse / Physician** badge; both roles see the same rows. (A separate clinic logs page was considered and dropped — this history is the log.)
 
 #### Live Queue (`nurse-dashboard`)
 - **Header**: blinking LIVE dot + "LIVE QUEUE" pill (peach bg, orange text) + "{n} students waiting · updated just now".
@@ -380,11 +386,11 @@ Students are scheduled only through their college (a batch request the Clinic Di
     - **Medical Case Categories** multi-select checkboxes (D-23 — a case can span several systems; each persists as a `clearance_case_categories` row): Alimentary System, Respiratory System, Musculo-Skeletal System, Integumentary System, Urinary System, Metabolic Endocrine System, Cardiovascular System, Eyes, Ears, Nose & Throat Disorders. The kiosk's **vision/hearing answers are decision support** for the "Eyes, Ears, Nose & Throat Disorders" pick — they have no physical-sign row of their own. *(Those two kiosk questions were removed by D-56.)*
     - **Purpose / Cleared For** — **read-only since D-62**: the batch reason's label (plus its specify text for Others), copied onto the clearance record on Save. The page header shows the form-type badge (Medical Clearance / Medical Assessment Form). The nurse picker and the `<x-hp.purpose-fieldset>` component are gone (D-24/D-28 superseded).
     - **Physical Signs Disorder of** (D-22, rows per D-63): twelve Yes/No rows — SKIN, HEAD, EYES, EARS, NOSE, THROAT, CHEST/LUNGS, HEART, ABDOMEN, KIDNEY/BLADDER, BRAIN, MENTAL DISORDER. The physician examines the student at the clinic; the nurse records the findings. Each row optional — an unanswered row prints as blank bubbles on the form. Stored in `clearance_records.ps_*`. **Kiosk pre-fill (D-56/D-63):** the kiosk asks these same twelve rows, so every row opens pre-checked with the student's answer, **YES and NO alike** (`ps_<key>` ← `<key>`), for the nurse to confirm or correct after the exam; a NULL kiosk answer leaves the row blank. *(Before D-56 the kiosk asked different self-report systems, mapped skin→SKIN, digestive→ABDOMEN (GIT), nose→HEENT, respiratory→CHEST/LUNGS, bones→EXTREMITIES, heart→HEART/CVS, nervous→NEUROLOGICAL, and GUT/BREAST always opened blank. From D-56 to D-63 the rows were the old form's nine — SKIN, ABDOMEN (GIT), HEENT, GUT, CHEST/LUNGS, EXTREMITIES, HEART/CVS, NEUROLOGICAL, BREAST.)*
-    - **Nurse Notes** textarea (optional) — prints under REMARKS. For a visit not yet encoded it opens **pre-filled with the student's YES details**, one `SKIN: <detail>` line each in the form's order (D-56; the twelve-row order since D-63); `old()` input wins and the nurse edits freely. A read-only encoded record shows its saved notes only.
+    - **Clinic Notes** textarea (optional; labelled "Nurse Notes" before D-64 — the column is still `nurse_notes`) — prints under REMARKS. For a visit not yet encoded it opens **pre-filled with the student's YES details**, one `SKIN: <detail>` line each in the form's order (D-56; the twelve-row order since D-63); `old()` input wins and the nurse edits freely. A read-only encoded record shows its saved notes only.
     - "Preview & Print Medical Clearance" button (ghost style, full width, Download icon).
     - "← Back" (ghost) + "Save & Close Appointment" (primary, flex-2) — Save disabled until Fit/Unfit chosen.
 
-- **On Save**: update clinic visit `status` → `encoded`, create `clearance_records` row, return to queue.
+- **On Save**: update clinic visit `status` → `encoded`, create `clearance_records` row, return to queue. **D-64:** the physician block is stamped from the encoder — a physician's own name (`UPPER(name), MD`) and license, NULL for a nurse. An encoded visit's read-only notice reads "encoded by <name> (<role>)".
 
 #### Print Medical Clearance (modal)
 - Fixed overlay (z-index 2000), modal 92% wide / 92vh.
@@ -400,7 +406,7 @@ Students are scheduled only through their college (a batch request the Clinic Di
 - Remarks / notes line — nurse notes only; case details are the physician's hand-written annotation (D-22).
 - Pregnancy question (YES/NO radio + LMP line) — pre-filled from the kiosk questionnaire (`screening_responses`).
 - Fitness declaration: "He/She is physically/mentally ☐ FIT ☐ UNFIT to undergo in:" + purpose bubbles — **the visit's form type's purposes (D-62)**, the saved batch-reason label shaded — incl. "Others, Specify: ___" — an Others purpose shades that bubble and prints the specified event on the line, clipped to fit (D-24). The college is NOT printed anywhere on the form (D-25).
-- Pre-printed physician: **REYNALDO S. ALIPIO, MD · University Physician · License No. 60252**
+- Physician block (D-64, conditional): when a **physician** encoded — their name, "University Physician", "License No. {license}"; when a **nurse** encoded — a blank name line, "University Physician", "License No. ________". Always a blank signature line above for the wet signature. *(Was the pre-printed "REYNALDO S. ALIPIO, MD · License No. 60252".)*
 - Date line + form code bottom-right.
 - Print via `window.print()`.
 
@@ -555,7 +561,8 @@ created_at, updated_at
 ### `users`
 ```sql
 id                    bigint PK
-role                  enum('student','college_admin','nurse','director')
+role                  enum('student','college_admin','nurse','physician','director')  -- physician added by D-64
+license_number        varchar(20) NULL   -- D-64: PRC license, digits only (4–10); required for physician, NULL otherwise
 name                  varchar(120)
 email                 varchar(191) UNIQUE
 email_verified_at     timestamp NULL
@@ -727,8 +734,8 @@ ps_abdomen            boolean NULL
 ps_kidney_bladder     boolean NULL
 ps_brain              boolean NULL
 ps_mental_disorder    boolean NULL
-physician_name        varchar(120) DEFAULT 'REYNALDO S. ALIPIO, MD'
-physician_license_no  varchar(20)  DEFAULT '60252'
+physician_name        varchar(120) NULL  -- D-64: no default; UPPER(encoder name) + ', MD' when a physician encoded, NULL = nurse encoded
+physician_license_no  varchar(20)  NULL  -- D-64: no default; the encoding physician's license_number, NULL = nurse encoded
 encoded_at            timestamp NULL
 printed_at            timestamp NULL
 created_at, updated_at
@@ -810,7 +817,7 @@ clinic_visits ──|| vital_signs          (1:1)
 **Form code**: DHVSU-QSP-OSS-004-FO002-R03  
 **Title**: MEDICAL CLEARANCE  
 **Issuing office**: Office of Student Welfare and Formation — Health Services Unit  
-**Pre-printed physician**: REYNALDO S. ALIPIO, MD · University Physician · License No. 60252  
+**Physician block** (D-64): the encoding physician's name + license when a physician encoded; blank name line and "License No. ________" when a nurse encoded (was pre-printed REYNALDO S. ALIPIO, MD · License No. 60252)  
 **Respiratory Rate**: intentionally blank (not a captured vital in HealthPass)  
 **Printing**: Blade view generates an HTML document rendered in an `<iframe>` inside the Encode Result screen; `window.print()` is triggered from the iframe's content window.
 
