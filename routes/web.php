@@ -19,9 +19,7 @@ use App\Http\Controllers\Nurse\KioskDeviceController as NurseKioskDeviceControll
 use App\Http\Controllers\Nurse\PrintClearanceController as NursePrintClearanceController;
 use App\Http\Controllers\Nurse\QueueController as NurseQueueController;
 use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\Student\BookAppointmentController;
 use App\Http\Controllers\Student\DashboardController as StudentDashboardController;
-use App\Http\Controllers\Student\MyAppointmentsController as StudentMyAppointmentsController;
 use App\Http\Controllers\Student\ProfileController as StudentProfileController;
 use App\Http\Controllers\Student\RecordsController as StudentRecordsController;
 use App\Http\Controllers\Student\TutorialCompletionController;
@@ -73,33 +71,21 @@ Route::middleware(['auth', 'role:student'])
     ->name('student.')
     ->group(function () {
         Route::get('/dashboard', StudentDashboardController::class)->name('dashboard');
-        Route::get('/appointments', [BookAppointmentController::class, 'show'])->name('appointments');
-        Route::get('/appointments/availability', [BookAppointmentController::class, 'availability'])->name('appointments.availability');
-        // State-changing writes carry a per-user rate cap (security.md: "Rate
-        // limiting on all endpoints"). Authed throttles key on the user id with no
-        // path, so each endpoint gets its own 3rd-arg bucket prefix — otherwise
-        // booking + cancelling would share one counter (see routes/auth.php note).
-        Route::post('/appointments', [BookAppointmentController::class, 'store'])
-            ->middleware('throttle:20,1,appt-store')->name('appointments.store');
-        Route::get('/appointments/{appointment}/confirmed', [BookAppointmentController::class, 'confirmed'])->name('appointments.confirmed');
-        Route::delete('/appointments/{appointment}', [BookAppointmentController::class, 'cancel'])
-            ->middleware('throttle:20,1,appt-cancel')->name('appointments.cancel');
-        // FR-STU-14 (D-51): every upcoming appointment, each cancellable on its
-        // own. Deliberately NOT under /appointments/... — that prefix already
-        // belongs to the booking page and carries an {appointment} wildcard.
+        // D-61: there is no student booking any more — no Book Appointment,
+        // no My Appointments. Only a Director-approved college batch creates
+        // an appointment, so every one of those old URLs is simply a 404.
         //
         // nav.seen (D-57): opening the page marks its sidebar badge as seen —
         // the argument is the badge's key. See App\Http\Middleware\MarkNavSeen.
-        Route::get('/my-appointments', StudentMyAppointmentsController::class)
-            ->middleware('nav.seen:student.my-appointments')->name('my-appointments');
         Route::get('/records', StudentRecordsController::class)
             ->middleware('nav.seen:student.records')->name('records');
         // Kiosk Tutorial (FR-STU-11): static walkthrough, no data to prepare —
         // Route::view renders the Blade view directly, no controller needed.
         Route::view('/tutorial', 'student.tutorial')->name('tutorial');
         // D-57: the walkthrough POSTs here on reaching its last step, which
-        // clears the tutorial's sidebar dot. Its own throttle bucket, for the
-        // same shared-counter reason as appt-store above.
+        // clears the tutorial's sidebar dot. Its own throttle bucket: an authed
+        // throttle keys on the user id with no path, so without the 3rd-arg
+        // prefix it would share one counter with every other student write.
         Route::post('/tutorial/complete', TutorialCompletionController::class)
             ->middleware('throttle:10,1,tutorial-complete')->name('tutorial.complete');
         Route::get('/id-profile', [StudentProfileController::class, 'show'])->name('id-profile');

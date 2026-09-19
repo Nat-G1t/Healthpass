@@ -42,11 +42,11 @@ final class NavBadges
     public const TUTORIAL_COMPLETED = 'student.tutorial_completed';
 
     /**
-     * The five "since last seen" pages: route name (which is also the
-     * nav_seen_at key) => the role whose visit stamps it.
+     * The four "since last seen" pages: route name (which is also the
+     * nav_seen_at key) => the role whose visit stamps it. (Five until D-61
+     * removed the student's My Appointments page.)
      */
     public const SEEN_PAGES = [
-        'student.my-appointments' => 'student',
         'student.records' => 'student',
         'admin.batches.index' => 'college_admin',
         'admin.activity' => 'college_admin',
@@ -121,29 +121,12 @@ final class NavBadges
     /** @return array<string, int> */
     private static function student(User $user): array
     {
-        $appointmentsSeen = self::lastSeen($user, 'student.my-appointments');
-
-        // Appointments the college booked for the student, plus batch
-        // appointments the college withdrew (FR-ADM-07). Self-bookings never
-        // count: the student made those themselves.
-        $booked = $user->appointments()
-            ->where('source', 'batch')
-            ->where('created_at', '>', $appointmentsSeen)
-            ->count();
-
-        $withdrawn = $user->appointments()
-            ->where('source', 'batch')
-            ->where('status', 'cancelled')
-            ->where('updated_at', '>', $appointmentsSeen)
-            ->count();
-
         $results = ClearanceRecord::query()
             ->where('encoded_at', '>', self::lastSeen($user, 'student.records'))
             ->whereHas('clinicVisit', fn (Builder $visit) => $visit->where('student_id', $user->id))
             ->count();
 
         return [
-            'student.my-appointments' => $booked + $withdrawn,
             'student.records' => $results,
             // A dot (a count of 1) until the walkthrough reaches its last step.
             // Once finished it never comes back.

@@ -85,8 +85,9 @@ class EncodeController extends Controller
                 // appointment whose student chose a purpose at booking, that
                 // choice is authoritative — the encode screen hid its own purpose
                 // input, so copy the student's purpose onto the clearance record
-                // (the print view reads $record->purpose unchanged). Walk-ins and
-                // purposeless appointments fall through to the nurse-entered
+                // (the print view reads $record->purpose unchanged). Legacy
+                // no-appointment visits and purposeless appointments (every batch)
+                // fall through to the nurse-entered
                 // purpose already in $validated.
                 $appointment = $visit->appointment;
                 if ($appointment && filled($appointment->purpose)) {

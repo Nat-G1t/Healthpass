@@ -41,7 +41,7 @@ class EncodeSaveTest extends TestCase
         return College::firstOrCreate(['code' => 'CCS'], ['name' => 'College of Computing Studies']);
     }
 
-    /** A captured walk-in visit (no appointment) with vitals + questionnaire. */
+    /** A captured visit with vitals + questionnaire; no appointment unless given (a legacy, pre-D-61 walk-in row). */
     private function makeVisit(?Appointment $appointment = null): ClinicVisit
     {
         $student = User::factory()->create(['role' => 'student', 'name' => 'Ana Cruz']);
@@ -203,10 +203,10 @@ class EncodeSaveTest extends TestCase
 
     // ── 3. The happy path (FR-NRS-04) ─────────────────────────────────────────
 
-    public function test_walk_in_visit_encodes_with_result_only(): void
+    public function test_a_visit_with_no_appointment_encodes_with_result_only(): void
     {
         $nurse = $this->nurse();
-        $visit = $this->makeVisit(); // walk-in: no appointment
+        $visit = $this->makeVisit(); // legacy row: no appointment
 
         $this->save($nurse, $visit, ['result' => 'Fit'])
             ->assertRedirect(route('nurse.queue'))

@@ -9,8 +9,8 @@ use Illuminate\Mail\Mailable;
 
 /**
  * FR-STU-12 (D-39) — deliver ONE student's "your appointment is scheduled"
- * email. Dispatched after the creating transaction commits, from both the
- * student's own booking and the Director's batch approval fan-out.
+ * email. Dispatched after the creating transaction commits, from the
+ * Director's batch approval fan-out (the only creation path since D-61).
  *
  * Everything about retries, recipient resolution and failure logging lives in
  * [[AppointmentMailJob]]; only the three hooks below are specific to this

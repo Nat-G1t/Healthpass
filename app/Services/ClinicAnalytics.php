@@ -52,8 +52,12 @@ final class ClinicAnalytics
     /** Donut slice colors (prototype): Male = brand orange, Female = peach. */
     private const SEX_COLORS = ['#FF8C2A', '#FFCAA0'];
 
-    /** Purpose bucket for visits with no linked appointment or no purpose. */
-    private const WALK_IN_LABEL = 'Walk-in / not specified';
+    /**
+     * Purpose bucket for visits with no recorded purpose — a batch appointment
+     * carries none, and a legacy visit may have no appointment at all. (Was
+     * "Walk-in / not specified" until D-61 removed walk-ins.)
+     */
+    private const PURPOSE_NOT_SPECIFIED_LABEL = 'Not specified';
 
     /**
      * Program bucket for visits that carry no usable program: the D-43 column
@@ -205,10 +209,9 @@ final class ClinicAnalytics
 
     /**
      * Visits by Purpose (inside the FR-ANL-09 card): the month's visits
-     * bucketed by their linked appointment's purpose. A visit with no linked
-     * appointment (walk-in, BR-10) or an appointment without a purpose falls
-     * into the "Walk-in / not specified" bucket — the LEFT JOIN yields NULL
-     * for both cases.
+     * bucketed by their linked appointment's purpose. A legacy visit with no
+     * linked appointment (pre-D-61) or an appointment without a purpose falls
+     * into the "Not specified" bucket — the LEFT JOIN yields NULL for both.
      *
      * @return array{purposeRows: list<array{label: string, count: int}>, purposeMax: int}
      */
@@ -223,7 +226,7 @@ final class ClinicAnalytics
 
         $rows = $counts
             ->map(fn (object $row) => [
-                'label' => $row->purpose ?? self::WALK_IN_LABEL,
+                'label' => $row->purpose ?? self::PURPOSE_NOT_SPECIFIED_LABEL,
                 'count' => (int) $row->visits,
             ])
             ->sortBy('label')          // stable tie-break…

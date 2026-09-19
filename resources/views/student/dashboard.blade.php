@@ -43,23 +43,21 @@
                     </svg>
                 </div>
                 <p class="text-sm font-medium text-hp-slate">No clearance yet</p>
-                <p class="mt-0.5 text-xs text-hp-slate/50">Book an appointment to get started</p>
+                <p class="mt-0.5 text-xs text-hp-slate/50">Your result appears here after your clinic visit</p>
             </div>
         @endif
 
-        <div class="mt-5">
-            <a href="{{ route('student.appointments') }}"
-               class="inline-flex w-full items-center justify-center gap-1.5 rounded-full
-                      bg-hp-orange px-4 py-2 text-xs font-semibold text-white
-                      transition-colors hover:bg-orange-500">
-                Book New Appointment
-            </a>
-        </div>
+        {{-- D-61: students never book. The college asks for the clinic
+             schedule (a batch request) and the Director approves it, so this
+             is information, not a button. --}}
+        <p class="mt-5 text-center text-xs leading-relaxed text-hp-slate/50">
+            Your college requests your clinic schedule.
+        </p>
     </x-hp.card>
 
-    {{-- Card 2: Next Appointment — wrapped in Alpine for the cancel confirm modal. --}}
-    <div x-data="{ cancelModal: false }">
-    <x-hp.card class="h-full flex flex-col">
+    {{-- Card 2: Next Appointment — read-only (D-61). Only the College Admin
+         who requested the batch can withdraw a seat (FR-ADM-07). --}}
+    <x-hp.card class="flex flex-col">
         <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
             Next Appointment
         </p>
@@ -79,11 +77,10 @@
                         {{ ucfirst($nextAppointment->service_type) }}
                     </x-hp.badge>
                     <x-hp.badge variant="pending">Scheduled</x-hp.badge>
-                    {{-- FR-STU-14 (D-51): who put this in the diary. Shown for
-                         BOTH sources and on every date — the "Booked by your
-                         college" note below is gated on a future date, so a
-                         batch appointment dated today used to say nothing at
-                         all about where it came from. --}}
+                    {{-- FR-STU-14 (D-51): who put this in the diary, on every
+                         date — the "Booked by your college" note below is gated
+                         on a future date, so without the badge an appointment
+                         dated today would say nothing about where it came from. --}}
                     <x-hp.badge variant="neutral">{{ $nextAppointment->scheduledByLabel() }}</x-hp.badge>
                 </div>
                 <p class="mt-2 flex items-center gap-1 text-xs text-hp-slate/50">
@@ -97,15 +94,9 @@
                 <p class="mt-1 text-xs text-hp-slate/40">{{ $nextAppointment->reference_no }}</p>
             </div>
 
-            {{-- D-39: batch-booked appointments show guidance instead of a button —
-                 only the College Admin who booked the cohort may withdraw one. --}}
-            @if ($nextAppointment->isSelfCancellable())
-                <div class="mt-5">
-                    <x-hp.button variant="danger" size="sm" class="w-full" @click="cancelModal = true">
-                        Cancel appointment
-                    </x-hp.button>
-                </div>
-            @elseif ($nextAppointment->source === 'batch' && $nextAppointment->scheduled_date->gt(today()))
+            {{-- D-39: guidance, not a button — only the College Admin who
+                 booked the cohort may withdraw a seat. --}}
+            @if ($nextAppointment->source === 'batch' && $nextAppointment->scheduled_date->gt(today()))
                 <p class="mt-5 text-xs leading-relaxed text-hp-slate/50">
                     Booked by your college. Contact your college administrator if you
                     need this cancelled.
@@ -123,101 +114,8 @@
                 <p class="text-sm font-medium text-hp-slate">No upcoming appointment</p>
                 <p class="mt-0.5 text-xs text-hp-slate/50">Your schedule is clear</p>
             </div>
-            <div class="mt-5">
-                <a href="{{ route('student.appointments') }}"
-                   class="inline-flex w-full items-center justify-center gap-1.5 rounded-full
-                          border border-hp-slate/25 px-4 py-2 text-xs font-semibold text-hp-slate
-                          transition-colors hover:bg-hp-slate/5">
-                    Book Appointment
-                </a>
-            </div>
         @endif
     </x-hp.card>
-
-    {{-- Cancel confirm modal — only rendered when there is a cancellable future appointment.
-
-         Teleported to <body>. Without this the dialog is laid out INSIDE this
-         card instead of over the whole screen: `position: fixed` resolves against
-         the nearest ancestor that establishes a containing block, and the card
-         carries a transform (the §6.2 motion pass), which is exactly such an
-         ancestor. Same fix, same reason, as x-logout-confirm. --}}
-    @if ($nextAppointment && $nextAppointment->isSelfCancellable())
-    <template x-teleport="body">
-    <div x-show="cancelModal" x-cloak
-         @keydown.escape.window="cancelModal = false"
-         {{-- Centred at EVERY breakpoint, like x-logout-confirm. The old
-              `items-end sm:items-center` pinned the panel to the bottom edge on
-              phones, which read as the dialog falling off the screen. --}}
-         class="fixed inset-0 z-[60] flex items-center justify-center p-4"
-         role="dialog" aria-modal="true">
-
-        {{-- Backdrop — click outside to dismiss. Its own element so a click on
-             the panel does not bubble up and close the dialog. --}}
-        <div @click="cancelModal = false"
-             class="absolute inset-0"
-             style="background-color: rgba(75,85,99,0.45);"
-             aria-hidden="true"></div>
-
-        {{-- max-h/overflow so the panel can never be taller than a short phone
-             viewport and get clipped (same guard as the Records modal). --}}
-        <div class="relative max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-2xl bg-hp-white p-6 shadow-xl">
-
-            <div class="mb-3 flex items-center gap-3">
-                {{-- A real button, not a decorative glyph: it reads as an X, so
-                     clicking it must dismiss the dialog and change nothing. --}}
-                <button type="button"
-                        @click="cancelModal = false"
-                        aria-label="Close"
-                        class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full
-                               bg-red-50 transition-colors hover:bg-red-100 focus-visible:outline-none
-                               focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-1">
-                    <svg class="h-4 w-4 text-red-500" fill="none" viewBox="0 0 24 24"
-                         stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round"
-                              d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
-                </button>
-                <h3 class="text-base font-semibold text-hp-slate">Cancel appointment?</h3>
-            </div>
-
-            <p class="text-sm text-hp-slate/70">
-                Cancel your
-                <span class="font-semibold text-hp-slate">
-                    {{ ucfirst($nextAppointment->service_type) }}
-                </span>
-                appointment on
-                <span class="font-semibold text-hp-slate">
-                    {{ $nextAppointment->scheduled_date->format('F j, Y') }}
-                </span>?
-                This frees the slot for another student.
-            </p>
-
-            <div class="mt-5 flex gap-3">
-                <button type="button"
-                        @click="cancelModal = false"
-                        class="flex-1 rounded-full border border-hp-slate/25 py-2.5 text-sm
-                               font-semibold text-hp-slate transition-colors hover:bg-hp-slate/5">
-                    Keep appointment
-                </button>
-                <form method="POST"
-                      action="{{ route('student.appointments.cancel', $nextAppointment) }}"
-                      class="flex-1">
-                    @csrf
-                    @method('DELETE')
-                    <button type="submit"
-                            class="w-full rounded-full bg-red-500 py-2.5 text-sm font-semibold
-                                   text-white transition-colors hover:bg-red-600">
-                        Yes, cancel
-                    </button>
-                </form>
-            </div>
-
-        </div>
-    </div>
-    </template>
-    @endif
-
-    </div>{{-- /x-data --}}
 
     {{-- Card 3: Past Clearances --}}
     <x-hp.card class="flex flex-col">
@@ -263,7 +161,7 @@
             </div>
             <p class="text-sm font-medium text-hp-slate">No activity yet</p>
             <p class="mt-0.5 text-xs text-hp-slate/50">
-                Your recent bookings and visits will appear here
+                Your appointments and visits will appear here
             </p>
         </div>
     @else

@@ -106,11 +106,15 @@ class DemoBatchSeederTest extends TestCase
     public function test_the_reserved_bands_do_not_collide_with_the_clinic_visit_seeder(): void
     {
         // DemoClinicVisitSeeder skips itself when ANY APT-2026-9xxx exists, so
-        // this seeder must mint none. Same story for HP-2026-90xx.
+        // this seeder must mint none. Same story for HP-2026-90xx. (Since D-61
+        // that seeder's own spread appointments are batch appointments too, so
+        // this looks only at the batches THIS seeder owns, BR-2026-90x.)
+        $ownBatchIds = BatchRequest::where('reference_no', 'like', 'BR-2026-90%')->pluck('id');
+
         $this->assertSame(
             0,
             Appointment::where('reference_no', 'like', 'APT-2026-9%')
-                ->whereNotNull('batch_request_id')->count(),
+                ->whereIn('batch_request_id', $ownBatchIds)->count(),
         );
 
         $this->assertSame(

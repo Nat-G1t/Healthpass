@@ -12,6 +12,7 @@ use App\Services\ReferenceNumberService;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /**
  * The kiosk submit use case (FR-KSK-12).
@@ -22,14 +23,21 @@ use Illuminate\Support\Facades\DB;
  * its 1:1 screening_responses), so the visit is either fully recorded or not
  * at all — a half-written visit can never reach the nurse queue.
  *
- * Two things are authoritative on the SERVER, never trusted from the browser:
+ * Three things are authoritative on the SERVER, never trusted from the browser:
  *   • BMI is recomputed from height + weight.
  *   • The three flag booleans are derived from config('healthpass.thresholds')
  *     (§7.4, BR-13/14) — the single source of truth shared with the queue and
  *     Director screens. Flags are advisory only; they never block submission.
+ *   • Whether the student may submit at all (D-61): only a student holding a
+ *     `scheduled` appointment today. There are no walk-ins, and the kiosk's
+ *     "No Clinic Schedule Today" screen is only a courtesy — this is the gate.
  */
 final class SubmitKioskVisit
 {
+    /** The refusal a student with no appointment today gets (D-61). */
+    public const NO_SCHEDULE_MESSAGE = "You don't have a clinic schedule today. Clearances are scheduled "
+        .'through your college, so please ask your college office to include you in a batch request.';
+
     public function __construct(private ReferenceNumberService $references) {}
 
     /**
@@ -48,6 +56,17 @@ final class SubmitKioskVisit
         // generateVisitRef() locks its sequence row for the life of this
         // transaction, so the reference number and the INSERT are atomic.
         return DB::transaction(function () use ($data, $vitals, $screening, $thresholds, $bmi) {
+            // D-61: no walk-ins. Resolved before anything is written, so a
+            // refusal leaves no row behind. A ValidationException is Laravel's
+            // "the input is not acceptable" error: for the kiosk's JSON request
+            // it becomes a 422 whose `message` the Review screen shows — the
+            // same shape a failed Form Request produces.
+            $appointmentId = $this->todaysAppointmentId((int) $data['studentUserId']);
+
+            if ($appointmentId === null) {
+                throw ValidationException::withMessages(['appointment' => self::NO_SCHEDULE_MESSAGE]);
+            }
+
             // Freeze the student's college AND program NOW (FR-STU-09 snapshot —
             // D-17 for the college, D-43 for the program): a later transfer or
             // program shift must not re-attribute this visit's flags, cases, or
@@ -59,7 +78,7 @@ final class SubmitKioskVisit
                 'student_id' => $data['studentUserId'],
                 'college_id' => $snapshot['college_id'],
                 'course' => $snapshot['course'],
-                'appointment_id' => $this->todaysAppointmentId((int) $data['studentUserId']), // null = walk-in (BR-10)
+                'appointment_id' => $appointmentId, // always set since D-61 (BR-10)
                 'login_method' => $data['loginMethod'],
                 'status' => 'captured', // until the nurse encodes (BR-11)
                 // Consent is captured seconds earlier in the same session; the
@@ -141,14 +160,15 @@ final class SubmitKioskVisit
     }
 
     /**
-     * Today's open appointment for this student, or null (walk-in, BR-10).
+     * Today's open appointment for this student, or null — and null means the
+     * submit is refused (D-61, BR-10).
      *
-     * D-54: a student can hold, say, a 9 AM batch appointment AND a 2 PM
-     * self-booking on the same day, so the link goes to the appointment whose
+     * D-54: a student can hold, say, a 9 AM appointment on one batch AND a 2 PM
+     * one on another the same day (their hours don't overlap, so BR-25 allows
+     * it), so the link goes to the appointment whose
      * hour STARTS closest to check-in (now()); a tie goes to the earlier hour.
      * A row with no hour (pre-D-37) has nothing to measure, so it links only
-     * when no timed appointment exists (lowest id first). Walk-ins are first-class —
-     * they flow through the queue identically.
+     * when no timed appointment exists (lowest id first).
      */
     private function todaysAppointmentId(int $studentId): ?int
     {
@@ -160,7 +180,7 @@ final class SubmitKioskVisit
             // a nurse already encoded their morning visit would re-link the same,
             // already-completed appointment — the nurse then completes it twice
             // and one appointment yields two counted visits. A second visit with
-            // no open appointment is a walk-in (appointment_id null, BR-10).
+            // no open appointment is refused (D-61).
             ->where('status', 'scheduled')
             ->orderBy('id')
             ->get(['id', 'scheduled_time']);

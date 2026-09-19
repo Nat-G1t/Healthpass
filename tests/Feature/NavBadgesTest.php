@@ -188,50 +188,17 @@ class NavBadgesTest extends TestCase
 
     public function test_each_role_gets_only_its_own_badged_items(): void
     {
-        // Dashboards, Book Appointment, New Batch Request, Analytics, My ID &
-        // Profile, Enable Kiosk Mode, Staff Accounts and Change Password carry
-        // no badge, so they are not in the map at all.
-        $this->assertSame(['student.my-appointments', 'student.records', 'student.tutorial'], array_keys($this->badges($this->student)));
+        // Dashboards, New Batch Request, Analytics, My ID & Profile, Enable
+        // Kiosk Mode, Staff Accounts and Change Password carry no badge, so
+        // they are not in the map at all. (D-61 removed the student's Book
+        // Appointment and My Appointments items.)
+        $this->assertSame(['student.records', 'student.tutorial'], array_keys($this->badges($this->student)));
         $this->assertSame(['admin.batches.index', 'admin.activity'], array_keys($this->badges($this->admin)));
         $this->assertSame(['nurse.queue'], array_keys($this->badges($this->nurse)));
         $this->assertSame(['director.batches.index', 'director.anomalies'], array_keys($this->badges($this->director)));
     }
 
     // ── Student ──────────────────────────────────────────────────────────────
-
-    public function test_an_appointment_the_college_booked_counts_until_my_appointments_is_opened(): void
-    {
-        $this->batchAppointment($this->student, $this->makeBatch('approved'));
-
-        $this->assertSame(1, $this->badges($this->student)['student.my-appointments']);
-
-        // The stamp lands BEFORE the page renders, so the item you are on reads 0.
-        $this->actingAs($this->student)->get(route('student.my-appointments'))
-            ->assertOk()
-            ->assertDontSee('data-nav-badge-for="student.my-appointments"', false);
-
-        $this->assertSame(0, $this->badges($this->student)['student.my-appointments']);
-    }
-
-    public function test_a_withdrawn_batch_appointment_counts(): void
-    {
-        $appointment = $this->batchAppointment($this->student, $this->makeBatch('approved'));
-        $this->actingAs($this->student)->get(route('student.my-appointments'))->assertOk();
-
-        $this->travel(1)->minutes();
-        // FR-ADM-07: the College Admin withdraws the seat.
-        $appointment->update(['status' => 'cancelled']);
-
-        $this->assertSame(1, $this->badges($this->student)['student.my-appointments']);
-    }
-
-    public function test_the_students_own_self_bookings_never_count(): void
-    {
-        Appointment::factory()->create(['student_id' => $this->student->id, 'source' => 'self']);
-        Appointment::factory()->cancelled()->create(['student_id' => $this->student->id, 'source' => 'self']);
-
-        $this->assertSame(0, $this->badges($this->student)['student.my-appointments']);
-    }
 
     public function test_an_encoded_record_counts_until_my_records_is_opened(): void
     {
@@ -316,7 +283,7 @@ class NavBadgesTest extends TestCase
 
         $this->travel(1)->minutes();
         $this->encode($visit);
-        // The same student's walk-in is not on any batch.
+        // A visit on no batch (a legacy, pre-D-61 walk-in row) never counts.
         $this->encode($this->captureVisit($student));
 
         $this->assertSame(1, $this->badges($this->admin)['admin.batches.index']);

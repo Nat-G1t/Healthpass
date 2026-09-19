@@ -9,6 +9,7 @@ use App\Models\ClinicVisit;
 use App\Models\College;
 use App\Models\StudentProfile;
 use App\Models\User;
+use App\Services\ClinicScheduleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
@@ -20,6 +21,7 @@ use Tests\TestCase;
  * They belong to no slot, so they must: render as an em dash rather than
  * blowing up on a null, stay invisible to the per-slot counters, still be
  * counted by the outer daily cap, and pass through the nurse queue untouched.
+ * (D-61 removed the student booking page these were first checked through.)
  */
 class LegacyAppointmentTimeTest extends TestCase
 {
@@ -69,20 +71,17 @@ class LegacyAppointmentTimeTest extends TestCase
             ->assertViewHas('nextAppointment');
     }
 
-    public function test_the_booking_confirmation_screen_renders_with_a_legacy_appointment(): void
-    {
-        $student = $this->student();
-        $appointment = $this->legacyAppointment($student, now()->addDays(3)->toDateString());
+    // ── Counting ─────────────────────────────────────────────────────────────
+    // Since D-61 the counters are read by the College Admin's batch form and
+    // the Director's approval — the student booking page they used to feed
+    // is gone — so the service is asserted directly.
 
-        $this->actingAs($student)
-            ->get(route('student.appointments.confirmed', $appointment))
-            ->assertOk()
-            ->assertSee($appointment->reference_no);
+    private function schedule(): ClinicScheduleService
+    {
+        return app(ClinicScheduleService::class);
     }
 
-    // ── Counting ─────────────────────────────────────────────────────────────
-
-    public function test_legacy_appointments_do_not_occupy_any_slot(): void
+    public function test_legacy_appointments_do_not_occupy_or_fill_any_slot(): void
     {
         $date = now()->addDays(4)->toDateString();
 
@@ -94,39 +93,11 @@ class LegacyAppointmentTimeTest extends TestCase
             'status' => 'scheduled',
         ]);
 
-        $response = $this->actingAs($this->student())
-            ->getJson(route('student.appointments.availability', [
-                'year' => Carbon::parse($date)->year,
-                'month' => Carbon::parse($date)->month,
-                'date' => $date,
-            ]))
-            ->assertOk();
-
-        foreach ($response->json('slots') as $slot) {
-            $this->assertSame(0, $slot['booked'], "{$slot['value']} should be empty");
-            $this->assertFalse($slot['full']);
+        foreach ($this->schedule()->slots() as $slot) {
+            $this->assertSame(0, $this->schedule()->bookedInSlot($date, $slot), "{$slot} should be empty");
         }
-    }
 
-    public function test_a_legacy_appointment_does_not_block_booking_its_hour(): void
-    {
-        $date = now()->addDays(4)->toDateString();
-
-        Appointment::factory()->count(12)->create([
-            'scheduled_date' => $date,
-            'scheduled_time' => null,
-            'status' => 'scheduled',
-        ]);
-
-        $this->actingAs($this->student())
-            ->post(route('student.appointments.store'), [
-                'service' => 'medical',
-                'date' => $date,
-                'time' => '07:00:00',
-                'purpose' => 'Sports Activities',
-            ])
-            ->assertRedirect()
-            ->assertSessionHasNoErrors();
+        $this->assertSame([], $this->schedule()->fullSlotsIn($date, $this->schedule()->slots()));
     }
 
     public function test_legacy_appointments_still_count_toward_the_daily_cap(): void
@@ -135,22 +106,15 @@ class LegacyAppointmentTimeTest extends TestCase
         // D-37 kept it alongside the per-hour cap.
         config(['healthpass.daily_capacity' => 3]);
 
-        $date = now()->addDays(4)->toDateString();
+        $date = Carbon::parse(now()->addDays(4)->toDateString());
 
         Appointment::factory()->count(3)->create([
-            'scheduled_date' => $date,
+            'scheduled_date' => $date->toDateString(),
             'scheduled_time' => null,
             'status' => 'scheduled',
         ]);
 
-        $this->actingAs($this->student())
-            ->post(route('student.appointments.store'), [
-                'service' => 'medical',
-                'date' => $date,
-                'time' => '07:00:00',
-                'purpose' => 'Sports Activities',
-            ])
-            ->assertSessionHasErrors('date');
+        $this->assertContains($date->day, $this->schedule()->fullDaysForMonth($date->year, $date->month));
     }
 
     // ── Nurse queue (FR-NRS-01) ──────────────────────────────────────────────

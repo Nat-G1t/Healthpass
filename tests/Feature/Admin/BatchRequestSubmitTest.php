@@ -299,13 +299,14 @@ class BatchRequestSubmitTest extends TestCase
             ], $overrides));
     }
 
-    private function selfBook(StudentProfile $profile, string $slot, array $overrides = []): Appointment
+    /** A pre-D-61 self-booking, as an old database may still hold one. */
+    private function legacySelfBooking(StudentProfile $profile, string $slot): Appointment
     {
-        return Appointment::factory()->medical()->inSlot($slot)->create(array_merge([
+        return Appointment::factory()->inSlot($slot)->create([
             'student_id' => $profile->user_id,
             'scheduled_date' => '2026-09-10',
             'source' => 'self',
-        ], $overrides));
+        ]);
     }
 
     /** @param  list<StudentProfile>  $profiles */
@@ -331,20 +332,21 @@ class BatchRequestSubmitTest extends TestCase
         return $batch;
     }
 
-    public function test_a_student_who_self_booked_inside_the_span_is_refused_with_one_error_per_clashing_student(): void
+    public function test_a_student_on_an_overlapping_batch_is_refused_with_one_error_per_clashing_student(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-09-01 08:00', 'Asia/Manila'));
 
-        [$booked, $free] = StudentProfile::factory()->count(2)->forCollege($this->ccs)->create()->all();
-        $this->selfBook($booked, '09:00:00');
+        [$held, $free] = StudentProfile::factory()->count(2)->forCollege($this->ccs)->create()->all();
+        $this->existingBatch('BR-2026-003', [$held], 'pending', '09:00:00', 1);
 
-        $this->postBatch([$booked, $free])
+        $this->postBatch([$held, $free])
             ->assertRedirect('/admin/batches/create')
-            ->assertSessionHasErrors(["clashes.{$booked->id}" => 'self-booked Sep 10, 9:00 AM – 10:00 AM'])
+            ->assertSessionHasErrors(["clashes.{$held->id}" => 'on batch BR-2026-003, 9:00 AM – 10:00 AM'])
             ->assertSessionDoesntHaveErrors("clashes.{$free->id}");
 
-        $this->assertDatabaseCount('batch_requests', 0);
-        $this->assertDatabaseCount('batch_request_students', 0);
+        // Only the batch that was there first.
+        $this->assertDatabaseCount('batch_requests', 1);
+        $this->assertDatabaseCount('batch_request_students', 1);
     }
 
     public function test_a_student_on_an_overlapping_pending_batch_is_refused(): void
@@ -361,34 +363,48 @@ class BatchRequestSubmitTest extends TestCase
         $this->assertDatabaseCount('batch_requests', 1);
     }
 
+    public function test_a_legacy_self_booking_inside_the_span_no_longer_blocks_a_batch(): void
+    {
+        // D-61 removed self-booking and with it D-54's self-booking clash.
+        Carbon::setTestNow(Carbon::parse('2026-09-01 08:00', 'Asia/Manila'));
+
+        $profile = StudentProfile::factory()->forCollege($this->ccs)->create();
+        $this->legacySelfBooking($profile, '09:00:00');
+
+        $this->postBatch([$profile])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseCount('batch_requests', 1);
+    }
+
     public function test_a_span_that_misses_every_clash_is_created(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-09-01 08:00', 'Asia/Manila'));
 
         $profile = StudentProfile::factory()->forCollege($this->ccs)->create();
-        $this->selfBook($profile, '09:00:00');
+        $this->existingBatch('BR-2026-003', [$profile], 'pending', '09:00:00', 1);
         $this->existingBatch('BR-2026-004', [$profile], 'pending', '11:00:00', 2);
 
-        // One student → 10–11 AM: after the self-booking, before the other batch.
+        // One student → 10–11 AM: after the one batch, before the other.
         $this->postBatch([$profile], ['requested_time' => '10:00:00'])->assertSessionHasNoErrors();
 
-        $this->assertDatabaseCount('batch_requests', 2);
+        $this->assertDatabaseCount('batch_requests', 3);
     }
 
     public function test_removing_the_clashing_student_lets_the_batch_submit(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-09-01 08:00', 'Asia/Manila'));
 
-        [$booked, $free] = StudentProfile::factory()->count(2)->forCollege($this->ccs)->create()->all();
-        $this->selfBook($booked, '09:00:00');
+        [$held, $free] = StudentProfile::factory()->count(2)->forCollege($this->ccs)->create()->all();
+        $this->existingBatch('BR-2026-003', [$held], 'pending', '09:00:00', 1);
 
-        $this->postBatch([$booked, $free])->assertSessionHasErrors("clashes.{$booked->id}");
+        $this->postBatch([$held, $free])->assertSessionHasErrors("clashes.{$held->id}");
 
         // What the popup's "Remove these students from the batch" button does.
         $this->postBatch([$free])->assertSessionHasNoErrors();
 
-        $this->assertDatabaseCount('batch_requests', 1);
-        $this->assertSame([$free->user_id], BatchRequestStudent::pluck('student_id')->all());
+        $this->assertDatabaseCount('batch_requests', 2);
+        $newBatch = BatchRequest::where('reference_no', '!=', 'BR-2026-003')->sole();
+        $this->assertSame([$free->user_id], $newBatch->batchRequestStudents()->pluck('student_id')->all());
     }
 
     public function test_a_student_withdrawn_from_an_approved_batch_raises_no_clash(): void
@@ -399,7 +415,9 @@ class BatchRequestSubmitTest extends TestCase
         $batch = $this->existingBatch('BR-2026-004', [$profile], 'approved', '09:00:00', 2);
 
         // FR-ADM-07: withdrawn = their appointment cancelled, the pivot row kept.
-        $appointment = $this->selfBook($profile, '09:00:00', [
+        $appointment = Appointment::factory()->inSlot('09:00:00')->create([
+            'student_id' => $profile->user_id,
+            'scheduled_date' => '2026-09-10',
             'source' => 'batch',
             'batch_request_id' => $batch->id,
             'status' => 'cancelled',
@@ -415,51 +433,50 @@ class BatchRequestSubmitTest extends TestCase
     {
         Carbon::setTestNow(Carbon::parse('2026-09-01 08:00', 'Asia/Manila'));
 
-        [$booked, $onBatch, $free] = StudentProfile::factory()->count(3)->forCollege($this->ccs)->create()->all();
-        $this->selfBook($booked, '09:00:00');
+        [$early, $onBatch, $free] = StudentProfile::factory()->count(3)->forCollege($this->ccs)->create()->all();
+        $this->existingBatch('BR-2026-003', [$early], 'approved', '09:00:00', 1);
         $this->existingBatch('BR-2026-004', [$onBatch], 'pending', '09:00:00', 2);
 
-        $this->postBatch([$booked, $onBatch, $free]);
+        $this->postBatch([$early, $onBatch, $free]);
 
         // The redirect flashed the errors and old input; the page reads both.
         $this->actingAs($this->admin)
             ->get('/admin/batches/create')
             ->assertOk()
             ->assertSee('Some students are already scheduled at this time')
-            ->assertSee('self-booked Sep 10, 9:00 AM – 10:00 AM')
+            ->assertSee('on batch BR-2026-003, 9:00 AM – 10:00 AM')
             ->assertSee('on batch BR-2026-004, 9:00 AM – 11:00 AM')
             ->assertSee('Remove these students from the batch')
             ->assertViewHas('students', fn ($students) => $students->contains('id', $free->id));
     }
 
     /**
-     * The race the Form Request's unlocked read cannot see: the student
-     * self-books 9 AM the moment the Form Request's clash query returns. Only
-     * the locked re-check inside store() can catch it.
+     * The race the Form Request's unlocked read cannot see: another batch
+     * holding the student at 9 AM lands the moment the Form Request's clash
+     * query returns. Only the locked re-check inside store() can catch it.
      */
-    public function test_a_self_booking_made_mid_submit_is_caught_by_the_locked_recheck(): void
+    public function test_a_batch_submitted_mid_submit_is_caught_by_the_locked_recheck(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-09-01 08:00', 'Asia/Manila'));
 
         $profile = StudentProfile::factory()->forCollege($this->ccs)->create();
-        $bookingInjected = false;
+        $competitorInjected = false;
 
-        DB::listen(function ($query) use (&$bookingInjected, $profile): void {
-            if ($bookingInjected
-                || ! str_contains($query->sql, 'from "appointments"')
-                || ! str_contains($query->sql, '"source"')) {
+        DB::listen(function ($query) use (&$competitorInjected, $profile): void {
+            if ($competitorInjected || ! str_contains($query->sql, 'from "batch_request_students"')) {
                 return;
             }
 
-            $bookingInjected = true; // set FIRST — the insert below re-enters this listener
-            $this->selfBook($profile, '09:00:00');
+            $competitorInjected = true; // set FIRST — the inserts below re-enter this listener
+            $this->existingBatch('BR-2026-003', [$profile], 'pending', '09:00:00', 1);
         });
 
         $this->postBatch([$profile])->assertSessionHasErrors("clashes.{$profile->id}");
 
-        $this->assertTrue($bookingInjected, 'The competing booking was never injected — the test no longer models the race.');
-        $this->assertDatabaseCount('batch_requests', 0);
-        $this->assertDatabaseCount('batch_request_students', 0);
+        $this->assertTrue($competitorInjected, 'The competing batch was never injected — the test no longer models the race.');
+        // Only the competitor; the submission itself wrote nothing.
+        $this->assertDatabaseCount('batch_requests', 1);
+        $this->assertDatabaseCount('batch_request_students', 1);
     }
 
     // ── BR-05 / FR-ADM-06: server-side scope, never the request ─────────────

@@ -75,7 +75,7 @@ class BatchApprovalController extends Controller
             'blocks' => ['nullable', 'integer', 'min:1', 'max:24'],
         ]);
 
-        // Same counting rule as self-booking (BR-02): cancelled slots are free.
+        // Same counting rule as every capacity check (BR-02): cancelled slots are free.
         $booked = $this->schedule->bookedOnDate($validated['date']);
 
         $span = isset($validated['time'], $validated['blocks'])
@@ -229,8 +229,8 @@ class BatchApprovalController extends Controller
                 'reviewed_at' => now(),
             ]);
 
-            // BR-08 fan-out. Downstream these are indistinguishable from
-            // self-booked appointments (FR-DIRA-03) apart from source/creator.
+            // BR-08 fan-out — since D-61 the ONLY way an appointment is
+            // created (FR-DIRA-03).
             //
             // D-37: students are spread across the span, hourly_capacity per
             // hour, in pivot-row id order — a deterministic assignment, so

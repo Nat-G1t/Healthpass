@@ -3,14 +3,18 @@
 namespace Database\Seeders;
 
 use App\Models\Appointment;
+use App\Models\BatchRequest;
+use App\Models\BatchRequestStudent;
 use App\Models\ClearanceRecord;
 use App\Models\ClinicVisit;
 use App\Models\College;
 use App\Models\ScreeningResponse;
 use App\Models\User;
 use App\Models\VitalSigns;
+use App\Services\ClinicScheduleService;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -32,9 +36,13 @@ use Illuminate\Support\Facades\DB;
  * (Feb–Jul 2026), all 11 colleges and both sexes, feeding every card of
  * the rescoped Director analytics (FR-ANL-09..13, D-32/D-33):
  *
- *   • medical visits with varied purposes (linked APT-2026-9xxx medical
- *     appointments) plus walk-ins (no appointment — the
- *     "Walk-in / not specified" bucket);
+ *   • every visit linked to an APT-2026-9xxx appointment on an APPROVED
+ *     college batch (BR-2026-707…) — since D-61 that is the only way a
+ *     visit happens: no self-bookings, no walk-ins. A student holds one seat
+ *     per batch, so a student's second visit in a month goes on their
+ *     college's second batch of that month, and so on. (Batch appointments
+ *     carry no purpose, so Visits by Purpose reads "Not specified" until the
+ *     batch reason becomes the purpose — prompt 03 / D-62.);
  *   • a deterministic sprinkle of BP / fever / BMI flags (FR-ANL-10);
  *   • BMI values across all four FR-ANL-12 buckets;
  *   • a few CAPTURED (un-encoded) July visits — these still count
@@ -43,9 +51,12 @@ use Illuminate\Support\Facades\DB;
  *     so the per-program reporting built in later prompts has data.
  *
  * Fully deterministic — no randomness, so re-seeding a fresh DB always
- * produces the same charts. Reference bands HP-2026-9xxx / APT-2026-9xxx
- * are reserved for synthetic data and will not collide with real
- * sequences (which start from 0001).
+ * produces the same charts. Reference bands HP-2026-9xxx / APT-2026-9xxx /
+ * APT-2026-84xx / BR-2026-7xx are reserved for synthetic data and will not
+ * collide with real sequences (the next real number is always one past the
+ * highest seeded one). The six My-Records visits sit on their own one-student
+ * CCS batches, BR-2026-701…706 with APT-2026-8401…8406 — deliberately OUTSIDE
+ * APT-2026-9xxx, whose existence makes the analytics spread skip itself.
  *
  * DELETE this seeder (and its call in DatabaseSeeder) once the real kiosk
  * starts writing clinic_visits rows directly.
@@ -77,11 +88,28 @@ class DemoClinicVisitSeeder extends Seeder
         '2026-05' => 48, '2026-06' => 64, '2026-07' => 40,
     ];
 
+    /** BR-2026-701…706 are the My-Records batches; the analytics spread starts here. */
+    private const FIRST_SPREAD_BATCH = 707;
+
+    /** Batch reasons the demo batches cycle through ('others' needs detail text, so it is left out). */
+    private const DEMO_REASONS = ['graduation', 'ojt', 'enrollment', 'scholarship', 'sports', 'fieldtrip'];
+
+    /** The Director whose approval every demo batch carries. */
+    private User $director;
+
+    /** Each college's administrator, keyed by college id — the batch's requester. @var Collection<int, User> */
+    private Collection $admins;
+
     public function run(): void
     {
         if (app()->environment('production')) {
             return;
         }
+
+        $this->director = User::where('role', 'director')->orderBy('id')->firstOrFail();
+        // keyBy() keeps the LAST row per key, so descending id order leaves the
+        // lowest-id (seeded) admin of each college.
+        $this->admins = User::where('role', 'college_admin')->orderByDesc('id')->get()->keyBy('managed_college_id');
 
         $this->seedRecordsPageVisits();
         $this->seedAnalyticsSpread();
@@ -120,6 +148,7 @@ class DemoClinicVisitSeeder extends Seeder
             'student_id' => $juan->id,
             'college_id' => $ccs->id,
             'course' => $juanCourse,
+            'appointment_id' => $this->recordsPageSeat(1, $juan, $ccs, '2026-01-10 09:02:00', 'completed', 'graduation'),
             'login_method' => 'qr',
             'status' => 'encoded',
             'privacy_consent_at' => Carbon::parse('2026-01-10 08:55:00'),
@@ -159,6 +188,7 @@ class DemoClinicVisitSeeder extends Seeder
             'student_id' => $juan->id,
             'college_id' => $ccs->id,
             'course' => $juanCourse,
+            'appointment_id' => $this->recordsPageSeat(2, $juan, $ccs, '2026-03-05 09:15:00', 'completed', 'ojt'),
             'login_method' => 'qr',
             'status' => 'encoded',
             'privacy_consent_at' => Carbon::parse('2026-03-05 09:10:00'),
@@ -202,6 +232,7 @@ class DemoClinicVisitSeeder extends Seeder
             'student_id' => $maria->id,
             'college_id' => $ccs->id,
             'course' => $mariaCourse,
+            'appointment_id' => $this->recordsPageSeat(3, $maria, $ccs, '2026-02-03 11:00:00', 'completed', 'scholarship'),
             'login_method' => 'qr',
             'status' => 'encoded',
             'privacy_consent_at' => Carbon::parse('2026-02-03 10:50:00'),
@@ -241,6 +272,7 @@ class DemoClinicVisitSeeder extends Seeder
             'student_id' => $juan->id,
             'college_id' => $ccs->id,
             'course' => $juanCourse,
+            'appointment_id' => $this->recordsPageSeat(4, $juan, $ccs, '2026-06-15 08:45:00', 'scheduled', 'sports'),
             'login_method' => 'qr',
             'status' => 'captured',
             'privacy_consent_at' => Carbon::parse('2026-06-15 08:40:00'),
@@ -272,6 +304,7 @@ class DemoClinicVisitSeeder extends Seeder
             'student_id' => $maria->id,
             'college_id' => $ccs->id,
             'course' => $mariaCourse,
+            'appointment_id' => $this->recordsPageSeat(5, $maria, $ccs, '2026-05-10 09:00:00', 'scheduled', 'fieldtrip'),
             'login_method' => 'qr',
             'status' => 'captured',
             'privacy_consent_at' => Carbon::parse('2026-05-10 08:55:00'),
@@ -308,6 +341,7 @@ class DemoClinicVisitSeeder extends Seeder
             'student_id' => $maria->id,
             'college_id' => $ccs->id,
             'course' => $mariaCourse,
+            'appointment_id' => $this->recordsPageSeat(6, $maria, $ccs, '2026-06-20 08:30:00', 'scheduled', 'enrollment'),
             'login_method' => 'qr',
             'status' => 'captured',
             'privacy_consent_at' => Carbon::parse('2026-06-20 08:25:00'),
@@ -337,7 +371,8 @@ class DemoClinicVisitSeeder extends Seeder
     }
 
     /**
-     * The multi-month analytics spread (HP-2026-9101… / APT-2026-9001…):
+     * The multi-month analytics spread (HP-2026-9101… / APT-2026-9001… /
+     * BR-2026-707…):
      * six months of clinic visits feeding every card of the rescoped
      * analytics. Replaces the pre-D-32 single-month
      * spread and Apr–Jun bands — any of those stale rows are purged first
@@ -384,9 +419,18 @@ class DemoClinicVisitSeeder extends Seeder
             $aptSeq = 0;
 
             // ── Medical visits, month by month ───────────────────────────
+            // D-61: every visit sits on an approved college batch, and a
+            // student holds ONE seat per batch — so a student's second visit
+            // in a month goes on their college's second batch that month (its
+            // "round"), and so on. Plan the month first, so each batch knows
+            // its roster size when it is created.
+            $collegeCodes = array_keys(self::COLLEGE_WEIGHTS);
             $monthIndex = 0;
+            $batchSeq = self::FIRST_SPREAD_BATCH;
             foreach (self::MEDICAL_VOLUME as $yearMonth => $visitCount) {
                 $monthIndex++;
+                $plan = [];
+                $visitsThisMonth = []; // student id => visits planned so far
 
                 for ($i = 0; $i < $visitCount; $i++) {
                     $code = $slots[($i * 7 + $monthIndex * 13) % count($slots)];
@@ -396,20 +440,45 @@ class DemoClinicVisitSeeder extends Seeder
                         continue; // no students seeded for this unit — skip
                     }
 
+                    $student = $students[$i % $students->count()];
+                    $round = $visitsThisMonth[$student->id] ?? 0;
+                    $visitsThisMonth[$student->id] = $round + 1;
+                    $plan[] = ['i' => $i, 'code' => $code, 'student' => $student, 'round' => $round, 'batch' => "{$code}|{$round}"];
+                }
+
+                $rosterSizes = array_count_values(array_column($plan, 'batch'));
+                $batches = [];
+
+                foreach ($plan as $visit) {
+                    $collegeIndex = array_search($visit['code'], $collegeCodes, true);
+
+                    $batches[$visit['batch']] ??= $this->approvedBatch(
+                        reference: sprintf('BR-2026-%03d', $batchSeq),
+                        college: $colleges[$visit['code']],
+                        // Days 21–28: clear of every My-Records visit date, and a
+                        // different day per round, so a student's batches never overlap.
+                        date: Carbon::parse(sprintf('%s-%02d', $yearMonth, 21 + (($visit['round'] * 3 + $monthIndex + $collegeIndex) % 8))),
+                        slot: sprintf('%02d:00:00', 8 + (($collegeIndex + $visit['round']) % 8)),
+                        studentCount: $rosterSizes[$visit['batch']],
+                        reason: self::DEMO_REASONS[$batchSeq++ % count(self::DEMO_REASONS)],
+                    );
+
                     $this->createSpreadMedicalVisit(
                         visitSeq: $visitSeq++,
                         aptSeq: $aptSeq,
-                        student: $students[$i % $students->count()],
-                        college: $colleges[$code],
+                        batch: $batches[$visit['batch']],
+                        student: $visit['student'],
+                        college: $colleges[$visit['code']],
                         nurse: $nurse,
-                        yearMonth: $yearMonth,
-                        dayIndex: $i,
+                        // A few July visits stay captured — the nurse hasn't encoded yet.
+                        isCaptured: $yearMonth === '2026-07' && $visit['i'] % 5 === 0,
                     );
                 }
             }
 
+            $batchCount = $batchSeq - self::FIRST_SPREAD_BATCH;
             $this->command->info(
-                "DemoClinicVisitSeeder: {$visitSeq} clinic visits + {$aptSeq} appointments seeded across Feb–Jul 2026."
+                "DemoClinicVisitSeeder: {$visitSeq} clinic visits + {$aptSeq} batch appointments on {$batchCount} approved batches seeded across Feb–Jul 2026."
             );
         });
     }
@@ -444,54 +513,43 @@ class DemoClinicVisitSeeder extends Seeder
      * One spread medical visit. Everything derives from the counters —
      * deterministic, no randomness:
      *
-     *   • ~2/3 are linked to a purposeful medical appointment (the Visits
-     *     by Purpose buckets), the rest are walk-ins;
+     *   • it sits on $batch — a seat (appointment + roster row) is created
+     *     for the student, and the visit is checked in during the batch's
+     *     hour on its clinic date (D-61: no self-bookings, no walk-ins);
      *   • a sprinkle of BP / fever / BMI flags (FR-ANL-10);
      *   • July visits are partly CAPTURED (un-encoded) — they still count
      *     (FR-ANL-07 as rewritten).
      *
-     * $aptSeq is by-ref: it advances only when a linked appointment is
-     * actually created.
+     * $aptSeq is by-ref: it advances with every appointment created.
      */
     private function createSpreadMedicalVisit(
         int $visitSeq,
         int &$aptSeq,
+        BatchRequest $batch,
         User $student,
         College $college,
         User $nurse,
-        string $yearMonth,
-        int $dayIndex,
+        bool $isCaptured,
     ): void {
-        $checkedIn = Carbon::createFromFormat('Y-m-d', sprintf('%s-%02d', $yearMonth, ($dayIndex % 17) + 1))
-            ->setTime(8 + ($dayIndex % 8), ($visitSeq % 12) * 5);
+        $checkedIn = $batch->scheduled_date->copy()
+            ->setTimeFromTimeString($batch->requested_time)
+            ->addMinutes(($visitSeq % 12) * 5);
 
-        // A few July visits stay captured — the nurse hasn't encoded yet.
-        $isCaptured = $yearMonth === '2026-07' && $dayIndex % 5 === 0;
-
-        // 2/3 booked ahead (with a purpose), 1/3 walk-in (no appointment).
-        $appointmentId = null;
-        if ($visitSeq % 3 !== 0) {
-            $purposes = [...ClearanceRecord::PURPOSES, ClearanceRecord::PURPOSE_OTHERS];
-            $purpose = $purposes[$visitSeq % count($purposes)];
-
-            $appointmentId = Appointment::create([
-                'reference_no' => sprintf('APT-2026-%d', 9001 + $aptSeq++),
-                'student_id' => $student->id,
-                'service_type' => 'medical',
-                'purpose' => $purpose,
-                'purpose_other' => $purpose === ClearanceRecord::PURPOSE_OTHERS ? 'University Intramurals' : null,
-                'scheduled_date' => $checkedIn->toDateString(),
-                'status' => $isCaptured ? 'checked_in' : 'completed',
-                'source' => 'self',
-            ])->id;
-        }
+        // The kiosk links the visit but leaves the appointment `scheduled`;
+        // only the nurse's encode completes it (Nurse\EncodeController).
+        $appointment = $this->seat(
+            $batch,
+            $student,
+            sprintf('APT-2026-%d', 9001 + $aptSeq++),
+            $isCaptured ? 'scheduled' : 'completed',
+        );
 
         $visit = ClinicVisit::create([
             'reference_no' => sprintf('HP-2026-%d', 9101 + $visitSeq),
             'student_id' => $student->id,
             'college_id' => $college->id, // capture-time snapshot (FR-STU-09, D-17)
             'course' => $student->studentProfile?->course, // program snapshot (D-43)
-            'appointment_id' => $appointmentId,
+            'appointment_id' => $appointment->id,
             'login_method' => $visitSeq % 4 === 0 ? 'email' : 'qr',
             'status' => $isCaptured ? 'captured' : 'encoded',
             'privacy_consent_at' => $checkedIn->copy()->subMinutes(5),
@@ -510,6 +568,108 @@ class DemoClinicVisitSeeder extends Seeder
                 'encoded_at' => $checkedIn->copy()->addHours(2),
             ]);
         }
+    }
+
+    // ── Batches (D-61: every appointment comes from one) ─────────────────────
+
+    /**
+     * One of the six My-Records visits' own batch: a one-student CCS batch,
+     * BR-2026-70{n}, with the appointment APT-2026-840{n}. Returns the
+     * appointment id for the visit to link.
+     */
+    private function recordsPageSeat(
+        int $n,
+        User $student,
+        College $college,
+        string $checkedIn,
+        string $appointmentStatus,
+        string $reason,
+    ): int {
+        $checkedInAt = Carbon::parse($checkedIn);
+
+        $batch = $this->approvedBatch(
+            reference: 'BR-2026-70'.$n,
+            college: $college,
+            date: $checkedInAt->copy()->startOfDay(),
+            slot: $checkedInAt->format('H').':00:00',
+            studentCount: 1,
+            reason: $reason,
+        );
+
+        return $this->seat($batch, $student, 'APT-2026-840'.$n, $appointmentStatus)->id;
+    }
+
+    /**
+     * A batch the way a Director's approval leaves it (FR-DIRA-02, BR-08):
+     * requested by the college's admin five days before the clinic date,
+     * approved two days before, `scheduled_date` = `requested_date` (D-36).
+     *
+     * The timestamps are set by hand so the Activity Log and Batch Tracking
+     * show these as history rather than as today's submissions. Eloquent
+     * keeps a created_at/updated_at that was set explicitly instead of
+     * stamping "now".
+     */
+    private function approvedBatch(
+        string $reference,
+        College $college,
+        Carbon $date,
+        string $slot,
+        int $studentCount,
+        string $reason,
+    ): BatchRequest {
+        $submittedAt = $date->copy()->subDays(5)->setTime(10, 0);
+        $approvedAt = $date->copy()->subDays(2)->setTime(14, 0);
+
+        $batch = new BatchRequest([
+            'reference_no' => $reference,
+            'college_id' => $college->id,
+            'requested_by' => $this->admins[$college->id]->id,
+            'reason' => $reason,
+            'service_type' => 'medical',
+            'requested_date' => $date->toDateString(),
+            'requested_time' => $slot,
+            'requested_blocks' => app(ClinicScheduleService::class)->blocksFor($studentCount),
+            'scheduled_date' => $date->toDateString(),
+            'status' => 'approved',
+            'reviewed_by' => $this->director->id,
+            'reviewed_at' => $approvedAt,
+        ]);
+        $batch->created_at = $submittedAt;
+        $batch->updated_at = $approvedAt;
+        $batch->save();
+
+        return $batch;
+    }
+
+    /**
+     * One student's seat on an approved batch: the appointment the approval
+     * generated plus the roster row that points at it (BR-08), created at the
+     * moment of approval.
+     */
+    private function seat(BatchRequest $batch, User $student, string $reference, string $status): Appointment
+    {
+        $appointment = new Appointment([
+            'reference_no' => $reference,
+            'student_id' => $student->id,
+            'service_type' => 'medical',
+            'scheduled_date' => $batch->scheduled_date->toDateString(),
+            'scheduled_time' => $batch->requested_time,
+            'status' => $status,
+            'source' => 'batch',
+            'batch_request_id' => $batch->id,
+            'created_by' => $this->director->id,
+        ]);
+        $appointment->created_at = $batch->reviewed_at;
+        $appointment->updated_at = $batch->reviewed_at;
+        $appointment->save();
+
+        BatchRequestStudent::create([
+            'batch_request_id' => $batch->id,
+            'student_id' => $student->id,
+            'appointment_id' => $appointment->id,
+        ]);
+
+        return $appointment;
     }
 
     /**

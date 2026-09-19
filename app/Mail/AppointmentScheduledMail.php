@@ -14,10 +14,9 @@ use Illuminate\Queue\SerializesModels;
 /**
  * FR-STU-12 (D-39) — "your appointment is scheduled" notice.
  *
- * Sent for BOTH sources: the student's own booking (FR-STU-04) and each
- * appointment a Director's batch approval fans out (BR-08). Same Mailable, same
- * template; the template branches on `$appointment->source` for the couple of
- * lines that genuinely differ (who booked it, who can cancel it).
+ * Sent for each appointment a Director's batch approval fans out (BR-08) —
+ * since D-61 the only way an appointment is created. It used to branch for a
+ * student's own booking as well; that branch went with self-booking.
  *
  * SCHEDULING ONLY. This mail must never carry a clearance outcome, Fit/Unfit,
  * vitals or questionnaire answers — those reach the student through My Records
@@ -55,7 +54,6 @@ class AppointmentScheduledMail extends Mailable
                 // returns null and the template drops the row.
                 'timeRange' => $this->appointment->timeRangeLabel(),
                 'purposeText' => $this->appointment->purposeText(),
-                'isBatch' => $this->appointment->source === 'batch',
                 'collegeName' => $this->appointment->batchRequest?->college?->name,
                 'clinicLocation' => (string) config('healthpass.clinic_location'),
                 'tutorialUrl' => route('student.tutorial'),

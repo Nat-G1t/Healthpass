@@ -31,7 +31,7 @@ class DashboardController extends Controller
             // and analytics only ever count encoded records (FR-ANL-07).
             'clearances' => ClearanceRecord::count(),
             'pendingBatches' => BatchRequest::where('status', 'pending')->count(),
-            // Same counting rule as self-booking capacity (BR-02):
+            // Same counting rule as clinic capacity (BR-02):
             // cancelled appointments don't occupy the day.
             'todaysAppointments' => Appointment::whereDate('scheduled_date', today())
                 ->where('status', '!=', 'cancelled')

@@ -427,7 +427,7 @@ class EncodePageTest extends TestCase
             ->assertDontSee('— Optional —');
     }
 
-    public function test_walk_in_visit_still_shows_the_purpose_dropdown(): void
+    public function test_a_visit_with_no_appointment_still_shows_the_purpose_dropdown(): void
     {
         // No appointment (or a purposeless one) → the nurse-entered dropdown
         // stays exactly as before.

@@ -16,7 +16,7 @@ use Symfony\Component\HttpFoundation\Response;
  *
  * Used as ->middleware('nav.seen:student.records'). The part after the colon is
  * a MIDDLEWARE PARAMETER: Laravel passes it to handle() as an extra argument,
- * so one class serves all five pages. It is the page's route name, which is
+ * so one class serves all four pages. It is the page's route name, which is
  * also its key in users.nav_seen_at.
  *
  * ORDER MATTERS. The sidebar renders inside $next(), while the page is being

@@ -1,4 +1,4 @@
-# HealthPass — End-to-End UAT Scenarios (E2E-1…E2E-11)
+# HealthPass — End-to-End UAT Scenarios (E2E-1…E2E-13)
 
 Source: `docs/HealthPass_PRD.md` §13 (Acceptance & UAT). These are the
 Week-11 end-to-end acceptance runs, written as step-by-step checklists a
@@ -53,30 +53,41 @@ School); any `@psu.edu.ph` student in the seeder works. A full list is in the
 
 ---
 
-## E2E-1 — Self-booked medical clearance (happy path)
+## E2E-1 — College-scheduled medical clearance (happy path)
 
-**Goal:** a student books a Medical Clearance, completes the kiosk, the nurse
-encodes **Fit** and prints, and the result shows up in the student's records.
+**Goal:** the student's college schedules them (a batch the Director
+approves), the student completes the kiosk, the nurse encodes **Fit** and
+prints, and the result shows up in the student's records. Since **D-61**
+students never book for themselves and never walk in.
 
-**Account:** Student `juan.santos@psu.edu.ph`, then Nurse `nurse@healthpass.test`.
+**Account:** CCS Admin `admin.ccs@healthpass.test`, Director
+`director@healthpass.test`, Student `juan.santos@psu.edu.ph`, then Nurse
+`nurse@healthpass.test`.
 
 **Steps:**
 
-1. Go to `http://127.0.0.1:8080/login`. Log in as `juan.santos@psu.edu.ph` /
-   `password`. → **Expect:** the Student Dashboard.
-2. Click **Book New Appointment** (or go to `/student/appointments`).
-3. Select the **Medical Clearance** service card. → **Expect:** the card
-   highlights.
-4. On the calendar, click a **future weekday that is not greyed "FULL"**.
-   → **Expect:** the date highlights and **Confirm Booking** becomes enabled.
-5. Click **Confirm Booking** → in the modal ("Book Medical Clearance on
-   {date}?") click **Yes, book it**. → **Expect:** a confirmation screen
-   showing Service, Date, Clinic Hours (7:00 AM–5:00 PM), and a reference like
-   `APT-2026-0001`.
-6. **Record the reference number.** Log out.
-7. **This scenario assumes the appointment is for today** so the kiosk links
-   it. If your booked date is not today, either book for today, or expect the
-   kiosk to record a walk-in (that's fine — it still flows through the queue).
+1. Log in as `admin.ccs@healthpass.test`, open **New Batch Request**. Choose
+   any **Reason**, click **today** on the Requested Clinic Date calendar, pick
+   a **Start time** that has not ended yet, tick **Juan Santos** (and **Maria
+   Reyes** too if you will run E2E-2 today), and click **Submit Batch
+   Request**. → **Expect:** the confirmation screen, "Pending Director
+   Approval". Log out.
+2. Log in as `director@healthpass.test`, open **Batch Approvals**, click
+   **Approve** on that batch and confirm. → **Expect:** the row reads
+   "✓ Approved". Log out.
+3. Log in as `juan.santos@psu.edu.ph` / `password`. → **Expect:** the Student
+   Dashboard. **Next Appointment** shows today's date and hour with a
+   **"Booked by College of Computing Studies"** badge and **no Cancel
+   button**.
+4. → **Expect:** the **Clearance Status** card reads "Your college requests
+   your clinic schedule." and the sidebar has **no** Book Appointment or My
+   Appointments item (E2E-13 checks this in full).
+5. **Record the reference number** (`APT-…`) shown on the Next Appointment
+   card.
+6. Log out.
+7. The appointment is for **today**, so the kiosk will link it and skip the
+   "No Clinic Schedule Today" screen. (A student with nothing today cannot
+   use the kiosk at all — that is E2E-12.)
 8. Open the kiosk: `http://127.0.0.1:8080/kiosk`. → **Expect:** the Welcome
    screen (pulsing QR target + "Log in with email").
 9. Click **Lost ID? Log in with email**. Type `juan.santos@psu.edu.ph` and
@@ -84,9 +95,10 @@ encodes **Fit** and prints, and the result shows up in the student's records.
    Identity Confirm screen with Juan's name, college (CCS), course, year, and
    student number.
 10. Click **That's me — Continue**.
-11. **Walk-in check:** if Juan has an appointment today the flow goes straight
-    to Privacy Consent; if not, you'll see "No Scheduled Clearance Today" —
-    click **Proceed as Walk-in**.
+11. **Schedule check:** Juan has an appointment today, so the flow goes
+    straight to Privacy Consent. (If you see "No Clinic Schedule Today"
+    instead, the batch from steps 1–2 is not approved for today — go back and
+    fix that; there is no way forward from that screen.)
 12. On **Privacy Consent**, click **I Agree — Proceed**.
 13. **Vitals — Height:** click **Enter manually**, type a normal height (e.g.
     `165`), confirm, click **Next**.
@@ -125,28 +137,29 @@ encodes **Fit** and prints, and the result shows up in the student's records.
     (`/student/records`). → **Expect:** a record with a **Fit** result badge
     and the visit's vitals in the detail modal.
 
-**Pass criteria:** booking created → kiosk submitted with no result shown →
-appeared in queue ≤ 5 s → encoded Fit and printed → **Fit** visible only now
-in My Records.
+**Pass criteria:** college batch approved for today → read-only appointment on
+the dashboard → kiosk submitted with no result shown → appeared in queue
+≤ 5 s → encoded Fit and printed → **Fit** visible only now in My Records.
 
 ---
 
-## E2E-2 — Walk-in with flags (fever + high BP) → encode Unfit
+## E2E-2 — Flags (fever + high BP) → encode Unfit
 
-**Goal:** a student with **no booking** completes the kiosk with feverish /
+**Goal:** a college-scheduled student completes the kiosk with feverish /
 high-BP values; the flags appear in the nurse queue and the Director's Flagged
-Anomalies, and the nurse encodes **Unfit**.
+Anomalies, and the nurse encodes **Unfit**. (This used to be run as a walk-in;
+since D-61 there are none.)
 
 **Account:** Student `maria.reyes@psu.edu.ph`, then Nurse, then Director.
 
 **Steps:**
 
-1. **Do not book anything** for Maria. (If she has an appointment today,
-   pick a different student who does not.)
+1. Make sure **Maria has an appointment today**: tick her on the batch in
+   E2E-1 steps 1–2, or run those two steps again for her.
 2. Open `http://127.0.0.1:8080/kiosk`. On Welcome, click **Log in with
    email**, enter `maria.reyes@psu.edu.ph` / `password`, press **Enter**.
-3. Click **That's me — Continue**. → **Expect:** the "No Scheduled Clearance
-   Today" screen. Click **Proceed as Walk-in**.
+3. Click **That's me — Continue**. → **Expect:** straight to Privacy Consent
+   (she has an appointment today).
 4. Click **I Agree — Proceed** on Privacy Consent.
 5. **Height:** enter `160`. **Weight:** enter `85` → **Expect:** BMI ~`33.2`
    shown with an **Abnormal BMI / Obese** status (threshold ≥ 30.0).
@@ -216,10 +229,12 @@ students.
    can no longer be re-approved.
 7. Log in as one of the batch students (e.g. `carlo.cruz@psu.edu.ph`), open the
    Dashboard. → **Expect:** the generated appointment appears under Next
-   Appointment on the approved date, looking like any self-booked one.
+   Appointment on the approved date, with a **"Booked by College of Computing
+   Studies"** badge and no Cancel button (D-61).
 8. Take **that student** through the kiosk (as in E2E-1, email login) on the
    approved date. → **Expect:** the visit **links to the appointment**
-   (appears in the queue, not as a walk-in).
+   (there are no walk-ins since D-61 — a student with no appointment today
+   is turned away, E2E-12).
 9. Repeat for a second sampled student.
 10. Log back in as `admin.ccs@healthpass.test` and open **Batch Tracking**. →
     **Expect:** a **Batch Results** card **above** the requests table, listing
@@ -323,7 +338,7 @@ blocked. Every step here **passes only if the action is refused.**
    **Expect:** the result is still **only CCS students** (scope is enforced
    server-side, not by the URL).
 6. **Direct POST without CSRF** (developer-assisted). Using browser devtools or
-   a tool like curl, POST to a state-changing endpoint (e.g. `/student/appointments`)
+   a tool like curl, POST to a state-changing endpoint (e.g. `/admin/batches`)
    **without** a valid CSRF token. → **Expect:** **HTTP 419 / rejected**.
 
 **Pass criteria:** every attempt above is refused. Zero cross-role or
@@ -340,9 +355,9 @@ and that a crafted dental request cannot get one into the database.
 
 **Steps:**
 
-1. Log in as the student, go to **Book Appointment**. → **Expect:** a single
-   service card, **Medical Clearance**. No Dental Check card, no tooth icon,
-   and no "Dental" anywhere on the page.
+1. Log in as the student. → **Expect:** there is no Book Appointment page to
+   check any more (D-61 — `/student/appointments` is a 404), and no "Dental"
+   anywhere on the dashboard.
 2. Log in as the College Admin, go to **New Batch Request**. → **Expect:** the
    form asks for Reason, Requested Clinic Date, start hour and students —
    there is **no Service Type field** and no "Dental" on the page. Submit a
@@ -360,14 +375,14 @@ and that a crafted dental request cannot get one into the database.
    column, no legend, no "Dental" in either view.
 6. Press **Ctrl+F** on each of those four pages and search for `Dental`. →
    **Expect:** zero matches on every one.
-7. Open the kiosk and run a student through the walk-in check. → **Expect:**
-   the wording says "appointment", never "medical or dental".
+7. Open the kiosk and log in as a student with no appointment today. →
+   **Expect:** the "No Clinic Schedule Today" screen never mentions dental.
 
 **Pass criteria:** the word "Dental" appears nowhere in the web app or the
 kiosk; the New Batch form has no Service Type field; both analytics pages and
 the printed report carry a single Visits series; and a batch always stores
-`service_type = 'medical'` (a posted `service_type=dental` is ignored, and a
-dental booking is refused server-side).
+`service_type = 'medical'` (a posted `service_type=dental` is ignored; since
+D-61 there is no student booking to refuse).
 
 ---
 
@@ -471,72 +486,54 @@ and `?college=` cannot move the scope.
 
 ---
 
-## E2E-9 — A student can't be double-booked by a batch and a self-booking (D-54)
+## E2E-9 — A student can't be double-booked by two batches (D-54, D-61)
 
 **Goal:** confirm a College Admin cannot put a student into a batch during an
-hour that student already self-booked, that a student cannot self-book an hour
-their college's batch already holds, and that the New Batch page's clash popup,
-its **Remove** button and the new mini calendar all work.
+hour another batch already holds for them, and that the New Batch page's clash
+popup, its **Remove** button and the mini calendar all work. (Before D-61 this
+scenario also covered a student's own self-booking; self-booking is gone.)
 
 **Accounts:** students `juan.santos@psu.edu.ph` and `maria.reyes@psu.edu.ph`
 (both CCS), and the CCS Admin `admin.ccs@healthpass.test`.
 
-**Steps — a batch after a self-booking:**
+**Steps:**
 
-1. Log in as **Juan Santos**. Book Appointment → **Medical Clearance** → pick a
-   date at least two days ahead → **9:00 AM – 10:00 AM** → any purpose →
-   Confirm Booking → Yes, book it. → **Expect:** the booking confirmation.
-   Write down the date. Log out.
-2. Log in as the **CCS admin** and open **New Batch Request**. → **Expect:**
+1. Log in as the **CCS admin** and open **New Batch Request**. → **Expect:**
    "Requested clinic date" is a **small month calendar**, not a date box. Past
    days are faded and cannot be clicked, the left arrow is disabled on the
    current month, the right arrow moves forward and back again, and any FULL
    day is greyed with a "Full" label.
-3. Click Juan's date on the calendar. → **Expect:** "Selected: <that date>"
-   appears under it. Choose a **Reason**, **Service = Medical**, **Start time
-   9:00 AM – 10:00 AM**, and tick **Juan Santos** and **Maria Reyes**. Click
-   **Submit Batch Request**.
+2. Click a date **at least two days ahead**. → **Expect:** "Selected: <that
+   date>" appears under it. Choose a **Reason**, **Start time 9:00 AM –
+   10:00 AM**, tick **Juan Santos only**, and submit. → **Expect:** the
+   confirmation screen with a `BR-` number (call it batch A). Write down the
+   date.
+3. Start another **New Batch Request** for the **same date**, **Start time
+   9:00 AM – 10:00 AM**, and tick **Juan Santos** and **Maria Reyes**. Submit.
 4. → **Expect:** the page comes back with a popup titled **"Some students are
    already scheduled at this time"**. It lists **Juan Santos**, his student
-   number and "self-booked <Mon DD>, 9:00 AM – 10:00 AM". **Maria is not
-   listed.** Behind the popup the reason, service, date, start hour and both
-   ticks are still filled in. Batch Tracking shows **no** new batch.
+   number and "on batch <batch A's BR- number>, 9:00 AM – 10:00 AM". **Maria is
+   not listed.** Behind the popup the reason, date, start hour and both ticks
+   are still filled in. Batch Tracking shows **no** new batch.
 5. Click **Close**. → **Expect:** the popup closes and **both** students are
    still ticked.
 6. Change **Start time** to **10:00 AM – 11:00 AM** (the batch no longer covers
    9 AM) and submit. → **Expect:** the confirmation screen with a new `BR-`
    number. Two students need one hour, so this batch holds 10–11 AM.
 7. Start another **New Batch Request** for the **same date**, **Start time
-   9:00 AM – 10:00 AM**, ticking Juan and Maria again (Maria's other batch is
-   10–11, which 9–10 does not overlap). Submit. → **Expect:** the popup lists
-   **Juan only**. Click **Remove these students from the batch**. →
-   **Expect:** the popup closes, **Juan is unticked**, Maria is still ticked,
-   and the "(N of M selected)" counter drops by one. Submit again. →
-   **Expect:** the confirmation screen.
+   10:00 AM – 11:00 AM**, ticking Juan and **Carlo Cruz**. Submit. →
+   **Expect:** the popup lists **Juan only** (step 6's batch holds him at
+   10–11). Click **Remove these students from the batch**. → **Expect:** the
+   popup closes, **Juan is unticked**, Carlo is still ticked, and the "(N of M
+   selected)" counter drops by one. Submit again. → **Expect:** the
+   confirmation screen.
 
-**Steps — a self-booking after a batch:**
-
-8. Log out and log in as **Maria Reyes** — the pending batches from steps 6
-   and 7 hold her 9–10 AM and 10–11 AM on that date. Book Appointment →
-   **Medical Clearance** → the same date. → **Expect:** tapping the date and then
-   the **10:00 AM – 11:00 AM** hour works normally — nothing is refused yet.
-9. Confirm Booking → Yes, book it. → **Expect:** a popup titled **"Already
-   Scheduled by Your College"** reading "<Day, Mon DD>, 10:00 AM – 11:00 AM has
-   already been scheduled for you by your college admin." It shows **no**
-   `BR-` number and no other student's name. No appointment is created (her
-   dashboard's Next Appointment is unchanged).
-10. Close it, pick **2:00 PM – 3:00 PM** on the same date and book. →
-    **Expect:** the booking succeeds — a different hour on the same day does
-    not clash.
-
-**Pass criteria:** a batch is refused while any ticked student already holds an
-hour inside its span; the popup lists exactly those students and what they
-clash with; **Close** keeps the selection and **Remove** deselects only the
-listed students; a span that misses the booked hour submits; the student is
-refused on **Book** (never on tapping a date or hour) with the college-admin
-message and no batch reference; a non-overlapping hour on the same day books
-normally; the mini calendar disables past and FULL days and its month arrows
-work.
+**Pass criteria:** a batch is refused while any ticked student is already held
+by another pending or approved batch during its span; the popup lists exactly
+those students and the batch they clash with; **Close** keeps the selection
+and **Remove** deselects only the listed students; a span that misses the held
+hour submits; the mini calendar disables past and FULL days and its month
+arrows work.
 
 ---
 
@@ -591,8 +588,9 @@ Live Queue number and the Director's Batch Approvals number.
 
 **Steps — Student:**
 
-7. Log in as **Carlo Cruz**. → **Expect:** **My Appointments** shows a dot
-   (the college booked him). Open it. → **Expect:** the badge is gone.
+7. Log in as **Carlo Cruz**. → **Expect:** there is **no My Appointments**
+   item (D-61 removed it with its badge); the appointment the college booked
+   is on the dashboard's Next Appointment card.
 8. **Kiosk Tutorial** shows a dot. Open it but do **not** click Get Started;
    click Dashboard. → **Expect:** the dot is **still there**.
 9. Open Kiosk Tutorial → **Get Started** → **Next** until the card reads
@@ -718,6 +716,74 @@ limit bring Start back without resetting the session; numbers being typed or
 already typed are never replaced; the retake note appears only for a flagged
 reading and never blocks; the kiosk never mentions an irregular pulse while the
 nurse's encode page does; a wrong key gets 403 and impossible numbers get 422.
+
+---
+
+## E2E-12 — No clinic schedule today: the kiosk turns the student away (D-61)
+
+**Goal:** a student with no appointment today cannot get through the kiosk —
+the screen offers no way forward, and nothing reaches the nurse.
+
+**Account:** a student with **no appointment today** — e.g.
+`angel.garcia@psu.edu.ph` (check her dashboard: Next Appointment must not show
+today). Nurse `nurse@healthpass.test`.
+
+**Steps:**
+
+1. Open `http://127.0.0.1:8080/kiosk`, click **Lost ID? Log in with email**,
+   and log in as the student. → **Expect:** Identity Confirm with her name.
+2. Click **That's me — Continue**. → **Expect:** a screen titled **"No Clinic
+   Schedule Today"** reading "You don't have a clinic schedule today.
+   Clearances are scheduled through your college, so please ask your college
+   office to include you in a batch request."
+3. → **Expect:** exactly **one** button, **Back to start**. There is **no**
+   "Proceed", "Continue" or "Walk-in" button anywhere on the screen.
+4. Click **Back to start**. → **Expect:** the Welcome screen, with no trace of
+   the student.
+5. Log in as the nurse and open the **Live Queue**. → **Expect:** no new visit
+   for that student.
+6. *(Developer-assisted, optional.)* Force a submit for her from the browser
+   devtools. → **Expect:** HTTP **422** with the same message, and no new
+   visit anywhere.
+
+**Pass criteria:** the no-schedule screen appears for a student with nothing
+today, offers only Back to start, and the server stores nothing even when the
+screen is bypassed. A student with an appointment at a **different hour
+today** still gets through (E2E-1).
+
+---
+
+## E2E-13 — The student dashboard has no booking (D-61)
+
+**Goal:** confirm a student can see their schedule but can neither book nor
+cancel anything.
+
+**Account:** a student with an upcoming batch appointment (e.g. Juan after
+E2E-1, or `juan.santos@psu.edu.ph` on the seeded upcoming batch BR-2026-904),
+and a student with none (e.g. `angel.garcia@psu.edu.ph`).
+
+**Steps:**
+
+1. Log in as the student **with** an appointment. → **Expect:** the sidebar
+   lists Dashboard, My Records, My ID & Profile and Kiosk Tutorial — **no Book
+   Appointment, no My Appointments**.
+2. → **Expect:** the **Clearance Status** card has no button; it reads "Your
+   college requests your clinic schedule."
+3. → **Expect:** the **Next Appointment** card shows the date, hour and a
+   **"Booked by College of Computing Studies"** badge. There is **no Cancel
+   appointment** button; a future appointment says "Booked by your college.
+   Contact your college administrator if you need this cancelled."
+4. Type `http://127.0.0.1:8080/student/appointments` into the address bar. →
+   **Expect:** a **404** page. Do the same for `/student/my-appointments`. →
+   **Expect:** **404**.
+5. Log in as the student **without** an appointment. → **Expect:** "No
+   upcoming appointment / Your schedule is clear" with **no Book button**.
+6. Repeat step 1–3 at phone width (browser devtools, ~390 px wide). →
+   **Expect:** the cards stack, nothing is cut off, and still no Book or
+   Cancel control.
+
+**Pass criteria:** no page, button or link lets a student book or cancel; the
+removed URLs are 404; the Next Appointment card stays visible and read-only.
 
 ---
 

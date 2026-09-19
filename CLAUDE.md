@@ -175,6 +175,9 @@ npm run dev                       # terminal 2
 - **Kiosk never shows Fit/Unfit to the student.** It captures vitals +
   the official form's nine Physical Signs rows (D-56) and routes to the
   Nurse queue.
+- **Students never self-schedule and never walk in (D-61)** — only
+  Director-approved college batches create appointments; the kiosk refuses
+  a student with no appointment today.
 - **Manual vitals entry is a first-class kiosk path**, sensors are
   progressive enhancement. Every reading records `entry_method`.
 - **Clinic capacity is TWO config values, never constants in a controller
@@ -188,8 +191,8 @@ npm run dev                       # terminal 2
   rows keep `scheduled_time` NULL, render as "—", and are seen by the daily
   cap only — **never backfill them**.
 - **On today, an hour stops being bookable once it has ENDED (BR-23)** — at
-  12:00 the 11–12 slot is gone, 12–1 is not. Binds the student picker, the
-  College Admin's batch start hour, *and* Director approval (any elapsed hour
+  12:00 the 11–12 slot is gone, 12–1 is not. Binds the College Admin's
+  batch start hour *and* Director approval (any elapsed hour
   in the span refuses it — D-36 still allows same-day batches, so their hours
   can lapse while pending; `BatchRequest::elapsedSpanHours()` is the one
   definition the page and the endpoint share). Always decided on the **server**

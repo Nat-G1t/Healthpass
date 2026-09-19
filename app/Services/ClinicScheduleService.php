@@ -15,7 +15,8 @@ use Illuminate\Support\Facades\DB;
  * controller or Form Request type-hints it (no `new`, no facade). Everything
  * that needs to know "what are the slots?" or "how full is 9 AM on the 14th?"
  * asks this one object, so the slot grid and the counting rule can never drift
- * between the student calendar, the batch form and the Director's approval.
+ * between the batch form and the Director's approval (the student calendar
+ * went with self-booking in D-61).
  *
  * The grid is DERIVED from `healthpass.clinic_hours` (7 AM–5 PM → ten slots,
  * lunch included) and the caps from `healthpass.hourly_capacity` /
@@ -351,9 +352,9 @@ class ClinicScheduleService
     }
 
     // ── Month calendar (FR-STU-03, FR-ADM-04) ────────────────────────────────
-    // Moved here from BookAppointmentController by D-54, so the student booking
-    // calendar and the College Admin's New Batch mini calendar grey out exactly
-    // the same days.
+    // Moved here from the student booking controller by D-54, so both calendars
+    // greyed out the same days. Since D-61 the College Admin's New Batch mini
+    // calendar is the only one left.
 
     /**
      * Day numbers (1–31) the calendar greys out as FULL. FR-STU-03 / BR-02 / D-37.

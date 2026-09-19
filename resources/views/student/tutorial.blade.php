@@ -14,7 +14,7 @@
     $steps = [
         2 => [
             'title' => 'Approach the kiosk & log in',
-            'body'  => 'Head to the clinic kiosk on your appointment day (or as a walk-in). '
+            'body'  => 'Head to the clinic kiosk on the day your college scheduled for you. '
                      . 'Hold your student ID\'s QR code up to the scanner — the kiosk reads '
                      . 'your linked ID and greets you by name.',
             'tip'   => 'Lost your ID? Tap "Log in with email" on the kiosk and use your '

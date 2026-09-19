@@ -237,30 +237,17 @@ class BatchAppointmentCancelTest extends TestCase
 
         $this->assertSame($capacity, $schedule->bookedInSlot($date, '09:00:00'));
 
-        // A student cannot book into it — the hour is full (D-37).
-        $student = User::factory()->create(['role' => 'student']);
-        $this->actingAs($student)->post('/student/appointments', [
-            'service' => 'medical',
-            'date' => $date,
-            'time' => '09:00:00',
-            'purpose' => 'On-the-job Training',
-        ])->assertSessionHasErrors('time');
+        // No other batch can start there — the hour is full (D-37).
+        $this->assertSame(['09:00:00'], $schedule->fullSlotsIn($date, ['09:00:00']));
 
         // The admin withdraws one student...
         $this->withdraw($batch, $appointments->first());
 
         // ...which frees a seat with no extra bookkeeping, because every
-        // capacity count filters on status != 'cancelled'.
+        // capacity count filters on status != 'cancelled'. Since D-61 the
+        // student who takes it arrives on another college batch.
         $this->assertSame($capacity - 1, $schedule->bookedInSlot($date, '09:00:00'));
-
-        $this->actingAs($student)->post('/student/appointments', [
-            'service' => 'medical',
-            'date' => $date,
-            'time' => '09:00:00',
-            'purpose' => 'On-the-job Training',
-        ])->assertSessionHasNoErrors();
-
-        $this->assertSame($capacity, $schedule->bookedInSlot($date, '09:00:00'));
+        $this->assertSame([], $schedule->fullSlotsIn($date, ['09:00:00']));
     }
 
     public function test_an_appointment_dated_today_can_still_be_withdrawn(): void
@@ -450,9 +437,22 @@ class BatchAppointmentCancelTest extends TestCase
         );
         $this->assertStringContainsString('9:00 AM – 10:00 AM', $body);
         $this->assertStringContainsString('College of Computing Studies', $body);
-        // It must tell them they can rebook themselves — a withdrawn student is
-        // an ordinary student again and self-booking is open to them.
-        $this->assertStringContainsString('Book an appointment in HealthPass', $body);
+    }
+
+    public function test_the_withdrawal_email_points_to_the_college_not_to_self_booking(): void
+    {
+        // D-61: there is nothing to book, so the way back is a new batch request.
+        [$batch, $appointments] = $this->makeApprovedBatch(1, $this->ccs, now()->addDays(5)->toDateString(), '09:00:00');
+        $target = $appointments->first();
+
+        $this->withdraw($batch, $target);
+
+        $body = (new AppointmentWithdrawnMail($target->fresh()))->render();
+
+        $this->assertStringContainsString('include you in a new batch request', $body);
+        $this->assertStringNotContainsStringIgnoringCase('book an appointment', $body);
+        $this->assertStringNotContainsStringIgnoringCase('book your own', $body);
+        $this->assertStringNotContainsString('/student/appointments', $body);
     }
 
     public function test_the_withdrawal_email_carries_no_health_data(): void

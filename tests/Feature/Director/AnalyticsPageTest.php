@@ -156,10 +156,11 @@ class AnalyticsPageTest extends TestCase
         $this->assertSame(2, $response->viewData('totalVisits'));
     }
 
-    public function test_purpose_buckets_including_walk_in_not_specified(): void
+    public function test_purpose_buckets_including_not_specified(): void
     {
-        // 2 OJT-purposed visits, 1 appointment with NO purpose and 1 with
-        // no appointment at all — both land in "Walk-in / not specified".
+        // 2 OJT-purposed visits, 1 appointment with NO purpose and 1 legacy
+        // visit with no appointment at all — both land in "Not specified"
+        // (D-61 renamed the old "Walk-in / not specified" bucket).
         $student = $this->makeStudent($this->ccs);
 
         $ojt = fn () => Appointment::factory()
@@ -174,14 +175,14 @@ class AnalyticsPageTest extends TestCase
             ->onDate('2026-05-07')
             ->create(['student_id' => $student->id, 'status' => 'completed']);
         $this->makeVisit($student, $this->ccs, '2026-05-07', appointmentId: $purposeless->id);
-        $this->makeVisit($student, $this->ccs, '2026-05-08'); // true walk-in
+        $this->makeVisit($student, $this->ccs, '2026-05-08'); // legacy, pre-D-61 walk-in row
 
         $response = $this->page('?month=2026-05')->assertOk();
 
         // Sorted by count desc; the 2–2 tie breaks alphabetically.
         $this->assertSame([
+            ['label' => 'Not specified', 'count' => 2],
             ['label' => 'On-the-job Training', 'count' => 2],
-            ['label' => 'Walk-in / not specified', 'count' => 2],
         ], $response->viewData('purposeRows'));
     }
 

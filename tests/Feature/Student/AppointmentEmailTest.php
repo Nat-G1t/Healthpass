@@ -24,9 +24,9 @@ use Tests\TestCase;
 /**
  * FR-STU-12 (D-39) — the "your appointment is scheduled" email.
  *
- * Two dispatch points, one Mailable: the student's own booking (FR-STU-04) and
- * the Director's batch approval fan-out (BR-08). Both queue one job per
- * student, both strictly after their transaction has committed.
+ * One dispatch point since D-61 removed self-booking: the Director's batch
+ * approval fan-out (BR-08), queueing one job per student strictly after its
+ * transaction has committed.
  *
  * Note on the queue in tests: phpunit.xml pins QUEUE_CONNECTION=sync, so a
  * dispatched job runs inline and Mail::fake() sees the send it performs. Tests
@@ -224,55 +224,6 @@ class AppointmentEmailTest extends TestCase
         Queue::assertNothingPushed();
     }
 
-    // ── Self-booking ─────────────────────────────────────────────────────────
-
-    public function test_self_booking_queues_exactly_one_mail_to_the_booking_student(): void
-    {
-        Mail::fake();
-
-        $student = User::factory()->create(['role' => 'student']);
-        $date = now()->addDays(4)->toDateString();
-
-        $this->actingAs($student)->post('/student/appointments', [
-            'service' => 'medical',
-            'date' => $date,
-            'time' => '09:00:00',
-            'purpose' => 'On-the-job Training',
-        ])->assertRedirect();
-
-        Mail::assertSent(AppointmentScheduledMail::class, 1);
-
-        $appointment = Appointment::where('student_id', $student->id)->firstOrFail();
-
-        Mail::assertSent(
-            AppointmentScheduledMail::class,
-            fn (AppointmentScheduledMail $mail): bool => $mail->hasTo($student->email)
-                && $mail->appointment->is($appointment),
-        );
-
-        $body = (new AppointmentScheduledMail($appointment))->render();
-        $this->assertStringContainsString('9:00 AM – 10:00 AM', $body);
-        $this->assertStringContainsString('On-the-job Training', $body);
-    }
-
-    public function test_a_rejected_booking_queues_nothing(): void
-    {
-        Mail::fake();
-
-        $student = User::factory()->create(['role' => 'student']);
-
-        // A date in the past fails validation, so no transaction, no email.
-        $this->actingAs($student)->post('/student/appointments', [
-            'service' => 'medical',
-            'date' => now()->subDay()->toDateString(),
-            'time' => '09:00:00',
-            'purpose' => 'On-the-job Training',
-        ])->assertSessionHasErrors();
-
-        $this->assertDatabaseCount('appointments', 0);
-        Mail::assertNothingSent();
-    }
-
     // ── Rendering edge cases ─────────────────────────────────────────────────
 
     public function test_a_legacy_appointment_with_no_slot_renders_without_error(): void
@@ -313,30 +264,22 @@ class AppointmentEmailTest extends TestCase
         $this->assertStringContainsString('&lt;script&gt;', $body);
     }
 
-    public function test_the_batch_email_names_the_college_and_the_self_email_does_not(): void
+    public function test_the_email_names_the_college_and_sends_cancellations_to_it(): void
     {
         $student = User::factory()->create(['role' => 'student']);
         $batch = $this->makeBatchWithStudents(1);
 
-        $batchAppointment = Appointment::factory()->create([
+        $appointment = Appointment::factory()->create([
             'student_id' => $student->id,
             'source' => 'batch',
             'batch_request_id' => $batch->id,
         ]);
 
-        $batchBody = (new AppointmentScheduledMail($batchAppointment))->render();
-        $this->assertStringContainsString('College of Computing Studies', $batchBody);
-        // Batch students are told to go to their college, not to self-cancel.
-        $this->assertStringContainsString('cannot cancel it yourself', $batchBody);
-
-        $selfAppointment = Appointment::factory()->create([
-            'student_id' => $student->id,
-            'source' => 'self',
-        ]);
-
-        $selfBody = (new AppointmentScheduledMail($selfAppointment))->render();
-        $this->assertStringNotContainsString('College of Computing Studies', $selfBody);
-        $this->assertStringContainsString('cancel from your HealthPass dashboard', $selfBody);
+        $body = (new AppointmentScheduledMail($appointment))->render();
+        $this->assertStringContainsString('College of Computing Studies', $body);
+        // Students are told to go to their college, never to self-cancel (D-39, D-61).
+        $this->assertStringContainsString('cannot cancel it yourself', $body);
+        $this->assertStringNotContainsString('cancel from your HealthPass dashboard', $body);
     }
 
     // ── The job itself ───────────────────────────────────────────────────────

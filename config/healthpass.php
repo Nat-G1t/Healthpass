@@ -50,8 +50,8 @@ return [
         'days' => ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
     ],
 
-    // BR-01: Weekdays (Carbon / JS day-of-week integers, 0 = Sunday … 6 = Saturday) on which
-    // self-booking is allowed. Remove an integer to block that weekday clinic-wide.
+    // BR-01: Weekdays (Carbon / JS day-of-week integers, 0 = Sunday … 6 = Saturday) a College
+    // Admin may request a batch for. Remove an integer to block that weekday clinic-wide.
     'booking_days' => [0, 1, 2, 3, 4, 5, 6],
 
     // FR-STU-12 (D-39): where the student is told to go, and what to bring, in the
@@ -61,10 +61,11 @@ return [
     // with the clinic before go-live; the default is deliberately generic.
     'clinic_location' => env('HEALTHPASS_CLINIC_LOCATION', 'University Clinic, Pampanga State University'),
 
-    // BR-20 (pending adviser sign-off): same-day booking cutoff. Once the local clock
-    // (Asia/Manila) reaches this hour, TODAY can no longer be self-booked — the clinic is
-    // closing. Integer hour, 24h, matches clinic_hours.close ('17:00') above; keep the two
-    // in sync. Consumed server-side by StoreAppointmentRequest and the availability endpoint.
+    // BR-20 (pending adviser sign-off): same-day batch cutoff. Once the local clock
+    // (Asia/Manila) reaches this hour, TODAY is greyed out in the College Admin's batch
+    // calendar — the clinic is closing. Integer hour, 24h, matches clinic_hours.close
+    // ('17:00') above; keep the two in sync. Consumed server-side by
+    // ClinicScheduleService::cutoffDaysForMonth() (D-61: batches only).
     'closing_hour' => 17,
 
     // FR-ADM-12 (D-55): when a batch student who never reached the kiosk stops

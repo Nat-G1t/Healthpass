@@ -58,19 +58,16 @@
                             </p>
                         </div>
 
-                        @if ($canRebook)
-                            <p style="margin:0 0 8px;font-size:14px;font-weight:600;color:#4B5563;">
-                                Still need your clearance?
-                            </p>
-                            <p style="margin:0 0 24px;font-size:13px;line-height:1.7;color:#6B7280;">
-                                You can book your own appointment at any time — you do not have to
-                                wait for your college to arrange another batch.
-                                <a href="{{ $bookingUrl }}" style="color:#FF8C2A;font-weight:600;">
-                                    Book an appointment in HealthPass
-                                </a>
-                                (sign in first), and pick whichever date and hour suits you.
-                            </p>
-                        @endif
+                        {{-- D-61: clinic schedules come only from college batch
+                             requests, so there is nothing to book — the way back
+                             is through the college. --}}
+                        <p style="margin:0 0 8px;font-size:14px;font-weight:600;color:#4B5563;">
+                            Still need your clearance?
+                        </p>
+                        <p style="margin:0 0 24px;font-size:13px;line-height:1.7;color:#6B7280;">
+                            Clinic schedules are arranged through your college. Ask your college
+                            office to include you in a new batch request.
+                        </p>
 
                         {{-- Wrong-cancellation path --}}
                         <div style="border-top:1px solid #F3F4F6;padding-top:20px;">

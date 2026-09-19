@@ -220,9 +220,9 @@ class MonthlyReportTest extends TestCase
             ),
         );
 
-        // Purpose bucket: both visits are walk-ins (no appointment).
+        // Purpose bucket: neither visit has an appointment purpose.
         $this->assertSame(
-            [['label' => 'Walk-in / not specified', 'count' => 2]],
+            [['label' => 'Not specified', 'count' => 2]],
             $response->viewData('purposeRows'),
         );
     }

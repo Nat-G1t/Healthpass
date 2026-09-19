@@ -152,12 +152,12 @@
         @endif
 
         {{-- Visits by Purpose (inside the same card): why the month's visits
-             were booked. Single muted hue + direct value labels; walk-ins get
-             their own bucket. --}}
+             happened. Single muted hue + direct value labels; a visit with no
+             recorded purpose gets its own "Not specified" bucket. --}}
         <div class="mt-6 border-t border-hp-slate/10 pt-4">
             <h4 class="text-xs font-semibold text-hp-slate">Visits by Purpose</h4>
             <p class="mb-3 mt-0.5 text-xs text-hp-slate/50">
-                Why students booked — from the linked appointment's purpose. Walk-ins have no appointment.
+                Why students came — from the linked appointment's purpose. A visit with none recorded counts as Not specified.
             </p>
             @if (empty($purposeRows))
                 <p class="py-3 text-center text-xs text-hp-slate/40">No visits recorded for this month yet.</p>

@@ -21,7 +21,7 @@ export const SCREENS = [
     'welcome',
     'email_login',
     'identity',
-    'walkin',
+    'no-schedule',
     'consent',
     'vitals',
     'questionnaire',
@@ -961,24 +961,16 @@ export function kioskMachine() {
         },
 
         /**
-         * "That's me" → Walk-in Check (FR-KSK-03a). The server already decided,
-         * at identity time, whether ANY non-cancelled appointment exists for
-         * today (`hasAppointmentToday`). With one, we skip straight to Privacy
-         * Consent; with nothing booked, we show the "No Scheduled Clearance
-         * Today" screen so the student can proceed as a walk-in. This is a UI
-         * gate only — the appointment_id linkage is resolved at submit.
+         * "That's me" → schedule check (FR-KSK-03a, D-61). The server already
+         * decided, at identity time, whether this student has a `scheduled`
+         * appointment today (`hasAppointmentToday`). With one, we go straight to
+         * Privacy Consent; without one, the "No Clinic Schedule Today" screen,
+         * whose only way out is back to Welcome — there are no walk-ins. The
+         * server refuses the submit on its own as well, so this is a courtesy,
+         * not the gate.
          */
         confirmIdentity() {
-            if (this.state.identity?.hasAppointmentToday) {
-                this.go('consent');
-            } else {
-                this.go('walkin');
-            }
-        },
-
-        /** "Proceed as Walk-in" (FR-KSK-03a) → Privacy Consent. */
-        proceedAsWalkin() {
-            this.go('consent');
+            this.go(this.state.identity?.hasAppointmentToday ? 'consent' : 'no-schedule');
         },
 
         // ── Privacy consent (FR-KSK-04) ──────────────────────────────────────

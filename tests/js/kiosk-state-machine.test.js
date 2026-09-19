@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { kioskMachine } from '../../resources/js/kiosk/state-machine.js';
+import { SCREENS, kioskMachine } from '../../resources/js/kiosk/state-machine.js';
 
 /**
  * Kiosk state-machine hardening (FR-KSK-05/06/07/08/15).
@@ -212,4 +212,53 @@ test('a fully silent abandon still idle-resets after 90s', (t) => {
 
     t.mock.timers.tick(IDLE_MS);
     assert.equal(m.state.screen, 'welcome');
+});
+
+// ── Schedule check after Identity Confirm (FR-KSK-03a, D-61) ─────────────────
+// The server decides `hasAppointmentToday`; the machine only picks the screen.
+// Without an appointment the student lands on 'no-schedule', whose only way
+// out is reset() — there is no walk-in path left to proceed through.
+
+/** A headless kiosk component parked on Identity Confirm with this payload. */
+function machineAtIdentity(identity) {
+    const m = kioskMachine();
+    m.$refs = { root: { dataset: {} } };
+    m.$nextTick = (cb) => cb && cb();
+    m.config = CONFIG;
+    m.arriveAtIdentity(identity);
+    return m;
+}
+
+test('the screen list has no-schedule and no walk-in screen', () => {
+    assert.ok(SCREENS.includes('no-schedule'));
+    assert.ok(!SCREENS.includes('walkin'));
+});
+
+test('no appointment today leads to the no-schedule screen', () => {
+    const m = machineAtIdentity({ firstName: 'Juan', hasAppointmentToday: false });
+
+    m.confirmIdentity();
+
+    assert.equal(m.state.screen, 'no-schedule');
+});
+
+test('an appointment today goes straight to privacy consent', () => {
+    const m = machineAtIdentity({ firstName: 'Juan', hasAppointmentToday: true });
+
+    m.confirmIdentity();
+
+    assert.equal(m.state.screen, 'consent');
+});
+
+test('the no-schedule screen offers no way forward, only back to Welcome', () => {
+    const m = machineAtIdentity({ firstName: 'Juan', hasAppointmentToday: false });
+    m.confirmIdentity();
+
+    // The old "Proceed as Walk-in" action is gone…
+    assert.equal(m.proceedAsWalkin, undefined);
+
+    // …and reset() is the exit: a clean Welcome with no identity left behind.
+    m.reset();
+    assert.equal(m.state.screen, 'welcome');
+    assert.equal(m.state.identity, null);
 });

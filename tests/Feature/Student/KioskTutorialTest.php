@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Student;
 
-use App\Models\Appointment;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * FR-STU-11 — Kiosk Tutorial page (auth + student role required) and the
- * first-booking prompt on the booking confirmation screen.
+ * FR-STU-11 — Kiosk Tutorial page (auth + student role required). The
+ * first-booking prompt lived on the booking confirmation screen and went with
+ * it (D-61).
  */
 class KioskTutorialTest extends TestCase
 {
@@ -47,43 +47,13 @@ class KioskTutorialTest extends TestCase
             ->assertSee('Get Started');
     }
 
-    // ── First-booking prompt on the confirmation screen ──────────────────────
-
-    public function test_confirmed_page_flags_first_booking(): void
+    public function test_the_tutorial_no_longer_mentions_walking_in(): void
     {
-        $student = $this->student();
-        $appointment = Appointment::factory()->create(['student_id' => $student->id]);
-
-        $this->actingAs($student)
-            ->get(route('student.appointments.confirmed', $appointment))
+        // D-61: a student reaches the kiosk only on the day their college scheduled.
+        $this->actingAs($this->student())
+            ->get(route('student.tutorial'))
             ->assertOk()
-            ->assertViewHas('isFirstBooking', true)
-            ->assertSee('View tutorial');
-    }
-
-    public function test_confirmed_page_does_not_flag_a_repeat_booking(): void
-    {
-        $student = $this->student();
-        // A prior appointment (even a cancelled one) means this is not the first.
-        Appointment::factory()->cancelled()->create(['student_id' => $student->id]);
-        $appointment = Appointment::factory()->create(['student_id' => $student->id]);
-
-        $this->actingAs($student)
-            ->get(route('student.appointments.confirmed', $appointment))
-            ->assertOk()
-            ->assertViewHas('isFirstBooking', false)
-            ->assertDontSee('View tutorial');
-    }
-
-    public function test_another_students_appointments_do_not_affect_the_flag(): void
-    {
-        $student = $this->student();
-        Appointment::factory()->create(); // someone else's appointment
-        $appointment = Appointment::factory()->create(['student_id' => $student->id]);
-
-        $this->actingAs($student)
-            ->get(route('student.appointments.confirmed', $appointment))
-            ->assertOk()
-            ->assertViewHas('isFirstBooking', true);
+            ->assertDontSee('walk-in')
+            ->assertSee('the day your college scheduled for you');
     }
 }

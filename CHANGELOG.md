@@ -4,6 +4,48 @@
 
 ### Added
 
+* **Students are scheduled only through their college** (D-61; supersedes D-16
+  and D-51, and D-28's student-purpose clause). Requested by the clinic
+  (nurses, University Physician, Clinic Director) on 2026-09-18; **pending
+  adviser sign-off**. **NO schema change** — `appointments.source` is kept
+  (every new row is `'batch'`) and `clinic_visits.appointment_id` stays
+  nullable for legacy walk-in rows.
+  - **Removed:** student Book Appointment (page, confirmation screen,
+    availability JSON, cancel — `BookAppointmentController`,
+    `StoreAppointmentRequest`, `student/book.blade.php`,
+    `book-confirmed.blade.php`) and **My Appointments**
+    (`MyAppointmentsController`, `student/my-appointments.blade.php`, its
+    sidebar entry and its `NavBadges` key). Every old URL returns 404.
+  - **Student dashboard:** the Next Appointment card is read-only (no cancel,
+    still badged "Booked by <College>"); the Clearance Status card's Book
+    button becomes "Your college requests your clinic schedule."
+  - `Appointment::isSelfCancellable()` deleted; `scheduledByLabel()` is the
+    batch case only. `ScheduleClashService` keeps only batch-vs-batch clashes
+    (`blockedSlotsForStudent()` and `studentClashMessage()` removed). BR-04
+    retired.
+  - **Emails:** the scheduling notice keeps only its batch branch ("contact
+    your college administrator"); the withdrawal notice tells the student to
+    ask their college to include them in a new batch request instead of
+    linking to a booking page.
+  - **Kiosk — no walk-ins:** the walk-in screen is replaced by **No Clinic
+    Schedule Today** with a single **Back to start** (screen key `walkin` →
+    `no-schedule`, partial `kiosk/screens/no-schedule.blade.php`).
+    `SubmitKioskVisit` refuses a submit with no `scheduled` appointment today
+    — 422, no `clinic_visits` / `vital_signs` / `screening_responses` row. The
+    identity check now looks for a `scheduled` appointment (it accepted any
+    non-cancelled one), the same set the submit links.
+  - "Walk-in / not specified" becomes **"Not specified"** in the analytics
+    purpose bucket; walk-in wording removed from the tutorial, encode comments
+    and config comments. BR-20 is now described as the batch calendar's
+    closing cutoff.
+  - **Seeders:** every demo visit now sits on an approved college batch
+    (`DemoClinicVisitSeeder` creates BR-2026-701… batches); no self-bookings,
+    no walk-ins. `AppointmentFactory` defaults to `source = 'batch'`.
+  - Tests: booking and My Appointments suites deleted; new cases cover the
+    removed URLs 404-ing, the dashboard without Book/cancel, the kiosk 422
+    with nothing written, the `no-schedule` screen (JS), the withdrawal email
+    without self-booking, and `ScheduleClashService` ignoring self-bookings.
+
 * **Dental removed from the whole website** (D-60; supersedes D-3 and D-33).
   Requested by the clinic (nurses, University Physician, Clinic Director) on
   2026-09-18; **pending adviser sign-off**. **NO schema change** — both

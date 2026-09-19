@@ -217,9 +217,9 @@ class BatchRequestController extends Controller
         // service's concurrency notes).
         $batch = DB::transaction(function () use ($request, $refs, $college, $studentUserIds, $profileIdsByUserId, $startSlot, $requestedDate, $blocks): BatchRequest {
             // The Form Request already checked that every hour in the span has
-            // room, but that read is unlocked and races with a student
-            // self-booking the last seat in one of those hours. Re-check HERE
-            // under a row lock, same reasoning as the self-booking store().
+            // room, but that read is unlocked and races with another batch
+            // being approved into the last seats of one of those hours.
+            // Re-check HERE under a row lock.
             $span = $this->schedule->span($startSlot, $blocks);
             $fullSlots = $this->schedule->fullSlotsIn($requestedDate, $span, lock: true);
 
@@ -232,10 +232,11 @@ class BatchRequestController extends Controller
                 ]);
             }
 
-            // D-54 / BR-25: the same race for the clash rule — a student may
-            // self-book one of these hours between the Form Request's read and
-            // this insert. Re-read under the lock, and report it with the same
-            // `clashes.*` keys, so the New Batch popup opens either way.
+            // D-54 / BR-25: the same race for the clash rule — another batch
+            // holding one of these students may be submitted between the Form
+            // Request's read and this insert. Re-read under the lock, and
+            // report it with the same `clashes.*` keys, so the New Batch popup
+            // opens either way.
             $clashes = $this->clashes->clashesForBatch($studentUserIds->all(), $requestedDate, $span, lock: true);
 
             if ($clashes !== []) {

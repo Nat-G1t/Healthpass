@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Seeders;
 
+use App\Models\Appointment;
+use App\Models\BatchRequestStudent;
 use App\Models\ClinicVisit;
 use App\Models\College;
 use Database\Seeders\DatabaseSeeder;
@@ -22,7 +24,9 @@ use Tests\TestCase;
  *     sexes, so the Director analytics (FR-ANL-04) have meaningful data
  *     in dev, and
  *  3. every seeded visit carries the D-43 program snapshot, so the
- *     per-program reporting built on it has something to render.
+ *     per-program reporting built on it has something to render, and
+ *  4. D-61: the demo data holds no self-bookings and no walk-ins — every
+ *     appointment comes from a batch, every visit from an appointment.
  */
 class DemoClinicVisitSeederTest extends TestCase
 {
@@ -72,6 +76,26 @@ class DemoClinicVisitSeederTest extends TestCase
             ->pluck('student_profiles.sex');
 
         $this->assertEqualsCanonicalizing(['M', 'F'], $sexes->all());
+    }
+
+    public function test_every_seeded_appointment_comes_from_an_approved_batch(): void
+    {
+        $this->assertGreaterThan(0, Appointment::count());
+        $this->assertSame(0, Appointment::where('source', '!=', 'batch')->count());
+        $this->assertSame(0, Appointment::whereNull('batch_request_id')->count());
+
+        // Every appointment has its roster row, on a batch that was approved.
+        $this->assertSame(Appointment::count(), BatchRequestStudent::whereNotNull('appointment_id')->count());
+        $this->assertSame(
+            0,
+            Appointment::whereHas('batchRequest', fn ($batch) => $batch->where('status', '!=', 'approved'))->count(),
+        );
+    }
+
+    public function test_every_seeded_visit_links_to_an_appointment(): void
+    {
+        $this->assertGreaterThan(0, ClinicVisit::count());
+        $this->assertSame(0, ClinicVisit::whereNull('appointment_id')->count());
     }
 
     public function test_demo_seeder_is_idempotent(): void

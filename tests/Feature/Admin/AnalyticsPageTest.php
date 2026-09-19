@@ -340,7 +340,7 @@ class AnalyticsPageTest extends TestCase
         $this->assertSame([1, 0], $response->viewData('donut')['datasets'][0]['data']);
         $this->assertSame(1, $response->viewData('bmiTotal'));
         $this->assertSame([0, 0, 0, 1], array_column($response->viewData('bmiRows'), 'count'));
-        $this->assertSame([['label' => 'Walk-in / not specified', 'count' => 1]], $response->viewData('purposeRows'));
+        $this->assertSame([['label' => 'Not specified', 'count' => 1]], $response->viewData('purposeRows'));
         // …the trend too: it ignores only the MONTH.
         $this->assertSame([1], $response->viewData('trend')['datasets'][0]['data']);
     }

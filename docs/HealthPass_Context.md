@@ -26,7 +26,7 @@
 
 HealthPass is a **single Laravel application** (plus a clinic kiosk that is a Blade route inside the same app) that runs PamSU's **medical clearance end-to-end** (dental is out of scope — D-60):
 
-1. Students book appointments or are batch-enrolled by their College Admin.
+1. Students are batch-enrolled by their College Admin, with the Clinic Director's approval. They never book themselves and never walk in (D-61).
 2. The kiosk captures vital signs and a 9-item body-system screening.
 3. A nurse reviews each capture and encodes a Fit/Unfit result.
 4. The system prints the official PamSU clearance form.
@@ -40,7 +40,7 @@ HealthPass is a **single Laravel application** (plus a clinic kiosk that is a Bl
 
 **In scope**
 - Student self-registration, profile management, and QR-ID linking
-- Solo appointment booking (Medical Clearance) by students
+- ~~Solo appointment booking (Medical Clearance) by students~~ — removed by **D-61**: students are scheduled only through their college
 - College Admin batch clearance requests (per-college, approved by Director)
 - Director approval that auto-generates appointments for listed students
 - Kiosk vitals capture (real sensors via Web Serial) + the official form's nine Physical Signs questions (D-56)
@@ -52,6 +52,7 @@ HealthPass is a **single Laravel application** (plus a clinic kiosk that is a Bl
 - Doctor role / teleconsultation
 - Payments, pharmacy, inventory
 - Laboratory results or referrals
+- Student self-booking, a student appointments list, and kiosk walk-ins (D-61 — a student asks their college office, offline, to include them in a batch request)
 - Native mobile app
 - Faculty and NASA (non-academic staff) clearances — analytics and clearance records cover students only; Faculty and NASA visits are explicitly out of scope and excluded from all analytics
 
@@ -66,7 +67,7 @@ Only **students** self-register. `nurse`, `college_admin`, and `director` accoun
 | Capability | Student | College Admin | Nurse | Director |
 |---|---|---|---|---|
 | Self-register, edit profile, hold kiosk QR | ✓ | | | |
-| Book a solo appointment (Medical Clearance) | ✓ | | | |
+| ~~Book a solo appointment (Medical Clearance)~~ — removed by D-61 | | | | |
 | Submit batch clearance request (own college only) | | ✓ | | |
 | View own college's students and batch requests only | | ✓ | | |
 | Approve / reject batch requests (all colleges) | | | | ✓ |
@@ -106,16 +107,19 @@ Each college has exactly one College Admin account. The admin's college is store
 ```
 Student registers → consents → links ID QR
          │
-         ├── self-books a Medical Clearance appointment
-         │
-         └── College Admin submits batch request
+         └── Student asks their college office (offline) to include them;
+             College Admin submits batch request
                     │
                     └── Director approves → system auto-creates
                             one appointment per listed student
-                    
-Student arrives at clinic
+             (D-61: no self-booking, no walk-ins)
+
+Student arrives at clinic (scheduled by their college)
          │
          └── Kiosk login (QR scan OR email + virtual keyboard)
+                    │
+                    └── Schedule check: no appointment today → "No Clinic
+                    │   Schedule Today" → Back to start (no way forward, D-61)
                     │
                     └── Privacy consent (RA 10173)
                     │
@@ -124,7 +128,8 @@ Student arrives at clinic
                     └── Physical Signs questionnaire (the form's 9 rows + optional YES details) + pregnancy/LMP
                     │
                     └── Review & Submit → Clinic Visit created (status: captured)
-                            │ (links to today's MEDICAL appointment if one exists, else walk-in)
+                            │ (links to today's appointment; with none the server
+                            │  refuses the submit and writes nothing — D-61)
 
 Nurse sees visit in Live Queue
          │
@@ -145,9 +150,10 @@ Director analytics and flagged anomalies update from encoded records
 ## 5. Business rules
 
 ### Appointments / booking
+- **D-61: students never book.** Only a Director-approved college batch creates an appointment, and every new appointment is `source` = `'batch'`. There is no Book Appointment page, no My Appointments page, and no student cancel — only the College Admin withdraws a seat (FR-ADM-07). BR-04 (one self-booking per service per date) is retired.
 - Past dates are unbookable.
 - Each clinic day has a configurable capacity; full days show as unavailable ("FULL").
-- **D-37/BR-23: an hour that has already ended is not bookable today.** A slot dies when it **ends** — at 12:00 the 11 AM–12 PM hour is gone, 12–1 PM is still open. Only today is affected, it is decided on the server clock (never the browser's), and it binds the student picker, the College Admin's batch start hour, and Director approval alike — a batch requested for today whose span hours have ended can no longer be approved, only rejected.
+- **D-37/BR-23: an hour that has already ended is not bookable today.** A slot dies when it **ends** — at 12:00 the 11 AM–12 PM hour is gone, 12–1 PM is still open. Only today is affected, it is decided on the server clock (never the browser's), and it binds the College Admin's batch start hour and Director approval alike (D-61 removed the student picker) — a batch requested for today whose span hours have ended can no longer be approved, only rejected.
 - **D-37: the day is ten one-hour slots.** Clinic hours (7 AM–5 PM, lunch included) yield ten bookable slots of `hourly_capacity` = **12** each — `daily_capacity` **120**, up from 40. There is one counter per hour (D-60). A date is FULL when every slot is at 12 (or the daily cap is reached, which is the only counter that sees pre-D-37 appointments).
 - Clinic hours: 7:00 AM–5:00 PM, daily.
 - Service type: **Medical Clearance only** (D-60, superseding D-3 and D-33 — dental is not part of HealthPass). The `service_type` columns are kept for history; the server always writes `'medical'`.
@@ -156,15 +162,15 @@ Director analytics and flagged anomalies update from encoded records
 - A College Admin can only request for their own college (enforced server-side).
 - A reason is required. If reason = `others`, a detail textarea is required.
 - At least one student must be selected.
-- **No double-booking (D-54, BR-25).** A batch holds its **whole** requested hour span for every student on it from submission — `pending` or `approved`, and still the whole span after approval. A clash is an **hour overlap, for any service**, against the student's own self-booking inside the span or another pending/approved batch they are on. **First come wins:** the later booking — a student's self-booking, a batch submission, or the Director's approval — is refused. Rejected/cancelled batches and a student withdrawn from an approved batch hold nothing; pre-D-37 rows with no hour never clash.
-- **Director approval generates one appointment per listed student automatically** — it appears in each student's appointment list and they proceed directly to the kiosk.
+- **No double-booking (D-54, BR-25).** A batch holds its **whole** requested hour span for every student on it from submission — `pending` or `approved`, and still the whole span after approval. A clash is an **hour overlap** against another pending/approved batch the student is on (D-61 retired the self-booking clash). **First come wins:** the later booking — a batch submission or the Director's approval — is refused. Rejected/cancelled batches and a student withdrawn from an approved batch hold nothing; pre-D-37 rows with no hour never clash.
+- **Director approval generates one appointment per listed student automatically** — it appears on each student's dashboard (Next Appointment card) and in their email, and they proceed directly to the kiosk. Since D-61 this is the only way an appointment is created.
 - Rejection generates no appointments; batch status flips to Rejected and the Director's written reason is stored (required, D-36).
 - Batch reasons: graduation clearance, OJT/practicum, general enrollment, scholarship, sports/athletics, field trip/educational tour, others.
 
 ### Visit linkage
 - ~~On kiosk submit, the visit links to the student's booked **medical** appointment for that date if one exists (`appointment_id` FK). Dental is scheduling-only (Decision D-3) and never links.~~ *Superseded — D-54 sets the rule below, and D-60 removed dental from HealthPass entirely:*
-- On kiosk submit, the visit links to one of the student's `scheduled` appointments for **today**, of **any** service (`appointment_id` FK) — **the one whose hour starts closest to check-in time** (D-54). A tie goes to the earlier hour; an appointment with no hour (pre-D-37) links only when no timed one exists. A student can hold, say, a 9 AM batch appointment and a 2 PM self-booking on the same day, which is why the closest one wins.
-- If no scheduled appointment exists today, it is a **walk-in** (`appointment_id` = null).
+- On kiosk submit, the visit links to one of the student's `scheduled` appointments for **today**, of **any** service (`appointment_id` FK) — **the one whose hour starts closest to check-in time** (D-54). A tie goes to the earlier hour; an appointment with no hour (pre-D-37) links only when no timed one exists. A student can hold, say, a 9 AM seat on one batch and a 2 PM seat on another the same day (their hours don't overlap), which is why the closest one wins.
+- ~~If no scheduled appointment exists today, it is a **walk-in** (`appointment_id` = null).~~ **D-61: there are no walk-ins.** If no `scheduled` appointment exists today, the submit is **refused (422) and nothing is written** — the server decides, never the kiosk screen. `appointment_id` is NULL only on legacy pre-D-61 rows.
 
 ### Rule-based vital flags (not diagnoses — screening signals only)
 
@@ -180,7 +186,7 @@ Flags appear in the nurse queue's "Flags" column and the Director's Flagged Anom
 - Only the **Nurse** encodes (4 roles total — no Doctor login).
 - The encode form is titled "Doctor's Assessment" in the UI but is nurse-operated.
 - `result` = Fit or Unfit (required to save).
-- Case categories (0..n, D-23) and purpose are optional (can save without them). Purpose is **nurse-entered only when the visit's appointment carries no student-supplied purpose** (walk-in / batch / pre-D-28); when the student chose a purpose at booking, encode hides its purpose input and carries that choice onto the clearance record (D-28).
+- Case categories (0..n, D-23) and purpose are optional (can save without them). Purpose is **nurse-entered only when the visit's appointment carries no student-supplied purpose** (a legacy no-appointment visit / batch / pre-D-28); when the student chose a purpose at booking, encode hides its purpose input and carries that choice onto the clearance record (D-28).
 - The printed form carries the **pre-printed physician signature: REYNALDO S. ALIPIO, MD, License No. 60252**.
 - **Respiratory Rate** is intentionally blank on the print form — it is not a captured vital.
 
@@ -238,7 +244,7 @@ Home, Calendar, FileText, QrCode, Plus, List, Activity, Edit, BarChart, Alert, C
 
 | Role | Nav items |
 |---|---|
-| Student | Dashboard · Book Appointment · My Appointments · My Records · My ID |
+| Student | Dashboard · My Records · My ID (D-61 removed Book Appointment and My Appointments) |
 | College Admin | Dashboard · New Batch Request · Batch Tracking |
 | Nurse | Live Queue · Encode Result · Enable Kiosk Mode (Kiosk Devices: enroll/revoke trusted terminals, D-27) |
 | Clinic Director | Dashboard · Batch Approvals · Analytics · Flagged Anomalies |
@@ -247,7 +253,7 @@ Home, Calendar, FileText, QrCode, Plus, List, Activity, Edit, BarChart, Alert, C
 
 | Role | Badged item → what it counts |
 |---|---|
-| Student | My Appointments → batch appointments the college booked or withdrew since last seen · My Records → results encoded since last seen · Kiosk Tutorial → a dot until the walkthrough reaches its last step (opening the page doesn't clear it) |
+| Student | My Records → results encoded since last seen · Kiosk Tutorial → a dot until the walkthrough reaches its last step (opening the page doesn't clear it) |
 | College Admin | Batch Tracking → Director decisions + results encoded for the college's batch students, since last seen · Activity Log → entries since last seen, minus the viewer's own submissions and cancellations |
 | Nurse | Live Queue → visits waiting right now (a work count — opening the page doesn't clear it, encoding does) |
 | Clinic Director | Batch Approvals → pending requests (a work count) · Flagged Anomalies → flagged visits captured since last seen |
@@ -293,32 +299,13 @@ Progress steps: Consent → Account Info → Email Verify → Link ID
 
 #### Student Dashboard (`student-dashboard`)
 - 3 stat cards across:
-  - **Clearance Status** (with status badge + orange left border; "Book New Appointment" button).
-  - **Next Appointment** (nearest upcoming non-cancelled appointment — date + service + time) with a "Cancel appointment" action (ghost, sm) that opens a confirm modal: "Cancel your {service} appointment on {date}? This frees the slot." → Yes, cancel / Keep appointment. After cancelling, the card re-queries and shows the next upcoming appointment or a clean empty state.
+  - **Clearance Status** (status badge + orange left border) with the line **"Your college requests your clinic schedule."** where the "Book New Appointment" button used to be (D-61).
+  - **Next Appointment** — **read-only since D-61**: the nearest upcoming non-cancelled appointment (date + service + time) with its **"Booked by <College>"** badge (`Appointment::scheduledByLabel()`, batch case only). No cancel action; a future one also says "Booked by your college. Contact your college administrator if you need this cancelled." A student on two future batches sees the nearest; their emails cover the rest. Empty state: "No upcoming appointment", with no Book link.
   - **Past Clearances** (large count, "View all →" link).
 - **Recent Activity** timeline card below (bullet list of timestamped events).
 
-#### Book Appointment (`student-book`)
-- **Service picker**: one selectable card (Medical Clearance 🏥) — D-60 removed the Dental Check card. The selected card gets an orange border + peach background.
-- **Month calendar**: 7-column grid. Past dates disabled (greyed/transparent). Full days greyed with "FULL" micro-label. Selected day orange fill + white text. Available days: white with slate-14 border.
-- **Time-slot picker (D-37)**: appears once a date is picked. Ten one-hour buttons rendered from the config-derived slot list, each showing seats left; a slot at 12 is disabled and labelled FULL, and on today an hour that has already ended is disabled and labelled PAST (BR-23). The chosen slot is required and is re-checked under a row lock inside the booking transaction.
-- **Purpose of Medical Clearance** (third card, hidden until the service is picked): the same locked dropdown as nurse encode (Off Campus Procedure, On-the-job Training, Field Trip/Educational Tour, Sports Activities, **Others, Specify…** → required free-text event, max 120 chars). Shared `<x-hp.purpose-fieldset>` Blade component with encode. Stored on the appointment (`purpose`/`purpose_other`) and carried through to encode + the printed form (D-28).
-- **Clinic hours note**: "7:00 AM – 5:00 PM · Daily · Campus Clinic, Main Building".
-- "Confirm Booking" disabled until a service and date are both selected (and, for Medical, a purpose — Others also needs its specify text; validated server-side, D-28). On click, a confirmation modal opens ("Book {Service} on {date}?" → Yes, book it / Cancel) before the record is created. A same-service-same-date duplicate (BR-04 / FR-STU-05) is surfaced as an in-page modal with a "Choose another date" action — no page reload, selected service and date preserved. **Since D-54 that duplicate rule counts self-bookings only** (a batch-made appointment on the same date no longer triggers it), and pressing Book on an hour a college batch already holds for the student (BR-25) opens the same modal titled **Already Scheduled by Your College** — "Thu, Sep 10, 9:00 AM – 10:00 AM has already been scheduled for you by your college admin." — never naming the batch or anyone else on it. Tapping a date or an hour is never refused for this; only Book is.
-
-#### Booking Confirmed (`student-book-confirm`)
-- Centered success: orange circle with check icon.
-- Summary box: Service, Date, Clinic Hours, Reference No.
-- "Back to Dashboard" button.
-
-#### My Appointments (`student-my-appointments`) — FR-STU-14, D-51
-- Lists **every** upcoming appointment (strictly after today, status != cancelled), ordered by date then slot — not just the nearest one. This is the surface the cancel rule always allowed but nothing exposed: the dashboard card renders a single row, so a student holding three appointments could previously reach only one.
-- One card per appointment: full date, one-hour slot ("—" on pre-D-37 rows), Service badge, **who-scheduled-it** badge ("Self-scheduled" / "Booked by <College>", from `Appointment::scheduledByLabel()`), reference number.
-- **Self-booked rows** carry their own Cancel button, gated on `Appointment::isSelfCancellable()` — the same rule the endpoint enforces. One shared Alpine confirm modal serves every row (`cancelId` selects the row's hidden form) rather than one modal per appointment.
-- **Two traps, both hit once and both now covered by test.** (1) The dialog **must** be wrapped in `<template x-teleport="body">`, like `x-logout-confirm`: `position: fixed` resolves against the nearest ancestor establishing a containing block, and the motion pass gives the cards a transform, so an unteleported dialog is laid out **inside card 2** instead of over the screen. This was a **pre-existing defect on the student dashboard**, fixed in the same pass. (2) The confirm text is read at runtime from `data-cancel-label` via `$el.dataset`, never interpolated — **`@js()` is not compiled inside a Blade component tag's attribute** (`<x-hp.button @click="…@js($x)…">` emits the literal string `@js($x)`, making the whole Alpine expression a JS syntax error so the button silently does nothing), and a hand-written JS literal would break on an apostrophe anyway. Same rule as the college-reassign dialog's `data-name`.
-- **Batch rows** are listed but have no Cancel control; they show "Booked by your college. Contact your college administrator…" instead (FR-STU-06 / D-39).
-- **Out of scope by design:** appointments dated today (past the cancel cutoff — they live on the dashboard card, which the empty state names), plus past and cancelled appointments (history belongs to My Records).
-- Cancelling from here returns here, chosen by a two-value allow-list on `from`, never a request-supplied URL.
+#### ~~Book Appointment · Booking Confirmed · My Appointments~~ — removed by D-61
+Students are scheduled only through their college (a batch request the Clinic Director approves), so the booking page, its confirmation screen (and the first-booking tutorial modal on it), the availability JSON, the cancel action and the My Appointments page (FR-STU-14, D-51) are gone. Every old URL (`/student/appointments…`, `/student/my-appointments`) returns 404. The month roll-up they used lives on in `ClinicScheduleService` for the College Admin's batch calendar.
 
 #### My Records (`student-records`)
 - Table: Date, Service, Result (Fit/Unfit badge), Reference No., View.
@@ -347,8 +334,8 @@ Progress steps: Consent → Account Info → Email Verify → Link ID
 #### New Batch Request (`admin-new-batch`)
 - College banner (auto, read-only).
 - **Reason dropdown** (required). If `others` selected: textarea "Please specify" appears below.
-- **Requested clinic date** (D-29) — a compact **month calendar** since **D-54**, with the student booking calendar's look and rules: month header with prev/next, weekday row, past days disabled, FULL days greyed and unselectable, today unavailable after closing (BR-20) or once no hour is left (BR-23), non-booking weekdays disabled, same legend. "Today" is the server's date. It still submits `requested_date` through a hidden input; its month data comes from `GET /admin/batches/availability` (`full_days`, `cutoff_days`), built by the same `ClinicScheduleService` methods as the student calendar's.
-- **Clash popup** (D-54, BR-25): if any selected student is already scheduled during the batch's span — their own self-booking inside it, or another pending/approved batch overlapping it — the submit comes back with a teleported popup, **"Some students are already scheduled at this time"**, listing every clashing student (name, student no., and what they clash with, e.g. "self-booked Sep 10, 9:00 AM – 10:00 AM" or "on batch BR-2026-004, 9:00 AM – 11:00 AM"). **Remove these students from the batch** deselects exactly those students and closes; **Close** keeps the selection so the date or start hour can be changed instead. Reason, service, date, start hour and selection are all restored.
+- **Requested clinic date** (D-29) — a compact **month calendar** since **D-54**, with the (D-61-removed) student booking calendar's look and rules: month header with prev/next, weekday row, past days disabled, FULL days greyed and unselectable, today unavailable after closing (BR-20) or once no hour is left (BR-23), non-booking weekdays disabled, same legend. "Today" is the server's date. It still submits `requested_date` through a hidden input; its month data comes from `GET /admin/batches/availability` (`full_days`, `cutoff_days`), built by `ClinicScheduleService` (the student calendar that shared them went with D-61).
+- **Clash popup** (D-54, BR-25): if any selected student is already scheduled during the batch's span — on another pending/approved batch overlapping it (D-61 retired the self-booking case) — the submit comes back with a teleported popup, **"Some students are already scheduled at this time"**, listing every clashing student (name, student no., and what they clash with, e.g. "on batch BR-2026-004, 9:00 AM – 11:00 AM"). **Remove these students from the batch** deselects exactly those students and closes; **Close** keeps the selection so the date or start hour can be changed instead. Reason, service, date, start hour and selection are all restored.
 - **Student multi-select** (scoped to admin's college):
   - Search bar (by name or student number).
   - Select All / Clear links.
@@ -389,7 +376,7 @@ Progress steps: Consent → Account Info → Email Verify → Link ID
   - **Right column** — "Doctor's Assessment" card:
     - **Fit / Unfit** selector (two cards; selected = peach bg + orange border).
     - **Medical Case Categories** multi-select checkboxes (D-23 — a case can span several systems; each persists as a `clearance_case_categories` row): Alimentary System, Respiratory System, Musculo-Skeletal System, Integumentary System, Urinary System, Metabolic Endocrine System, Cardiovascular System, Eyes, Ears, Nose & Throat Disorders. The kiosk's **vision/hearing answers are decision support** for the "Eyes, Ears, Nose & Throat Disorders" pick — they have no physical-sign row of their own. *(Those two kiosk questions were removed by D-56.)*
-    - **Purpose / Cleared For** dropdown: Off Campus Procedure, On-the-job Training, Field Trip/Educational Tour, Sports Activities, **Others, Specify…** — picking Others reveals a required text input for the exact event (max 120 chars, stored in `clearance_records.purpose_other`, D-24). **Shown only when the visit's appointment carries no student-supplied purpose** (walk-in / batch / pre-D-28). When the student chose the purpose at booking (D-28), this input is replaced by a read-only echo of their choice and the value is copied onto the clearance record on Save. Shares the `<x-hp.purpose-fieldset>` component with the student booking page.
+    - **Purpose / Cleared For** dropdown: Off Campus Procedure, On-the-job Training, Field Trip/Educational Tour, Sports Activities, **Others, Specify…** — picking Others reveals a required text input for the exact event (max 120 chars, stored in `clearance_records.purpose_other`, D-24). **Shown only when the visit's appointment carries no student-supplied purpose** (a legacy no-appointment visit / batch / pre-D-28). When the student chose the purpose at booking (D-28), this input is replaced by a read-only echo of their choice and the value is copied onto the clearance record on Save. Shares the `<x-hp.purpose-fieldset>` component with the student booking page.
     - **Physical Signs Disorder of** (D-22): nine Yes/No rows — SKIN, ABDOMEN (GIT), HEENT, GUT, CHEST/LUNGS, EXTREMITIES, HEART/CVS, NEUROLOGICAL, BREAST. The physician examines the student at the clinic; the nurse records the findings. Each row optional — an unanswered row prints as blank bubbles on the form. Stored in `clearance_records.ps_*`. **Kiosk pre-fill (D-56):** the kiosk asks these same nine rows, so every row — GUT and BREAST included — opens pre-checked with the student's answer, **YES and NO alike** (`ps_<key>` ← `<key>`), for the nurse to confirm or correct after the exam; a NULL kiosk answer leaves the row blank. *(Before D-56 the kiosk asked different self-report systems, mapped skin→SKIN, digestive→ABDOMEN (GIT), nose→HEENT, respiratory→CHEST/LUNGS, bones→EXTREMITIES, heart→HEART/CVS, nervous→NEUROLOGICAL, and GUT/BREAST always opened blank.)*
     - **Nurse Notes** textarea (optional) — prints under REMARKS. For a visit not yet encoded it opens **pre-filled with the student's YES details**, one `SKIN: <detail>` line each in the form's order (D-56); `old()` input wins and the nurse edits freely. A read-only encoded record shows its saved notes only.
     - "Preview & Print Medical Clearance" button (ghost style, full width, Download icon).
@@ -440,7 +427,7 @@ then nurse-edited).
 - Full-width card with header "College Batch Requests" + description.
 - Each batch as a row: Batch ID (orange, 700) + status badge, college name (600), reason (italic, in quotes), count + submitted date.
 - **Pending rows only** show: "Reject" (ghost sm) + "Approve" (primary sm) buttons.
-- **On Approve** (confirm-only since **Decision D-36**, superseding D-29's adjust clause): the modal shows the College Admin's `requested_date` **read-only** — there is no date picker. In one DB transaction: set `batch_requests.status` → `Approved`, stamp `reviewed_by`/`reviewed_at` and `batch_requests.scheduled_date` **= the `requested_date` read from the LOCKED row** (never from the request body), **auto-create one `appointments` record per student listed in `batch_request_students`** (service = batch request's service type, date = the requested date, `source` = `batch`), and update each `batch_request_students.appointment_id`. Two kinds of batch cannot be approved at all — one whose `requested_date` is NULL (pre-D-29), and one whose `requested_date` has already passed (confirm-only can't move it, and a cohort must never be scheduled into the past). For both, Approve is disabled with a one-line notice **and** the endpoint refuses the POST; the Director rejects with a reason instead. A batch requested for today is still confirmable. **D-37 adds two things:** the modal also shows the batch's **clinic hour span read-only** (e.g. 7:00 AM – 10:00 AM (3 slots)), and capacity becomes a **hard block** — if any hour in that span has reached the hourly cap of 12 — **or has already ended, for a batch requested for today (BR-23)** — approval is refused in the UI *and* at the endpoint (capacity re-checked under lock), with the Director directed to reject-and-resubmit. A batch with no hour span (`requested_time` NULL, pre-D-37) is a further un-approvable case. The fan-out writes `scheduled_time` onto every generated appointment, 12 per hour in pivot-row id order. **D-54 adds one more un-approvable case:** a batch any of whose students is already scheduled during its span (BR-25 — a self-booking inside it, or another pending/approved batch overlapping it). Submission already refuses such a batch, so this only catches a pre-D-54 batch or a race; it is re-checked under the row lock and refused with a flash naming up to three of the students ("… N student(s) are already scheduled during its hours: A, B, C and N more. Reject it with a reason so the college can resubmit."), creating nothing.
+- **On Approve** (confirm-only since **Decision D-36**, superseding D-29's adjust clause): the modal shows the College Admin's `requested_date` **read-only** — there is no date picker. In one DB transaction: set `batch_requests.status` → `Approved`, stamp `reviewed_by`/`reviewed_at` and `batch_requests.scheduled_date` **= the `requested_date` read from the LOCKED row** (never from the request body), **auto-create one `appointments` record per student listed in `batch_request_students`** (service = batch request's service type, date = the requested date, `source` = `batch`), and update each `batch_request_students.appointment_id`. Two kinds of batch cannot be approved at all — one whose `requested_date` is NULL (pre-D-29), and one whose `requested_date` has already passed (confirm-only can't move it, and a cohort must never be scheduled into the past). For both, Approve is disabled with a one-line notice **and** the endpoint refuses the POST; the Director rejects with a reason instead. A batch requested for today is still confirmable. **D-37 adds two things:** the modal also shows the batch's **clinic hour span read-only** (e.g. 7:00 AM – 10:00 AM (3 slots)), and capacity becomes a **hard block** — if any hour in that span has reached the hourly cap of 12 — **or has already ended, for a batch requested for today (BR-23)** — approval is refused in the UI *and* at the endpoint (capacity re-checked under lock), with the Director directed to reject-and-resubmit. A batch with no hour span (`requested_time` NULL, pre-D-37) is a further un-approvable case. The fan-out writes `scheduled_time` onto every generated appointment, 12 per hour in pivot-row id order. **D-54 adds one more un-approvable case:** a batch any of whose students is already scheduled during its span (BR-25 — another pending/approved batch overlapping it; D-61 retired the self-booking case). Submission already refuses such a batch, so this only catches a pre-D-54 batch or a race; it is re-checked under the row lock and refused with a flash naming up to three of the students ("… N student(s) are already scheduled during its hours: A, B, C and N more. Reject it with a reason so the college can resubmit."), creating nothing.
 - **On Reject** (D-36): a **written reason is required** (10–500 chars, `RejectBatchRequest`). Update `batch_requests.status` → `Rejected` and store `batch_requests.rejection_reason`. No appointments created. This is also the escape hatch when the Director can't take the requested date — "date unavailable, please resubmit for &lt;X&gt;" — since the date can no longer be adjusted at approval. The College Admin reads the reason on Batch Tracking.
 - Approved/rejected rows show "✓ Approved" or "✕ Rejected" static text (no action buttons).
 
@@ -453,7 +440,7 @@ then nurse-edited).
 > the kiosk. **No Export/print** — analytics is on-screen only (FR-ANL-06
 > removed). The approved layout is `docs/prototypes/web/director-analytics-rescope.html`.
 - **Filters** (FR-ANL-13): the existing month picker + a new **college dropdown** (default "All colleges"). Both scope every card except the Visits-per-Month trend.
-- **Clinic Visits by College** (FR-ANL-09) — horizontal bar chart, one row per college (all 11 since D-43, zero-visit rows included), **a single Visits series in `#FF8C2A` — D-60 dropped the Medical / Dental split and its legend** — sorted by visits descending, total-visits headline, "View as table" toggle (college × visits). Visits = kiosk check-ins (`clinic_visits`, capture-time `college_id` snapshot). Includes a **Visits by Purpose** mini bar chart from the linked appointment's `purpose`/`purpose_other`; visits with no linked appointment or purpose fall into a "Walk-in / not specified" bucket.
+- **Clinic Visits by College** (FR-ANL-09) — horizontal bar chart, one row per college (all 11 since D-43, zero-visit rows included), **a single Visits series in `#FF8C2A` — D-60 dropped the Medical / Dental split and its legend** — sorted by visits descending, total-visits headline, "View as table" toggle (college × visits). Visits = kiosk check-ins (`clinic_visits`, capture-time `college_id` snapshot). Includes a **Visits by Purpose** mini bar chart from the linked appointment's `purpose`/`purpose_other`; visits with no linked appointment or purpose fall into a "Not specified" bucket ("Walk-in / not specified" until D-61).
 - **Vital-Sign Flags** (FR-ANL-10) — three stat tiles (High BP, Fever, Abnormal BMI), each showing count **and rate** (% of the month's captured screenings). Recomputed server-side from `vital_signs` flags.
 - **Visits per Month** (FR-ANL-11) — line chart across all months with data, **one series**: clinic visits (D-60 dropped the dental series and its legend). Ignores the page filters by design (whole-year, all-college).
 - **Students Screened by Sex** (FR-ANL-04, retitled from "By-Sex donut") — Chart.js donut, 160px, Male (orange) + Female (peach), centre total, legend with count + %. Counts students screened (captured kiosk visits), so it already fits the system-collected scope; now obeys the college filter too.
@@ -477,7 +464,7 @@ Welcome
   ├── QR scan (USB scanner as keyboard input; multi-line payload normalized to IDNo) → Identity
   └── "Lost ID?" → Email Login (virtual keyboard) → Identity
 
-Identity → Walk-in check (skip if any appt is booked today) → Privacy Consent → vital-height → vital-weight → vital-temp → vital-bp → Questionnaire → Review → Complete (12s auto-reset → Welcome)
+Identity → schedule check (no appointment today → No Clinic Schedule Today → Back to start, D-61) → Privacy Consent → vital-height → vital-weight → vital-temp → vital-bp → Questionnaire → Review → Complete (12s auto-reset → Welcome)
 ```
 
 #### Screen 1 — Welcome
@@ -495,15 +482,14 @@ Identity → Walk-in check (skip if any appt is booked today) → Privacy Consen
 
 #### Screen 3 — Identity Confirm
 - Large avatar (circular, initials), "Identity Verified ✓", "Hello, {first name}!", college/course/year/student number.
-- "That's me — Continue" (lg) → Walk-in check (Screen 3a).
+- "That's me — Continue" (lg) → schedule check (Screen 3a).
 - "Not you?" (ghost lg) → resets to Welcome.
 
-#### Screen 3a — Walk-in Check / No Scheduled Clearance (FR-KSK-03a)
-- Shown only when the identified student has **no non-cancelled appointment dated today at all**.
-- Calendar/info icon; "No Scheduled Clearance Today" heading; body explaining nothing is booked for today.
-- "Proceed as Walk-in" (lg) → Privacy Consent (Screen 3b).
-- Exit / "Not now" (ghost lg) → resets to Welcome.
-- If ANY same-day appointment exists, this screen is skipped and the flow goes straight to Privacy Consent. This screen is a UI gate only — the submit-time `appointment_id` linkage (FR-KSK-12 / BR-10) links whichever of today's scheduled appointments starts closest to check-in (D-54); see "Visit linkage" above.
+#### Screen 3a — No Clinic Schedule Today (FR-KSK-03a, rewritten by D-61)
+- Shown only when the identified student has **no `scheduled` appointment dated today** (server-decided `hasAppointmentToday`). Screen key `no-schedule` (was `walkin`); partial `kiosk/screens/no-schedule.blade.php`.
+- Calendar icon; **"No Clinic Schedule Today"**; body: *"You don't have a clinic schedule today. Clearances are scheduled through your college, so please ask your college office to include you in a batch request."*
+- **One** button: **"Back to start"** (lg) → resets to Welcome. **No way forward** — there are no walk-ins ("Proceed as Walk-in" is gone).
+- An appointment at **any hour** today skips this screen and goes straight to Privacy Consent. The screen is a courtesy, not the gate: submit refuses a student with no `scheduled` appointment today on the server (422, nothing written).
 
 #### Screen 3b — Privacy Consent
 - Shield icon (orange stroke on peach bg).
@@ -610,7 +596,7 @@ purpose_other         varchar(120) NULL -- the Others specify-event text; requir
 scheduled_date        date
 scheduled_time        time NULL             -- D-37: the one-hour clinic slot ('07:00:00' .. '16:00:00', canonical 'H:i:s'); REQUIRED on every booking from D-37 onwards, NULL on pre-D-37 rows which were deliberately NOT backfilled (they belong to no slot, render as "—", and are counted only by the daily cap)
 status                enum('scheduled','checked_in','completed','cancelled') DEFAULT 'scheduled'
-source                enum('self','batch')  -- how the appointment was created
+source                enum('self','batch')  -- how the appointment was created; always 'batch' since D-61 ('self' = pre-D-61 history)
 batch_request_id      bigint NULL FK → batch_requests.id
 created_by            bigint NULL FK → users.id
 created_at, updated_at
@@ -657,7 +643,7 @@ reference_no          varchar(20) UNIQUE    -- HP-YYYY-####
 student_id            bigint FK → users.id
 college_id            bigint FK → colleges.id   -- SCHEMA ADD: snapshot of the student's college at capture time, so analytics stay transfer-proof (FR-STU-09)
 course                varchar(120) NULL     -- SCHEMA ADD (D-43): snapshot of the student's PROGRAM at capture time, frozen beside college_id above. student_profiles.course stays live, so without this a program shift would restate every past per-program report. NULLABLE and NEVER BACKFILLED — a pre-D-43 visit has no honest answer and renders "—" (the pattern appointments.scheduled_time uses for pre-D-37 rows); a profile with no program also stores NULL rather than blocking the kiosk.
-appointment_id        bigint NULL FK → appointments.id   -- NULL = walk-in
+appointment_id        bigint NULL FK → appointments.id   -- always set since D-61 (no walk-ins); NULL only on legacy walk-in rows
 login_method          enum('qr','email')
 status                enum('captured','encoded') DEFAULT 'captured'
 privacy_consent_at    timestamp NULL

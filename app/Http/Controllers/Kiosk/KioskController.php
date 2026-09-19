@@ -332,10 +332,10 @@ final class KioskController extends Controller
      * own display/state; they are NOT trusted at submit, which reads identity
      * from the server session instead (see submit()).
      *
-     * `hasAppointmentToday` is computed HERE, server-side, so the Walk-in
-     * Check (FR-KSK-03a) can never be spoofed by client state: the front-end
-     * only uses this boolean to pick which screen to show. The authoritative
-     * appointment_id linkage is still re-resolved at submit.
+     * `hasAppointmentToday` is computed HERE, server-side, so the schedule
+     * check (FR-KSK-03a) can never be spoofed by client state: the front-end
+     * only uses this boolean to pick which screen to show. Submit re-resolves
+     * the appointment itself and refuses the visit without one (D-61).
      */
     private function identityPayload(StudentProfile $profile, string $loginMethod): array
     {
@@ -358,17 +358,22 @@ final class KioskController extends Controller
     }
 
     /**
-     * Walk-in Check (FR-KSK-03a): does this student have ANY non-cancelled
-     * appointment dated today? When false (literally nothing booked today),
-     * the kiosk shows the "No Scheduled Clearance Today" screen; when true,
-     * it goes straight to Privacy Consent.
+     * Schedule check (FR-KSK-03a, D-61): does this student hold a `scheduled`
+     * appointment today? When false, the kiosk shows "No Clinic Schedule
+     * Today", which only leads back to Welcome; when true, it goes straight to
+     * Privacy Consent.
+     *
+     * `scheduled` — not merely "not cancelled" — because that is the only kind
+     * of appointment SubmitKioskVisit::todaysAppointmentId() will link. A
+     * student whose appointment today is already `completed` (encoded) would
+     * otherwise pass this screen and be refused only after doing every vital.
      */
     private function hasAppointmentToday(int $studentId): bool
     {
         return Appointment::query()
             ->where('student_id', $studentId)
             ->whereDate('scheduled_date', Carbon::today())
-            ->where('status', '!=', 'cancelled')
+            ->where('status', 'scheduled')
             ->exists();
     }
 }

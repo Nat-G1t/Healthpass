@@ -34,7 +34,7 @@ class StoreBatchRequestRequest extends FormRequest
      * BR-06: reason_detail only means anything when the reason is "others".
      * Drop stray detail text otherwise (e.g. the admin typed one, then
      * switched back to a listed reason) — server-side, so a crafted request
-     * can't smuggle it past the UI. Mirrors StoreAppointmentRequest (D-28).
+     * can't smuggle it past the UI.
      */
     protected function prepareForValidation(): void
     {
@@ -104,9 +104,8 @@ class StoreBatchRequestRequest extends FormRequest
      *
      * The capacity check (4) and the D-54 clash check (5) are re-run under a
      * row lock at write time (BatchRequestController::store) — this read is
-     * unlocked and races with a self-booking taking the last seat in one of
-     * the batch's hours, or a student self-booking one of them, exactly as the
-     * student booking Form Request does.
+     * unlocked and races with another batch taking the last seats in one of
+     * the batch's hours, or holding one of its students in them.
      */
     public function withValidator(Validator $validator): void
     {
@@ -175,8 +174,8 @@ class StoreBatchRequestRequest extends FormRequest
             }
 
             // (5) D-54 / BR-25: no student may already be scheduled during the
-            // span — by their own self-booking or on another pending/approved
-            // batch. First come wins, so THIS batch is the one refused. One
+            // span on another pending/approved batch (D-61 removed the
+            // self-booking half). First come wins, so THIS batch is refused. One
             // error per clashing student, keyed
             // `clashes.<student_profile_id>`: the New Batch page collects those
             // keys into its popup and its "Remove these students" button.

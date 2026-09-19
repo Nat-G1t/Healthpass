@@ -27,7 +27,9 @@ class AppointmentFactory extends Factory
             'service_type' => 'medical',   // D-60: the clinic's only service
             'scheduled_date' => now()->addDays($this->faker->numberBetween(1, 30))->toDateString(),
             'status' => 'scheduled',
-            'source' => 'self',
+            // D-61: every appointment comes from a college batch. A test that
+            // needs a legacy pre-D-61 self-booking says 'source' => 'self'.
+            'source' => 'batch',
             'batch_request_id' => null,
             'created_by' => null,
         ];
@@ -40,8 +42,8 @@ class AppointmentFactory extends Factory
 
     /**
      * D-28: an appointment carrying the student's chosen clearance purpose.
-     * Leaving purpose null (the default) models a walk-in-equivalent / batch /
-     * pre-D-28 appointment that falls back to the nurse dropdown.
+     * Leaving purpose null (the default) models a batch / pre-D-28
+     * appointment that falls back to the nurse dropdown.
      */
     public function withPurpose(string $purpose, ?string $purposeOther = null): static
     {

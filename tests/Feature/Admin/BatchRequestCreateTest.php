@@ -115,10 +115,11 @@ class BatchRequestCreateTest extends TestCase
             ->assertViewHas('bookingDays', config('healthpass.booking_days'));
     }
 
-    public function test_availability_endpoint_reports_the_same_days_as_the_student_one(): void
+    public function test_availability_endpoint_reports_full_and_cutoff_days(): void
     {
         // 6 PM on Sep 8: today is past closing (BR-20) and has no hour left
-        // (BR-23); Sep 15 is at the daily cap.
+        // (BR-23); Sep 15 is at the daily cap. (This used to be compared with
+        // the student booking calendar's endpoint, which D-61 removed.)
         Carbon::setTestNow(Carbon::parse('2026-09-08 18:00', 'Asia/Manila'));
         config(['healthpass.daily_capacity' => 2]);
 
@@ -126,15 +127,10 @@ class BatchRequestCreateTest extends TestCase
 
         $query = ['year' => 2026, 'month' => 9];
 
-        $admin = $this->actingAs($this->admin)
+        $this->actingAs($this->admin)
             ->getJson(route('admin.batches.availability', $query))
             ->assertOk()
             ->assertExactJson(['full_days' => [8, 15], 'cutoff_days' => [8]]);
-
-        $this->actingAs(User::factory()->create(['role' => 'student']))
-            ->getJson(route('student.appointments.availability', $query))
-            ->assertOk()
-            ->assertExactJson($admin->json());
     }
 
     public function test_availability_endpoint_is_refused_for_other_roles_and_guests(): void

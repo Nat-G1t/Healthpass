@@ -531,15 +531,13 @@ class BatchApprovalDecisionTest extends TestCase
         $date = now()->addDays(7)->toDateString();
         $batch = $this->makeBatchWithStudents(5, ['requested_date' => $date, 'requested_time' => '07:00:00']);
 
-        // Four of the five students self-booked 7 AM on the same day.
+        // Four of the five students are already held at 7 AM that day by
+        // another pending batch — the only kind of clash since D-61.
         $clashing = $batch->batchRequestStudents()->orderBy('id')->take(4)->get();
+        $other = $this->makeBatchWithStudents(0, ['requested_date' => $date, 'requested_time' => '07:00:00', 'requested_blocks' => 1]);
 
         foreach ($clashing as $row) {
-            Appointment::factory()->inSlot('07:00:00')->create([
-                'student_id' => $row->student_id,
-                'scheduled_date' => $date,
-                'source' => 'self',
-            ]);
+            BatchRequestStudent::create(['batch_request_id' => $other->id, 'student_id' => $row->student_id]);
         }
 
         $names = User::whereIn('id', $clashing->pluck('student_id'))->orderBy('name')->pluck('name');
@@ -556,9 +554,27 @@ class BatchApprovalDecisionTest extends TestCase
         $this->assertSame('pending', $batch->status);
         $this->assertNull($batch->scheduled_date);
         $this->assertNull($batch->reviewed_by);
-        // Nothing fanned out — only the four self-bookings exist.
-        $this->assertSame(0, Appointment::where('batch_request_id', $batch->id)->count());
-        $this->assertDatabaseCount('appointments', 4);
+        // Nothing fanned out.
+        $this->assertDatabaseCount('appointments', 0);
+    }
+
+    public function test_a_legacy_self_booking_no_longer_blocks_approval(): void
+    {
+        // D-61 removed self-booking and with it D-54's self-booking clash; a
+        // pre-D-61 row in an old database holds nothing against a batch.
+        $date = now()->addDays(7)->toDateString();
+        $batch = $this->makeBatchWithStudents(1, ['requested_date' => $date, 'requested_time' => '07:00:00']);
+
+        Appointment::factory()->inSlot('07:00:00')->create([
+            'student_id' => $batch->batchRequestStudents()->value('student_id'),
+            'scheduled_date' => $date,
+            'source' => 'self',
+        ]);
+
+        $this->approve($batch)->assertRedirect('/director/batches')->assertSessionMissing('error');
+
+        $this->assertSame('approved', $batch->fresh()->status);
+        $this->assertSame(1, Appointment::where('batch_request_id', $batch->id)->count());
     }
 
     public function test_approval_is_refused_when_a_student_is_on_an_overlapping_batch(): void

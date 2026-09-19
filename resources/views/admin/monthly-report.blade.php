@@ -173,7 +173,7 @@
 <div class="block">
     <h2>Visits by Purpose</h2>
     <p class="note">
-        Why students booked, from the linked appointment. Walk-ins have no appointment.
+        Why students came, from the linked appointment. A visit with none recorded counts as Not specified.
     </p>
     <table>
         <thead>
@@ -291,7 +291,7 @@
 {{-- ── Footer: the honesty line D-32 was decided on ──────────────────────── --}}
 <p class="foot">
     This report covers data captured by HealthPass only — appointments booked in the
-    system and vitals captured at the clinic kiosk. Walk-in consultations that never
+    system and vitals captured at the clinic kiosk. Other clinic consultations that never
     passed through HealthPass are not represented.
 </p>
 

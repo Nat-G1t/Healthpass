@@ -97,7 +97,7 @@ class ClinicVisit extends Model
         return $this->belongsTo(College::class);
     }
 
-    /** The booked appointment this visit is linked to (null = walk-in). */
+    /** The appointment this visit is linked to — always set since D-61 (null only on legacy walk-in rows). */
     public function appointment(): BelongsTo
     {
         return $this->belongsTo(Appointment::class);

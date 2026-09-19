@@ -58,7 +58,7 @@ class Appointment extends Model
      * The full one-hour slot — "9:00 AM – 10:00 AM" — or "—" for the pre-D-37
      * rows that belong to no slot. The wordier counterpart of timeLabel(), used
      * where the student needs to know the whole hour rather than just when it
-     * starts (the booking picker, and the appointment email — FR-STU-12).
+     * starts (the appointment emails — FR-STU-12/13).
      */
     public function timeRangeLabel(): string
     {
@@ -96,58 +96,34 @@ class Appointment extends Model
     }
 
     /**
-     * Who put this appointment in the diary — "Self-scheduled", or
-     * "Booked by <College>" for a batch-generated one. (FR-STU-14, D-51)
+     * Who put this appointment in the diary — "Booked by <College>".
+     * (FR-STU-14 introduced it, D-51; D-61 left only the batch case.)
      *
-     * The student cannot act on a batch appointment themselves (D-39), so the
-     * label is what tells them WHY there is no cancel button and, by naming the
-     * college, exactly who to go to instead. One accessor rather than the same
-     * ternary in two Blade files, so the dashboard card and the My Appointments
-     * list can never word it differently.
+     * Since D-61 a student never schedules themselves: every appointment comes
+     * from a Director-approved college batch, so the label always names the
+     * college, and by naming it tells the student exactly who to go to about
+     * it. A legacy self-booked row from before D-61 reads the same way — the
+     * dev database holds none, and the student has no page that could act on
+     * the difference any more.
      *
-     * Null-safe on the relation: a batch row whose request or college has gone
+     * Null-safe on the relation: a row whose batch request or college has gone
      * missing degrades to the generic "your college" instead of throwing in a
      * view. Callers should eager-load `batchRequest.college` to avoid an N+1.
      */
     public function scheduledByLabel(): string
     {
-        if ($this->source !== 'batch') {
-            return 'Self-scheduled';
-        }
-
         return 'Booked by '.($this->batchRequest?->college?->name ?? 'your college');
-    }
-
-    /**
-     * May the STUDENT cancel this appointment themselves? (FR-STU-06, D-39)
-     *
-     * Three conditions, and the third is new in D-39: a batch appointment
-     * belongs to the cohort its College Admin booked, so only that admin may
-     * withdraw it — a student quietly dropping out of a graduation batch left
-     * the college's roster silently wrong. Self-booked appointments are
-     * unchanged: cancellable right up to the day before.
-     *
-     * This is the ONE definition, called by both the cancel endpoint and every
-     * view that draws a cancel button, so the button and the server can never
-     * disagree (same shape as BatchRequest::hasStaleRequestedDate()).
-     */
-    public function isSelfCancellable(): bool
-    {
-        return $this->status === 'scheduled'
-            && $this->source !== 'batch'
-            && $this->scheduled_date->gt(today());
     }
 
     /**
      * May the COLLEGE ADMIN withdraw this appointment? (FR-ADM-07, D-40)
      *
-     * The counterpart of isSelfCancellable(), and deliberately not its mirror
-     * image — the two differ on the date. A student loses the right to cancel
-     * the day before, so they cannot walk away from a booked seat at the last
-     * minute; an admin keeps it through the day itself, because "the student
-     * phoned in sick this morning" is the single most common reason a seat
-     * needs freeing, and refusing it would leave a seat blocked for a student
-     * everyone already knows is not coming.
+     * The admin keeps this right through the clinic day itself, because "the
+     * student phoned in sick this morning" is the single most common reason a
+     * seat needs freeing, and refusing it would leave a seat blocked for a
+     * student everyone already knows is not coming. (Students never cancel
+     * anything themselves — D-39 took batch appointments away from them, and
+     * D-61 removed self-booking altogether.)
      *
      * `scheduled` is the hard limit in the other direction: once the visit is
      * `checked_in` or `completed` the student is at (or through) the kiosk and
@@ -235,13 +211,13 @@ class Appointment extends Model
         return $this->belongsTo(User::class, 'student_id');
     }
 
-    /** The batch request that generated this appointment (null for self-booked). */
+    /** The batch request that generated this appointment (null only on legacy pre-D-61 self-bookings). */
     public function batchRequest(): BelongsTo
     {
         return $this->belongsTo(BatchRequest::class);
     }
 
-    /** The user who created this appointment (Director for batch; null for self-booked). */
+    /** The user who created this appointment (the approving Director; null on legacy self-bookings). */
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');

@@ -13,19 +13,20 @@ use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 /**
- * FR-KSK-03a — Walk-in Check ("No Scheduled Clearance Today").
+ * FR-KSK-03a (D-61) — the schedule check after Identity Confirm.
  *
- * The kiosk inserts a screen between Identity Confirm and Privacy Consent that
- * is shown ONLY when the student has NO non-cancelled appointment dated today
- * (FR-KSK-03a). The decision is made SERVER-SIDE: the identity payload carries
- * a `hasAppointmentToday` boolean that the front-end uses purely to pick which
+ * The kiosk shows "No Clinic Schedule Today" between Identity Confirm and
+ * Privacy Consent when the student holds NO `scheduled` appointment dated
+ * today, and that screen only leads back to Welcome — there are no walk-ins.
+ * The decision is made SERVER-SIDE: the identity payload carries a
+ * `hasAppointmentToday` boolean that the front-end uses purely to pick which
  * screen to show. These tests assert that boolean for the scan endpoint (login
  * shares the exact same payload builder).
  *
- * How the visit LINKS to that appointment at submit is covered in
- * KioskSubmitTest; here we only assert the UI gate.
+ * The submit endpoint refuses such a student on its own (KioskSubmitTest), so
+ * this screen is a courtesy, not the gate.
  */
-class KioskWalkInCheckTest extends TestCase
+class KioskScheduleCheckTest extends TestCase
 {
     use RefreshDatabase;
 
@@ -37,7 +38,7 @@ class KioskWalkInCheckTest extends TestCase
     }
 
     /** A student user + profile with a known qr_token. */
-    private function student(string $token = 'KIOSK-WALKIN-TOKEN'): StudentProfile
+    private function student(string $token = 'KIOSK-SCHEDULE-TOKEN'): StudentProfile
     {
         $user = User::factory()->create([
             'role' => 'student',
@@ -61,48 +62,74 @@ class KioskWalkInCheckTest extends TestCase
 
     // ── The gate boolean ──────────────────────────────────────────────────────
 
-    public function test_student_with_no_appointment_today_is_flagged_walk_in(): void
+    public function test_student_with_no_appointment_today_gets_the_no_schedule_screen(): void
     {
         $profile = $this->student();
 
-        // No appointments at all → walk-in screen is shown.
         $this->assertFalse($this->scan($profile)['hasAppointmentToday']);
     }
 
-    public function test_student_with_same_day_medical_appointment_skips_walk_in(): void
+    public function test_student_with_a_scheduled_appointment_today_goes_on(): void
     {
         $profile = $this->student();
-        Appointment::factory()->medical()->create([
+        Appointment::factory()->create([
             'student_id' => $profile->user_id,
             'scheduled_date' => now()->toDateString(),
             'status' => 'scheduled',
         ]);
 
-        // A booked medical clearance today → go straight to Privacy Consent.
+        // Straight to Privacy Consent.
         $this->assertTrue($this->scan($profile)['hasAppointmentToday']);
     }
 
-    public function test_cancelled_same_day_appointment_still_shows_walk_in(): void
+    public function test_an_appointment_at_a_different_hour_today_still_goes_on(): void
     {
         $profile = $this->student();
-        Appointment::factory()->medical()->cancelled()->create([
+        // Whatever the hour, it is today's appointment — the kiosk never
+        // turns a student away for arriving outside their slot.
+        Appointment::factory()->inSlot('16:00:00')->create([
+            'student_id' => $profile->user_id,
+            'scheduled_date' => now()->toDateString(),
+            'status' => 'scheduled',
+        ]);
+
+        $this->assertTrue($this->scan($profile)['hasAppointmentToday']);
+    }
+
+    public function test_cancelled_same_day_appointment_gets_the_no_schedule_screen(): void
+    {
+        $profile = $this->student();
+        Appointment::factory()->cancelled()->create([
             'student_id' => $profile->user_id,
             'scheduled_date' => now()->toDateString(),
         ]);
 
-        // Cancelled doesn't count as scheduled → still a walk-in.
+        $this->assertFalse($this->scan($profile)['hasAppointmentToday']);
+    }
+
+    public function test_an_already_completed_appointment_today_gets_the_no_schedule_screen(): void
+    {
+        $profile = $this->student();
+        // Encoded this morning. Submit links only a `scheduled` appointment, so
+        // letting the student through here would refuse them after every vital.
+        Appointment::factory()->create([
+            'student_id' => $profile->user_id,
+            'scheduled_date' => now()->toDateString(),
+            'status' => 'completed',
+        ]);
+
         $this->assertFalse($this->scan($profile)['hasAppointmentToday']);
     }
 
     public function test_appointment_on_another_day_does_not_count(): void
     {
         $profile = $this->student();
-        Appointment::factory()->medical()->create([
+        Appointment::factory()->create([
             'student_id' => $profile->user_id,
             'scheduled_date' => now()->subDay()->toDateString(),
             'status' => 'scheduled',
         ]);
-        Appointment::factory()->medical()->create([
+        Appointment::factory()->create([
             'student_id' => $profile->user_id,
             'scheduled_date' => now()->addDay()->toDateString(),
             'status' => 'scheduled',
@@ -113,11 +140,10 @@ class KioskWalkInCheckTest extends TestCase
 
     public function test_another_students_appointment_today_does_not_count(): void
     {
-        $profile = $this->student('KIOSK-WALKIN-A');
-        $other = $this->student('KIOSK-WALKIN-B');
+        $profile = $this->student('KIOSK-SCHEDULE-A');
+        $other = $this->student('KIOSK-SCHEDULE-B');
 
-        // The appointment belongs to a DIFFERENT student.
-        Appointment::factory()->medical()->create([
+        Appointment::factory()->create([
             'student_id' => $other->user_id,
             'scheduled_date' => now()->toDateString(),
             'status' => 'scheduled',

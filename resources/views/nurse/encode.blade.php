@@ -252,20 +252,20 @@
             </div>
 
             {{-- Purpose — the four locked values plus the form's "Others,
-                 Specify" line, extracted into <x-hp.purpose-fieldset> (shared
-                 with student booking). The enclosing x-data seeds `purpose` and
+                 Specify" line, extracted into <x-hp.purpose-fieldset> (it was
+                 shared with student booking until D-61). The enclosing x-data seeds `purpose` and
                  `purposeOther`; the component x-models both.
 
                  D-28 fallback: this input only shows when the visit's
-                 appointment carries NO student-supplied purpose (walk-in, batch,
-                 or pre-D-28 booking). When the student already chose a purpose at
+                 appointment carries NO student-supplied purpose (a batch, a
+                 legacy visit with no appointment, or a pre-D-28 booking). When the student already chose a purpose at
                  booking, $purposeFromBooking is true → the whole fieldset is
                  hidden and EncodeController copies the student's choice onto the
                  clearance record on save (print populates unchanged). --}}
             @php
                 $savedPurpose = old('purpose', $record?->purpose);
                 // A booked appointment's student-supplied purpose supersedes the
-                // nurse dropdown. Null on walk-ins and purposeless appointments.
+                // nurse dropdown. Null on legacy no-appointment visits and purposeless appointments.
                 $bookingPurpose = $visit->appointment?->purpose;
                 $purposeFromBooking = filled($bookingPurpose);
             @endphp

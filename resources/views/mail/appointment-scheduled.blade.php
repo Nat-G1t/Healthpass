@@ -6,7 +6,7 @@
     dark mode is web-app only (D-38) and an email has no theme toggle.
 
     EVERY interpolation below uses {{ }}, never {!! !!}. `purposeText` and the
-    college name are free text typed by a student or a College Admin, so raw
+    college name are free text typed by a College Admin, so raw
     output here would be a stored-XSS vector in whatever webmail renders it.
 
     SCHEDULING DATA ONLY — no clearance outcome, no Fit/Unfit, no vitals,
@@ -35,21 +35,16 @@
 
                         <p style="margin:0 0 8px;">Hi {{ $studentName }},</p>
 
-                        @if ($isBatch)
-                            <p style="margin:0 0 24px;color:#6B7280;">
-                                @if ($collegeName)
-                                    <strong>{{ $collegeName }}</strong> has booked
-                                @else
-                                    Your college has booked
-                                @endif
-                                a clearance appointment for you at the university clinic.
-                                You did not need to do anything — the details are below.
-                            </p>
-                        @else
-                            <p style="margin:0 0 24px;color:#6B7280;">
-                                Your clearance appointment is confirmed. Here are the details.
-                            </p>
-                        @endif
+                        {{-- D-61: every appointment comes from a college batch. --}}
+                        <p style="margin:0 0 24px;color:#6B7280;">
+                            @if ($collegeName)
+                                <strong>{{ $collegeName }}</strong> has booked
+                            @else
+                                Your college has booked
+                            @endif
+                            a clearance appointment for you at the university clinic.
+                            You did not need to do anything — the details are below.
+                        </p>
 
                         {{-- Reference block --}}
                         <div style="text-align:center;background:#FFF7F0;border-radius:10px;padding:20px 0;margin-bottom:24px;">
@@ -93,7 +88,7 @@
                             <tr>
                                 <td style="padding:8px 0;color:#9CA3AF;border-top:1px solid #F3F4F6;">Booked by</td>
                                 <td style="padding:8px 0;font-weight:600;color:#4B5563;border-top:1px solid #F3F4F6;">
-                                    {{ $isBatch ? ($collegeName ? $collegeName.' (your college)' : 'Your college') : 'You' }}
+                                    {{ $collegeName ? $collegeName.' (your college)' : 'Your college' }}
                                 </td>
                             </tr>
                             <tr>
@@ -127,27 +122,18 @@
                             (sign in to HealthPass to open it).
                         </p>
 
-                        {{-- Cancellation guidance (FR-STU-06, D-39) --}}
+                        {{-- Cancellation guidance (D-39; D-61 left only this case) --}}
                         <div style="border-top:1px solid #F3F4F6;padding-top:20px;">
                             <p style="margin:0 0 8px;font-size:14px;font-weight:600;color:#4B5563;">
                                 Need to cancel?
                             </p>
-                            @if ($isBatch)
-                                <p style="margin:0;font-size:13px;line-height:1.7;color:#6B7280;">
-                                    This appointment was booked for you as part of a group, so you
-                                    cannot cancel it yourself. Please contact
-                                    {{ $collegeName ? 'your college ('.$collegeName.')' : 'your college' }}
-                                    administrator — they will withdraw it, which frees the slot
-                                    for another student.
-                                </p>
-                            @else
-                                <p style="margin:0;font-size:13px;line-height:1.7;color:#6B7280;">
-                                    You can cancel from your HealthPass dashboard any time up to the
-                                    day before your appointment; that frees the slot for another
-                                    student. On or after the day itself, please contact the clinic
-                                    directly.
-                                </p>
-                            @endif
+                            <p style="margin:0;font-size:13px;line-height:1.7;color:#6B7280;">
+                                This appointment was booked for you as part of a group, so you
+                                cannot cancel it yourself. Please contact
+                                {{ $collegeName ? 'your college ('.$collegeName.')' : 'your college' }}
+                                administrator — they will withdraw it, which frees the slot
+                                for another student.
+                            </p>
                         </div>
 
                         <p style="margin:24px 0 0;font-size:12px;color:#9CA3AF;">

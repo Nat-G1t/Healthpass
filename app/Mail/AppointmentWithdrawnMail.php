@@ -14,10 +14,10 @@ use Illuminate\Queue\SerializesModels;
 /**
  * FR-STU-13 (D-41) — "your college withdrew your appointment" notice.
  *
- * The counterpart of [[AppointmentScheduledMail]], and only ever sent for a
- * BATCH appointment withdrawn by a College Admin (FR-ADM-07). A self-booked
- * appointment is cancelled by the student themselves, who was standing at the
- * screen when they did it and needs no email telling them so.
+ * The counterpart of [[AppointmentScheduledMail]], sent when a College Admin
+ * withdraws a student's appointment from an approved batch (FR-ADM-07). Since
+ * D-61 the student cannot book for themselves, so the mail points them back to
+ * their college for a new batch request rather than at a booking page.
  *
  * SCHEDULING ONLY, exactly as the scheduling notice: no clearance outcome, no
  * Fit/Unfit, no vitals, no questionnaire answers (FR-STU-08).
@@ -49,11 +49,6 @@ class AppointmentWithdrawnMail extends Mailable
                 // NULL-safe on pre-D-37 rows: "—" for an appointment with no slot.
                 'timeRange' => $this->appointment->timeRangeLabel(),
                 'collegeName' => $this->appointment->batchRequest?->college?->name,
-                // Whether the student can simply rebook for themselves. False
-                // once the clinic day has passed — offering "book again" for a
-                // date already gone would just confuse them.
-                'canRebook' => ! $this->appointment->scheduled_date->lt(today()),
-                'bookingUrl' => route('student.appointments'),
             ],
         );
     }

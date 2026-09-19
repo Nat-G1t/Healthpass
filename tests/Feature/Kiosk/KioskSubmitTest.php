@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Kiosk;
 
+use App\Actions\Kiosk\SubmitKioskVisit;
 use App\Http\Controllers\Kiosk\BpReadingController;
 use App\Models\Appointment;
 use App\Models\ClinicVisit;
@@ -19,8 +20,9 @@ use Tests\TestCase;
 /**
  * FR-KSK-12 — kiosk submit. ONE endpoint that, in a single transaction, creates
  * the clinic_visits + vital_signs + screening_responses trio, computes the §7.4
- * flag booleans server-side (BR-13/14), and links today's appointment or NULL
- * for a walk-in (BR-10).
+ * flag booleans server-side (BR-13/14), and links today's appointment (BR-10).
+ * D-61: a student with no `scheduled` appointment today is refused with a 422
+ * and nothing is written — there are no walk-ins.
  */
 class KioskSubmitTest extends TestCase
 {
@@ -28,13 +30,33 @@ class KioskSubmitTest extends TestCase
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    /** An active student user; returns the User (clinic_visits.student_id = users.id). */
-    private function student(): User
+    /**
+     * An active student user; returns the User (clinic_visits.student_id = users.id).
+     *
+     * D-61: by default the student also holds a `scheduled` appointment today,
+     * because without one the kiosk refuses the submit. The linkage tests pass
+     * false and create exactly the appointments they are about.
+     */
+    private function student(bool $scheduledToday = true): User
     {
         $college = College::firstOrCreate(['code' => 'CCS'], ['name' => 'College of Computing Studies']);
         $profile = StudentProfile::factory()->forCollege($college)->create();
 
+        if ($scheduledToday) {
+            $this->scheduleToday($profile->user);
+        }
+
         return $profile->user;
+    }
+
+    /** A `scheduled` appointment today — what a Director-approved batch leaves (D-61). */
+    private function scheduleToday(User $student): Appointment
+    {
+        return Appointment::factory()->create([
+            'student_id' => $student->id,
+            'scheduled_date' => now()->toDateString(),
+            'status' => 'scheduled',
+        ]);
     }
 
     /** A complete, valid submission payload; override any leaf via dot-free nesting. */
@@ -313,6 +335,7 @@ class KioskSubmitTest extends TestCase
         $college = College::firstOrCreate(['code' => 'CCS'], ['name' => 'College of Computing Studies']);
         $profile = StudentProfile::factory()->forCollege($college)->create(['qr_token' => 'INTEGRATION-TOKEN']);
         $student = $profile->user;
+        $this->scheduleToday($student);
 
         $this->postJson(route('kiosk.scan'), ['token' => 'INTEGRATION-TOKEN'])
             ->assertOk()
@@ -338,6 +361,7 @@ class KioskSubmitTest extends TestCase
         $college = College::firstOrCreate(['code' => 'CCS'], ['name' => 'College of Computing Studies']);
         $profile = StudentProfile::factory()->forCollege($college)->create(['qr_token' => 'REPLAY-TOKEN']);
         $student = $profile->user;
+        $this->scheduleToday($student);
 
         $this->postJson(route('kiosk.scan'), ['token' => 'REPLAY-TOKEN'])->assertOk();
         $this->postJson(route('kiosk.submit'), $this->payload($student->id))->assertOk();
@@ -396,7 +420,7 @@ class KioskSubmitTest extends TestCase
 
     public function test_booked_student_links_todays_appointment(): void
     {
-        $student = $this->student();
+        $student = $this->student(scheduledToday: false);
         $appointment = Appointment::factory()->medical()->create([
             'student_id' => $student->id,
             'scheduled_date' => now()->toDateString(),
@@ -417,7 +441,7 @@ class KioskSubmitTest extends TestCase
     {
         Carbon::setTestNow(Carbon::parse('2026-09-10 13:30', 'Asia/Manila'));
 
-        $student = $this->student();
+        $student = $this->student(scheduledToday: false);
         $far = $this->todaysAppointment($student, '08:00:00');
         $near = $this->todaysAppointment($student, '14:00:00');
 
@@ -440,32 +464,35 @@ class KioskSubmitTest extends TestCase
         ], $overrides));
     }
 
-    public function test_a_morning_check_in_links_the_9am_batch_appointment(): void
+    // Two batches may hold one student on the same day when their hours don't
+    // overlap (BR-25) — a 9 AM seat on one and a 2 PM seat on another.
+
+    public function test_a_morning_check_in_links_the_9am_appointment(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-09-10 09:10', 'Asia/Manila'));
 
-        $student = $this->student();
+        $student = $this->student(scheduledToday: false);
         // The 2 PM one is created first, so an id-order pick would choose it.
-        $this->todaysAppointment($student, '14:00:00', ['source' => 'self']);
-        $batch = $this->todaysAppointment($student, '09:00:00', ['source' => 'batch']);
+        $this->todaysAppointment($student, '14:00:00');
+        $morning = $this->todaysAppointment($student, '09:00:00');
 
         $this->submit($student->id)->assertOk();
 
-        $this->assertSame($batch->id, ClinicVisit::first()->appointment_id);
+        $this->assertSame($morning->id, ClinicVisit::first()->appointment_id);
     }
 
-    public function test_an_afternoon_check_in_links_the_2pm_self_booking(): void
+    public function test_an_afternoon_check_in_links_the_2pm_appointment(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-09-10 13:50', 'Asia/Manila'));
 
-        $student = $this->student();
-        $batch = $this->todaysAppointment($student, '09:00:00', ['source' => 'batch']);
-        $selfBooked = $this->todaysAppointment($student, '14:00:00', ['source' => 'self']);
+        $student = $this->student(scheduledToday: false);
+        $morning = $this->todaysAppointment($student, '09:00:00');
+        $afternoon = $this->todaysAppointment($student, '14:00:00');
 
         $this->submit($student->id)->assertOk();
 
-        $this->assertSame($selfBooked->id, ClinicVisit::first()->appointment_id);
-        $this->assertSame('scheduled', $batch->fresh()->status);
+        $this->assertSame($afternoon->id, ClinicVisit::first()->appointment_id);
+        $this->assertSame('scheduled', $morning->fresh()->status);
     }
 
     public function test_a_tie_goes_to_the_earlier_hour(): void
@@ -473,7 +500,7 @@ class KioskSubmitTest extends TestCase
         // 10:00 is exactly one hour from both 9 AM and 11 AM.
         Carbon::setTestNow(Carbon::parse('2026-09-10 10:00', 'Asia/Manila'));
 
-        $student = $this->student();
+        $student = $this->student(scheduledToday: false);
         $this->todaysAppointment($student, '11:00:00');
         $earlier = $this->todaysAppointment($student, '09:00:00');
 
@@ -486,7 +513,7 @@ class KioskSubmitTest extends TestCase
     {
         Carbon::setTestNow(Carbon::parse('2026-09-10 08:00', 'Asia/Manila'));
 
-        $student = $this->student();
+        $student = $this->student(scheduledToday: false);
         // A pre-D-37 row has no hour to measure — it loses to any timed one.
         $this->todaysAppointment($student, null);
         $timed = $this->todaysAppointment($student, '16:00:00');
@@ -503,8 +530,9 @@ class KioskSubmitTest extends TestCase
      */
     public function test_forged_appointment_id_in_body_is_ignored(): void
     {
-        $student = $this->student();
-        $otherStudentsAppointment = Appointment::factory()->medical()->create([
+        $student = $this->student(scheduledToday: false);
+        $own = $this->scheduleToday($student);
+        $otherStudentsAppointment = Appointment::factory()->create([
             'scheduled_date' => now()->toDateString(),
             'status' => 'scheduled',
         ]);
@@ -512,17 +540,37 @@ class KioskSubmitTest extends TestCase
         $this->submit($student->id, ['appointmentId' => $otherStudentsAppointment->id])
             ->assertOk();
 
-        // No appointment of their own today → walk-in, forged id discarded.
-        $this->assertNull(ClinicVisit::first()->appointment_id);
+        $this->assertSame($own->id, ClinicVisit::first()->appointment_id);
         $this->assertSame('scheduled', $otherStudentsAppointment->fresh()->status);
     }
 
-    public function test_walk_in_gets_null_appointment(): void
+    /** ...and a forged id cannot get a student with no appointment of their own past the D-61 gate. */
+    public function test_forged_appointment_id_does_not_unlock_the_gate(): void
     {
-        $student = $this->student();
+        $student = $this->student(scheduledToday: false);
+        $otherStudentsAppointment = Appointment::factory()->create([
+            'scheduled_date' => now()->toDateString(),
+            'status' => 'scheduled',
+        ]);
 
-        // A cancelled appointment today, and a scheduled one on another day —
-        // neither should link; this is a walk-in.
+        $this->submit($student->id, ['appointmentId' => $otherStudentsAppointment->id])
+            ->assertStatus(422);
+
+        $this->assertSame(0, ClinicVisit::count());
+        $this->assertSame('scheduled', $otherStudentsAppointment->fresh()->status);
+    }
+
+    // ── D-61: no walk-ins ────────────────────────────────────────────────────
+
+    /**
+     * No `scheduled` appointment today → 422 and NOTHING written: no visit, no
+     * vitals, no screening answers. A cancelled appointment today and a
+     * scheduled one tomorrow don't count. The kiosk's no-schedule screen should
+     * have stopped the student already; this is the server refusing on its own.
+     */
+    public function test_student_with_no_appointment_today_is_refused_and_nothing_is_written(): void
+    {
+        $student = $this->student(scheduledToday: false);
         Appointment::factory()->cancelled()->create([
             'student_id' => $student->id,
             'scheduled_date' => now()->toDateString(),
@@ -533,9 +581,28 @@ class KioskSubmitTest extends TestCase
             'status' => 'scheduled',
         ]);
 
-        $this->submit($student->id)->assertOk();
+        $this->submit($student->id)
+            ->assertStatus(422)
+            ->assertJsonPath('message', SubmitKioskVisit::NO_SCHEDULE_MESSAGE);
 
-        $this->assertNull(ClinicVisit::first()->appointment_id);
+        $this->assertSame(0, ClinicVisit::count());
+        $this->assertSame(0, VitalSigns::count());
+        $this->assertSame(0, ScreeningResponse::count());
+    }
+
+    /** Already encoded this morning: that appointment is `completed`, so a second visit is refused. */
+    public function test_a_second_visit_after_the_appointment_is_completed_is_refused(): void
+    {
+        $student = $this->student(scheduledToday: false);
+        Appointment::factory()->create([
+            'student_id' => $student->id,
+            'scheduled_date' => now()->toDateString(),
+            'status' => 'completed',
+        ]);
+
+        $this->submit($student->id)->assertStatus(422);
+
+        $this->assertSame(0, ClinicVisit::count());
     }
 
     // ── College snapshot, transfer-proof (FR-STU-09 / D-17) ───────────────────
@@ -547,6 +614,7 @@ class KioskSubmitTest extends TestCase
 
         $profile = StudentProfile::factory()->forCollege($ccs)->create();
         $student = $profile->user;
+        $this->scheduleToday($student);
 
         // Visit 1 captured while the student is still in CCS.
         $this->submit($student->id)->assertOk();
@@ -585,6 +653,7 @@ class KioskSubmitTest extends TestCase
         $profile = StudentProfile::factory()->forCollege($college)->create([
             'course' => 'Bachelor of Science in Information Systems',
         ]);
+        $this->scheduleToday($profile->user);
 
         $this->submit($profile->user->id)->assertOk();
 
@@ -605,6 +674,7 @@ class KioskSubmitTest extends TestCase
         $profile = StudentProfile::factory()->forCollege($college)->create([
             'course' => 'Bachelor of Science in Information Technology',
         ]);
+        $this->scheduleToday($profile->user);
 
         $this->submit($profile->user->id)->assertOk();
         $visit = ClinicVisit::latest('id')->first();
@@ -635,6 +705,7 @@ class KioskSubmitTest extends TestCase
     {
         $college = College::firstOrCreate(['code' => 'CCS'], ['name' => 'College of Computing Studies']);
         $profile = StudentProfile::factory()->forCollege($college)->create(['course' => '']);
+        $this->scheduleToday($profile->user);
 
         $this->submit($profile->user->id)->assertOk()->assertJson(['ok' => true]);
 
