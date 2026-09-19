@@ -143,15 +143,11 @@ final class SubmitKioskVisit
     /**
      * Today's open appointment for this student, or null (walk-in, BR-10).
      *
-     * D-33 (amends D-3) made dental appointments link too, so the nurse-encode
-     * step completes them and dental visits get a college snapshot.
-     *
-     * D-54 replaces D-33's "medical wins" edge rule. A student can now hold,
-     * say, a 9 AM batch appointment AND a 2 PM self-booking on the same day, so
-     * the link goes to the appointment whose hour STARTS closest to check-in
-     * (now()), whatever its service; a tie goes to the earlier hour. A row
-     * with no hour (pre-D-37) has nothing to measure, so it links only when no
-     * timed appointment exists (lowest id first). Walk-ins are first-class —
+     * D-54: a student can hold, say, a 9 AM batch appointment AND a 2 PM
+     * self-booking on the same day, so the link goes to the appointment whose
+     * hour STARTS closest to check-in (now()); a tie goes to the earlier hour.
+     * A row with no hour (pre-D-37) has nothing to measure, so it links only
+     * when no timed appointment exists (lowest id first). Walk-ins are first-class —
      * they flow through the queue identically.
      */
     private function todaysAppointmentId(int $studentId): ?int

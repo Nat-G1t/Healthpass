@@ -93,10 +93,7 @@
             <div>
                 <h3 class="text-sm font-semibold text-hp-slate">Clinic Visits by Program</h3>
                 <p class="mt-1 text-xs text-hp-slate/50">
-                    Visits per program, split by service type — sorted by volume.
-                </p>
-                <p class="text-xs text-hp-slate/50">
-                    Medical = kiosk check-ins · Dental = completed appointments (scheduling-only, no vitals).
+                    Kiosk check-ins per program — sorted by volume.
                 </p>
             </div>
             <p class="text-3xl font-bold leading-none text-hp-orange">
@@ -109,28 +106,18 @@
             <div class="flex flex-col items-center py-10 text-center">
                 <p class="text-sm font-medium text-hp-slate/60">No visits recorded for this month yet</p>
                 <p class="mt-1 text-xs text-hp-slate/40">
-                    The chart fills in as your students check in at the kiosk or complete dental appointments.
+                    The chart fills in as your students check in at the kiosk.
                 </p>
             </div>
         @else
-            {{-- Server-rendered legend (identity never rides on color alone —
-                 the table toggle below repeats the same numbers). --}}
-            <div class="mb-3 flex gap-4 text-xs text-hp-slate/50">
-                <span class="flex items-center gap-1.5">
-                    <span class="h-2.5 w-2.5 rounded-sm" style="background:#FF8C2A"></span> Medical
-                </span>
-                <span class="flex items-center gap-1.5">
-                    <span class="h-2.5 w-2.5 rounded-sm" style="background:#2563EB"></span> Dental
-                </span>
-            </div>
-
-            {{-- Stacked horizontal bar — one row per program, zeros included.
-                 56px a row (against the Director's 32) because program names
-                 are wrapped onto two or three axis lines, not 3-letter codes. --}}
+            {{-- Horizontal bar — one row per program, zeros included. 56px a
+                 row (against the Director's 32) because program names are
+                 wrapped onto two or three axis lines, not 3-letter codes. One
+                 series since D-60, so no legend: the table repeats the numbers. --}}
             <div data-visits-bar data-chart="{{ json_encode($programBar) }}"
                  style="height: {{ count($programRows) * 56 + 24 }}px">
                 <canvas role="img"
-                        aria-label="Stacked bar chart: clinic visits per program, medical and dental. The same numbers are in the table below."></canvas>
+                        aria-label="Bar chart: clinic visits per program. The same numbers are in the table below."></canvas>
             </div>
 
             {{-- "View as table" — also the contrast relief for the orange
@@ -138,30 +125,24 @@
             <details class="mt-3">
                 <summary class="cursor-pointer text-xs font-semibold text-hp-slate/50">View as table</summary>
                 <div class="mt-3 overflow-x-auto">
-                    <table class="min-w-[420px] text-xs text-hp-slate">
+                    <table class="min-w-[280px] text-xs text-hp-slate">
                         <thead>
                             <tr class="border-b border-hp-slate/10 text-hp-slate/50">
                                 <th class="px-3 py-1.5 text-left font-semibold">Program</th>
-                                <th class="px-3 py-1.5 text-right font-semibold">Medical</th>
-                                <th class="px-3 py-1.5 text-right font-semibold">Dental</th>
-                                <th class="px-3 py-1.5 text-right font-semibold">Total</th>
+                                <th class="px-3 py-1.5 text-right font-semibold">Visits</th>
                             </tr>
                         </thead>
                         <tbody>
                             @foreach ($programRows as $row)
                                 <tr class="even:bg-hp-slate/[0.04]">
                                     <td class="px-3 py-1.5">{{ $row['program'] }}</td>
-                                    <td class="px-3 py-1.5 text-right tabular-nums">{{ $row['medical'] }}</td>
-                                    <td class="px-3 py-1.5 text-right tabular-nums">{{ $row['dental'] }}</td>
-                                    <td class="px-3 py-1.5 text-right font-semibold tabular-nums">{{ $row['total'] }}</td>
+                                    <td class="px-3 py-1.5 text-right font-semibold tabular-nums">{{ $row['visits'] }}</td>
                                 </tr>
                             @endforeach
                         </tbody>
                         <tfoot>
                             <tr class="border-t border-hp-slate/10 font-bold">
                                 <td class="px-3 py-1.5">Total</td>
-                                <td class="px-3 py-1.5 text-right tabular-nums">{{ $totalMedical }}</td>
-                                <td class="px-3 py-1.5 text-right tabular-nums">{{ $totalDental }}</td>
                                 <td class="px-3 py-1.5 text-right tabular-nums">{{ $totalVisits }}</td>
                             </tr>
                         </tfoot>
@@ -170,16 +151,16 @@
             </details>
         @endif
 
-        {{-- Visits by Purpose (inside the same card): why the month's medical
-             visits were booked. Single muted hue + direct value labels;
-             walk-ins get their own bucket. --}}
+        {{-- Visits by Purpose (inside the same card): why the month's visits
+             were booked. Single muted hue + direct value labels; walk-ins get
+             their own bucket. --}}
         <div class="mt-6 border-t border-hp-slate/10 pt-4">
             <h4 class="text-xs font-semibold text-hp-slate">Visits by Purpose</h4>
             <p class="mb-3 mt-0.5 text-xs text-hp-slate/50">
                 Why students booked — from the linked appointment's purpose. Walk-ins have no appointment.
             </p>
             @if (empty($purposeRows))
-                <p class="py-3 text-center text-xs text-hp-slate/40">No medical visits recorded for this month yet.</p>
+                <p class="py-3 text-center text-xs text-hp-slate/40">No visits recorded for this month yet.</p>
             @else
                 <div class="space-y-1.5">
                     @foreach ($purposeRows as $row)
@@ -244,8 +225,8 @@
         <x-hp.card class="lg:col-span-3">
             <h3 class="text-sm font-semibold text-hp-slate">Visits per Month</h3>
             <p class="mt-1 text-xs text-hp-slate/50">
-                Medical screenings and completed dental appointments across all months with data —
-                your college's whole-year view (ignores the month filter above by design).
+                Clinic visits across all months with data — your college's
+                whole-year view (ignores the month filter above by design).
             </p>
 
             @if ($trendMonthCount === 0)
@@ -254,20 +235,11 @@
                     <p class="mt-1 text-xs text-hp-slate/40">The trend appears once visits span a month.</p>
                 </div>
             @else
-                {{-- Legend required: two series (FR-ANL-11). Server-rendered
-                     to match the bar card; latest points are direct-labeled
-                     by the chart itself. --}}
-                <div class="mt-3 flex gap-4 text-xs text-hp-slate/50">
-                    <span class="flex items-center gap-1.5">
-                        <span class="h-2.5 w-2.5 rounded-sm" style="background:#FF8C2A"></span> Medical screenings
-                    </span>
-                    <span class="flex items-center gap-1.5">
-                        <span class="h-2.5 w-2.5 rounded-sm" style="background:#2563EB"></span> Completed dental
-                    </span>
-                </div>
-                <div class="mt-2 h-56" data-trend data-chart="{{ json_encode($trend) }}">
+                {{-- One series since D-60, so no legend: the latest point is
+                     direct-labeled by the chart itself. --}}
+                <div class="mt-3 h-56" data-trend data-chart="{{ json_encode($trend) }}">
                     <canvas role="img"
-                            aria-label="Line chart: medical screenings and completed dental appointments per month, all months with data."></canvas>
+                            aria-label="Line chart: clinic visits per month, all months with data."></canvas>
                 </div>
             @endif
         </x-hp.card>

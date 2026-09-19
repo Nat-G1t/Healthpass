@@ -53,7 +53,6 @@ class BatchRequestSubmitTest extends TestCase
 
         return $this->actingAs($this->admin)->post('/admin/batches', array_merge([
             'reason' => 'ojt',
-            'service_type' => 'medical',
             'requested_date' => now()->addDays(7)->toDateString(),
             'requested_time' => '07:00:00', // D-37: start hour of the batch span
             'students' => $students->pluck('id')->all(),
@@ -71,7 +70,6 @@ class BatchRequestSubmitTest extends TestCase
         $this->actingAs($this->admin)
             ->post('/admin/batches', [
                 'reason' => 'graduation',
-                'service_type' => 'dental',
                 'requested_date' => $requestedDate,
                 'requested_time' => '08:00:00',
                 'students' => $students->pluck('id')->all(),
@@ -86,7 +84,7 @@ class BatchRequestSubmitTest extends TestCase
         $this->assertSame($this->ccs->id, $batch->college_id);
         $this->assertSame($this->admin->id, $batch->requested_by);
         $this->assertSame('graduation', $batch->reason);
-        $this->assertSame('dental', $batch->service_type);
+        $this->assertSame('medical', $batch->service_type);
         // D-29: the admin's proposed date is stored at submission…
         $this->assertSame($requestedDate, $batch->requested_date->toDateString());
         // D-37: …together with the span — start hour as posted, LENGTH derived
@@ -295,7 +293,6 @@ class BatchRequestSubmitTest extends TestCase
             ->from('/admin/batches/create')
             ->post('/admin/batches', array_merge([
                 'reason' => 'ojt',
-                'service_type' => 'medical',
                 'requested_date' => '2026-09-10',
                 'requested_time' => '09:00:00',
                 'students' => array_map(fn (StudentProfile $profile): int => $profile->id, $profiles),
@@ -348,19 +345,6 @@ class BatchRequestSubmitTest extends TestCase
 
         $this->assertDatabaseCount('batch_requests', 0);
         $this->assertDatabaseCount('batch_request_students', 0);
-    }
-
-    public function test_a_dental_self_booking_clashes_with_a_medical_batch(): void
-    {
-        // A clash is an hour overlap, whatever the service (D-54 decision 1).
-        Carbon::setTestNow(Carbon::parse('2026-09-01 08:00', 'Asia/Manila'));
-
-        $profile = StudentProfile::factory()->forCollege($this->ccs)->create();
-        $this->selfBook($profile, '09:00:00', ['service_type' => 'dental']);
-
-        $this->postBatch([$profile])->assertSessionHasErrors("clashes.{$profile->id}");
-
-        $this->assertDatabaseCount('batch_requests', 0);
     }
 
     public function test_a_student_on_an_overlapping_pending_batch_is_refused(): void
@@ -480,6 +464,16 @@ class BatchRequestSubmitTest extends TestCase
 
     // ── BR-05 / FR-ADM-06: server-side scope, never the request ─────────────
 
+    public function test_a_posted_service_type_is_ignored_and_the_batch_is_medical(): void
+    {
+        // D-60: dental is gone and the field is off the form, so the server
+        // always writes 'medical' and never reads the body's service_type.
+        $this->submitBatch(overrides: ['service_type' => 'dental'])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('medical', BatchRequest::sole()->service_type);
+    }
+
     public function test_college_id_comes_from_the_admin_scope_not_the_request(): void
     {
         // A tampered college_id in the POST body must be ignored outright.
@@ -497,7 +491,6 @@ class BatchRequestSubmitTest extends TestCase
         $this->actingAs($this->admin)
             ->post('/admin/batches', [
                 'reason' => 'ojt',
-                'service_type' => 'medical',
                 'students' => [$own->id, $foreign->id],
             ])
             ->assertSessionHasErrors('students.1');

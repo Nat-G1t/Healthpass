@@ -66,7 +66,7 @@
                             <tr>
                                 <td style="padding:8px 0;color:#9CA3AF;width:40%;">Service</td>
                                 <td style="padding:8px 0;font-weight:600;color:#4B5563;">
-                                    {{ $appointment->service_type === 'medical' ? 'Medical Clearance' : 'Dental Check' }}
+                                    Medical Clearance
                                 </td>
                             </tr>
                             <tr>

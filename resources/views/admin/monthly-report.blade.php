@@ -134,46 +134,35 @@
 {{-- ── Summary line ──────────────────────────────────────────────────────── --}}
 <p class="summary">
     <strong>{{ $totalVisits }}</strong> total visits
-    <span class="sep">|</span>
-    <strong>{{ $totalMedical }}</strong> medical
-    <span class="sep">|</span>
-    <strong>{{ $totalDental }}</strong> dental
 </p>
 
 {{-- ── Clinic Visits by Program (FR-ADM-08 as printed) ───────────────────── --}}
 <div class="block">
     <h2>Clinic Visits by Program</h2>
     <p class="note">
-        Medical = kiosk check-ins, counted under the program recorded at capture.
-        Dental = completed dental appointments, counted under the student's current program.
+        Kiosk check-ins, counted under the program recorded at capture.
         Programs with no visits this month are listed with zeros.
     </p>
     <table>
         <thead>
             <tr>
                 <th>Program</th>
-                <th class="num">Medical</th>
-                <th class="num">Dental</th>
-                <th class="num">Total</th>
+                <th class="num">Visits</th>
             </tr>
         </thead>
         <tbody>
             @forelse ($programRows as $row)
                 <tr>
                     <td>{{ $row['program'] }}</td>
-                    <td class="num">{{ $row['medical'] }}</td>
-                    <td class="num">{{ $row['dental'] }}</td>
-                    <td class="num">{{ $row['total'] }}</td>
+                    <td class="num">{{ $row['visits'] }}</td>
                 </tr>
             @empty
-                <tr><td colspan="4" class="empty">No programs are listed for this college.</td></tr>
+                <tr><td colspan="2" class="empty">No programs are listed for this college.</td></tr>
             @endforelse
         </tbody>
         <tfoot>
             <tr>
                 <td>Total</td>
-                <td class="num">{{ $totalMedical }}</td>
-                <td class="num">{{ $totalDental }}</td>
                 <td class="num">{{ $totalVisits }}</td>
             </tr>
         </tfoot>

@@ -99,13 +99,12 @@ class BatchRequestController extends Controller
      * reference go into it, so none of them can reach the page source. The view
      * owns the wording of each status key.
      *
-     * @return array{ref: string, service: string, date: string, span: string, students: list<array{name: string, number: string, hour: string, status: ?string, result: ?string}>}
+     * @return array{ref: string, date: string, span: string, students: list<array{name: string, number: string, hour: string, status: ?string, result: ?string}>}
      */
     private function resultsPopup(BatchRequest $batch): array
     {
         return [
             'ref' => $batch->reference_no,
-            'service' => $batch->service_type === 'medical' ? 'Medical Clearance' : 'Dental Check',
             'date' => $batch->scheduled_date?->format('l, F j, Y') ?? '—',
             'span' => $batch->requestedSpanLabel(),
             'students' => $batch->batchRequestStudents
@@ -251,7 +250,9 @@ class BatchRequestController extends Controller
                 'requested_by' => $request->user()->id,
                 'reason' => $request->validated('reason'),
                 'reason_detail' => $request->validated('reason_detail'),
-                'service_type' => $request->validated('service_type'),
+                // D-60: dental is gone. The server always writes 'medical' and
+                // never reads a service type from the request body.
+                'service_type' => 'medical',
                 'requested_date' => $requestedDate,   // D-29
                 'requested_time' => $startSlot,        // D-37 span start
                 'requested_blocks' => $blocks,         // D-37 span length, in hours

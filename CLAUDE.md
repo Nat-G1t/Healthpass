@@ -182,8 +182,8 @@ npm run dev                       # terminal 2
   clinic day is **ten one-hour slots derived from `clinic_hours`**
   (7–8 AM … 4–5 PM, **lunch included**) — never hardcode 7–5 in a view; ask
   `App\Services\ClinicScheduleService`. Every appointment carries a
-  `scheduled_time` slot key in canonical `'H:i:s'` form; **medical and dental
-  share one counter** (the constraint is clinic congestion, not kiosk
+  `scheduled_time` slot key in canonical `'H:i:s'` form; there is **one
+  counter per hour** (the constraint is clinic congestion, not kiosk
   throughput). A day is full only when **every** slot is at 12. Pre-D-37
   rows keep `scheduled_time` NULL, render as "—", and are seen by the daily
   cap only — **never backfill them**.
@@ -205,9 +205,7 @@ npm run dev                       # terminal 2
   hourly cap** — that last one is a **hard block since D-37, replacing
   FR-DIRA-06's old warn-but-allow**. The pushback path is
   **reject with a written reason** (required, 10–500 chars), which the
-  College Admin reads on Batch Tracking. Dental is scheduling-only, except
-  that kiosk submit now links today's dental appointment so it can be
-  completed (D-33).
+  College Admin reads on Batch Tracking.
 - Printed clearance must match official form DHVSU-QSP-OSS-004-FO002-R03.
 
 ## Database

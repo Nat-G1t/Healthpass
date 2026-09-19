@@ -39,9 +39,7 @@ use Illuminate\Support\Facades\DB;
  *   • BMI values across all four FR-ANL-12 buckets;
  *   • a few CAPTURED (un-encoded) July visits — these still count
  *     (FR-ANL-07 as rewritten);
- *   • dental appointments in mixed states: completed ones count toward
- *     the charts (D-33), scheduled ones must not;
- *   • every medical visit carries the student's PROGRAM snapshot (D-43),
+ *   • every visit carries the student's PROGRAM snapshot (D-43),
  *     so the per-program reporting built in later prompts has data.
  *
  * Fully deterministic — no randomness, so re-seeding a fresh DB always
@@ -78,15 +76,6 @@ class DemoClinicVisitSeeder extends Seeder
         '2026-02' => 24, '2026-03' => 32, '2026-04' => 40,
         '2026-05' => 48, '2026-06' => 64, '2026-07' => 40,
     ];
-
-    /** Completed dental appointments per month (count toward charts, D-33). */
-    private const DENTAL_COMPLETED = [
-        '2026-02' => 6, '2026-03' => 8, '2026-04' => 10,
-        '2026-05' => 12, '2026-06' => 16, '2026-07' => 12,
-    ];
-
-    /** Still-scheduled July dental appointments — must NOT count anywhere. */
-    private const DENTAL_SCHEDULED = 8;
 
     public function run(): void
     {
@@ -349,8 +338,8 @@ class DemoClinicVisitSeeder extends Seeder
 
     /**
      * The multi-month analytics spread (HP-2026-9101… / APT-2026-9001…):
-     * six months of medical visits + dental appointments feeding every
-     * card of the rescoped analytics. Replaces the pre-D-32 single-month
+     * six months of clinic visits feeding every card of the rescoped
+     * analytics. Replaces the pre-D-32 single-month
      * spread and Apr–Jun bands — any of those stale rows are purged first
      * so old demo data can't pollute the new charts.
      */
@@ -419,51 +408,8 @@ class DemoClinicVisitSeeder extends Seeder
                 }
             }
 
-            // ── Dental appointments: completed count, scheduled don't ────
-            foreach (self::DENTAL_COMPLETED as $yearMonth => $dentalCount) {
-                for ($i = 0; $i < $dentalCount; $i++) {
-                    // Different stride than medical so dental volume has its
-                    // own college mix.
-                    $code = $slots[($i * 31 + 5) % count($slots)];
-                    $students = $studentsByCollege[$code];
-
-                    if ($students->isEmpty()) {
-                        continue;
-                    }
-
-                    Appointment::create([
-                        'reference_no' => sprintf('APT-2026-%d', 9001 + $aptSeq++),
-                        'student_id' => $students[$i % $students->count()]->id,
-                        'service_type' => 'dental',
-                        'scheduled_date' => sprintf('%s-%02d', $yearMonth, ($i % 17) + 2),
-                        'status' => 'completed',
-                        'source' => 'self',
-                    ]);
-                }
-            }
-
-            // Still-scheduled late-July dental — proves FR-ANL-09/11 only
-            // count COMPLETED dental appointments.
-            for ($i = 0; $i < self::DENTAL_SCHEDULED; $i++) {
-                $code = $slots[($i * 11 + 3) % count($slots)];
-                $students = $studentsByCollege[$code];
-
-                if ($students->isEmpty()) {
-                    continue;
-                }
-
-                Appointment::create([
-                    'reference_no' => sprintf('APT-2026-%d', 9001 + $aptSeq++),
-                    'student_id' => $students[$i % $students->count()]->id,
-                    'service_type' => 'dental',
-                    'scheduled_date' => sprintf('2026-07-%02d', 20 + $i),
-                    'status' => 'scheduled',
-                    'source' => 'self',
-                ]);
-            }
-
             $this->command->info(
-                "DemoClinicVisitSeeder: {$visitSeq} medical visits + {$aptSeq} appointments seeded across Feb–Jul 2026."
+                "DemoClinicVisitSeeder: {$visitSeq} clinic visits + {$aptSeq} appointments seeded across Feb–Jul 2026."
             );
         });
     }

@@ -12,7 +12,7 @@
 
         <p class="mb-3">
             Pampanga State University's Health Services Unit collects personal and health information
-            from students for the purpose of processing medical and dental clearances. This is governed
+            from students for the purpose of processing medical clearances. This is governed
             by the <strong>Republic Act No. 10173 (Data Privacy Act of 2012)</strong>.
         </p>
 
@@ -25,7 +25,7 @@
 
         <p class="mb-2 font-semibold text-hp-slate">Why we collect it</p>
         <p class="mb-3">
-            To process your medical and dental clearance requests, generate official clearance documents
+            To process your medical clearance requests, generate official clearance documents
             (PamSU form DHVSU-QSP-OSS-004-FO002-R03), and maintain clinic records required by the
             university for accreditation and institutional reporting.
         </p>

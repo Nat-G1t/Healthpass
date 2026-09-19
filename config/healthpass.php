@@ -7,8 +7,8 @@ return [
     //
     // D-37 made the clinic day TEN one-hour booking slots (clinic_hours below,
     // 7 AM–5 PM, lunch included). A kiosk session takes at most 5 minutes, so a
-    // slot holds 12 students — 12 × 10 = 120 a day. Medical and dental share ONE
-    // counter: what is being capped is clinic congestion, not kiosk throughput.
+    // slot holds 12 students — 12 × 10 = 120 a day. There is ONE counter per
+    // hour: what is being capped is clinic congestion, not kiosk throughput.
     'hourly_capacity' => env('HEALTHPASS_HOURLY_CAPACITY', 12),
 
     // The outer daily cap. It equals hourly_capacity × the number of slots, and

@@ -4,6 +4,38 @@
 
 ### Added
 
+* **Dental removed from the whole website** (D-60; supersedes D-3 and D-33).
+  Requested by the clinic (nurses, University Physician, Clinic Director) on
+  2026-09-18; **pending adviser sign-off**. **NO schema change** — both
+  `service_type` columns and their enums are kept so pre-D-60 rows still read
+  back, and the server now always writes `'medical'`.
+  - **New Batch Request** loses its Service Type field. The server writes
+    `'medical'` unconditionally and never reads a service type from the
+    request body, so a posted `service_type=dental` is ignored.
+  - **Book Appointment** loses its Dental card, and `service` now validates
+    `in:medical` — a crafted dental booking is refused server-side.
+  - **Analytics** (Director + College Admin) drop the Medical/Dental split:
+    Clinic Visits by College / by Program is a single **Visits** bar, and
+    Visits per Month a single series. Both legends are gone, the "View as
+    table" toggle shows one Visits column, and `ClinicAnalytics` rows are now
+    `['code'|'program' => …, 'visits' => n]` with `totalMedical`/`totalDental`
+    removed.
+  - **Printable monthly report**: the Medical / Dental / Total columns become
+    one **Visits** column and the summary line drops the split.
+  - `App\Support\VisitMonths` no longer considers dental appointments, and
+    FR-ANL-07's "dental visits count from completed dental appointments" rule
+    is deleted.
+  - **Kiosk**: wording only. The walk-in check and the D-54 closest-appointment
+    link say "appointment" instead of "medical or dental"; the linking rule
+    itself is unchanged.
+  - Dental is also gone from both appointment emails, the registration consent
+    text, `config/healthpass.php`'s capacity comment ("one counter per hour"),
+    `AppointmentFactory` (no `dental()` state) and `DemoClinicVisitSeeder`.
+  - Tests: nine dental-only cases removed as redundant; new cases assert that
+    a posted `service_type=dental` is stored as `medical`, that the New Batch
+    page has no Service Type field, that a dental booking is refused, and that
+    neither analytics page nor the monthly report renders the word "Dental".
+
 * **Blood-pressure step: Start button, faster Bluetooth readings, bridge
   starts at boot** (D-59). No schema change, no new route, no new package.
   - The BP step shows **▶ Start**. Tapping it shows a waiting animation with

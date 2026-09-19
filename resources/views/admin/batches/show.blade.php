@@ -59,7 +59,7 @@
                 {{ $batch->reference_no }}
             </h2>
             <p class="mt-0.5 text-sm text-hp-slate/50">
-                {{ $batch->service_type === 'medical' ? 'Medical Clearance' : 'Dental Check' }}
+                Medical Clearance
                 for {{ $rows->count() }} {{ Str::plural('student', $rows->count()) }}
             </p>
         </div>

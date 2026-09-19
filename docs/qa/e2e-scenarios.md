@@ -331,35 +331,43 @@ cross-college data is ever visible (SM-5).
 
 ---
 
-## E2E-6 — Dental is scheduling-only (never enters the kiosk loop)
+## E2E-6 — Dental is gone from the whole website (D-60)
 
-**Goal:** confirm a Dental Check can be booked but never goes through vitals →
-encode → print.
+**Goal:** confirm there is no dental option, column, legend or wording anywhere,
+and that a crafted dental request cannot get one into the database.
 
-**Account:** a student who has **no medical appointment today**, e.g.
-`maria.reyes@psu.edu.ph`.
+**Accounts:** a student, a College Admin (CCS), the Clinic Director.
 
 **Steps:**
 
-1. Log in as the student, go to **Book Appointment**.
-2. Select the **Dental Check** service card, pick a **future date today**,
-   confirm the booking. → **Expect:** a confirmation with a reference; the
-   appointment shows in the dashboard as a Dental Check.
-3. Open the kiosk and log in as that same student. Click **That's me —
-   Continue**.
-4. → **Expect:** because a dental appointment exists today, the "No Scheduled
-   Clearance Today" notice is **suppressed** (skipped straight to Privacy
-   Consent) — but if you complete the flow it records as a **walk-in**
-   (`appointment_id` is NULL), because **dental never links** (Decision D-3).
-5. Do **not** expect any dental-specific vitals or a dental encode/print path.
-   Dental lives only in scheduling and records.
-6. Log in as the nurse. → **Expect:** the dental appointment does **not** create
-   a captured visit on its own; it never appears in the encode/print loop.
+1. Log in as the student, go to **Book Appointment**. → **Expect:** a single
+   service card, **Medical Clearance**. No Dental Check card, no tooth icon,
+   and no "Dental" anywhere on the page.
+2. Log in as the College Admin, go to **New Batch Request**. → **Expect:** the
+   form asks for Reason, Requested Clinic Date, start hour and students —
+   there is **no Service Type field** and no "Dental" on the page. Submit a
+   small batch and open its confirmation. → **Expect:** it reads **Medical
+   Clearance**.
+3. Open **Analytics** as the College Admin, with a month that has visits. →
+   **Expect:** *Clinic Visits by Program* is **one bar series**, its "View as
+   table" toggle has a single **Visits** column, and *Visits per Month* is one
+   line. No Medical/Dental legend swatches, no blue `#2563EB` series.
+4. Click **Print Monthly Report**. → **Expect:** the summary line reads
+   *"N total visits"* with no medical/dental split, and the program table has
+   **Program | Visits** only.
+5. Log in as the Clinic Director, open **Analytics** with **All colleges**, then
+   filter to **one college**. → **Expect:** the same — one series, one Visits
+   column, no legend, no "Dental" in either view.
+6. Press **Ctrl+F** on each of those four pages and search for `Dental`. →
+   **Expect:** zero matches on every one.
+7. Open the kiosk and run a student through the walk-in check. → **Expect:**
+   the wording says "appointment", never "medical or dental".
 
-**Pass criteria:** dental books and appears in records, but has **no** vitals
-capture, **no** nurse encode, and **no** printed clearance. Any kiosk session
-by a dental-only student is recorded as a walk-in, not linked to the dental
-appointment.
+**Pass criteria:** the word "Dental" appears nowhere in the web app or the
+kiosk; the New Batch form has no Service Type field; both analytics pages and
+the printed report carry a single Visits series; and a batch always stores
+`service_type = 'medical'` (a posted `service_type=dental` is ignored, and a
+dental booking is refused server-side).
 
 ---
 
@@ -431,7 +439,7 @@ shows for the same scope.
 1. Log in as the **CCS admin** and open **Analytics**. Pick a **month that has
    data**. → **Expect:** the scope banner names your college, and Clinic Visits
    by Program lists **every CCS program**, zero-visit ones included.
-2. Write down, from the screen: the **total / medical / dental** headline, each
+2. Write down, from the screen: the **total visits** headline, each
    program row's three numbers, the **Visits by Purpose** counts, the three
    **Vital-Sign Flag** counts and rates, the four **BMI** bucket counts, and the
    **Male / Female** counts and percentages.
@@ -510,7 +518,7 @@ its **Remove** button and the new mini calendar all work.
 
 8. Log out and log in as **Maria Reyes** — the pending batches from steps 6
    and 7 hold her 9–10 AM and 10–11 AM on that date. Book Appointment →
-   **Dental Check** → the same date. → **Expect:** tapping the date and then
+   **Medical Clearance** → the same date. → **Expect:** tapping the date and then
    the **10:00 AM – 11:00 AM** hour works normally — nothing is refused yet.
 9. Confirm Booking → Yes, book it. → **Expect:** a popup titled **"Already
    Scheduled by Your College"** reading "<Day, Mon DD>, 10:00 AM – 11:00 AM has

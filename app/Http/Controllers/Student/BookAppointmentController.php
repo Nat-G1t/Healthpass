@@ -141,9 +141,9 @@ class BookAppointmentController extends Controller
                 'reference_no' => $refService->generateAppointmentRef(),
                 'student_id' => $userId,
                 'service_type' => $service,
-                // D-28: student-chosen purpose of the medical clearance. NULL for
-                // dental (normalized away in the Form Request); purpose_other holds
-                // the free-text event only when "Others" was picked.
+                // D-28: student-chosen purpose of the medical clearance;
+                // purpose_other holds the free-text event only when "Others"
+                // was picked.
                 'purpose' => $request->validated('purpose'),
                 'purpose_other' => $request->validated('purpose_other'),
                 'scheduled_date' => $date,

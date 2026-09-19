@@ -27,7 +27,7 @@ function bookCalendar() {
         slotAvailability: {},   // slot value => { remaining, full }
         slotsLoading:    false,
         // D-28: purpose of the medical clearance, chosen here so the printed
-        // form auto-populates. Empty for dental (server nulls it anyway).
+        // form auto-populates.
         purpose:         '',
         purposeOther:    '',
         purposeOthers:   @js(\App\Models\ClearanceRecord::PURPOSE_OTHERS),
@@ -51,8 +51,9 @@ function bookCalendar() {
                 .toLocaleString('en-US', { month: 'long', year: 'numeric' });
         },
 
+        // D-60: medical clearance is the clinic's only service.
         get serviceLabel() {
-            return this.selectedService === 'medical' ? 'Medical Clearance' : 'Dental Check';
+            return 'Medical Clearance';
         },
 
         /**
@@ -66,8 +67,8 @@ function bookCalendar() {
         },
 
         /**
-         * D-28: purpose is only required for a medical clearance. Dental needs
-         * none; picking "Others" needs the specify text. Mirrors the server's
+         * D-28: a purpose is required once the service is picked; choosing
+         * "Others" needs the specify text. Mirrors the server's
          * StoreAppointmentRequest rules — the server stays the real gate.
          */
         get purposeReady() {
@@ -277,8 +278,8 @@ function bookCalendar() {
                     service:       this.selectedService,
                     date:          this.selectedDate,
                     time:          this.selectedTime,   // D-37
-                    // Sent for every booking; the server drops purpose for dental
-                    // and clears purpose_other unless "Others" was chosen (D-28).
+                    // The server clears purpose_other unless "Others" was
+                    // chosen (D-28).
                     purpose:       this.purpose,
                     purpose_other: this.purposeOther,
                 });
@@ -358,7 +359,7 @@ function bookCalendar() {
             Step 1 — Select a Service
         </p>
 
-        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div class="grid grid-cols-1 gap-3">
 
             {{-- Medical Clearance --}}
             <button type="button"
@@ -383,38 +384,6 @@ function bookCalendar() {
 
                 <div class="mt-3 flex items-center gap-1"
                      :class="selectedService === 'medical' ? 'text-hp-orange' : 'invisible'">
-                    <svg class="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20">
-                        <path fill-rule="evenodd"
-                              d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                              clip-rule="evenodd"/>
-                    </svg>
-                    <span class="text-xs font-semibold">Selected</span>
-                </div>
-            </button>
-
-            {{-- Dental Check --}}
-            <button type="button"
-                @click="selectedService = 'dental'"
-                class="rounded-xl border-2 p-5 text-left transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-hp-orange"
-                :class="selectedService === 'dental'
-                    ? 'border-hp-orange bg-orange-50'
-                    : 'border-transparent bg-hp-bg hover:border-hp-orange/30'">
-
-                <div class="mb-3 flex h-10 w-10 items-center justify-center rounded-xl transition-colors"
-                     :class="selectedService === 'dental' ? 'bg-hp-orange' : 'bg-hp-white'">
-                    <svg class="h-5 w-5 transition-colors"
-                         :class="selectedService === 'dental' ? 'text-white' : 'text-hp-orange'"
-                         fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75">
-                        <path stroke-linecap="round" stroke-linejoin="round"
-                              d="M12 3c-2.2 0-4 1.8-4 4 0 1.3.4 2.4 1 3.3.6 1 .9 2.1.9 3.2 0 2.5-.9 5-1.4 7.5h7c-.5-2.5-1.4-5-1.4-7.5 0-1.1.3-2.2.9-3.2.6-.9 1-2 1-3.3 0-2.2-1.8-4-4-4z"/>
-                    </svg>
-                </div>
-
-                <p class="font-semibold text-hp-slate">Dental Check</p>
-                <p class="mt-0.5 text-xs text-hp-slate/50">Scheduling only — no vitals required</p>
-
-                <div class="mt-3 flex items-center gap-1"
-                     :class="selectedService === 'dental' ? 'text-hp-orange' : 'invisible'">
                     <svg class="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd"
                               d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
@@ -599,8 +568,7 @@ function bookCalendar() {
     {{-- ── Step 4: Purpose of Medical Clearance (D-28) ──────────────────────────
          A medical clearance prints an official form that names its purpose, so
          the student chooses it here (shared <x-hp.purpose-fieldset>, same
-         dropdown as nurse encode). Dental is scheduling-only — no clearance form
-         — so this card is hidden for dental and until a service is picked.
+         dropdown as nurse encode). Hidden until the service is picked.
          bookCalendar() supplies the `purpose`/`purposeOther` the fieldset binds. --}}
     <div x-show="selectedService === 'medical'" x-cloak>
         <x-hp.card class="mb-6">

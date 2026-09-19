@@ -963,11 +963,10 @@ export function kioskMachine() {
         /**
          * "That's me" → Walk-in Check (FR-KSK-03a). The server already decided,
          * at identity time, whether ANY non-cancelled appointment exists for
-         * today — medical or dental (`hasAppointmentToday`). With one, we skip
-         * straight to Privacy Consent; with nothing booked, we show the "No
-         * Scheduled Clearance Today" screen so the student can proceed as a
-         * walk-in. This is a UI gate only — the appointment_id linkage is
-         * resolved (medical-only) at submit.
+         * today (`hasAppointmentToday`). With one, we skip straight to Privacy
+         * Consent; with nothing booked, we show the "No Scheduled Clearance
+         * Today" screen so the student can proceed as a walk-in. This is a UI
+         * gate only — the appointment_id linkage is resolved at submit.
          */
         confirmIdentity() {
             if (this.state.identity?.hasAppointmentToday) {

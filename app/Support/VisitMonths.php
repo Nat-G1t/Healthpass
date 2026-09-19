@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Support;
 
-use App\Models\Appointment;
 use App\Models\ClinicVisit;
 use App\Models\College;
 use Carbon\CarbonImmutable;
@@ -16,9 +15,8 @@ use Carbon\CarbonInterface;
  * value). Generalized from the old CaseMonths (D-32 rescope, FR-ANL-13).
  *
  * A "month with data" is one with at least one clinic-visit check-in
- * (captured OR encoded — FR-ANL-07 counts from capture) OR at least one
- * completed dental appointment (D-33), so the picker never offers a month
- * that would render every card empty.
+ * (captured OR encoded — FR-ANL-07 counts from capture), so the picker never
+ * offers a month that would render every card empty.
  */
 final class VisitMonths
 {
@@ -42,25 +40,12 @@ final class VisitMonths
         $visitMonths = ClinicVisit::query()
             ->whereNotNull('checked_in_at')
             // The capture-time college snapshot (FR-STU-09), same as every
-            // medical analytics count.
+            // analytics count.
             ->when($college, fn ($query) => $query->where('college_id', $college->id))
             ->pluck('checked_in_at')
             ->map(fn (CarbonInterface $date) => $date->format('Y-m'));
 
-        // Dental has no clinic_visits row — its month is the appointment's
-        // scheduled date, and only completed appointments count (D-33).
-        // It has no snapshot either, so it scopes through the student's
-        // CURRENT college (the FR-ANL-09 stated limitation).
-        $dentalMonths = Appointment::query()
-            ->where('service_type', 'dental')
-            ->where('status', 'completed')
-            ->when($college, fn ($query) => $query
-                ->join('student_profiles', 'student_profiles.user_id', '=', 'appointments.student_id')
-                ->where('student_profiles.college_id', $college->id))
-            ->pluck('scheduled_date')
-            ->map(fn (CarbonInterface $date) => $date->format('Y-m'));
-
-        return $visitMonths->merge($dentalMonths)
+        return $visitMonths
             ->unique()
             ->sortDesc()
             ->values()

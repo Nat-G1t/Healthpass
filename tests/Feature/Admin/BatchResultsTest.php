@@ -86,7 +86,6 @@ class BatchResultsTest extends TestCase
         string $status = 'approved',
         string $date = self::CLINIC_DAY,
         ?College $college = null,
-        string $service = 'medical',
     ): BatchRequest {
         static $seq = 800;
 
@@ -97,7 +96,7 @@ class BatchResultsTest extends TestCase
             'college_id' => ($college ?? $this->ccs)->id,
             'requested_by' => $this->admin->id,
             'reason' => 'graduation',
-            'service_type' => $service,
+            'service_type' => 'medical',   // D-60: the only service
             'requested_date' => $date,
             'requested_time' => '09:00:00',
             'requested_blocks' => 1,
@@ -390,7 +389,6 @@ class BatchResultsTest extends TestCase
         $popup = $this->popup($response, $batch);
 
         $this->assertSame($batch->reference_no, $popup['ref']);
-        $this->assertSame('Medical Clearance', $popup['service']);
         $this->assertSame('Thursday, September 10, 2026', $popup['date']);
         $this->assertSame('9:00 AM – 10:00 AM (1 slot)', $popup['span']);
 
@@ -410,17 +408,6 @@ class BatchResultsTest extends TestCase
         // Embedded in the page for Alpine to open — through Js::from().
         $response->assertSee('results = JSON.parse', false);
         $response->assertSee('Ana Cleared', false);
-    }
-
-    public function test_a_dental_batch_shows_its_results_too(): void
-    {
-        $batch = $this->makeBatch(service: 'dental');
-        $this->addStudent($batch, 'Fit', 'Ana Cleared');
-
-        $popup = $this->popup($this->tracking(), $batch);
-
-        $this->assertSame('Dental Check', $popup['service']);
-        $this->assertSame('Fit', $popup['students'][0]['result']);
     }
 
     public function test_a_name_with_an_apostrophe_cannot_break_the_payload(): void

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Admin;
 
-use App\Models\Appointment;
 use App\Models\ClearanceRecord;
 use App\Models\ClinicVisit;
 use App\Models\College;
@@ -134,25 +133,16 @@ class AnalyticsPageTest extends TestCase
         return $visit;
     }
 
-    /** A dental appointment on $date in the given status. */
-    private function makeDental(User $student, string $date, string $status = 'completed'): Appointment
-    {
-        return Appointment::factory()
-            ->dental()
-            ->onDate($date)
-            ->create(['student_id' => $student->id, 'status' => $status]);
-    }
-
     private function page(string $query = ''): TestResponse
     {
         return $this->actingAs($this->admin)->get('/admin/analytics'.$query);
     }
 
-    /** The card rows keyed by program, for readable assertions. */
+    /** The card's visit counts keyed by program, for readable assertions. */
     private function programTotals(TestResponse $response): array
     {
         return collect($response->viewData('programRows'))
-            ->mapWithKeys(fn (array $row) => [$row['program'] => [$row['medical'], $row['dental'], $row['total']]])
+            ->mapWithKeys(fn (array $row) => [$row['program'] => $row['visits']])
             ->all();
     }
 
@@ -191,18 +181,14 @@ class AnalyticsPageTest extends TestCase
         $coeStudent = $this->makeStudent($this->coe);
 
         $this->makeVisit($ccsStudent, $this->ccs, self::BSIT, '2026-05-05');
-        $this->makeDental($ccsStudent, '2026-05-10');
 
         // COE activity in the same month — none of it may be counted.
         $this->makeVisit($coeStudent, $this->coe, 'Bachelor of Elementary Education', '2026-05-06');
         $this->makeVisit($coeStudent, $this->coe, 'Bachelor of Elementary Education', '2026-05-07');
-        $this->makeDental($coeStudent, '2026-05-11');
 
         $response = $this->page('?month=2026-05')->assertOk();
 
-        $this->assertSame(2, $response->viewData('totalVisits'));
-        $this->assertSame(1, $response->viewData('totalMedical'));
-        $this->assertSame(1, $response->viewData('totalDental'));
+        $this->assertSame(1, $response->viewData('totalVisits'));
         $this->assertSame(1, $response->viewData('screenings'));
         $this->assertSame(1, $response->viewData('totalScreened'));
         $this->assertSame(1, $response->viewData('bmiTotal'));
@@ -239,14 +225,13 @@ class AnalyticsPageTest extends TestCase
         $coeStudent = $this->makeStudent($this->coe);
         $this->makeVisit($ccsStudent, $this->ccs, self::BSIT, '2026-01-10');
         $this->makeVisit($coeStudent, $this->coe, 'Bachelor of Elementary Education', '2026-01-20');
-        $this->makeDental($ccsStudent, '2026-02-10');
-        $this->makeDental($coeStudent, '2026-02-11');
+        $this->makeVisit($ccsStudent, $this->ccs, self::BSIT, '2026-02-10');
+        $this->makeVisit($coeStudent, $this->coe, 'Bachelor of Elementary Education', '2026-02-11');
 
         $trend = $this->page('?month=2026-01')->assertOk()->viewData('trend');
 
         $this->assertSame(['Jan', 'Feb'], $trend['labels']);
-        $this->assertSame([1, 0], $trend['datasets'][0]['data']); // medical, CCS only
-        $this->assertSame([0, 1], $trend['datasets'][1]['data']); // dental, CCS only
+        $this->assertSame([1, 1], $trend['datasets'][0]['data']); // CCS only
     }
 
     public function test_the_month_picker_only_offers_months_this_college_has_data_in(): void
@@ -273,29 +258,24 @@ class AnalyticsPageTest extends TestCase
         $bsit = $this->makeStudent($this->ccs, self::BSIT);
         $bscs = $this->makeStudent($this->ccs, self::BSCS);
 
-        // BSIT: 2 medical (one still CAPTURED — it counts, FR-ANL-07) + 1
-        // completed dental. BSCS: 1 medical. ACT and BSIS: nothing at all,
-        // and must still appear as zero rows (the FR-ANL-09 rule, one level
-        // down). A scheduled dental never counts.
+        // BSIT: 2 visits (one still CAPTURED — it counts, FR-ANL-07).
+        // BSCS: 1. ACT and BSIS: nothing at all, and must still appear as
+        // zero rows (the FR-ANL-09 rule, one level down).
         $this->makeVisit($bsit, $this->ccs, self::BSIT, '2026-05-05');
         $this->makeVisit($bsit, $this->ccs, self::BSIT, '2026-05-12', visitStatus: 'captured');
-        $this->makeDental($bsit, '2026-05-20');
-        $this->makeDental($bsit, '2026-05-25', status: 'scheduled');
         $this->makeVisit($bscs, $this->ccs, self::BSCS, '2026-05-06');
 
         $response = $this->page('?month=2026-05')->assertOk();
 
         $this->assertSame([
-            self::BSIT => [2, 1, 3],
-            self::BSCS => [1, 0, 1],
+            self::BSIT => 2,
+            self::BSCS => 1,
             // Zero rows, alphabetical among themselves (the tie-break).
-            self::ACT => [0, 0, 0],
-            'Bachelor of Science in Information Systems' => [0, 0, 0],
+            self::ACT => 0,
+            'Bachelor of Science in Information Systems' => 0,
         ], $this->programTotals($response));
 
-        $this->assertSame(4, $response->viewData('totalVisits'));
-        $this->assertSame(3, $response->viewData('totalMedical'));
-        $this->assertSame(1, $response->viewData('totalDental'));
+        $this->assertSame(3, $response->viewData('totalVisits'));
     }
 
     public function test_a_visit_counts_under_its_snapshot_program_not_the_students_current_one(): void
@@ -309,8 +289,8 @@ class AnalyticsPageTest extends TestCase
 
         $rows = $this->programTotals($this->page('?month=2026-05')->assertOk());
 
-        $this->assertSame(1, $rows[self::BSIT][0]);
-        $this->assertSame(0, $rows[self::BSCS][0]);
+        $this->assertSame(1, $rows[self::BSIT]);
+        $this->assertSame(0, $rows[self::BSCS]);
     }
 
     public function test_visits_with_no_program_snapshot_fall_into_a_not_specified_row(): void
@@ -326,7 +306,7 @@ class AnalyticsPageTest extends TestCase
         $response = $this->page('?month=2026-05')->assertOk();
         $rows = $this->programTotals($response);
 
-        $this->assertSame([2, 0, 2], $rows['Not specified']);
+        $this->assertSame(2, $rows['Not specified']);
         $this->assertSame(3, $response->viewData('totalVisits'));
         $this->assertSame($response->viewData('screenings'), $response->viewData('totalVisits'));
     }
@@ -346,16 +326,15 @@ class AnalyticsPageTest extends TestCase
         $bsit = $this->makeStudent($this->ccs, self::BSIT, 'M');
         $bscs = $this->makeStudent($this->ccs, self::BSCS, 'F');
 
-        // BSIT: 1 flagged medical + 1 completed dental. BSCS: 1 clean medical.
+        // BSIT: 1 flagged visit. BSCS: 1 clean visit.
         $this->makeVisit($bsit, $this->ccs, self::BSIT, '2026-05-05', vitals: ['is_bp_flagged' => true, 'bmi' => 31.0]);
-        $this->makeDental($bsit, '2026-05-10');
         $this->makeVisit($bscs, $this->ccs, self::BSCS, '2026-05-06', vitals: ['bmi' => 22.0]);
 
         $response = $this->page('?month=2026-05&program='.urlencode(self::BSIT))->assertOk();
 
         $this->assertSame(self::BSIT, $response->viewData('selectedProgram'));
         // Only the filtered program's row remains, like the Director's college.
-        $this->assertSame([self::BSIT => [1, 1, 2]], $this->programTotals($response));
+        $this->assertSame([self::BSIT => 1], $this->programTotals($response));
         $this->assertSame(1, $response->viewData('screenings'));
         $this->assertSame(1, $response->viewData('flagTiles')[0]['count']);
         $this->assertSame([1, 0], $response->viewData('donut')['datasets'][0]['data']);
@@ -371,10 +350,9 @@ class AnalyticsPageTest extends TestCase
         $student = $this->makeStudent($this->ccs, self::BSIT);
         $this->makeVisit($student, $this->ccs, self::BSIT, '2026-04-10', vitals: ['is_bp_flagged' => true, 'bmi' => 31.0]);
         $this->makeVisit($student, $this->ccs, self::BSIT, '2026-05-10');
-        $this->makeDental($student, '2026-04-15');
 
         $april = $this->page('?month=2026-04')->assertOk();
-        $this->assertSame(2, $april->viewData('totalVisits')); // 1 medical + 1 dental
+        $this->assertSame(1, $april->viewData('totalVisits'));
         $this->assertSame(1, $april->viewData('screenings'));
         $this->assertSame(1, $april->viewData('flagTiles')[0]['count']);
         $this->assertSame([0, 0, 0, 1], array_column($april->viewData('bmiRows'), 'count'));
@@ -402,6 +380,17 @@ class AnalyticsPageTest extends TestCase
             $this->assertNull($response->viewData('selectedProgram'));
             $this->assertSame(1, $response->viewData('totalVisits'));
             $this->assertCount(4, $response->viewData('programRows')); // all of CCS
+        }
+    }
+
+    public function test_nothing_dental_is_left_on_the_page(): void
+    {
+        // D-60: the service split is gone — no legend, no column, no wording.
+        $student = $this->makeStudent($this->ccs, self::BSIT);
+        $this->makeVisit($student, $this->ccs, self::BSIT, '2026-05-05');
+
+        foreach (['', '?month=2026-05'] as $query) {
+            $this->page($query)->assertOk()->assertDontSee('Dental', escape: false);
         }
     }
 

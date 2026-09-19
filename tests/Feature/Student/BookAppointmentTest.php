@@ -59,16 +59,6 @@ class BookAppointmentTest extends TestCase
         ], $overrides);
     }
 
-    /** A valid dental booking payload (D-37 slot included, D-28 purpose exempt). */
-    private function dentalBooking(array $overrides = []): array
-    {
-        return array_merge([
-            'service' => 'dental',
-            'date' => $this->futureDate(),
-            'time' => '07:00:00',
-        ], $overrides);
-    }
-
     // ── 1. Guard: unauthenticated / wrong role ────────────────────────────────
 
     public function test_guest_is_redirected_from_booking_page(): void
@@ -376,25 +366,6 @@ class BookAppointmentTest extends TestCase
             ->assertSessionHasNoErrors();
     }
 
-    public function test_medical_and_dental_share_one_slot_counter(): void
-    {
-        // D-37: the constraint being modelled is clinic congestion, so a dental
-        // appointment consumes an hour-seat exactly like a medical one.
-        $date = $this->futureDate();
-
-        Appointment::factory()->count(12)->dental()->inSlot('09:00:00')->create([
-            'scheduled_date' => $date,
-            'status' => 'scheduled',
-        ]);
-
-        $this->actingAs($this->student())
-            ->post(route('student.appointments.store'), $this->medicalBooking([
-                'date' => $date,
-                'time' => '09:00:00',
-            ]))
-            ->assertSessionHasErrors('time');
-    }
-
     public function test_cancelled_appointments_free_their_slot_seat(): void
     {
         $date = $this->futureDate();
@@ -688,25 +659,6 @@ class BookAppointmentTest extends TestCase
             ->assertSessionHasErrors('date');
 
         $this->assertDatabaseCount('appointments', 1);
-    }
-
-    public function test_different_service_on_same_date_is_allowed(): void
-    {
-        $date = $this->futureDate();
-        $student = $this->student();
-
-        Appointment::factory()->create([
-            'student_id' => $student->id,
-            'service_type' => 'medical',
-            'scheduled_date' => $date,
-            'status' => 'scheduled',
-        ]);
-
-        $this->actingAs($student)
-            ->post(route('student.appointments.store'), $this->dentalBooking(['date' => $date]))
-            ->assertRedirect();
-
-        $this->assertDatabaseCount('appointments', 2);
     }
 
     public function test_cancelled_appointment_does_not_block_rebooking_same_service_and_date(): void
@@ -1334,41 +1286,14 @@ class BookAppointmentTest extends TestCase
         $this->assertDatabaseCount('appointments', 0);
     }
 
-    public function test_dental_booking_does_not_require_a_purpose(): void
+    public function test_a_dental_booking_is_rejected(): void
     {
-        // Dental is scheduling-only — no clearance form — so purpose is exempt.
-        $student = $this->student();
+        // D-60: medical clearance is the clinic's only service, so a crafted
+        // request naming any other one never reaches the database.
+        $this->actingAs($this->student())
+            ->post(route('student.appointments.store'), $this->medicalBooking(['service' => 'dental']))
+            ->assertSessionHasErrors('service');
 
-        $this->actingAs($student)
-            ->post(route('student.appointments.store'), $this->dentalBooking())
-            ->assertRedirect();
-
-        $this->assertDatabaseHas('appointments', [
-            'student_id' => $student->id,
-            'service_type' => 'dental',
-            'purpose' => null,
-            'purpose_other' => null,
-        ]);
-    }
-
-    public function test_dental_booking_ignores_any_supplied_purpose(): void
-    {
-        // A crafted request can't smuggle a purpose onto a dental booking —
-        // prepareForValidation nulls it server-side.
-        $student = $this->student();
-
-        $this->actingAs($student)
-            ->post(route('student.appointments.store'), $this->dentalBooking([
-                'purpose' => 'Sports Activities',
-                'purpose_other' => 'sneaky',
-            ]))
-            ->assertRedirect();
-
-        $this->assertDatabaseHas('appointments', [
-            'student_id' => $student->id,
-            'service_type' => 'dental',
-            'purpose' => null,
-            'purpose_other' => null,
-        ]);
+        $this->assertDatabaseCount('appointments', 0);
     }
 }

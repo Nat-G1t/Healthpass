@@ -36,11 +36,10 @@ class MyAppointmentsPageTest extends TestCase
     /**
      * A self-booked, scheduled appointment $daysAhead days out.
      */
-    private function upcoming(User $student, int $daysAhead, string $service = 'medical'): Appointment
+    private function upcoming(User $student, int $daysAhead): Appointment
     {
         return Appointment::factory()->create([
             'student_id' => $student->id,
-            'service_type' => $service,
             'scheduled_date' => now()->addDays($daysAhead)->toDateString(),
             'scheduled_time' => '09:00:00',
             'status' => 'scheduled',
@@ -104,7 +103,7 @@ class MyAppointmentsPageTest extends TestCase
         $student = $this->student();
 
         $soon = $this->upcoming($student, 2);
-        $middle = $this->upcoming($student, 9, 'dental');
+        $middle = $this->upcoming($student, 9);
         $far = $this->upcoming($student, 20);
 
         $this->actingAs($student)

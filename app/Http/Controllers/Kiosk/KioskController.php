@@ -359,14 +359,9 @@ final class KioskController extends Controller
 
     /**
      * Walk-in Check (FR-KSK-03a): does this student have ANY non-cancelled
-     * appointment dated today — medical OR dental? When false (literally
-     * nothing booked today), the kiosk shows the "No Scheduled Clearance
-     * Today" screen; when true, it goes straight to Privacy Consent.
-     *
-     * Dental counts here AND links at submit (D-33, amending D-3): a
-     * dental-only student proceeds through the same vitals flow and their
-     * dental appointment is linked to the visit, medical taking priority
-     * when both are booked today.
+     * appointment dated today? When false (literally nothing booked today),
+     * the kiosk shows the "No Scheduled Clearance Today" screen; when true,
+     * it goes straight to Privacy Consent.
      */
     private function hasAppointmentToday(int $studentId): bool
     {

@@ -71,7 +71,7 @@ class Appointment extends Model
 
     /**
      * Why this clearance is being sought, as one human-readable line, or NULL
-     * when nothing was recorded (dental, or a pre-D-28 row).
+     * when nothing was recorded (a batch-generated or pre-D-28 row).
      *
      * The two sources are genuinely different columns: a self-booked
      * appointment carries the student's own `purpose` (D-28, with

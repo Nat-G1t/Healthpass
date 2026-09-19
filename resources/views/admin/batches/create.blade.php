@@ -4,7 +4,7 @@
 <div class="mb-6">
     <h2 class="text-xl font-semibold text-hp-slate">New Batch Request</h2>
     <p class="mt-0.5 text-sm text-hp-slate/50">
-        Request medical or dental clearances for a group of {{ $college->code }} students.
+        Request medical clearances for a group of {{ $college->code }} students.
     </p>
 </div>
 
@@ -57,7 +57,6 @@ function batchForm() {
         // ── Form fields (seeded from old() after a failed validation) ──────
         reason:        @js(old('reason', '')),
         reasonDetail:  @js(old('reason_detail', '') ?? ''),
-        serviceType:   @js(old('service_type', 'medical')),
         // D-29: the admin proposes the clinic date (defaults to today).
         requestedDate: @js(old('requested_date', now()->toDateString())),
         // D-37: …and the START hour. The span is computed from the roster size
@@ -370,26 +369,6 @@ function batchForm() {
                                        x-model="reasonDetail" rows="3" maxlength="500"
                                        placeholder="Describe the reason for this batch request" />
                         @error('reason_detail')
-                            <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
-                        @enderror
-                    </div>
-
-                    {{-- Service Type (FR-ADM-02) --}}
-                    <div>
-                        <span class="text-sm font-semibold text-hp-slate">Service Type</span>
-                        <div class="mt-1.5 grid grid-cols-2 gap-2">
-                            @foreach (['medical' => 'Medical', 'dental' => 'Dental'] as $value => $label)
-                                <label class="flex cursor-pointer items-center justify-center gap-2 rounded-lg border-[1.5px] px-3 py-2.5 text-sm font-medium transition-colors"
-                                       :class="serviceType === '{{ $value }}'
-                                           ? 'border-hp-orange bg-hp-peach/40 text-hp-orange'
-                                           : 'border-hp-slate/25 text-hp-slate/70 hover:border-hp-slate/40'">
-                                    <input type="radio" name="service_type" value="{{ $value }}"
-                                           x-model="serviceType" class="sr-only">
-                                    {{ $label }}
-                                </label>
-                            @endforeach
-                        </div>
-                        @error('service_type')
                             <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
                         @enderror
                     </div>

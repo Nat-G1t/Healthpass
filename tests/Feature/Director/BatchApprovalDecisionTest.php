@@ -573,7 +573,7 @@ class BatchApprovalDecisionTest extends TestCase
             'college_id' => $this->ccs->id,
             'requested_by' => $this->admin->id,
             'reason' => 'ojt',
-            'service_type' => 'dental',
+            'service_type' => 'medical',
             'requested_date' => $date,
             'scheduled_date' => $date,
             'requested_time' => '08:00:00',

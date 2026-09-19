@@ -1,11 +1,10 @@
 ﻿{{-- Walk-in Check / No Scheduled Clearance Today (FR-KSK-03a).
      Shown between Identity Confirm and Privacy Consent ONLY when the server
-     found NO non-cancelled appointment dated today for this student — medical
-     OR dental. The check is server-side (state.identity.hasAppointmentToday);
-     this screen is a UI gate. "Proceed as Walk-in" → consent; "Not now" →
-     full reset to Welcome. The appointment_id linkage is still resolved
-     server-side (medical-only) at submit, so a dental-only student records
-     as a walk-in. --}}
+     found NO non-cancelled appointment dated today for this student. The
+     check is server-side (state.identity.hasAppointmentToday); this screen is
+     a UI gate. "Proceed as Walk-in" → consent; "Not now" → full reset to
+     Welcome. The appointment_id linkage is still resolved server-side at
+     submit. --}}
 <section class="kiosk-screen" x-show="state.screen === 'walkin'" x-cloak
          x-transition:enter="transition ease-hp-out duration-hp-base"
          x-transition:enter-start="opacity-0 translate-y-1"

@@ -21,8 +21,8 @@ use Illuminate\Support\Collection;
  * it and hands it to any controller or Form Request that type-hints it.)
  *
  * The rule:
- *   1. A clash is an HOUR overlap, for ANY service — a medical batch 9–11 AM
- *      clashes with the same student's dental self-booking at 10 AM.
+ *   1. A clash is an HOUR overlap — a batch 9–11 AM clashes with the same
+ *      student's own self-booking at 10 AM.
  *   2. A batch holds its WHOLE requested span, for every student on it, from
  *      the moment it is submitted: status `pending` or `approved`. After
  *      approval it still holds the whole span, not just the hour the student

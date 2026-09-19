@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Services;
 
-use App\Models\Appointment;
 use App\Models\ClinicVisit;
 use App\Models\College;
 use App\Models\VitalSigns;
@@ -28,16 +27,16 @@ use Illuminate\Support\Facades\DB;
  * the web app, vitals from the kiosk:
  *
  *  - Clinic Visits by College (FR-ANL-09) / by Program (FR-ADM-08): kiosk
- *    check-ins + completed dental appointments, stacked per unit, with a
- *    Visits-by-Purpose breakdown from the linked appointments.
+ *    check-ins per unit, with a Visits-by-Purpose breakdown from the linked
+ *    appointments.
  *  - Vital-Sign Flags (FR-ANL-10): count + rate per flag column.
  *  - Visits per Month trend (FR-ANL-11): whole-year, ignores the month.
  *  - BMI Distribution (FR-ANL-12): four rule-based buckets.
  *  - Students Screened by Sex (FR-ANL-04 as amended).
  *
- * All counts compute from CAPTURED data (FR-ANL-07 as rewritten): medical
- * visits count at kiosk check-in — no encoded-only guard — and dental counts
- * from completed appointments (D-33).
+ * All counts compute from CAPTURED data (FR-ANL-07 as rewritten): a visit
+ * counts at kiosk check-in, with no encoded-only guard. Since D-60 the clinic
+ * runs ONE service — medical clearance — so every card is a single series.
  *
  * THE SCOPE IS FIXED AT CONSTRUCTION and every method reads it — a caller
  * cannot ask one card for a different college than another. That is what
@@ -47,10 +46,8 @@ use Illuminate\Support\Facades\DB;
  */
 final class ClinicAnalytics
 {
-    /** FR-ANL-09 series colors (pair CVD-validated 2026-07-18). */
-    private const MEDICAL_COLOR = '#FF8C2A';
-
-    private const DENTAL_COLOR = '#2563EB';
+    /** FR-ANL-09 series color (brand orange). */
+    private const VISITS_COLOR = '#FF8C2A';
 
     /** Donut slice colors (prototype): Male = brand orange, Female = peach. */
     private const SEX_COLORS = ['#FF8C2A', '#FFCAA0'];
@@ -92,7 +89,7 @@ final class ClinicAnalytics
     }
 
     /**
-     * The clinic_visits-side scope every medical card shares: the month, the
+     * The clinic_visits-side scope every card shares: the month, the
      * capture-time college snapshot (FR-STU-09) and the capture-time program
      * snapshot (D-43). Applied to any query that has `clinic_visits` in it,
      * whether that is the base table or a join.
@@ -106,30 +103,12 @@ final class ClinicAnalytics
     }
 
     /**
-     * Medical visits in scope: ALL kiosk check-ins of the month — captured
-     * and encoded alike (FR-ANL-07).
+     * Visits in scope: ALL kiosk check-ins of the month — captured and
+     * encoded alike (FR-ANL-07).
      */
-    private function medicalVisitsInScope(): Builder
+    private function visitsInScope(): Builder
     {
         return $this->scopeToVisits(ClinicVisit::query());
-    }
-
-    /**
-     * Dental visits in scope: COMPLETED dental appointments of the month
-     * (D-33), attributed to the student's CURRENT college and CURRENT program
-     * — dental has no capture-time snapshot (stated limitation, FR-ANL-09).
-     */
-    private function dentalVisitsInScope(): Builder
-    {
-        [$start, $end] = $this->monthBounds();
-
-        return Appointment::query()
-            ->where('service_type', 'dental')
-            ->where('status', 'completed')
-            ->whereBetween('scheduled_date', [$start->toDateString(), $end->toDateString()])
-            ->join('student_profiles', 'student_profiles.user_id', '=', 'appointments.student_id')
-            ->when($this->college, fn ($query) => $query->where('student_profiles.college_id', $this->college->id))
-            ->when($this->course, fn ($query) => $query->where('student_profiles.course', $this->course));
     }
 
     /** The month's captured screenings (vital_signs joined to their visit). */
@@ -144,64 +123,55 @@ final class ClinicAnalytics
 
     /**
      * Clinic Visits by College (FR-ANL-09): one row per college — all 11 with
-     * zero rows included, or just the filtered one — sorted by total
-     * descending (stable tie-break by code), split Medical / Dental.
+     * zero rows included, or just the filtered one — sorted by visits
+     * descending (stable tie-break by code).
      *
-     * @return array{collegeRows: list<array{code: string, medical: int, dental: int, total: int}>, totalVisits: int, totalMedical: int, totalDental: int, collegeBar: array}
+     * @return array{collegeRows: list<array{code: string, visits: int}>, totalVisits: int, collegeBar: array}
      */
     public function visitsByCollege(): array
     {
-        $medical = $this->countBy($this->medicalVisitsInScope(), 'college_id', 'clinic_visits.college_id');
-        $dental = $this->countBy($this->dentalVisitsInScope(), 'college_id', 'student_profiles.college_id');
+        $visits = $this->countBy($this->visitsInScope(), 'college_id', 'clinic_visits.college_id');
 
         $rows = College::orderBy('code')
             ->when($this->college, fn ($query) => $query->whereKey($this->college->id))
             ->get(['id', 'code'])
-            ->map(fn (College $unit) => $this->row(
-                'code',
-                $unit->code,
-                (int) ($medical[$unit->id] ?? 0),
-                (int) ($dental[$unit->id] ?? 0),
-            ))
+            ->map(fn (College $unit) => $this->row('code', $unit->code, (int) ($visits[$unit->id] ?? 0)))
             // sortBy is stable, and the rows arrive code-ascending — so
-            // equal totals keep their alphabetical order (the tie-break).
-            ->sortByDesc('total')
+            // equal counts keep their alphabetical order (the tie-break).
+            ->sortByDesc('visits')
             ->values();
 
         return [
             'collegeRows' => $rows->all(),
             ...$this->totals($rows),
-            'collegeBar' => $this->stackedBar($rows->pluck('code')->all(), $rows),
+            'collegeBar' => $this->visitsBar($rows->pluck('code')->all(), $rows),
         ];
     }
 
     /**
      * Clinic Visits by Program (FR-ADM-08, D-45): the same card one level
      * down — one row per program the college offers, zero-visit programs
-     * included, sorted by total descending with an alphabetical tie-break.
+     * included, sorted by visits descending with an alphabetical tie-break.
      *
-     * Medical reads the capture-time `clinic_visits.course` snapshot (D-43),
-     * so a student who shifts program does not silently restate last month's
-     * report. Dental has no clinic_visits row at all, so it attributes through
-     * the student profile's CURRENT program — the same stated limitation
-     * dental already carries for college in FR-ANL-09.
+     * It reads the capture-time `clinic_visits.course` snapshot (D-43), so a
+     * student who shifts program does not silently restate last month's
+     * report.
      *
      * A trailing "Not specified" row appears only when visits in scope carry
      * no program (the D-43 column is nullable and never backfilled) or one the
      * catalog no longer lists. Without it the card's headline total would
      * silently disagree with every other card on the page.
      *
-     * @return array{programRows: list<array{program: string, medical: int, dental: int, total: int}>, totalVisits: int, totalMedical: int, totalDental: int, programBar: array}
+     * @return array{programRows: list<array{program: string, visits: int}>, totalVisits: int, programBar: array}
      */
     public function visitsByProgram(): array
     {
         $catalog = $this->college === null ? [] : Programs::forCollege($this->college->id);
 
-        $medical = $this->countBy($this->medicalVisitsInScope(), 'course', 'clinic_visits.course');
-        $dental = $this->countBy($this->dentalVisitsInScope(), 'course', 'student_profiles.course');
+        $visits = $this->countBy($this->visitsInScope(), 'course', 'clinic_visits.course');
 
         // Alphabetical, not catalog order, so the stable sort below leaves
-        // equal totals in alphabetical order — the same tie-break as colleges.
+        // equal counts in alphabetical order — the same tie-break as colleges.
         $rows = collect($catalog)
             ->when(
                 $this->course !== null,
@@ -209,32 +179,24 @@ final class ClinicAnalytics
             )
             ->sort()
             ->values()
-            ->map(fn (string $program) => $this->row(
-                'program',
-                $program,
-                (int) ($medical[$program] ?? 0),
-                (int) ($dental[$program] ?? 0),
-            ));
+            ->map(fn (string $program) => $this->row('program', $program, (int) ($visits[$program] ?? 0)));
 
         // A program filter names one catalog program, so it can never select
         // the unlisted bucket — only the unfiltered view can show it.
         if ($this->course === null) {
-            $unlistedMedical = $this->unlisted($medical, $catalog);
-            $unlistedDental = $this->unlisted($dental, $catalog);
+            $unlisted = $this->unlisted($visits, $catalog);
 
-            if ($unlistedMedical + $unlistedDental > 0) {
-                $rows = $rows->concat([
-                    $this->row('program', self::NO_PROGRAM_LABEL, $unlistedMedical, $unlistedDental),
-                ]);
+            if ($unlisted > 0) {
+                $rows = $rows->concat([$this->row('program', self::NO_PROGRAM_LABEL, $unlisted)]);
             }
         }
 
-        $rows = $rows->sortByDesc('total')->values();
+        $rows = $rows->sortByDesc('visits')->values();
 
         return [
             'programRows' => $rows->all(),
             ...$this->totals($rows),
-            'programBar' => $this->stackedBar(
+            'programBar' => $this->visitsBar(
                 $rows->map(fn (array $row) => $this->wrapLabel($row['program']))->all(),
                 $rows,
             ),
@@ -242,17 +204,17 @@ final class ClinicAnalytics
     }
 
     /**
-     * Visits by Purpose (inside the FR-ANL-09 card): the month's medical
-     * visits bucketed by their linked appointment's purpose. A visit with
-     * no linked appointment (walk-in, BR-10) or an appointment without a
-     * purpose falls into the "Walk-in / not specified" bucket — the LEFT
-     * JOIN yields NULL for both cases.
+     * Visits by Purpose (inside the FR-ANL-09 card): the month's visits
+     * bucketed by their linked appointment's purpose. A visit with no linked
+     * appointment (walk-in, BR-10) or an appointment without a purpose falls
+     * into the "Walk-in / not specified" bucket — the LEFT JOIN yields NULL
+     * for both cases.
      *
      * @return array{purposeRows: list<array{label: string, count: int}>, purposeMax: int}
      */
     public function visitsByPurpose(): array
     {
-        $counts = $this->medicalVisitsInScope()
+        $counts = $this->visitsInScope()
             ->leftJoin('appointments', 'appointments.id', '=', 'clinic_visits.appointment_id')
             ->groupBy('appointments.purpose')
             ->select('appointments.purpose', DB::raw('count(*) as visits'))
@@ -308,9 +270,9 @@ final class ClinicAnalytics
     }
 
     /**
-     * Visits per Month trend (FR-ANL-11): medical screenings and completed
-     * dental appointments per month, across ALL months with data. The MONTH
-     * filter is always ignored — that is the whole point of the card.
+     * Visits per Month trend (FR-ANL-11): clinic visits per month, across ALL
+     * months with data. The MONTH filter is always ignored — that is the whole
+     * point of the card.
      *
      * Months are derived in PHP from Carbon-cast dates, so no MySQL-only date
      * functions reach the SQLite test DB.
@@ -325,28 +287,14 @@ final class ClinicAnalytics
      */
     public function visitsTrend(bool $withinScope = false): array
     {
-        $medicalByMonth = ClinicVisit::query()
+        $visitsByMonth = ClinicVisit::query()
             ->whereNotNull('checked_in_at')
             ->when($withinScope && $this->college, fn ($q) => $q->where('clinic_visits.college_id', $this->college->id))
             ->when($withinScope && $this->course, fn ($q) => $q->where('clinic_visits.course', $this->course))
             ->pluck('checked_in_at')
             ->countBy(fn ($date) => $date->format('Y-m'));
 
-        $dentalByMonth = Appointment::query()
-            ->where('service_type', 'dental')
-            ->where('status', 'completed')
-            ->when($withinScope && $this->college, fn ($q) => $q
-                ->join('student_profiles', 'student_profiles.user_id', '=', 'appointments.student_id')
-                ->where('student_profiles.college_id', $this->college->id)
-                ->when($this->course, fn ($scoped) => $scoped->where('student_profiles.course', $this->course)))
-            ->pluck('appointments.scheduled_date')
-            ->countBy(fn ($date) => $date->format('Y-m'));
-
-        $months = $medicalByMonth->keys()
-            ->merge($dentalByMonth->keys())
-            ->unique()
-            ->sort()
-            ->values();
+        $months = $visitsByMonth->keys()->sort()->values();
 
         // Short month names; the year is added only when the data spans
         // more than one calendar year, to keep the axis readable.
@@ -359,14 +307,9 @@ final class ClinicAnalytics
                 'labels' => $months->map($label)->all(),
                 'datasets' => [
                     [
-                        'label' => 'Medical screenings',
-                        'data' => $months->map(fn (string $m) => $medicalByMonth[$m] ?? 0)->all(),
-                        'borderColor' => self::MEDICAL_COLOR,
-                    ],
-                    [
-                        'label' => 'Completed dental',
-                        'data' => $months->map(fn (string $m) => $dentalByMonth[$m] ?? 0)->all(),
-                        'borderColor' => self::DENTAL_COLOR,
+                        'label' => 'Clinic visits',
+                        'data' => $months->map(fn (string $m) => $visitsByMonth[$m] ?? 0)->all(),
+                        'borderColor' => self::VISITS_COLOR,
                     ],
                 ],
             ],
@@ -425,7 +368,7 @@ final class ClinicAnalytics
      */
     public function bySexDonut(): array
     {
-        $bySex = $this->medicalVisitsInScope()
+        $bySex = $this->visitsInScope()
             ->join('student_profiles', 'student_profiles.user_id', '=', 'clinic_visits.student_id')
             ->groupBy('student_profiles.sex')
             ->select('student_profiles.sex', DB::raw('count(*) as visits'))
@@ -477,9 +420,9 @@ final class ClinicAnalytics
     }
 
     /** One bar row, keyed by whatever names the unit ('code' or 'program'). */
-    private function row(string $key, string $label, int $medical, int $dental): array
+    private function row(string $key, string $label, int $visits): array
     {
-        return [$key => $label, 'medical' => $medical, 'dental' => $dental, 'total' => $medical + $dental];
+        return [$key => $label, 'visits' => $visits];
     }
 
     /**
@@ -501,33 +444,28 @@ final class ClinicAnalytics
     }
 
     /**
-     * The headline numbers under a set of bar rows.
+     * The headline number under a set of bar rows.
      *
      * @param  Collection<int, array>  $rows
-     * @return array{totalVisits: int, totalMedical: int, totalDental: int}
+     * @return array{totalVisits: int}
      */
     private function totals(Collection $rows): array
     {
-        return [
-            'totalVisits' => (int) $rows->sum('total'),
-            'totalMedical' => (int) $rows->sum('medical'),
-            'totalDental' => (int) $rows->sum('dental'),
-        ];
+        return ['totalVisits' => (int) $rows->sum('visits')];
     }
 
     /**
-     * The Chart.js payload for a stacked horizontal bar. Labels are passed in
+     * The Chart.js payload for the horizontal visits bar. Labels are passed in
      * because programs need wrapping and college codes do not.
      *
      * @param  Collection<int, array>  $rows
      */
-    private function stackedBar(array $labels, Collection $rows): array
+    private function visitsBar(array $labels, Collection $rows): array
     {
         return [
             'labels' => $labels,
             'datasets' => [
-                ['label' => 'Medical', 'data' => $rows->pluck('medical')->all(), 'backgroundColor' => self::MEDICAL_COLOR],
-                ['label' => 'Dental', 'data' => $rows->pluck('dental')->all(), 'backgroundColor' => self::DENTAL_COLOR],
+                ['label' => 'Visits', 'data' => $rows->pluck('visits')->all(), 'backgroundColor' => self::VISITS_COLOR],
             ],
         ];
     }

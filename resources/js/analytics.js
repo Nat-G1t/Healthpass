@@ -2,10 +2,10 @@
  * Analytics charts, shared by the Director page (FR-ANL-09/11 + amended 04)
  * and the College Admin page (FR-ADM-08, D-45) — the same three charts on
  * both, because both are drawn from the same App\Services\ClinicAnalytics:
- *  - Clinic Visits by College / by Program — stacked horizontal bar,
- *    Medical/Dental. One selector serves both: the two cards differ only in
- *    what a row IS, which is settled server-side.
- *  - Visits per Month — two-series line, direct label on latest points
+ *  - Clinic Visits by College / by Program — horizontal bar. One selector
+ *    serves both: the two cards differ only in what a row IS, which is
+ *    settled server-side.
+ *  - Visits per Month — line, direct label on the latest point
  *  - Students Screened by Sex — doughnut
  *
  * Dedicated Vite entry (same pattern as nurse/live-queue.js) so Chart.js is
@@ -61,8 +61,8 @@ const token = (name, alpha = 1) => {
  * Chart colours, read from the --hp-* tokens rather than hardcoded, so the
  * palette has one source (resources/css/app.css).
  *
- * `surface` is the hairline gap drawn between stacked bar segments and
- * doughnut slices — it must match the CARD behind the chart.
+ * `surface` is the hairline outline drawn around bars and doughnut slices —
+ * it must match the CARD behind the chart.
  */
 const palette = () => ({
     ink:     token('--hp-slate'),
@@ -76,12 +76,12 @@ const C = palette();
 /** Parse the JSON payload the controller ships on a data attribute. */
 const chartData = (host) => JSON.parse(host.dataset.chart);
 
-// ── Clinic Visits by College / by Program — stacked bar (FR-ANL-09) ──────
+// ── Clinic Visits by College / by Program — bar (FR-ANL-09) ─────────────
 const visitsHost = document.querySelector('[data-visits-bar]');
 
 if (visitsHost) {
-    // Draws each row's total just past the end of its stacked bar — the
-    // mockup's right-hand value column, done as a Chart.js inline plugin.
+    // Draws each row's total just past the end of its bar — the mockup's
+    // right-hand value column, done as a Chart.js inline plugin.
     const rowTotals = {
         id: 'rowTotals',
         afterDatasetsDraw(chart) {
@@ -111,8 +111,7 @@ if (visitsHost) {
             layout: { padding: { right: 34 } }, // room for the row totals
             datasets: {
                 bar: {
-                    // Thin marks with a hairline surface gap between the
-                    // Medical and Dental segments of each stack.
+                    // Thin marks with a hairline surface outline.
                     barThickness: 16,
                     borderColor: C.surface,
                     borderWidth: 1,
@@ -121,9 +120,8 @@ if (visitsHost) {
             },
             scales: {
                 // Values live at the row ends + in the table — no x axis.
-                x: { stacked: true, display: false },
+                x: { display: false },
                 y: {
-                    stacked: true,
                     grid: { display: false },
                     border: { display: false },
                     ticks: { color: C.ink, font: { size: 11, weight: 600 } },
@@ -135,13 +133,13 @@ if (visitsHost) {
     });
 }
 
-// ── Visits per Month — two-series line (FR-ANL-11) ───────────────────────
+// ── Visits per Month — line (FR-ANL-11) ──────────────────────────────────
 const trendHost = document.querySelector('[data-trend]');
 
 if (trendHost) {
     // Direct label on the LATEST point of each line (selective labeling —
-    // never a number on every point). Nudges the second label clear when
-    // the two lines end close together.
+    // never a number on every point). Nudges a label clear if two lines ever
+    // end close together.
     const latestPointLabels = {
         id: 'latestPointLabels',
         afterDatasetsDraw(chart) {

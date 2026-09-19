@@ -20,8 +20,7 @@ use Tests\TestCase;
  * SQLite suite is what catches raw-SQL portability drift:
  *
  *  - visits count from CAPTURE (FR-ANL-07 as rewritten): captured and
- *    encoded medical visits alike, plus COMPLETED dental appointments
- *    (D-33) — scheduled ones never count;
+ *    encoded visits alike;
  *  - the month + college filters scope every card except the trend.
  */
 class AnalyticsPageTest extends TestCase
@@ -113,15 +112,6 @@ class AnalyticsPageTest extends TestCase
         return $visit;
     }
 
-    /** A dental appointment on $date in the given status. */
-    private function makeDental(User $student, string $date, string $status = 'completed'): Appointment
-    {
-        return Appointment::factory()
-            ->dental()
-            ->onDate($date)
-            ->create(['student_id' => $student->id, 'status' => $status]);
-    }
-
     private function page(string $query = ''): \Illuminate\Testing\TestResponse
     {
         return $this->actingAs($this->director)->get('/director/analytics'.$query);
@@ -146,29 +136,24 @@ class AnalyticsPageTest extends TestCase
             ->assertSee('No visits recorded');
     }
 
-    public function test_visits_by_college_splits_medical_and_dental_with_zero_rows(): void
+    public function test_visits_by_college_counts_captured_visits_with_zero_rows(): void
     {
-        // FR-ANL-09, May 2026: CCS gets 2 medical (one still CAPTURED —
-        // it counts, FR-ANL-07) + 1 completed dental. COE gets nothing but
-        // must still appear as a zero row. A scheduled dental in May and a
-        // completed dental in June must not enter May's card.
+        // FR-ANL-09, May 2026: CCS gets 2 visits (one still CAPTURED — it
+        // counts, FR-ANL-07). COE gets nothing but must still appear as a
+        // zero row. A June visit must not enter May's card.
         $ccsStudent = $this->makeStudent($this->ccs);
         $this->makeVisit($ccsStudent, $this->ccs, '2026-05-05');
         $this->makeVisit($ccsStudent, $this->ccs, '2026-05-12', visitStatus: 'captured');
-        $this->makeDental($ccsStudent, '2026-05-20');
-        $this->makeDental($ccsStudent, '2026-05-25', status: 'scheduled');
-        $this->makeDental($ccsStudent, '2026-06-02');
+        $this->makeVisit($ccsStudent, $this->ccs, '2026-06-02');
 
         $response = $this->page('?month=2026-05')->assertOk();
 
         $this->assertSame([
-            ['code' => 'CCS', 'medical' => 2, 'dental' => 1, 'total' => 3],
-            ['code' => 'COE', 'medical' => 0, 'dental' => 0, 'total' => 0],
+            ['code' => 'CCS', 'visits' => 2],
+            ['code' => 'COE', 'visits' => 0],
         ], $response->viewData('collegeRows'));
 
-        $this->assertSame(3, $response->viewData('totalVisits'));
-        $this->assertSame(2, $response->viewData('totalMedical'));
-        $this->assertSame(1, $response->viewData('totalDental'));
+        $this->assertSame(2, $response->viewData('totalVisits'));
     }
 
     public function test_purpose_buckets_including_walk_in_not_specified(): void
@@ -244,23 +229,19 @@ class AnalyticsPageTest extends TestCase
 
     public function test_trend_covers_all_months_and_ignores_both_filters(): void
     {
-        // Medical: Jan ×2, Feb ×1. Dental completed: Feb ×2, Mar ×1 (a
-        // dental-only month). Scheduled dental never enters the series.
+        // Jan ×2 (both colleges), Feb ×1, Mar ×1 — one series since D-60.
         $ccsStudent = $this->makeStudent($this->ccs);
         $coeStudent = $this->makeStudent($this->coe);
         $this->makeVisit($ccsStudent, $this->ccs, '2026-01-10');
         $this->makeVisit($coeStudent, $this->coe, '2026-01-20');
         $this->makeVisit($ccsStudent, $this->ccs, '2026-02-05');
-        $this->makeDental($ccsStudent, '2026-02-10');
-        $this->makeDental($ccsStudent, '2026-02-15');
-        $this->makeDental($ccsStudent, '2026-03-01');
-        $this->makeDental($ccsStudent, '2026-03-20', status: 'scheduled');
+        $this->makeVisit($ccsStudent, $this->ccs, '2026-03-01');
 
         $expected = function ($response): void {
             $trend = $response->viewData('trend');
             $this->assertSame(['Jan', 'Feb', 'Mar'], $trend['labels']);
-            $this->assertSame([2, 1, 0], $trend['datasets'][0]['data']); // medical
-            $this->assertSame([0, 2, 1], $trend['datasets'][1]['data']); // dental
+            $this->assertCount(1, $trend['datasets']);
+            $this->assertSame([2, 1, 1], $trend['datasets'][0]['data']);
         };
 
         // The same series regardless of the selected month AND college —
@@ -311,10 +292,9 @@ class AnalyticsPageTest extends TestCase
         $student = $this->makeStudent($this->ccs);
         $this->makeVisit($student, $this->ccs, '2026-04-10', vitals: ['is_bp_flagged' => true, 'bmi' => 31.0, 'is_bmi_flagged' => true]);
         $this->makeVisit($student, $this->ccs, '2026-05-10');
-        $this->makeDental($student, '2026-04-15');
 
         $april = $this->page('?month=2026-04')->assertOk();
-        $this->assertSame(2, $april->viewData('totalVisits')); // 1 medical + 1 dental
+        $this->assertSame(1, $april->viewData('totalVisits'));
         $this->assertSame(1, $april->viewData('screenings'));
         $this->assertSame(1, $april->viewData('flagTiles')[0]['count']);
         $this->assertSame(1, $april->viewData('totalScreened'));
@@ -328,21 +308,18 @@ class AnalyticsPageTest extends TestCase
 
     public function test_college_filter_scopes_every_card_except_the_trend(): void
     {
-        // Same month, two colleges. The medical side scopes on the
-        // capture-time snapshot; the dental side on the student's CURRENT
-        // college (FR-ANL-09 stated limitation).
+        // Same month, two colleges. Every card scopes on the capture-time
+        // college snapshot (FR-STU-09).
         $ccsStudent = $this->makeStudent($this->ccs, 'M');
         $coeStudent = $this->makeStudent($this->coe, 'F');
         $this->makeVisit($ccsStudent, $this->ccs, '2026-05-05', vitals: ['is_bp_flagged' => true]);
         $this->makeVisit($coeStudent, $this->coe, '2026-05-06');
-        $this->makeDental($ccsStudent, '2026-05-10');
-        $this->makeDental($coeStudent, '2026-05-11');
 
         $response = $this->page('?month=2026-05&college='.$this->ccs->id)->assertOk();
 
         $this->assertSame($this->ccs->id, $response->viewData('selectedCollegeId'));
         $this->assertSame([
-            ['code' => 'CCS', 'medical' => 1, 'dental' => 1, 'total' => 2],
+            ['code' => 'CCS', 'visits' => 1],
         ], $response->viewData('collegeRows'));
         $this->assertSame(1, $response->viewData('screenings'));
         $this->assertSame(1, $response->viewData('flagTiles')[0]['count']);
@@ -364,13 +341,13 @@ class AnalyticsPageTest extends TestCase
         $this->assertSame(1, $response->viewData('totalVisits'));
     }
 
-    public function test_month_picker_lists_visit_and_dental_months_newest_first(): void
+    public function test_month_picker_lists_visit_months_newest_first(): void
     {
-        // A dental-only month belongs in the picker too (FR-ANL-13) —
-        // and the newest month with ANY data is the default scope.
+        // FR-ANL-13: every month with a visit is offered, newest first —
+        // and the newest month with data is the default scope.
         $student = $this->makeStudent($this->ccs);
         $this->makeVisit($student, $this->ccs, '2026-03-10');
-        $this->makeDental($student, '2026-06-05');
+        $this->makeVisit($student, $this->ccs, '2026-06-05');
 
         $response = $this->page()->assertOk();
 
@@ -417,8 +394,20 @@ class AnalyticsPageTest extends TestCase
         $this->assertSame(1, $response->viewData('totalVisits'));
         $this->assertSame(
             $response->viewData('totalVisits'),
-            array_sum(array_column($response->viewData('programRows'), 'total')),
+            array_sum(array_column($response->viewData('programRows'), 'visits')),
         );
+    }
+
+    public function test_nothing_dental_is_left_on_the_page(): void
+    {
+        // D-60: the service split is gone — no legend, no column, no wording,
+        // with data on the page and without.
+        $student = $this->makeStudent($this->ccs);
+        $this->makeVisit($student, $this->ccs, '2026-05-05');
+
+        foreach (['', '?month=2026-05', '?month=2026-05&college='.$this->ccs->id] as $query) {
+            $this->page($query)->assertOk()->assertDontSee('Dental', escape: false);
+        }
     }
 
     public function test_removed_medical_cases_views_are_gone(): void

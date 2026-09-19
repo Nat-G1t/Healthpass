@@ -56,7 +56,6 @@ class StoreBatchRequestRequest extends FormRequest
                 'string',
                 'max:500',
             ],
-            'service_type' => ['required', 'in:medical,dental'],
             // D-29: the admin proposes the clinic date (they know the
             // cohort's event); the Director confirms it at approval (D-36).
             'requested_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:today'],
@@ -80,8 +79,6 @@ class StoreBatchRequestRequest extends FormRequest
             'reason.required' => 'Please choose a reason for this batch request.',
             'reason.in' => 'Invalid reason.',
             'reason_detail.required_if' => 'Please specify the reason when choosing "Others".',
-            'service_type.required' => 'Please choose a service type.',
-            'service_type.in' => 'Invalid service type.',
             'requested_date.required' => 'Please pick the date your students should visit the clinic.',
             'requested_date.date_format' => 'Invalid requested date.',
             'requested_date.after_or_equal' => 'The requested date cannot be in the past.',
@@ -179,8 +176,8 @@ class StoreBatchRequestRequest extends FormRequest
 
             // (5) D-54 / BR-25: no student may already be scheduled during the
             // span — by their own self-booking or on another pending/approved
-            // batch, whatever the service. First come wins, so THIS batch is
-            // the one refused. One error per clashing student, keyed
+            // batch. First come wins, so THIS batch is the one refused. One
+            // error per clashing student, keyed
             // `clashes.<student_profile_id>`: the New Batch page collects those
             // keys into its popup and its "Remove these students" button.
             $profileIdsByUserId = StudentProfile::whereIn('id', (array) $this->input('students'))

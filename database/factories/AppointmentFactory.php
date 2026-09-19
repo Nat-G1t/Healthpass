@@ -24,7 +24,7 @@ class AppointmentFactory extends Factory
         return [
             'reference_no' => sprintf('APT-%d-%04d', $year, $seq),
             'student_id' => User::factory(),
-            'service_type' => $this->faker->randomElement(['medical', 'dental']),
+            'service_type' => 'medical',   // D-60: the clinic's only service
             'scheduled_date' => now()->addDays($this->faker->numberBetween(1, 30))->toDateString(),
             'status' => 'scheduled',
             'source' => 'self',
@@ -38,15 +38,10 @@ class AppointmentFactory extends Factory
         return $this->state(['service_type' => 'medical']);
     }
 
-    public function dental(): static
-    {
-        return $this->state(['service_type' => 'dental']);
-    }
-
     /**
-     * D-28: a medical appointment carrying the student's chosen clearance
-     * purpose. Leaving purpose null (the default) models a walk-in-equivalent /
-     * batch / pre-D-28 appointment that falls back to the nurse dropdown.
+     * D-28: an appointment carrying the student's chosen clearance purpose.
+     * Leaving purpose null (the default) models a walk-in-equivalent / batch /
+     * pre-D-28 appointment that falls back to the nurse dropdown.
      */
     public function withPurpose(string $purpose, ?string $purposeOther = null): static
     {

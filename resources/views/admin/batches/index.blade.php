@@ -288,7 +288,7 @@
                     Results for <span x-text="results?.ref"></span>
                 </h2>
                 <p class="mt-1 text-sm text-hp-slate/60">
-                    <span x-text="results?.service"></span> ·
+                    Medical Clearance ·
                     <span x-text="results?.date"></span> ·
                     <span x-text="results?.span"></span>
                 </p>

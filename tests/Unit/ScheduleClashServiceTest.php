@@ -203,18 +203,6 @@ class ScheduleClashServiceTest extends TestCase
         $this->assertSame([], $this->service()->clashesForBatch([$student->id], self::DATE, ['09:00:00', '10:00:00']));
     }
 
-    public function test_a_dental_self_booking_clashes_with_a_medical_batch(): void
-    {
-        // Decision 1: a clash is an HOUR overlap, whatever the service.
-        $student = $this->student();
-        $this->selfBooking($student, '10:00:00', ['service_type' => 'dental']);
-
-        $this->assertArrayHasKey(
-            $student->id,
-            $this->service()->clashesForBatch([$student->id], self::DATE, ['09:00:00', '10:00:00']),
-        );
-    }
-
     public function test_a_self_booking_with_no_time_never_clashes(): void
     {
         // Pre-D-37 rows have no hour, so there is nothing to overlap with.

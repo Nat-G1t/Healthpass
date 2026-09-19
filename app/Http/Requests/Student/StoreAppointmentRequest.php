@@ -31,8 +31,8 @@ class StoreAppointmentRequest extends FormRequest
      * prepareForValidation runs before the rules — a Form Request hook for
      * normalizing input BEFORE it is trusted. Two D-28 clean-ups, both
      * server-side so a crafted request can't smuggle values past the UI:
-     *   1. Dental is scheduling-only (no clearance form), so any purpose sent
-     *      with a dental booking is meaningless — drop it to NULL.
+     *   1. A purpose only means anything on a clearance booking, so anything
+     *      sent with an unrecognized service is dropped to NULL.
      *   2. purpose_other only means anything when the purpose is Others; drop
      *      stray specify text otherwise (e.g. the student typed one, then
      *      switched back to a listed purpose).
@@ -49,7 +49,8 @@ class StoreAppointmentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'service' => ['required', 'in:medical,dental'],
+            // D-60: medical clearance is the clinic's only service.
+            'service' => ['required', 'in:medical'],
             'date' => ['required', 'date_format:Y-m-d', 'after_or_equal:today'],
             // D-37: every new booking sits in a one-hour clinic slot. The value
             // must be one of the slots DERIVED from clinic_hours — the server
@@ -59,10 +60,10 @@ class StoreAppointmentRequest extends FormRequest
                 'required',
                 Rule::in($this->schedule()->slots()),
             ],
-            // D-28: purpose is required for a medical clearance (something WILL
-            // be printed) and forbidden-by-normalization for dental. The value
-            // must come from the locked list plus the "Others" line; the server
-            // is the sole gate (SQLite never enforced the column as an enum).
+            // D-28: purpose is required for a medical clearance — something
+            // WILL be printed. The value must come from the locked list plus
+            // the "Others" line; the server is the sole gate (SQLite never
+            // enforced the column as an enum).
             'purpose' => [
                 'required_if:service,medical',
                 'nullable',
@@ -164,8 +165,7 @@ class StoreAppointmentRequest extends FormRequest
                 return;
             }
 
-            // D-37: per-slot cap. Medical and dental share this counter — an
-            // appointment of either service occupies one of the hour's 12 seats.
+            // D-37: per-slot cap — one counter per hour, 12 seats.
             if ($schedule->bookedInSlot($date, $slot) >= $schedule->hourlyCapacity()) {
                 $validator->errors()->add('time', $schedule->slotFullMessage($slot));
 

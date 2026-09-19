@@ -16,13 +16,13 @@ use Tests\TestCase;
  * FR-KSK-03a — Walk-in Check ("No Scheduled Clearance Today").
  *
  * The kiosk inserts a screen between Identity Confirm and Privacy Consent that
- * is shown ONLY when the student has NO non-cancelled appointment dated today —
- * medical OR dental (FR-KSK-03a). The decision is made SERVER-SIDE: the identity
- * payload carries a `hasAppointmentToday` boolean that the front-end uses purely
- * to pick which screen to show. These tests assert that boolean for the scan
- * endpoint (login shares the exact same payload builder).
+ * is shown ONLY when the student has NO non-cancelled appointment dated today
+ * (FR-KSK-03a). The decision is made SERVER-SIDE: the identity payload carries
+ * a `hasAppointmentToday` boolean that the front-end uses purely to pick which
+ * screen to show. These tests assert that boolean for the scan endpoint (login
+ * shares the exact same payload builder).
  *
- * Dental now also LINKS at submit (D-33, amending D-3) — that is covered in
+ * How the visit LINKS to that appointment at submit is covered in
  * KioskSubmitTest; here we only assert the UI gate.
  */
 class KioskWalkInCheckTest extends TestCase
@@ -82,20 +82,6 @@ class KioskWalkInCheckTest extends TestCase
         $this->assertTrue($this->scan($profile)['hasAppointmentToday']);
     }
 
-    public function test_student_with_same_day_dental_appointment_skips_walk_in(): void
-    {
-        $profile = $this->student();
-        Appointment::factory()->dental()->create([
-            'student_id' => $profile->user_id,
-            'scheduled_date' => now()->toDateString(),
-            'status' => 'scheduled',
-        ]);
-
-        // A dental booking today also suppresses the notice (the student has
-        // SOMETHING scheduled). It also links at submit now (D-33).
-        $this->assertTrue($this->scan($profile)['hasAppointmentToday']);
-    }
-
     public function test_cancelled_same_day_appointment_still_shows_walk_in(): void
     {
         $profile = $this->student();
@@ -116,7 +102,7 @@ class KioskWalkInCheckTest extends TestCase
             'scheduled_date' => now()->subDay()->toDateString(),
             'status' => 'scheduled',
         ]);
-        Appointment::factory()->dental()->create([
+        Appointment::factory()->medical()->create([
             'student_id' => $profile->user_id,
             'scheduled_date' => now()->addDay()->toDateString(),
             'status' => 'scheduled',

@@ -53,7 +53,7 @@
                                 {{ $appointment->scheduled_date->format('l, F j, Y') }} · {{ $timeRange }}
                             </p>
                             <p style="margin:6px 0 0;font-size:12px;color:#9CA3AF;">
-                                {{ $appointment->service_type === 'medical' ? 'Medical Clearance' : 'Dental Check' }}
+                                Medical Clearance
                                 · Ref. {{ $appointment->reference_no }}
                             </p>
                         </div>

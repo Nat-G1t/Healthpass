@@ -62,7 +62,7 @@
             <dt class="text-sm text-hp-slate/50">Service</dt>
             <dd>
                 <x-hp.badge variant="positive">
-                    {{ $batch->service_type === 'medical' ? 'Medical Clearance' : 'Dental Check' }}
+                    Medical Clearance
                 </x-hp.badge>
             </dd>
         </div>

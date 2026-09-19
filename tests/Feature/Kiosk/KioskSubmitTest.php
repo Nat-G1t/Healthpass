@@ -409,52 +409,27 @@ class KioskSubmitTest extends TestCase
     }
 
     /**
-     * D-33 (amends D-3): a dental-only student's kiosk submit now LINKS today's
-     * dental appointment instead of recording a walk-in, so the nurse-encode
-     * step can complete it and the visit carries a college snapshot like any
-     * other visit.
+     * D-54: with two appointments today, the one whose hour starts closest to
+     * check-in wins the link and the other stays `scheduled`. The far one is
+     * created FIRST (lower id), so a plain id-order pick would fail this test.
      */
-    public function test_dental_only_student_links_todays_dental_appointment(): void
-    {
-        $student = $this->student();
-        $dental = Appointment::factory()->dental()->create([
-            'student_id' => $student->id,
-            'scheduled_date' => now()->toDateString(),
-            'status' => 'scheduled',
-        ]);
-
-        $this->submit($student->id)->assertOk();
-
-        $visit = ClinicVisit::first();
-        $this->assertSame($dental->id, $visit->appointment_id);
-        $this->assertSame($student->studentProfile->college_id, $visit->college_id);
-    }
-
-    /**
-     * UPDATED BY D-54 — this used to assert D-33's "medical wins" edge rule,
-     * which D-54 supersedes. With a medical AND a dental appointment today, the
-     * one whose hour starts closest to check-in now wins the link, whatever its
-     * service, and the other stays `scheduled`. Medical is created FIRST (lower
-     * id) and is further away, so both the old medical-first rule and a plain
-     * id-order pick would fail this test.
-     */
-    public function test_the_appointment_closest_to_check_in_wins_whatever_its_service(): void
+    public function test_the_appointment_closest_to_check_in_wins(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-09-10 13:30', 'Asia/Manila'));
 
         $student = $this->student();
-        $medical = $this->todaysAppointment($student, '08:00:00');
-        $dental = $this->todaysAppointment($student, '14:00:00', ['service_type' => 'dental']);
+        $far = $this->todaysAppointment($student, '08:00:00');
+        $near = $this->todaysAppointment($student, '14:00:00');
 
         $this->submit($student->id)->assertOk();
 
-        $this->assertSame($dental->id, ClinicVisit::first()->appointment_id);
-        $this->assertSame('scheduled', $medical->fresh()->status);
+        $this->assertSame($near->id, ClinicVisit::first()->appointment_id);
+        $this->assertSame('scheduled', $far->fresh()->status);
     }
 
     // ── D-54: the appointment closest to check-in wins the link ───────────────
 
-    /** A scheduled medical appointment today for $student in $slot (NULL = pre-D-37). */
+    /** A scheduled appointment today for $student in $slot (NULL = pre-D-37). */
     private function todaysAppointment(User $student, ?string $slot, array $overrides = []): Appointment
     {
         return Appointment::factory()->medical()->create(array_merge([
@@ -500,7 +475,7 @@ class KioskSubmitTest extends TestCase
 
         $student = $this->student();
         $this->todaysAppointment($student, '11:00:00');
-        $earlier = $this->todaysAppointment($student, '09:00:00', ['service_type' => 'dental']);
+        $earlier = $this->todaysAppointment($student, '09:00:00');
 
         $this->submit($student->id)->assertOk();
 
@@ -514,7 +489,7 @@ class KioskSubmitTest extends TestCase
         $student = $this->student();
         // A pre-D-37 row has no hour to measure — it loses to any timed one.
         $this->todaysAppointment($student, null);
-        $timed = $this->todaysAppointment($student, '16:00:00', ['service_type' => 'dental']);
+        $timed = $this->todaysAppointment($student, '16:00:00');
 
         $this->submit($student->id)->assertOk();
 

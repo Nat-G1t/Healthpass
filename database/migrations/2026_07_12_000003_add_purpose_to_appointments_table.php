@@ -19,10 +19,9 @@ use Illuminate\Support\Facades\Schema;
  *                     the single validation gate (SQLite never enforced enums).
  *   - `purpose_other` the free-text event when 'Others' is chosen.
  *
- * Both are NULLABLE on purpose: dental appointments (scheduling-only, no
- * clearance), batch-booked appointments, and any appointment created before
- * this feature carry NO purpose — those fall back to the nurse-entered
- * dropdown on the encode screen.
+ * Both are NULLABLE on purpose: batch-booked appointments and any appointment
+ * created before this feature carry NO purpose — those fall back to the
+ * nurse-entered dropdown on the encode screen.
  *
  * SCHEMA CHANGE flagged per CLAUDE.md: the PRD data dictionary's appointments
  * table gains these two columns — matching data-dictionary + decisions-log

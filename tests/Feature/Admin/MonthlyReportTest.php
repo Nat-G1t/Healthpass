@@ -131,25 +131,16 @@ class MonthlyReportTest extends TestCase
         return $visit;
     }
 
-    /** A completed dental appointment on $date. */
-    private function makeDental(User $student, string $date): Appointment
-    {
-        return Appointment::factory()
-            ->dental()
-            ->onDate($date)
-            ->create(['student_id' => $student->id, 'status' => 'completed']);
-    }
-
     private function report(string $query = ''): TestResponse
     {
         return $this->actingAs($this->admin)->get('/admin/analytics/print'.$query);
     }
 
-    /** The report's program rows keyed by program, for readable assertions. */
+    /** The report's visit counts keyed by program, for readable assertions. */
     private function programTotals(TestResponse $response): array
     {
         return collect($response->viewData('programRows'))
-            ->mapWithKeys(fn (array $row) => [$row['program'] => [$row['medical'], $row['dental'], $row['total']]])
+            ->mapWithKeys(fn (array $row) => [$row['program'] => $row['visits']])
             ->all();
     }
 
@@ -187,14 +178,12 @@ class MonthlyReportTest extends TestCase
         $bscs = $this->makeStudent($this->ccs, self::BSCS, 'F');
         $coeStudent = $this->makeStudent($this->coe, 'Bachelor of Elementary Education');
 
-        // CCS: 2 medical (one flagged, one obese) + 1 completed dental.
+        // CCS: 2 visits (one flagged, one obese).
         $this->makeVisit($bsit, $this->ccs, self::BSIT, '2026-05-05', ['is_bp_flagged' => true, 'bmi' => 31.0]);
-        $this->makeDental($bsit, '2026-05-20');
         $this->makeVisit($bscs, $this->ccs, self::BSCS, '2026-05-06', ['bmi' => 22.0]);
 
         // COE activity in the same month — none of it may reach the paper.
         $this->makeVisit($coeStudent, $this->coe, 'Bachelor of Elementary Education', '2026-05-07');
-        $this->makeDental($coeStudent, '2026-05-21');
 
         $response = $this->report('?month=2026-05')->assertOk();
 
@@ -207,14 +196,13 @@ class MonthlyReportTest extends TestCase
             ->assertDontSee('Bachelor of Elementary Education');
 
         // Summary line + program table.
-        $this->assertSame(3, $response->viewData('totalVisits'));
-        $this->assertSame(2, $response->viewData('totalMedical'));
-        $this->assertSame(1, $response->viewData('totalDental'));
+        $this->assertSame(2, $response->viewData('totalVisits'));
         $this->assertSame([
-            self::BSIT => [1, 1, 2],
-            self::BSCS => [1, 0, 1],
-            self::ACT => [0, 0, 0],
-            self::BSIS => [0, 0, 0],
+            // Equal counts keep alphabetical order (the tie-break).
+            self::BSCS => 1,
+            self::BSIT => 1,
+            self::ACT => 0,
+            self::BSIS => 0,
         ], $this->programTotals($response));
 
         // Flags, BMI and sex, all over the same two CCS screenings.
@@ -232,7 +220,7 @@ class MonthlyReportTest extends TestCase
             ),
         );
 
-        // Purpose bucket: both medical visits are walk-ins (no appointment).
+        // Purpose bucket: both visits are walk-ins (no appointment).
         $this->assertSame(
             [['label' => 'Walk-in / not specified', 'count' => 2]],
             $response->viewData('purposeRows'),
@@ -245,12 +233,11 @@ class MonthlyReportTest extends TestCase
         // can never quote a different number than the screen it came from.
         $bsit = $this->makeStudent($this->ccs, self::BSIT);
         $this->makeVisit($bsit, $this->ccs, self::BSIT, '2026-05-05', ['is_temp_flagged' => true, 'bmi' => 17.0]);
-        $this->makeDental($bsit, '2026-05-20');
 
         $page = $this->actingAs($this->admin)->get('/admin/analytics?month=2026-05')->assertOk();
         $print = $this->report('?month=2026-05')->assertOk();
 
-        foreach (['totalVisits', 'totalMedical', 'totalDental', 'programRows',
+        foreach (['totalVisits', 'programRows',
             'purposeRows', 'screenings', 'flagTiles', 'bmiRows', 'bmiTotal',
             'bySex', 'totalScreened'] as $key) {
             $this->assertSame($page->viewData($key), $print->viewData($key), "mismatch on {$key}");
@@ -302,11 +289,10 @@ class MonthlyReportTest extends TestCase
         $student = $this->makeStudent($this->ccs, self::BSIT);
         $this->makeVisit($student, $this->ccs, self::BSIT, '2026-04-10', ['is_bp_flagged' => true, 'bmi' => 31.0]);
         $this->makeVisit($student, $this->ccs, self::BSIT, '2026-05-10');
-        $this->makeDental($student, '2026-04-15');
 
         $april = $this->report('?month=2026-04')->assertOk();
         $april->assertSee('April 2026');
-        $this->assertSame(2, $april->viewData('totalVisits')); // 1 medical + 1 dental
+        $this->assertSame(1, $april->viewData('totalVisits'));
         $this->assertSame(1, $april->viewData('flagTiles')[0]['count']);
         $this->assertSame([0, 0, 0, 1], array_column($april->viewData('bmiRows'), 'count'));
 
@@ -322,14 +308,13 @@ class MonthlyReportTest extends TestCase
         $bsit = $this->makeStudent($this->ccs, self::BSIT);
         $bscs = $this->makeStudent($this->ccs, self::BSCS);
         $this->makeVisit($bsit, $this->ccs, self::BSIT, '2026-05-05');
-        $this->makeDental($bsit, '2026-05-10');
         $this->makeVisit($bscs, $this->ccs, self::BSCS, '2026-05-06');
 
         $response = $this->report('?month=2026-05&program='.urlencode(self::BSIT))->assertOk();
 
         $this->assertSame(self::BSIT, $response->viewData('selectedProgram'));
-        $this->assertSame([self::BSIT => [1, 1, 2]], $this->programTotals($response));
-        $this->assertSame(2, $response->viewData('totalVisits'));
+        $this->assertSame([self::BSIT => 1], $this->programTotals($response));
+        $this->assertSame(1, $response->viewData('totalVisits'));
         $this->assertSame(1, $response->viewData('screenings'));
 
         // A filtered report has to SAY it is filtered, or partial figures get
@@ -359,10 +344,10 @@ class MonthlyReportTest extends TestCase
         $response = $this->report('?month=2026-05')->assertOk();
 
         $this->assertSame([
-            self::BSIT => [1, 0, 1],
-            self::ACT => [0, 0, 0],
-            self::BSCS => [0, 0, 0],
-            self::BSIS => [0, 0, 0],
+            self::BSIT => 1,
+            self::ACT => 0,
+            self::BSCS => 0,
+            self::BSIS => 0,
         ], $this->programTotals($response));
 
         $response->assertSee(self::ACT)->assertSee(self::BSIS);
@@ -426,6 +411,19 @@ class MonthlyReportTest extends TestCase
             ->assertSee('data-print-trigger', false)
             ->assertSee('id="hp-print-frame"', false)
             ->assertDontSee('target="_blank"', false);
+    }
+
+    public function test_nothing_dental_is_left_on_the_report(): void
+    {
+        // D-60: the Medical / Dental / Total columns became one Visits column
+        // and the summary line dropped the split.
+        $student = $this->makeStudent($this->ccs, self::BSIT);
+        $this->makeVisit($student, $this->ccs, self::BSIT, '2026-05-05');
+
+        $this->report('?month=2026-05')
+            ->assertOk()
+            ->assertDontSee('Dental', escape: false)
+            ->assertSee('total visits');
     }
 
     public function test_the_report_prints_in_place_rather_than_in_a_new_tab(): void

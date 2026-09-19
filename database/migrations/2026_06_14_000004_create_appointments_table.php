@@ -12,6 +12,8 @@ return new class extends Migration
             $table->id();
             $table->string('reference_no', 20)->unique();   // APT-YYYY-####
             $table->foreignId('student_id')->constrained('users')->restrictOnDelete();
+            // D-60: always 'medical'. The 'dental' value is kept only so
+            // pre-D-60 rows still read back; nothing writes it any more.
             $table->enum('service_type', ['medical', 'dental']);
             $table->date('scheduled_date');
             $table->enum('status', ['scheduled', 'checked_in', 'completed', 'cancelled'])->default('scheduled');

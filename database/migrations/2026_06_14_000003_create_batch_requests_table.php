@@ -15,6 +15,8 @@ return new class extends Migration
             $table->foreignId('requested_by')->constrained('users')->restrictOnDelete();
             $table->enum('reason', ['graduation', 'ojt', 'enrollment', 'scholarship', 'sports', 'fieldtrip', 'others']);
             $table->text('reason_detail')->nullable();
+            // D-60: always 'medical'. The 'dental' value is kept only so
+            // pre-D-60 rows still read back; nothing writes it any more.
             $table->enum('service_type', ['medical', 'dental']);
             $table->date('scheduled_date')->nullable();     // D-5: Director-selected date, stamped at approval
             $table->enum('status', ['pending', 'approved', 'rejected'])->default('pending');

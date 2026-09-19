@@ -48,7 +48,6 @@ class BatchRequestCreateTest extends TestCase
 
         return array_merge([
             'reason' => 'ojt',
-            'service_type' => 'medical',
             'requested_date' => now()->addDays(7)->toDateString(),
             'requested_time' => '07:00:00', // D-37: start hour of the batch span
             'students' => [$student->id],
@@ -154,11 +153,11 @@ class BatchRequestCreateTest extends TestCase
 
     // ── BR-06: reason + conditional reason_detail ───────────────────────────
 
-    public function test_reason_and_service_type_and_date_and_students_are_required(): void
+    public function test_reason_and_date_and_students_are_required(): void
     {
         $this->actingAs($this->admin)
             ->post('/admin/batches', [])
-            ->assertSessionHasErrors(['reason', 'service_type', 'requested_date', 'students']);
+            ->assertSessionHasErrors(['reason', 'requested_date', 'students']);
     }
 
     // ── D-29: the admin proposes the clinic date ─────────────────────────────
@@ -215,13 +214,18 @@ class BatchRequestCreateTest extends TestCase
             ->assertSessionHasNoErrors();
     }
 
-    // ── FR-ADM-02: service type ──────────────────────────────────────────────
+    // ── FR-ADM-02 as amended by D-60: no service type ────────────────────────
 
-    public function test_unknown_service_type_is_rejected(): void
+    public function test_the_page_no_longer_offers_a_service_type(): void
     {
+        // D-60: dental is gone, so the field is gone with it — the server
+        // always writes 'medical' (asserted in BatchRequestSubmitTest).
         $this->actingAs($this->admin)
-            ->post('/admin/batches', $this->validPayload(['service_type' => 'optical']))
-            ->assertSessionHasErrors('service_type');
+            ->get('/admin/batches/create')
+            ->assertOk()
+            ->assertDontSee('Service Type')
+            ->assertDontSee('Dental')
+            ->assertDontSee('name="service_type"', escape: false);
     }
 
     // ── BR-07 + FR-ADM-06: student selection and scope ──────────────────────
@@ -277,7 +281,6 @@ class BatchRequestCreateTest extends TestCase
         $this->actingAs($this->admin)
             ->post('/admin/batches', [
                 'reason' => 'graduation',
-                'service_type' => 'dental',
                 'requested_date' => now()->addDays(7)->toDateString(),
                 'requested_time' => '07:00:00',
                 'students' => $students->pluck('id')->all(),

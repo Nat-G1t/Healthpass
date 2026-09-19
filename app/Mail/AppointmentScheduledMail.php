@@ -37,12 +37,8 @@ class AppointmentScheduledMail extends Mailable
 
     public function envelope(): Envelope
     {
-        $service = $this->appointment->service_type === 'medical'
-            ? 'Medical Clearance'
-            : 'Dental Check';
-
         return new Envelope(
-            subject: 'HealthPass — '.$service.' appointment on '
+            subject: 'HealthPass — Medical Clearance appointment on '
                 .$this->appointment->scheduled_date->format('M j, Y'),
         );
     }
