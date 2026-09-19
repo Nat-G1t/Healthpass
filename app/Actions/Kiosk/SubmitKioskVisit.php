@@ -111,7 +111,7 @@ final class SubmitKioskVisit
             ]);
 
             $visit->screeningResponse()->create([
-                // The official form's nine Physical Signs rows, one boolean column each (D-56).
+                // The official forms' twelve Physical Signs rows, one boolean column each (D-63).
                 ...Arr::only($screening, array_keys(ScreeningResponse::QUESTIONS)),
                 // Already cleaned by KioskSubmitRequest: known questions answered
                 // YES only, control characters stripped, ≤ 120 chars, null if none.

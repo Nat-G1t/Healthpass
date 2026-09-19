@@ -37,7 +37,7 @@ final class KioskSubmitRequest extends FormRequest
      * Clean the optional YES details before the rules run (D-56).
      * prepareForValidation is a Form Request hook that may reshape the input
      * first. The browser is never trusted, so whatever it sent:
-     *   • a detail is kept only for one of the nine known questions — unknown
+     *   • a detail is kept only for one of the twelve known questions (D-63) — unknown
      *     keys are dropped;
      *   • and only when that question was answered YES — a NO drops it;
      *   • control characters (NUL, tab, newline, …) are stripped, then trimmed;
@@ -102,7 +102,7 @@ final class KioskSubmitRequest extends FormRequest
             'vitals.diastolic' => ['required', 'integer', "min:{$bounds['bp_diastolic']['min']}", "max:{$bounds['bp_diastolic']['max']}"],
             'vitals.heartRate' => ['required', 'integer', "min:{$bounds['heart_rate']['min']}", "max:{$bounds['heart_rate']['max']}"],
 
-            // Screening — the form's nine rows answered (true/false), plus pregnancy.
+            // Screening — the form's twelve rows (D-63) answered (true/false), plus pregnancy.
             'screening' => ['required', 'array'],
             'screening.isPregnant' => ['required', 'boolean'],
             // LMP required only when pregnant, never in the future (FR-KSK-10).

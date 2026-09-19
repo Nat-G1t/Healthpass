@@ -90,14 +90,17 @@ class PrintViewTest extends TestCase
         ScreeningResponse::create(array_merge([
             'clinic_visit_id' => $visit->id,
             'skin' => false,
-            'abdomen_git' => false,
-            'heent' => false,
-            'gut' => false,
+            'head' => false,
+            'eyes' => false,
+            'ears' => false,
+            'nose' => false,
+            'throat' => false,
             'chest_lungs' => true,
-            'extremities' => false,
-            'heart_cvs' => false,
-            'neurological' => false,
-            'breast' => false,
+            'heart' => false,
+            'abdomen' => false,
+            'kidney_bladder' => false,
+            'brain' => false,
+            'mental_disorder' => false,
             'is_pregnant' => false,
             'last_menstrual_period' => null,
         ], $screening));
@@ -214,7 +217,7 @@ class PrintViewTest extends TestCase
         $nurse = $this->nurse();
         $visit = $this->makeVisit();
         // The nurse recorded the physician's exam: chest/lungs YES, skin NO,
-        // GUT not examined (NULL). Not the kiosk questionnaire (D-22).
+        // KIDNEY/BLADDER not examined (NULL). Not the kiosk questionnaire (D-22).
         $this->encode($visit, $nurse, [
             'ps_chest_lungs' => true,
             'ps_skin' => false,
@@ -235,9 +238,9 @@ class PrintViewTest extends TestCase
             '~SKIN</b></td>\s*<td class="bubbles"><span class="bb"></span></td>\s*<td class="bubbles"><span class="bb">●</span></td>~u',
             $html
         );
-        // ps_gut NULL (not examined) → both bubbles blank
+        // ps_kidney_bladder NULL (not examined) → both bubbles blank
         $this->assertMatchesRegularExpression(
-            '~GUT</b></td>\s*<td class="bubbles"><span class="bb"></span></td>\s*<td class="bubbles"><span class="bb"></span></td>~u',
+            '~KIDNEY/BLADDER</b></td>\s*<td class="bubbles"><span class="bb"></span></td>\s*<td class="bubbles"><span class="bb"></span></td>~u',
             $html
         );
     }

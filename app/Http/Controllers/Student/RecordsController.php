@@ -10,8 +10,8 @@ use Illuminate\View\View;
 
 /**
  * FR-STU-07 — My Records: list of the student's clinic visits and a detail
- * modal with kiosk vitals + the student's answers to the official form's nine
- * Physical Signs questions, with any details they typed (D-56).
+ * modal with kiosk vitals + the student's answers to the official forms' twelve
+ * Physical Signs questions, with any details they typed (D-63; details per D-56).
  *
  * FR-STU-08 — Fit/Unfit result is gated: it only appears once the visit has
  * a clearance record (status = 'encoded'). Captured visits show "Pending" and

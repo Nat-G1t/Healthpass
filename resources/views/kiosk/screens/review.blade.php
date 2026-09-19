@@ -70,7 +70,7 @@
                 </div>
             </div>
 
-            {{-- ── Questionnaire card: the form's nine rows as Yes/No badges,
+            {{-- ── Questionnaire card: the form's twelve rows (D-63) as Yes/No badges,
                  each YES detail under its badge (D-56) ─────────────────────── --}}
             <div class="rounded-2xl bg-hp-white p-5 shadow-sm">
                 <p class="text-sm font-semibold uppercase tracking-wider text-hp-slate/50">Questionnaire</p>

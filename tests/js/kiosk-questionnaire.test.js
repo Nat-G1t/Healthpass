@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { kioskMachine, SYSTEMS, DETAIL_MAX } from '../../resources/js/kiosk/state-machine.js';
+import { kioskMachine, SYSTEMS, DETAIL_MAX, QUESTION_COUNT } from '../../resources/js/kiosk/state-machine.js';
 
 /**
- * Kiosk questionnaire — the official form's nine rows + optional YES details
- * (FR-KSK-10/11/13, D-56), and the on-screen keyboard now serving both the
+ * Kiosk questionnaire — the new forms' twelve rows (D-63) + optional YES
+ * details (FR-KSK-10/11/13, D-56), and the on-screen keyboard now serving both the
  * credential fields and the details panel.
  *
  * Run with `npm run test:js`. Same headless approach as
@@ -27,13 +27,30 @@ function type(m, text, target) {
     for (const ch of text) m.keyPress(ch === ' ' ? 'space' : ch, target);
 }
 
-test('the questionnaire asks the form\'s nine rows, verbatim, in the form\'s order', () => {
+test('the questionnaire asks the new forms\' twelve rows, verbatim, down each column', () => {
     assert.deepEqual(
-        SYSTEMS.map((s) => s.label),
-        ['SKIN', 'ABDOMEN (GIT)', 'HEENT', 'GUT', 'CHEST/LUNGS', 'EXTREMITIES', 'HEART/CVS', 'NEUROLOGICAL', 'BREAST'],
+        SYSTEMS.map((s) => [s.key, s.label]),
+        [
+            ['skin', 'SKIN'], ['head', 'HEAD'], ['eyes', 'EYES'], ['ears', 'EARS'],
+            ['nose', 'NOSE'], ['throat', 'THROAT'], ['chest_lungs', 'CHEST/LUNGS'], ['heart', 'HEART'],
+            ['abdomen', 'ABDOMEN'], ['kidney_bladder', 'KIDNEY/BLADDER'], ['brain', 'BRAIN'],
+            ['mental_disorder', 'MENTAL DISORDER'],
+        ],
     );
     assert.ok(SYSTEMS.every((s) => s.helper.length > 0));
+    assert.equal(QUESTION_COUNT, 13); // twelve rows + pregnancy
     assert.equal(DETAIL_MAX, 120);
+});
+
+test('Review unlocks only once all 13 are answered', () => {
+    const m = machineAtQuestionnaire();
+    for (const s of SYSTEMS) m.setSystem(s.key, false);
+    assert.equal(m.answeredCount(), 12);
+    assert.equal(m.questionnaireComplete(), false);
+
+    m.setPregnant(false);
+    assert.equal(m.answeredCount(), 13);
+    assert.equal(m.questionnaireComplete(), true);
 });
 
 test('the detail keyboard types into the open YES detail, not the login fields', () => {
@@ -66,22 +83,22 @@ test('shift and caps on the detail keyboard never leak into the login keyboard',
 test('a details panel only opens for a question answered YES', () => {
     const m = machineAtQuestionnaire();
 
-    m.openDetail('gut'); // unanswered
+    m.openDetail('brain'); // unanswered
     assert.equal(m.state.detailPanel.question, null);
 
-    m.setSystem('gut', false);
-    m.openDetail('gut'); // answered NO
+    m.setSystem('brain', false);
+    m.openDetail('brain'); // answered NO
     assert.equal(m.state.detailPanel.question, null);
 });
 
 test('a detail stops growing at 120 characters', () => {
     const m = machineAtQuestionnaire();
-    m.setSystem('heent', true);
-    m.openDetail('heent');
+    m.setSystem('throat', true);
+    m.openDetail('throat');
 
     type(m, 'a'.repeat(DETAIL_MAX + 5), 'detail');
 
-    assert.equal(m.detailText('heent').length, DETAIL_MAX);
+    assert.equal(m.detailText('throat').length, DETAIL_MAX);
 });
 
 test('switching a YES to NO clears its detail and closes its panel', () => {
@@ -91,13 +108,13 @@ test('switching a YES to NO clears its detail and closes its panel', () => {
     type(m, 'rash', 'detail');
     m.closeDetail();
 
-    m.setSystem('gut', true);
-    m.openDetail('gut');
+    m.setSystem('kidney_bladder', true);
+    m.openDetail('kidney_bladder');
     type(m, 'pain', 'detail');
 
-    m.setSystem('gut', false);
+    m.setSystem('kidney_bladder', false);
 
-    assert.equal(m.detailText('gut'), '');
+    assert.equal(m.detailText('kidney_bladder'), '');
     assert.equal(m.state.detailPanel.question, null);
     assert.equal(m.detailText('skin'), 'rash'); // other details untouched
 });
@@ -185,19 +202,19 @@ test('backspace long-press on the detail keyboard clears only the detail', (t) =
     assert.equal(m.state.login.email, 'kept@psu.edu.ph');
 });
 
-test('the submission carries all nine answers and only trimmed YES details', () => {
+test('the submission carries all twelve answers and only trimmed YES details', () => {
     const m = machineAtQuestionnaire();
     for (const s of SYSTEMS) m.setSystem(s.key, false);
     m.setSystem('skin', true);
-    m.setSystem('breast', true);
+    m.setSystem('mental_disorder', true);
     // A NO detail can't be typed through the UI — force one to prove the filter.
-    m.state.questionnaire.details = { skin: ' rash ', breast: '   ', gut: 'stale' };
+    m.state.questionnaire.details = { skin: ' rash ', mental_disorder: '   ', brain: 'stale' };
 
     const { screening } = m.buildSubmission();
 
     assert.deepEqual(
         SYSTEMS.map((s) => screening[s.key]),
-        [true, false, false, false, false, false, false, false, true],
+        [true, false, false, false, false, false, false, false, false, false, false, true],
     );
     assert.deepEqual(screening.details, { skin: 'rash' });
 });

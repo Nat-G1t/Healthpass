@@ -4,6 +4,28 @@
 
 ### Added
 
+* **The kiosk and encode use the new forms' twelve Physical Signs rows**
+  (D-63; supersedes D-56's row list, keeps its detail and pre-fill
+  mechanics). Requested by the clinic on 2026-09-18 — both new forms print
+  twelve rows; **pending adviser sign-off**. **Flagged schema change**
+  (migrations `2026_09_20_000001_replace_physical_signs_on_screening_responses_table`
+  and `2026_09_20_000002_replace_physical_signs_on_clearance_records_table`):
+  the nine D-56 columns on `screening_responses` and the nine `ps_*` on
+  `clearance_records` are replaced by twelve BOOLEAN NULL columns — `skin`,
+  `head`, `eyes`, `ears`, `nose`, `throat`, `chest_lungs`, `heart`, `abdomen`,
+  `kidney_bladder`, `brain`, `mental_disorder` (and their `ps_` twins). Old
+  answers are discarded, never mapped; reseed the dev DB.
+  - **Kiosk:** twelve cards (verbatim labels + helper lines) in the 2-column
+    grid, then pregnancy; footer "{N} of 13 answered"; Review lists all twelve.
+    `ScreeningResponse::QUESTIONS`, `ClearanceRecord::PHYSICAL_SIGNS` and the
+    kiosk's `SYSTEMS` carry the new list. The GUT helper-line TODO is gone.
+  - **Encode:** twelve rows, each pre-filled 1:1 from its kiosk answer;
+    Nurse Notes pre-fill follows the new order.
+  - **Print (interim):** the twelve rows in the form's three columns of four.
+  - **My Records:** the twelve labels with details under a Yes.
+  - Tests: required-answer, dropped-detail (NO and unknown key), 1:1
+    pre-fill and migration round-trip coverage.
+
 * **The College Admin picks the clinic form; the batch reason is the printed
   purpose** (D-62; supersedes D-24 and D-28). Requested by the clinic on
   2026-09-18; **pending adviser sign-off**. **Flagged schema change**

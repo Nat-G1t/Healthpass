@@ -25,7 +25,7 @@
                 'is_temp_flagged' => $v->vitalSigns?->is_temp_flagged ?? false,
                 'is_bp_flagged'   => $v->vitalSigns?->is_bp_flagged ?? false,
             ],
-            // The form's nine rows (D-56): label, the student's Yes/No
+            // The form's twelve rows (D-63): label, the student's Yes/No
             // (null = unanswered) and any detail they typed under a Yes.
             'screening'     => collect(\App\Models\ScreeningResponse::QUESTIONS)
                 ->map(fn ($question, $key) => [
@@ -311,7 +311,7 @@ function recordsPageData() {
                         </dl>
                     </div>
 
-                    {{-- Right: the form's nine Physical Signs rows (D-56), with
+                    {{-- Right: the form's twelve Physical Signs rows (D-63), with
                          the student's own details under each Yes --}}
                     <div class="p-6">
                         <p class="mb-4 text-[11px] font-semibold uppercase

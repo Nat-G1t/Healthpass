@@ -141,11 +141,11 @@
 
     /* ── Physical signs ── */
     .signs-heading { font-style: italic; font-weight: bold; margin-top: 12px; }
-    .signs { width: 88%; margin: 6px auto 0; border-collapse: collapse; }
-    .signs td, .signs th { padding: 1px 4px; font-size: 10pt; text-align: left; }
+    .signs { width: 100%; margin: 6px auto 0; border-collapse: collapse; }
+    .signs td, .signs th { padding: 1px 3px; font-size: 9.5pt; text-align: left; white-space: nowrap; }
     .signs th { text-align: center; font-weight: bold; }
-    .signs td.bubbles { text-align: center; width: 44px; }
-    .signs td.spacer { width: 28px; }
+    .signs td.bubbles { text-align: center; width: 36px; }
+    .signs td.spacer { width: 16px; }
     .if-yes { font-style: italic; margin-top: 6px; }
     .if-yes b { font-style: italic; }
 
@@ -287,35 +287,31 @@
     {{-- ── Physical Signs Disorder of — the physician examines the student and
          the nurse records the findings on the encode screen (FR-NRS-03/D-22);
          these bubbles shade from clearance_records.ps_*. An unanswered row
-         prints blank. The physician hand-writes details under REMARKS. --}}
+         prints blank. The physician hand-writes details under REMARKS.
+         D-63: the new forms' twelve rows, laid out as the form lays them out —
+         three columns of four, read DOWN each column. INTERIM layout: prompts
+         08 and 12 rebuild the documents; this only has to fit one sheet. --}}
+    @php
+        $signColumns = array_chunk(array_keys($signLabels), 4);
+    @endphp
     <p class="signs-heading">Physical Signs Disorder of:</p>
     <table class="signs">
         <tr>
-            <td></td><th>YES</th><th>NO</th>
-            <td class="spacer"></td>
-            <td></td><th>YES</th><th>NO</th>
+            @foreach ($signColumns as $i => $unused)
+                @if ($i > 0)<td class="spacer"></td>@endif
+                <td></td><th>YES</th><th>NO</th>
+            @endforeach
         </tr>
-        @foreach ([
-            ['ps_skin',        'ps_extremities'],
-            ['ps_abdomen_git', 'ps_heart_cvs'],
-            ['ps_heent',       'ps_neurological'],
-            ['ps_gut',         'ps_breast'],
-            ['ps_chest_lungs', null],
-        ] as [$left, $right])
+        @for ($row = 0; $row < 4; $row++)
             <tr>
-                <td><b>* {{ $signLabels[$left] }}</b></td>
-                <td class="bubbles"><span class="bb">{{ $dot($left, true) }}</span></td>
-                <td class="bubbles"><span class="bb">{{ $dot($left, false) }}</span></td>
-                <td class="spacer"></td>
-                @if ($right)
-                    <td><b>* {{ $signLabels[$right] }}</b></td>
-                    <td class="bubbles"><span class="bb">{{ $dot($right, true) }}</span></td>
-                    <td class="bubbles"><span class="bb">{{ $dot($right, false) }}</span></td>
-                @else
-                    <td></td><td></td><td></td>
-                @endif
+                @foreach ($signColumns as $i => $columnKeys)
+                    @if ($i > 0)<td class="spacer"></td>@endif
+                    <td><b>* {{ $signLabels[$columnKeys[$row]] }}</b></td>
+                    <td class="bubbles"><span class="bb">{{ $dot($columnKeys[$row], true) }}</span></td>
+                    <td class="bubbles"><span class="bb">{{ $dot($columnKeys[$row], false) }}</span></td>
+                @endforeach
             </tr>
-        @endforeach
+        @endfor
     </table>
 
     <p class="if-yes">If <b>YES</b>, give details under Remarks.</p>

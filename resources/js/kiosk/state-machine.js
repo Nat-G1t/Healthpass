@@ -38,31 +38,32 @@ const BP_STEP = 4;
 const BP_WAIT_EXPIRED_NOTICE = 'No reading came from the blood pressure monitor. Tap Start to try again.';
 
 /**
- * The questionnaire (FR-KSK-10, D-56): the official form's nine "Physical Signs
- * Disorder of" rows, in the form's order. Pure DATA — the Blade renders all nine
- * cards from this list, so they are not nine copies of markup. `key` is the
- * screening_responses boolean column (and the suffix of the nurse's matching
- * clearance_records.ps_* row); `label` is the form's wording VERBATIM; `helper`
- * is the plain-language line shown under it.
+ * The questionnaire (FR-KSK-10, D-63): the new official forms' twelve "Physical
+ * Signs Disorder of" rows, reading DOWN each of the form's three columns. Pure
+ * DATA — the Blade renders all twelve cards from this list, so they are not
+ * twelve copies of markup. `key` is the screening_responses boolean column (and
+ * the suffix of the nurse's matching clearance_records.ps_* row); `label` is
+ * the form's wording VERBATIM; `helper` is the plain-language line shown under it.
  *
  * Mirrors ScreeningResponse::QUESTIONS (app/Models/ScreeningResponse.php) —
  * keep the two lists in step.
  */
 export const SYSTEMS = [
     { key: 'skin', label: 'SKIN', helper: 'Rashes, wounds, itching or other skin problems' },
-    { key: 'abdomen_git', label: 'ABDOMEN (GIT)', helper: 'Stomach or digestive problems' },
-    { key: 'heent', label: 'HEENT', helper: 'Head, eyes, ears, nose or throat' },
-    // TODO(D-56): confirm with the clinic. GUT is ASSUMED to mean the
-    // genito-urinary tract; this helper line depends on that reading.
-    { key: 'gut', label: 'GUT', helper: 'Kidneys, bladder or urination' },
+    { key: 'head', label: 'HEAD', helper: 'Headaches, head injury or dizziness' },
+    { key: 'eyes', label: 'EYES', helper: 'Blurred vision, eye pain or redness' },
+    { key: 'ears', label: 'EARS', helper: 'Hearing problems, ear pain or discharge' },
+    { key: 'nose', label: 'NOSE', helper: 'Nosebleeds, or a blocked or runny nose' },
+    { key: 'throat', label: 'THROAT', helper: 'Sore throat or trouble swallowing' },
     { key: 'chest_lungs', label: 'CHEST/LUNGS', helper: 'Breathing problems, cough or asthma' },
-    { key: 'extremities', label: 'EXTREMITIES', helper: 'Arms, legs, hands, feet or joints' },
-    { key: 'heart_cvs', label: 'HEART/CVS', helper: 'Heart or blood circulation' },
-    { key: 'neurological', label: 'NEUROLOGICAL', helper: 'Seizures, numbness, frequent headaches or nerve problems' },
-    { key: 'breast', label: 'BREAST', helper: 'Lumps, pain or other breast concerns' },
+    { key: 'heart', label: 'HEART', helper: 'Chest pain, palpitations or heart problems' },
+    { key: 'abdomen', label: 'ABDOMEN', helper: 'Stomach pain or digestive problems' },
+    { key: 'kidney_bladder', label: 'KIDNEY/BLADDER', helper: 'Kidney, bladder or urination problems' },
+    { key: 'brain', label: 'BRAIN', helper: 'Seizures, fainting or other nerve problems' },
+    { key: 'mental_disorder', label: 'MENTAL DISORDER', helper: 'Anxiety, depression or other mental health concerns' },
 ];
 
-// 9 form rows + the pregnancy item = 10 questions to answer (FR-KSK-10).
+// 12 form rows + the pregnancy item = 13 questions to answer (FR-KSK-10).
 export const QUESTION_COUNT = SYSTEMS.length + 1;
 
 // Longest optional detail under a YES answer — the same cap the server enforces
@@ -196,7 +197,7 @@ function freshState() {
         // `draft` collects them and commits only when the last is confirmed.
         pad: { open: false, step: null, fieldIndex: 0, value: '', error: '', draft: {} },
 
-        // The form's nine rows + pregnancy (FR-KSK-10, D-56). `systems` maps a
+        // The form's twelve rows + pregnancy (FR-KSK-10, D-63). `systems` maps a
         // question key → true (Yes) | false (No); an unanswered one is simply
         // absent. `details` maps a key → the optional text typed under a YES.
         // `isPregnant` is true | false | null (unanswered); `lmp` holds the Last
@@ -237,8 +238,8 @@ export function kioskMachine() {
         // Read once so client validation uses the SAME numbers as the server (FR-KSK-08).
         config: {},
 
-        // The form's nine rows, exposed so Blade can x-for over them
-        // (FR-KSK-10) — the cards are data-driven, not nine copies of markup.
+        // The form's twelve rows, exposed so Blade can x-for over them
+        // (FR-KSK-10) — the cards are data-driven, not twelve copies of markup.
         systemList: SYSTEMS,
         detailMax: DETAIL_MAX, // shown as the details panel's "N / 120" counter
 
@@ -1295,7 +1296,7 @@ export function kioskMachine() {
                 : 'bg-emerald-50 text-emerald-600';
         },
 
-        // ── Questionnaire: the form's nine rows (FR-KSK-10, D-56) ────────────
+        // ── Questionnaire: the form's twelve rows (FR-KSK-10, D-63) ────────────
         /**
          * Record a Yes (true) / No (false) answer for one card. Switching to No
          * clears any detail typed under the Yes, and closes its panel (D-56).
@@ -1487,7 +1488,7 @@ export function kioskMachine() {
             return q.isPregnant === false || (q.isPregnant === true && q.lmp !== null);
         },
 
-        /** How many of the 10 questions are answered (footer "{N} of 10"). */
+        /** How many of the 13 questions are answered (footer "{N} of 13"). */
         answeredCount() {
             const answered = SYSTEMS.filter(
                 (s) => this.state.questionnaire.systems[s.key] !== undefined,
@@ -1495,7 +1496,7 @@ export function kioskMachine() {
             return answered + (this.pregnancyAnswered() ? 1 : 0);
         },
 
-        /** All 10 answered → Review & Submit unlocks (FR-KSK-10). */
+        /** All 13 answered → Review & Submit unlocks (FR-KSK-10). */
         questionnaireComplete() {
             return this.answeredCount() === QUESTION_COUNT;
         },

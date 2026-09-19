@@ -144,7 +144,7 @@ class ClinicVisit extends Model
         return $this->hasOne(VitalSigns::class);
     }
 
-    /** 1:1 nine-system questionnaire answers. */
+    /** 1:1 questionnaire answers — the form's twelve Physical Signs rows (D-63). */
     public function screeningResponse(): HasOne
     {
         return $this->hasOne(ScreeningResponse::class);

@@ -14,6 +14,7 @@ use App\Models\StudentProfile;
 use App\Models\User;
 use App\Models\VitalSigns;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
@@ -77,9 +78,10 @@ class KioskSubmitTest extends TestCase
                 'heartRate' => 72,
             ],
             'screening' => [
-                'skin' => false, 'abdomen_git' => false, 'heent' => false,
-                'gut' => false, 'chest_lungs' => false, 'extremities' => false,
-                'heart_cvs' => false, 'neurological' => false, 'breast' => false,
+                'skin' => false, 'head' => false, 'eyes' => false, 'ears' => false,
+                'nose' => false, 'throat' => false, 'chest_lungs' => false, 'heart' => false,
+                'abdomen' => false, 'kidney_bladder' => false, 'brain' => false,
+                'mental_disorder' => false,
                 'isPregnant' => false, 'lastMenstrualPeriod' => null,
             ],
         ];
@@ -142,20 +144,27 @@ class KioskSubmitTest extends TestCase
         $this->assertSame(0, ScreeningResponse::count());
     }
 
-    // ── The official form's nine questions + YES details (D-56) ──────────────
+    // ── The new forms' twelve questions (D-63) + YES details (D-56) ──────────
 
-    public function test_the_nine_form_answers_are_stored(): void
+    public function test_the_twelve_form_answers_are_stored(): void
     {
-        $this->submit($this->student()->id, ['screening' => ['gut' => true, 'breast' => true]])->assertOk();
+        $this->assertCount(12, ScreeningResponse::QUESTIONS);
+
+        $this->submit($this->student()->id, ['screening' => ['kidney_bladder' => true, 'mental_disorder' => true]])->assertOk();
 
         $row = ScreeningResponse::first();
         foreach (array_keys(ScreeningResponse::QUESTIONS) as $question) {
-            $this->assertSame(in_array($question, ['gut', 'breast'], true), $row->{$question}, $question);
+            $this->assertSame(in_array($question, ['kidney_bladder', 'mental_disorder'], true), $row->{$question}, $question);
         }
     }
 
-    public function test_each_of_the_nine_questions_is_a_required_boolean(): void
+    /** Submit rejects a payload missing any one of the twelve answers. */
+    public function test_each_of_the_twelve_questions_is_a_required_boolean(): void
     {
+        // Two submits per question = 24 requests, over the route's
+        // throttle:20,1 — switch the rate limiter off for this test only.
+        $this->withoutMiddleware(ThrottleRequests::class);
+
         $student = $this->student();
 
         foreach (array_keys(ScreeningResponse::QUESTIONS) as $question) {
@@ -173,6 +182,25 @@ class KioskSubmitTest extends TestCase
         }
 
         $this->assertSame(0, ClinicVisit::count());
+    }
+
+    public function test_a_d56_nine_row_questionnaire_payload_is_refused(): void
+    {
+        $student = $this->student();
+        $body = $this->payload($student->id);
+        $body['screening'] = [
+            'skin' => false, 'abdomen_git' => false, 'heent' => false,
+            'gut' => false, 'chest_lungs' => false, 'extremities' => false,
+            'heart_cvs' => false, 'neurological' => false, 'breast' => false,
+            'isPregnant' => false, 'lastMenstrualPeriod' => null,
+        ];
+
+        $this->withSession(['kiosk.student_id' => $student->id, 'kiosk.login_method' => 'qr'])
+            ->postJson(route('kiosk.submit'), $body)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['screening.head', 'screening.mental_disorder']);
+
+        $this->assertSame(0, ScreeningResponse::count());
     }
 
     public function test_an_old_self_report_questionnaire_payload_is_refused(): void
@@ -211,14 +239,29 @@ class KioskSubmitTest extends TestCase
         $this->assertSame(['skin' => 'Itchy rash on left arm'], $visit->screeningResponse->details);
     }
 
-    public function test_details_for_a_no_answer_or_an_unknown_key_are_dropped(): void
+    public function test_a_detail_on_a_no_answer_is_dropped(): void
     {
         $this->submit($this->student()->id, ['screening' => [
             'skin' => true,
-            'gut' => false,
+            'kidney_bladder' => false,
             'details' => [
                 'skin' => 'Itchy rash on left arm',
-                'gut' => str_repeat('x', 500), // answered NO — dropped, never measured
+                'kidney_bladder' => str_repeat('x', 500), // answered NO — dropped, never measured
+            ],
+        ]])->assertOk();
+
+        $this->assertSame(['skin' => 'Itchy rash on left arm'], ScreeningResponse::first()->details);
+    }
+
+    public function test_a_detail_on_an_unknown_key_is_dropped(): void
+    {
+        $this->submit($this->student()->id, ['screening' => [
+            'skin' => true,
+            // Unknown keys, even with a YES beside them, never reach `details`.
+            'heent' => true,
+            'details' => [
+                'skin' => 'Itchy rash on left arm',
+                'heent' => 'A D-56 row the new forms dropped', // unknown key
                 'vision' => 'A pre-D-56 question', // unknown key
                 'isPregnant' => 'Not a physical-signs question', // unknown key
             ],
@@ -251,10 +294,10 @@ class KioskSubmitTest extends TestCase
     {
         $this->submit($this->student()->id, ['screening' => [
             'skin' => true,
-            'heent' => true,
+            'throat' => true,
             'details' => [
                 'skin' => "Rash\u{0000} on\t arm\u{0085}\n",
-                'heent' => "\u{0007}\u{001B}", // nothing but control characters
+                'throat' => "\u{0007}\u{001B}", // nothing but control characters
             ],
         ]])->assertOk();
 

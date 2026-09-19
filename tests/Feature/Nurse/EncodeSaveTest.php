@@ -90,14 +90,17 @@ class EncodeSaveTest extends TestCase
         ScreeningResponse::create([
             'clinic_visit_id' => $visit->id,
             'skin' => false,
-            'abdomen_git' => false,
-            'heent' => false,
-            'gut' => false,
+            'head' => false,
+            'eyes' => false,
+            'ears' => false,
+            'nose' => false,
+            'throat' => false,
             'chest_lungs' => false,
-            'extremities' => false,
-            'heart_cvs' => false,
-            'neurological' => false,
-            'breast' => false,
+            'heart' => false,
+            'abdomen' => false,
+            'kidney_bladder' => false,
+            'brain' => false,
+            'mental_disorder' => false,
             'is_pregnant' => false,
             'last_menstrual_period' => null,
         ]);
@@ -206,7 +209,7 @@ class EncodeSaveTest extends TestCase
         $record = ClearanceRecord::firstWhere('clinic_visit_id', $visit->id);
         $this->assertFalse($record->ps_skin);
         $this->assertTrue($record->ps_chest_lungs);
-        $this->assertNull($record->ps_gut);
+        $this->assertNull($record->ps_kidney_bladder);
     }
 
     // ── 3. The happy path (FR-NRS-04) ─────────────────────────────────────────

@@ -26,24 +26,28 @@ class ClearanceRecord extends Model
     // (`purpose`) plus the admin's specify text (`purpose_other`).
 
     /**
-     * The official form's "Physical Signs Disorder of" rows, column → label
-     * (FR-NRS-03 / D-22). The physician examines the student; the nurse
-     * records YES/NO per system on the encode screen. NULL = not examined —
-     * the printed bubbles stay blank. One map keeps the encode form,
-     * validation, and print view in step.
+     * The new official forms' twelve "Physical Signs Disorder of" rows,
+     * column → label (FR-NRS-03 / D-22, row list replaced by D-63). The
+     * physician examines the student; the nurse records YES/NO per row on the
+     * encode screen, pre-filled 1:1 from ScreeningResponse::QUESTIONS (same
+     * keys, `ps_` prefix). NULL = not examined — the printed bubbles stay
+     * blank. One map keeps the encode form, validation, and print view in step.
      *
      * @var array<string, string>
      */
     public const PHYSICAL_SIGNS = [
         'ps_skin' => 'SKIN',
-        'ps_abdomen_git' => 'ABDOMEN (GIT)',
-        'ps_heent' => 'HEENT',
-        'ps_gut' => 'GUT',
+        'ps_head' => 'HEAD',
+        'ps_eyes' => 'EYES',
+        'ps_ears' => 'EARS',
+        'ps_nose' => 'NOSE',
+        'ps_throat' => 'THROAT',
         'ps_chest_lungs' => 'CHEST/LUNGS',
-        'ps_extremities' => 'EXTREMITIES',
-        'ps_heart_cvs' => 'HEART/CVS',
-        'ps_neurological' => 'NEUROLOGICAL',
-        'ps_breast' => 'BREAST',
+        'ps_heart' => 'HEART',
+        'ps_abdomen' => 'ABDOMEN',
+        'ps_kidney_bladder' => 'KIDNEY/BLADDER',
+        'ps_brain' => 'BRAIN',
+        'ps_mental_disorder' => 'MENTAL DISORDER',
     ];
 
     /**
@@ -65,14 +69,17 @@ class ClearanceRecord extends Model
         'purpose_other',
         'nurse_notes',
         'ps_skin',
-        'ps_abdomen_git',
-        'ps_heent',
-        'ps_gut',
+        'ps_head',
+        'ps_eyes',
+        'ps_ears',
+        'ps_nose',
+        'ps_throat',
         'ps_chest_lungs',
-        'ps_extremities',
-        'ps_heart_cvs',
-        'ps_neurological',
-        'ps_breast',
+        'ps_heart',
+        'ps_abdomen',
+        'ps_kidney_bladder',
+        'ps_brain',
+        'ps_mental_disorder',
         'physician_name',
         'physician_license_no',
         'encoded_at',
@@ -86,14 +93,17 @@ class ClearanceRecord extends Model
             'printed_at' => 'datetime',
             // Nullable booleans: a cast still returns NULL for NULL columns.
             'ps_skin' => 'boolean',
-            'ps_abdomen_git' => 'boolean',
-            'ps_heent' => 'boolean',
-            'ps_gut' => 'boolean',
+            'ps_head' => 'boolean',
+            'ps_eyes' => 'boolean',
+            'ps_ears' => 'boolean',
+            'ps_nose' => 'boolean',
+            'ps_throat' => 'boolean',
             'ps_chest_lungs' => 'boolean',
-            'ps_extremities' => 'boolean',
-            'ps_heart_cvs' => 'boolean',
-            'ps_neurological' => 'boolean',
-            'ps_breast' => 'boolean',
+            'ps_heart' => 'boolean',
+            'ps_abdomen' => 'boolean',
+            'ps_kidney_bladder' => 'boolean',
+            'ps_brain' => 'boolean',
+            'ps_mental_disorder' => 'boolean',
         ];
     }
 

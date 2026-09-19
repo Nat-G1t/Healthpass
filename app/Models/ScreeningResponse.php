@@ -13,9 +13,10 @@ class ScreeningResponse extends Model
     use HasFactory;
 
     /**
-     * The kiosk questionnaire (FR-KSK-10, D-56): the official form's nine
-     * "Physical Signs Disorder of" rows in the form's order — column => the
-     * form's label VERBATIM plus one plain-language helper line for the student.
+     * The kiosk questionnaire (FR-KSK-10, D-63): the new official forms' twelve
+     * "Physical Signs Disorder of" rows, reading DOWN each of the form's three
+     * columns — column => the form's label VERBATIM plus one plain-language
+     * helper line for the student. (D-63 replaced D-56's nine old-form rows.)
      *
      * The ONE server-side list: KioskSubmitRequest, SubmitKioskVisit, the nurse
      * encode view and the student records view all read it. Each key equals the
@@ -29,16 +30,17 @@ class ScreeningResponse extends Model
      */
     public const QUESTIONS = [
         'skin' => ['label' => 'SKIN', 'helper' => 'Rashes, wounds, itching or other skin problems'],
-        'abdomen_git' => ['label' => 'ABDOMEN (GIT)', 'helper' => 'Stomach or digestive problems'],
-        'heent' => ['label' => 'HEENT', 'helper' => 'Head, eyes, ears, nose or throat'],
-        // TODO(D-56): confirm with the clinic. GUT is ASSUMED to mean the
-        // genito-urinary tract; this helper line depends on that reading.
-        'gut' => ['label' => 'GUT', 'helper' => 'Kidneys, bladder or urination'],
+        'head' => ['label' => 'HEAD', 'helper' => 'Headaches, head injury or dizziness'],
+        'eyes' => ['label' => 'EYES', 'helper' => 'Blurred vision, eye pain or redness'],
+        'ears' => ['label' => 'EARS', 'helper' => 'Hearing problems, ear pain or discharge'],
+        'nose' => ['label' => 'NOSE', 'helper' => 'Nosebleeds, or a blocked or runny nose'],
+        'throat' => ['label' => 'THROAT', 'helper' => 'Sore throat or trouble swallowing'],
         'chest_lungs' => ['label' => 'CHEST/LUNGS', 'helper' => 'Breathing problems, cough or asthma'],
-        'extremities' => ['label' => 'EXTREMITIES', 'helper' => 'Arms, legs, hands, feet or joints'],
-        'heart_cvs' => ['label' => 'HEART/CVS', 'helper' => 'Heart or blood circulation'],
-        'neurological' => ['label' => 'NEUROLOGICAL', 'helper' => 'Seizures, numbness, frequent headaches or nerve problems'],
-        'breast' => ['label' => 'BREAST', 'helper' => 'Lumps, pain or other breast concerns'],
+        'heart' => ['label' => 'HEART', 'helper' => 'Chest pain, palpitations or heart problems'],
+        'abdomen' => ['label' => 'ABDOMEN', 'helper' => 'Stomach pain or digestive problems'],
+        'kidney_bladder' => ['label' => 'KIDNEY/BLADDER', 'helper' => 'Kidney, bladder or urination problems'],
+        'brain' => ['label' => 'BRAIN', 'helper' => 'Seizures, fainting or other nerve problems'],
+        'mental_disorder' => ['label' => 'MENTAL DISORDER', 'helper' => 'Anxiety, depression or other mental health concerns'],
     ];
 
     /** Longest optional detail a student may type under a YES answer (D-56). */
@@ -47,14 +49,17 @@ class ScreeningResponse extends Model
     protected $fillable = [
         'clinic_visit_id',
         'skin',
-        'abdomen_git',
-        'heent',
-        'gut',
+        'head',
+        'eyes',
+        'ears',
+        'nose',
+        'throat',
         'chest_lungs',
-        'extremities',
-        'heart_cvs',
-        'neurological',
-        'breast',
+        'heart',
+        'abdomen',
+        'kidney_bladder',
+        'brain',
+        'mental_disorder',
         'details',
         'is_pregnant',
         'last_menstrual_period',
@@ -63,16 +68,19 @@ class ScreeningResponse extends Model
     protected function casts(): array
     {
         return [
-            // Nullable booleans (D-56): a cast still returns NULL for NULL.
+            // Nullable booleans (D-63): a cast still returns NULL for NULL.
             'skin' => 'boolean',
-            'abdomen_git' => 'boolean',
-            'heent' => 'boolean',
-            'gut' => 'boolean',
+            'head' => 'boolean',
+            'eyes' => 'boolean',
+            'ears' => 'boolean',
+            'nose' => 'boolean',
+            'throat' => 'boolean',
             'chest_lungs' => 'boolean',
-            'extremities' => 'boolean',
-            'heart_cvs' => 'boolean',
-            'neurological' => 'boolean',
-            'breast' => 'boolean',
+            'heart' => 'boolean',
+            'abdomen' => 'boolean',
+            'kidney_bladder' => 'boolean',
+            'brain' => 'boolean',
+            'mental_disorder' => 'boolean',
             // Question key => the student's typed detail, YES answers only.
             // The 'array' cast turns the JSON column into a PHP array and back.
             'details' => 'array',

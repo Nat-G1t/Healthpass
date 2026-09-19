@@ -43,7 +43,7 @@ HealthPass is a **single Laravel application** (plus a clinic kiosk that is a Bl
 - ~~Solo appointment booking (Medical Clearance) by students~~ — removed by **D-61**: students are scheduled only through their college
 - College Admin batch clearance requests (per-college, approved by Director)
 - Director approval that auto-generates appointments for listed students
-- Kiosk vitals capture (real sensors via Web Serial) + the official form's nine Physical Signs questions (D-56)
+- Kiosk vitals capture (real sensors via Web Serial) + the new forms' twelve Physical Signs questions (D-63)
 - Nurse live queue, encode result (Fit/Unfit), and clearance printout
 - Director dashboard: KPIs, approvals, analytics, flagged anomalies
 
@@ -312,7 +312,7 @@ Students are scheduled only through their college (a batch request the Clinic Di
 - Table: Date, Service, Result (Fit/Unfit badge), Reference No., View.
 - "View" opens a **Record modal** (fixed overlay, max-width 700px):
   - Left column: "Kiosk Vital Signs" (height, weight, BMI, temp, HR, BP key-value list) + one Medical Case Category chip per assigned category (0..n, D-23).
-  - Right column: the official form's nine Physical Signs rows (Yes/No badges — Yes = flagged variant), each Yes followed by the detail the student typed at the kiosk (D-56).
+  - Right column: the new forms' twelve Physical Signs rows (D-63; Yes/No badges — Yes = flagged variant), each Yes followed by the detail the student typed at the kiosk (D-56).
 
 #### My ID & Profile (`student-profile`)
 - Two-column layout (240px left + 1fr right):
@@ -374,13 +374,13 @@ Students are scheduled only through their college (a batch request the Clinic Di
   - **Left column**:
     - Student header card (avatar, name, college · student number · time, Flagged badge if applicable).
     - Vital Signs grid (3-col, flagged cells highlighted with peach bg + orange-40 border + orange value).
-    - Questionnaire answers card: the form's nine rows (Yes/No badges; Yes = flagged variant), with the student's typed detail under each Yes (D-56).
+    - Questionnaire answers card: the form's twelve rows (D-63; Yes/No badges; Yes = flagged variant), with the student's typed detail under each Yes (D-56).
   - **Right column** — "Doctor's Assessment" card:
     - **Fit / Unfit** selector (two cards; selected = peach bg + orange border).
     - **Medical Case Categories** multi-select checkboxes (D-23 — a case can span several systems; each persists as a `clearance_case_categories` row): Alimentary System, Respiratory System, Musculo-Skeletal System, Integumentary System, Urinary System, Metabolic Endocrine System, Cardiovascular System, Eyes, Ears, Nose & Throat Disorders. The kiosk's **vision/hearing answers are decision support** for the "Eyes, Ears, Nose & Throat Disorders" pick — they have no physical-sign row of their own. *(Those two kiosk questions were removed by D-56.)*
     - **Purpose / Cleared For** — **read-only since D-62**: the batch reason's label (plus its specify text for Others), copied onto the clearance record on Save. The page header shows the form-type badge (Medical Clearance / Medical Assessment Form). The nurse picker and the `<x-hp.purpose-fieldset>` component are gone (D-24/D-28 superseded).
-    - **Physical Signs Disorder of** (D-22): nine Yes/No rows — SKIN, ABDOMEN (GIT), HEENT, GUT, CHEST/LUNGS, EXTREMITIES, HEART/CVS, NEUROLOGICAL, BREAST. The physician examines the student at the clinic; the nurse records the findings. Each row optional — an unanswered row prints as blank bubbles on the form. Stored in `clearance_records.ps_*`. **Kiosk pre-fill (D-56):** the kiosk asks these same nine rows, so every row — GUT and BREAST included — opens pre-checked with the student's answer, **YES and NO alike** (`ps_<key>` ← `<key>`), for the nurse to confirm or correct after the exam; a NULL kiosk answer leaves the row blank. *(Before D-56 the kiosk asked different self-report systems, mapped skin→SKIN, digestive→ABDOMEN (GIT), nose→HEENT, respiratory→CHEST/LUNGS, bones→EXTREMITIES, heart→HEART/CVS, nervous→NEUROLOGICAL, and GUT/BREAST always opened blank.)*
-    - **Nurse Notes** textarea (optional) — prints under REMARKS. For a visit not yet encoded it opens **pre-filled with the student's YES details**, one `SKIN: <detail>` line each in the form's order (D-56); `old()` input wins and the nurse edits freely. A read-only encoded record shows its saved notes only.
+    - **Physical Signs Disorder of** (D-22, rows per D-63): twelve Yes/No rows — SKIN, HEAD, EYES, EARS, NOSE, THROAT, CHEST/LUNGS, HEART, ABDOMEN, KIDNEY/BLADDER, BRAIN, MENTAL DISORDER. The physician examines the student at the clinic; the nurse records the findings. Each row optional — an unanswered row prints as blank bubbles on the form. Stored in `clearance_records.ps_*`. **Kiosk pre-fill (D-56/D-63):** the kiosk asks these same twelve rows, so every row opens pre-checked with the student's answer, **YES and NO alike** (`ps_<key>` ← `<key>`), for the nurse to confirm or correct after the exam; a NULL kiosk answer leaves the row blank. *(Before D-56 the kiosk asked different self-report systems, mapped skin→SKIN, digestive→ABDOMEN (GIT), nose→HEENT, respiratory→CHEST/LUNGS, bones→EXTREMITIES, heart→HEART/CVS, nervous→NEUROLOGICAL, and GUT/BREAST always opened blank. From D-56 to D-63 the rows were the old form's nine — SKIN, ABDOMEN (GIT), HEENT, GUT, CHEST/LUNGS, EXTREMITIES, HEART/CVS, NEUROLOGICAL, BREAST.)*
+    - **Nurse Notes** textarea (optional) — prints under REMARKS. For a visit not yet encoded it opens **pre-filled with the student's YES details**, one `SKIN: <detail>` line each in the form's order (D-56; the twelve-row order since D-63); `old()` input wins and the nurse edits freely. A read-only encoded record shows its saved notes only.
     - "Preview & Print Medical Clearance" button (ghost style, full width, Download icon).
     - "← Back" (ghost) + "Save & Close Appointment" (primary, flex-2) — Save disabled until Fit/Unfit chosen.
 
@@ -396,7 +396,7 @@ Students are scheduled only through their college (a batch request the Clinic Di
 - Font: Times New Roman, 11.5px, black on white, print margins 12–16mm.
 - Student fields: Surname / First Name / Middle Name (3-column underlines), Course/Year/Section, Address, Age, Sex (radio), Civil Status (radio), Date of Birth, Place of Birth.
 - Vitals grid (3 columns): Height, Heart Rate, Temperature, Weight, Blood Pressure, Respiratory Rate (**left blank — not captured**).
-- Physical signs table: YES/NO radio columns for SKIN, ABDOMEN(GIT), HEENT, GUT, CHEST/LUNGS (left col) + EXTREMITIES, HEART/CVS, NEUROLOGICAL, BREAST (right col) — shaded from the nurse-encoded exam findings (`clearance_records.ps_*`, D-22); unanswered rows print blank.
+- Physical signs table (D-63, interim until D-67/D-71 rebuild the documents): YES/NO bubbles for the twelve rows in the form's three columns of four — SKIN, HEAD, EYES, EARS | NOSE, THROAT, CHEST/LUNGS, HEART | ABDOMEN, KIDNEY/BLADDER, BRAIN, MENTAL DISORDER — shaded from the nurse-encoded exam findings (`clearance_records.ps_*`, D-22); unanswered rows print blank.
 - Remarks / notes line — nurse notes only; case details are the physician's hand-written annotation (D-22).
 - Pregnancy question (YES/NO radio + LMP line) — pre-filled from the kiosk questionnaire (`screening_responses`).
 - Fitness declaration: "He/She is physically/mentally ☐ FIT ☐ UNFIT to undergo in:" + purpose bubbles — **the visit's form type's purposes (D-62)**, the saved batch-reason label shaded — incl. "Others, Specify: ___" — an Others purpose shades that bubble and prints the specified event on the line, clipped to fit (D-24). The college is NOT printed anywhere on the form (D-25).
@@ -405,10 +405,10 @@ Students are scheduled only through their college (a batch request the Clinic Di
 - Print via `window.print()`.
 
 **Physical-signs source (D-22, supersedes the earlier questionnaire → form mapping):**
-the form's nine Physical Signs rows shade from the nurse-encoded exam findings
+the form's Physical Signs rows (twelve since D-63) shade from the nurse-encoded exam findings
 (`clearance_records.ps_*` — the physician examines, the nurse records), never
 from the kiosk questionnaire. Since D-56 the questionnaire asks the form's own
-nine rows, and each answer **pre-fills** its matching exam row on the encode
+rows (twelve since D-63), and each answer **pre-fills** its matching exam row on the encode
 screen for the nurse to confirm — it still never shades the print directly. Its
 pregnancy/LMP answer is the one questionnaire item that prints as-is; its YES
 details reach the printout only through Nurse Notes under REMARKS (pre-filled,
@@ -513,18 +513,18 @@ Each vital screen has:
 | 3/4 | Temperature | 🌡️ | IR forehead thermometer. Captured: e.g. 37.9°C, "Slightly Elevated" (flagged badge), normal range note. |
 | 4/4 | Blood Pressure | 💪 | Cuff BP monitor. Has its own instruction step ("Place your arm in the cuff") before measuring. Pulsing arm emoji during scan. Captured: e.g. 145/92 mmHg "Elevated — Flagged" + Heart Rate in peach panel (78 bpm, Normal badge). |
 
-#### Screen 8 — Questionnaire (rewritten by D-56)
+#### Screen 8 — Questionnaire (rewritten by D-56; rows replaced by D-63)
 - Heading **"Physical Signs Disorder of:"**, sub-line "Answer YES or NO for each."
-- **2-column grid** of the official form's nine rows, in the form's order:
-  SKIN · ABDOMEN (GIT) · HEENT · GUT · CHEST/LUNGS · EXTREMITIES · HEART/CVS · NEUROLOGICAL · BREAST.
-  Each card: the form's label verbatim + one plain-language helper line (e.g. SKIN — "Rashes, wounds, itching or other skin problems"; GUT — "Kidneys, bladder or urination", *awaiting clinic confirmation*) + Yes (orange when selected) / No (green when selected) buttons. One list: `ScreeningResponse::QUESTIONS`, mirrored by the kiosk's JS `SYSTEMS`.
+- **2-column grid** of the new official forms' twelve rows, reading down the form's three columns:
+  SKIN · HEAD · EYES · EARS · NOSE · THROAT · CHEST/LUNGS · HEART · ABDOMEN · KIDNEY/BLADDER · BRAIN · MENTAL DISORDER.
+  Each card: the form's label verbatim + one plain-language helper line (e.g. SKIN — "Rashes, wounds, itching or other skin problems"; KIDNEY/BLADDER — "Kidney, bladder or urination problems"; MENTAL DISORDER — "Anxiety, depression or other mental health concerns"; the full list is FR-KSK-10) + Yes (orange when selected) / No (green when selected) buttons. One list: `ScreeningResponse::QUESTIONS`, mirrored by the kiosk's JS `SYSTEMS`.
 - **YES details:** a Yes card offers "Add details (optional)" → a full-width panel docked at the bottom of the screen with the question label, the typed text, an "N / 120" counter, **Done**, and the shared on-screen keyboard. Optional, max 120 characters, never blocks Review; switching to No clears it; the card then shows the detail truncated.
 - **Pregnancy question** below the grid (full width), in the form's wording: **Are you Pregnant?** Yes/No — "If YES, when is the last menstrual period?" If Yes: inline calendar (full month, tap to pick date — future dates disabled) for Last Menstrual Period.
-- Footer: "{N} of 10 answered" + "Review & Submit →" (disabled until all 10 answered including pregnancy).
+- Footer: "{N} of 13 answered" + "Review & Submit →" (disabled until all 13 answered including pregnancy). On the 1080×1920 panel the grid area scrolls when the twelve cards overflow; the footer stays on screen.
 
 #### Screen 9 — Review
 - "Review Your Submission" in header.
-- Two-column cards: **Vital Signs** (key-value; flagged items in orange + ⚑) + **Health Questionnaire** (Yes/No badges for the form's nine rows, each YES detail shown under its badge — D-56).
+- Two-column cards: **Vital Signs** (key-value; flagged items in orange + ⚑) + **Health Questionnaire** (Yes/No badges for the form's twelve rows — D-63 — each YES detail shown under its badge — D-56).
 - "Submit to Clinic →" (xl, center).
 
 #### Screen 10 — Complete
@@ -676,20 +676,24 @@ created_at, updated_at
 ```sql
 id                    bigint PK
 clinic_visit_id       bigint UNIQUE FK → clinic_visits.id
--- The official form's nine "Physical Signs Disorder of" rows (D-56 replaced
--- the old vision/hearing/nose/skin/respiratory/heart/digestive/bones/nervous
--- self-report columns; old answers discarded). Names match the
+-- The new official forms' twelve "Physical Signs Disorder of" rows (D-63
+-- replaced D-56's nine — skin/abdomen_git/heent/gut/chest_lungs/extremities/
+-- heart_cvs/neurological/breast — which had replaced the old self-report
+-- columns; old answers discarded both times). Names match the
 -- clearance_records ps_* suffixes. NULL at DB level; validation requires all
--- nine on every new visit.
+-- twelve on every new visit.
 skin                  boolean NULL
-abdomen_git           boolean NULL
-heent                 boolean NULL
-gut                   boolean NULL
+head                  boolean NULL
+eyes                  boolean NULL
+ears                  boolean NULL
+nose                  boolean NULL
+throat                boolean NULL
 chest_lungs           boolean NULL
-extremities           boolean NULL
-heart_cvs             boolean NULL
-neurological          boolean NULL
-breast                boolean NULL
+heart                 boolean NULL
+abdomen               boolean NULL
+kidney_bladder        boolean NULL
+brain                 boolean NULL
+mental_disorder       boolean NULL
 details               json NULL             -- question key → text typed under a YES (≤120 chars); NULL when none
 is_pregnant           boolean
 last_menstrual_period date NULL             -- required if is_pregnant = true
@@ -710,15 +714,19 @@ purpose_other         varchar(120) NULL -- D-62: the batch's "Others, Specify" t
 nurse_notes           text NULL
 -- "Physical Signs Disorder of" exam findings (D-22): physician examines,
 -- nurse records on the encode screen; NULL = not examined (prints blank)
+-- The twelve rows per D-63 (replaced D-56's nine ps_skin…ps_breast, not mapped).
 ps_skin               boolean NULL
-ps_abdomen_git        boolean NULL
-ps_heent              boolean NULL
-ps_gut                boolean NULL
+ps_head               boolean NULL
+ps_eyes               boolean NULL
+ps_ears               boolean NULL
+ps_nose               boolean NULL
+ps_throat             boolean NULL
 ps_chest_lungs        boolean NULL
-ps_extremities        boolean NULL
-ps_heart_cvs          boolean NULL
-ps_neurological       boolean NULL
-ps_breast             boolean NULL
+ps_heart              boolean NULL
+ps_abdomen            boolean NULL
+ps_kidney_bladder     boolean NULL
+ps_brain              boolean NULL
+ps_mental_disorder    boolean NULL
 physician_name        varchar(120) DEFAULT 'REYNALDO S. ALIPIO, MD'
 physician_license_no  varchar(20)  DEFAULT '60252'
 encoded_at            timestamp NULL

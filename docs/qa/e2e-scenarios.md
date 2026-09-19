@@ -109,11 +109,13 @@ students never book for themselves and never walk in.
 16. **Blood Pressure:** enter systolic `118`, diastolic `76`, heart rate `72`.
     → **Expect:** no High-BP flag. Click **Next**.
 17. **Questionnaire:** → **Expect:** the heading reads "Physical Signs
-    Disorder of:" and the nine cards are the official form's rows in the form's
-    order — SKIN, ABDOMEN (GIT), HEENT, GUT, CHEST/LUNGS, EXTREMITIES,
-    HEART/CVS, NEUROLOGICAL, BREAST — each with a short helper line (D-56).
-    Answer **No** to all nine and to **Are you Pregnant?** → **Expect:** footer
-    reads "10 of 10 answered" and **Review & Submit** becomes enabled. Click it.
+    Disorder of:" and the twelve cards are the new forms' rows, reading down
+    the form's three columns — SKIN, HEAD, EYES, EARS, NOSE, THROAT,
+    CHEST/LUNGS, HEART, ABDOMEN, KIDNEY/BLADDER, BRAIN, MENTAL DISORDER — each
+    with a short helper line (D-63). The grid may scroll, but **Review &
+    Submit** stays on screen. Answer **No** to all twelve and to **Are you
+    Pregnant?** → **Expect:** footer reads "13 of 13 answered" and **Review &
+    Submit** becomes enabled. Click it.
 18. **Review screen:** confirm vitals and answers look right (nothing flagged
     orange). Click **Submit to Clinic →**. → **Expect:** the Complete screen
     ("Submitted! … proceed to the nurse's station") with a 12-second countdown.
@@ -124,8 +126,9 @@ students never book for themselves and never walk in.
     **NEXT**, with his vitals summarised and **no flags** (Flags column shows
     "—").
 21. Click **Encode Result**. → **Expect:** the "Doctor's Assessment" screen
-    with Juan's vitals and all nine questionnaire answers; every **Physical
-    Signs Disorder of** row is pre-checked **No** (his kiosk answers, D-56) and
+    with Juan's vitals and all twelve questionnaire answers; every one of the
+    twelve **Physical Signs Disorder of** rows is pre-checked **No** (his kiosk
+    answers, D-63) and
     Nurse Notes is empty.
 22. Set **Result = Fit**. Leave case category/purpose blank. Optionally type a
     note. Click **Preview & Print**. → **Expect:** the official clearance form
@@ -168,27 +171,31 @@ since D-61 there are none.)
 7. **Blood Pressure:** enter systolic `150`, diastolic `95`, HR `88` →
    **Expect:** a **High Blood Pressure** badge (systolic ≥ 140 OR diastolic
    ≥ 90).
-8. **Questionnaire with a YES detail (D-56):** answer **Yes** on **SKIN**, tap
-   **Add details (optional)** and type `itchy rash on left arm` on the
-   on-screen keyboard. → **Expect:** a panel docked at the bottom of the screen
-   with the keyboard and an "N / 120" counter. Tap **Done** → the SKIN card
-   shows the detail. Answer **Yes** on **GUT**, add any detail, then switch GUT
-   back to **No** → **Expect:** its detail disappears. Answer the rest **No**,
-   answer **Are you Pregnant?**, reach Review. → **Expect:** the three flagged
-   vitals are shown in **orange with a ⚑**; SKIN shows **Yes** with "itchy
-   rash on left arm" under it; GUT shows **No** with no detail. Click **Submit
-   to Clinic →**.
+8. **Questionnaire with YES details (D-56, rows per D-63):** answer **Yes** on
+   **SKIN**, tap **Add details (optional)** and type `itchy rash on left arm`
+   on the on-screen keyboard. → **Expect:** a panel docked at the bottom of the
+   screen with the keyboard and an "N / 120" counter. Tap **Done** → the SKIN
+   card shows the detail. Scroll to **THROAT**, answer **Yes** and add
+   `sore throat since monday`. Answer **Yes** on **KIDNEY/BLADDER**, add any
+   detail, then switch it back to **No** → **Expect:** its detail disappears.
+   Answer the rest **No**, answer **Are you Pregnant?** → footer "13 of 13
+   answered"; reach Review. → **Expect:** the three flagged vitals are shown in
+   **orange with a ⚑**; all twelve rows are listed; SKIN and THROAT show
+   **Yes** with their details under them; KIDNEY/BLADDER shows **No** with no
+   detail. Click **Submit to Clinic →**.
 9. Log in as `nurse@healthpass.test`. On the Live Queue, find Maria's row. →
    **Expect:** the **Flags column shows badges for temp, BP and BMI**, and the
    flagged values are bold orange.
-10. Open **Encode Result**. → **Expect (D-56):** the questionnaire card shows
-    "itchy rash on left arm" under SKIN's Yes; the **SKIN** Physical Signs row
-    is pre-checked **Yes** and GUT and the other seven **No**; **Nurse Notes**
-    is pre-filled with `SKIN: itchy rash on left arm`. Set **Result = Unfit**,
+10. Open **Encode Result**. → **Expect (D-56/D-63):** the questionnaire card
+    shows each detail under its Yes; there are **twelve** Physical Signs rows;
+    **SKIN** and **THROAT** are pre-checked **Yes** and the other ten **No**;
+    **Nurse Notes** is pre-filled with two lines, in form order:
+    `SKIN: itchy rash on left arm` then `THROAT: sore throat since monday`. Set **Result = Unfit**,
     optionally set a Case
     Category (e.g. Cardiovascular System), click **Preview & Print**. →
     **Expect:** on the printed form the **SKIN YES** bubble is shaded and the
-    **REMARKS** line reads `SKIN: itchy rash on left arm`. Click **Save & Close**.
+    **REMARKS** show both lines; the Physical Signs table has twelve rows in
+    three columns and the page still fits one sheet. Click **Save & Close**.
 11. Log in as `director@healthpass.test`, open **Flagged Anomalies**. →
     **Expect:** Maria appears under High Blood Pressure, Fever, and Abnormal
     BMI, with her college (CCS) shown.

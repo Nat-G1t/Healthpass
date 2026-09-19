@@ -67,14 +67,17 @@ class RecordsPageTest extends TestCase
         ScreeningResponse::create([
             'clinic_visit_id' => $visit->id,
             'skin' => false,
-            'abdomen_git' => false,
-            'heent' => false,
-            'gut' => false,
+            'head' => false,
+            'eyes' => false,
+            'ears' => false,
+            'nose' => false,
+            'throat' => false,
             'chest_lungs' => false,
-            'extremities' => false,
-            'heart_cvs' => false,
-            'neurological' => false,
-            'breast' => false,
+            'heart' => false,
+            'abdomen' => false,
+            'kidney_bladder' => false,
+            'brain' => false,
+            'mental_disorder' => false,
             'is_pregnant' => false,
         ]);
 
@@ -225,20 +228,22 @@ class RecordsPageTest extends TestCase
         $student = $this->student();
         $visit = $this->makeEncodedVisit($student, $this->nurse(), 'Fit', 'HP-2026-T040');
         $visit->screeningResponse->update([
-            'abdomen_git' => true,
-            'details' => ['abdomen_git' => 'Stomach pain after meals'],
+            'abdomen' => true,
+            'details' => ['abdomen' => 'Stomach pain after meals'],
         ]);
 
         $response = $this->actingAs($student)->get(route('student.records'))->assertOk();
 
-        // D-56: the official form's labels (slash-free ones — @json escapes "/").
-        foreach (['SKIN', 'ABDOMEN (GIT)', 'HEENT', 'GUT', 'EXTREMITIES', 'NEUROLOGICAL', 'BREAST'] as $label) {
+        // D-63: the new forms' labels (slash-free ones — @json escapes "/").
+        foreach (['SKIN', 'HEAD', 'EYES', 'EARS', 'NOSE', 'THROAT', 'HEART', 'ABDOMEN', 'BRAIN', 'MENTAL DISORDER'] as $label) {
             $response->assertSee($label, false);
         }
 
         $response->assertSee('Stomach pain after meals', false)
             ->assertDontSee('Nervous System')
-            ->assertDontSee('Bones / Joints');
+            ->assertDontSee('Bones / Joints')
+            ->assertDontSee('HEENT')
+            ->assertDontSee('NEUROLOGICAL');
     }
 
     // ── 5. Mixed — pending visit beside encoded visit ─────────────────────────

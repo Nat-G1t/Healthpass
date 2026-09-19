@@ -155,7 +155,7 @@
             @endif
         </x-hp.card>
 
-        {{-- ── Questionnaire — the form's nine rows + pregnancy/LMP (FR-KSK-10, D-56) ── --}}
+        {{-- ── Questionnaire — the form's twelve rows (D-63) + pregnancy/LMP (FR-KSK-10) ── --}}
         <x-hp.card>
             <h3 class="text-sm font-semibold text-hp-slate">Health Questionnaire</h3>
             <p class="mt-0.5 text-xs text-hp-slate/50">The student's own answers at the kiosk, with any details they typed.</p>
@@ -294,8 +294,8 @@
 
                             // Fresh form only: pre-check the row with the
                             // student's own kiosk answer — YES or NO — for all
-                            // nine rows (D-22/D-25 as amended by D-56). The
-                            // kiosk asks the form's rows, so ps_<key> ← <key>.
+                            // twelve rows (D-22/D-25 as amended by D-56/D-63).
+                            // The kiosk asks the form's rows, so ps_<key> ← <key>.
                             // A NULL answer leaves the row blank.
                             if ($saved === null && ! $readOnly && $sr) {
                                 $kioskAnswer = $sr->{Str::after($column, 'ps_')};

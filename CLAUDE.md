@@ -173,7 +173,7 @@ npm run dev                       # terminal 2
   (case categories were dropped by D-32); the University Physician signs
   the printed form.
 - **Kiosk never shows Fit/Unfit to the student.** It captures vitals +
-  the official form's nine Physical Signs rows (D-56) and routes to the
+  the official form's twelve Physical Signs rows (D-63) and routes to the
   Nurse queue.
 - **Students never self-schedule and never walk in (D-61)** — only
   Director-approved college batches create appointments; the kiosk refuses

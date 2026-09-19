@@ -309,7 +309,7 @@ class DemoBatchSeeder extends Seeder
 
         ScreeningResponse::create([
             'clinic_visit_id' => $visit->id,
-            // All nine of the form's Physical Signs rows answered NO (D-56).
+            // All twelve of the form's Physical Signs rows answered NO (D-63).
             ...array_fill_keys(array_keys(ScreeningResponse::QUESTIONS), false),
             'is_pregnant' => false,
         ]);

@@ -221,7 +221,7 @@ class DemoClinicVisitSeeder extends Seeder
             // Two YES answers — one with a typed detail, one without.
             ...$this->screening([
                 'chest_lungs' => 'Dry cough for about a week',
-                'heart_cvs' => null,
+                'heart' => null,
             ]),
             'is_pregnant' => false,
         ]);
@@ -263,7 +263,7 @@ class DemoClinicVisitSeeder extends Seeder
         ]);
         ScreeningResponse::create([
             'clinic_visit_id' => $v3->id,
-            ...$this->screening(['abdomen_git' => 'Stomach pain after meals']),
+            ...$this->screening(['abdomen' => 'Stomach pain after meals']),
             'is_pregnant' => false,
         ]);
         ClearanceRecord::create([
@@ -339,7 +339,7 @@ class DemoClinicVisitSeeder extends Seeder
             // Captured, not yet encoded: opening it on the encode screen shows
             // both details pre-filled into Nurse Notes (D-56).
             ...$this->screening([
-                'heent' => 'Sore throat since Monday',
+                'throat' => 'Sore throat since Monday',
                 'chest_lungs' => 'Cough at night',
             ]),
             'is_pregnant' => false,
@@ -728,7 +728,7 @@ class DemoClinicVisitSeeder extends Seeder
     }
 
     /**
-     * The nine form answers for a demo visit (D-56): every row NO unless named
+     * The twelve form answers for a demo visit (D-63): every row NO unless named
      * in $yes. A YES may carry the detail the student typed at the kiosk, or
      * null for a YES with nothing typed.
      *
