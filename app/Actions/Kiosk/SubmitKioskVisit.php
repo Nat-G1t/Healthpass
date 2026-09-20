@@ -11,7 +11,6 @@ use App\Models\StudentProfile;
 use App\Models\VitalSigns;
 use App\Services\ReferenceNumberService;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -34,6 +33,9 @@ use Illuminate\Validation\ValidationException;
  *   • Whether the student may submit at all (D-61): only a student holding a
  *     `scheduled` appointment today. There are no walk-ins, and the kiosk's
  *     "No Clinic Schedule Today" screen is only a courtesy — this is the gate.
+ *   • Which official form this visit follows (D-68). It is re-resolved here
+ *     from that same appointment, so a payload claiming the other form cannot
+ *     make a Medical Clearance visit store a Personal / Social History.
  */
 final class SubmitKioskVisit
 {
@@ -64,9 +66,9 @@ final class SubmitKioskVisit
             // "the input is not acceptable" error: for the kiosk's JSON request
             // it becomes a 422 whose `message` the Review screen shows — the
             // same shape a failed Form Request produces.
-            $appointmentId = $this->todaysAppointmentId((int) $data['studentUserId']);
+            $appointment = Appointment::todayFor((int) $data['studentUserId']);
 
-            if ($appointmentId === null) {
+            if ($appointment === null) {
                 throw ValidationException::withMessages(['appointment' => self::NO_SCHEDULE_MESSAGE]);
             }
 
@@ -81,7 +83,7 @@ final class SubmitKioskVisit
                 'student_id' => $data['studentUserId'],
                 'college_id' => $snapshot['college_id'],
                 'course' => $snapshot['course'],
-                'appointment_id' => $appointmentId, // always set since D-61 (BR-10)
+                'appointment_id' => $appointment->id, // always set since D-61 (BR-10)
                 'login_method' => $data['loginMethod'],
                 'status' => 'captured', // until the nurse encodes (BR-11)
                 // Consent is captured seconds earlier in the same session; the
@@ -124,6 +126,11 @@ final class SubmitKioskVisit
                 // Already cleaned by KioskSubmitRequest: known questions answered
                 // YES only, control characters stripped, ≤ 120 chars, null if none.
                 'details' => $screening['details'] ?? null,
+                // D-68: section I of the Medical Assessment Form, or four
+                // NULLs on a Medical Clearance visit. The form type is
+                // RE-RESOLVED here from the appointment this action just
+                // picked — the browser's copy is never consulted.
+                ...$this->socialHistory($appointment->formType(), $data['socialHistory'] ?? null),
                 'is_pregnant' => $screening['isPregnant'],
                 'last_menstrual_period' => $screening['lastMenstrualPeriod'] ?? null,
             ]);
@@ -168,49 +175,29 @@ final class SubmitKioskVisit
     }
 
     /**
-     * Today's open appointment for this student, or null — and null means the
-     * submit is refused (D-61, BR-10).
+     * The Personal / Social History columns for this visit (D-68).
      *
-     * D-54: a student can hold, say, a 9 AM appointment on one batch AND a 2 PM
-     * one on another the same day (their hours don't overlap, so BR-25 allows
-     * it), so the link goes to the appointment whose
-     * hour STARTS closest to check-in (now()); a tie goes to the earlier hour.
-     * A row with no hour (pre-D-37) has nothing to measure, so it links only
-     * when no timed appointment exists (lowest id first).
+     * The FORM TYPE decides, and it was resolved from the appointment the
+     * server itself picked — never from the request body, which could name
+     * the other form. On a Medical Clearance visit the four questions were
+     * never asked, so every column is NULL and whatever the browser posted is
+     * discarded here as well as in KioskSubmitRequest.
+     *
+     * @param  array|null  $answers  The validated socialHistory block, or null.
+     * @return array<string, mixed>
      */
-    private function todaysAppointmentId(int $studentId): ?int
+    private function socialHistory(string $formType, ?array $answers): array
     {
-        $appointments = Appointment::query()
-            ->where('student_id', $studentId)
-            ->whereDate('scheduled_date', Carbon::today())
-            // Only an OPEN appointment may be linked. Matching "!= cancelled"
-            // also caught 'completed', so a student returning to the kiosk after
-            // a nurse already encoded their morning visit would re-link the same,
-            // already-completed appointment — the nurse then completes it twice
-            // and one appointment yields two counted visits. A second visit with
-            // no open appointment is refused (D-61).
-            ->where('status', 'scheduled')
-            ->orderBy('id')
-            ->get(['id', 'scheduled_time']);
-
-        $timed = $appointments->whereNotNull('scheduled_time');
-
-        if ($timed->isEmpty()) {
-            return $appointments->first()?->id;
+        if ($formType !== 'assessment' || $answers === null) {
+            return ['smoking' => null, 'alcohol' => null, 'illicit_drugs' => null, 'sexually_active' => null];
         }
 
-        $checkIn = now()->getTimestamp();
-
-        // Seconds between check-in and the start of the appointment's hour.
-        $distance = fn (Appointment $appointment): int => abs(
-            Carbon::parse(Carbon::today()->toDateString().' '.$appointment->scheduled_time)->getTimestamp() - $checkIn
-        );
-
-        // Closest first; on a tie, the earlier hour ('H:i:s' keys sort as times).
-        return $timed
-            ->sort(fn (Appointment $a, Appointment $b): int => [$distance($a), $a->scheduled_time] <=> [$distance($b), $b->scheduled_time])
-            ->first()
-            ->id;
+        return [
+            'smoking' => $answers['smoking'],
+            'alcohol' => $answers['alcohol'],
+            'illicit_drugs' => $answers['illicitDrugs'],
+            'sexually_active' => $answers['sexuallyActive'],
+        ];
     }
 
     /**

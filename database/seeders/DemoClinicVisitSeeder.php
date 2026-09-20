@@ -220,6 +220,7 @@ class DemoClinicVisitSeeder extends Seeder
         ScreeningResponse::create([
             'clinic_visit_id' => $v1->id,
             ...$this->screening(),
+            ...$this->socialHistory($v1->formType()), // D-68: clearance -> NULLs
             'is_pregnant' => false,
         ]);
         ClearanceRecord::create([
@@ -266,6 +267,7 @@ class DemoClinicVisitSeeder extends Seeder
                 'chest_lungs' => 'Dry cough for about a week',
                 'heart' => null,
             ]),
+            ...$this->socialHistory($v2->formType(), 1), // D-68: assessment
             'is_pregnant' => false,
         ]);
         ClearanceRecord::create([
@@ -312,6 +314,7 @@ class DemoClinicVisitSeeder extends Seeder
         ScreeningResponse::create([
             'clinic_visit_id' => $v3->id,
             ...$this->screening(['abdomen' => 'Stomach pain after meals']),
+            ...$this->socialHistory($v3->formType(), 2), // D-68: assessment
             'is_pregnant' => false,
         ]);
         ClearanceRecord::create([
@@ -354,6 +357,7 @@ class DemoClinicVisitSeeder extends Seeder
         ScreeningResponse::create([
             'clinic_visit_id' => $v4->id,
             ...$this->screening(),
+            ...$this->socialHistory($v4->formType(), 3), // D-68: assessment
             'is_pregnant' => false,
         ]);
 
@@ -392,6 +396,7 @@ class DemoClinicVisitSeeder extends Seeder
                 'throat' => 'Sore throat since Monday',
                 'chest_lungs' => 'Cough at night',
             ]),
+            ...$this->socialHistory($v5->formType()), // D-68: clearance -> NULLs
             'is_pregnant' => false,
         ]);
 
@@ -425,6 +430,7 @@ class DemoClinicVisitSeeder extends Seeder
         ScreeningResponse::create([
             'clinic_visit_id' => $v6->id,
             ...$this->screening(),
+            ...$this->socialHistory($v6->formType()), // D-68: clearance -> NULLs
             'is_pregnant' => false,
         ]);
 
@@ -619,7 +625,9 @@ class DemoClinicVisitSeeder extends Seeder
             'checked_in_at' => $checkedIn,
         ]);
 
-        $this->createSpreadVitalsAndScreening($visit, $visitSeq);
+        // D-68: the batch's form decides whether the kiosk asked for a
+        // Personal / Social History at all.
+        $this->createSpreadVitalsAndScreening($visit, $visitSeq, $batch->form_type);
 
         if (! $isCaptured) {
             ClearanceRecord::create([
@@ -746,9 +754,10 @@ class DemoClinicVisitSeeder extends Seeder
      * (the is_bmi_flagged rule); temperature, BP and heart rate stay unflagged
      * except for their own deliberate flag cases (D-66 added the heart rate).
      * Every flag is derived through the VitalSigns helpers, never asserted.
-     * Plus an all-clear questionnaire.
+     * Plus an all-clear questionnaire and, on an `assessment` batch only, a
+     * Personal / Social History (D-68).
      */
-    private function createSpreadVitalsAndScreening(ClinicVisit $visit, int $seq): void
+    private function createSpreadVitalsAndScreening(ClinicVisit $visit, int $seq, string $formType): void
     {
         // Deterministic flag sprinkle (~3–4% each, non-overlapping mostly).
         $bpFlagged = $seq % 29 === 3;
@@ -782,6 +791,7 @@ class DemoClinicVisitSeeder extends Seeder
         ScreeningResponse::create([
             'clinic_visit_id' => $visit->id,
             ...$this->screening(),
+            ...$this->socialHistory($formType, $seq), // D-68
             'is_pregnant' => false,
         ]);
     }
@@ -804,5 +814,29 @@ class DemoClinicVisitSeeder extends Seeder
         $details = array_filter($yes, fn (?string $detail) => $detail !== null);
 
         return [...$answers, 'details' => $details === [] ? null : $details];
+    }
+
+    /**
+     * Personal / Social History for a demo visit (D-68): four answers on a
+     * Medical Assessment Form visit, four NULLs on a Medical Clearance one —
+     * which is what the kiosk itself stores, since a Clearance student is
+     * never asked. $seq varies the answers so the demo shows all three boxes.
+     *
+     * @return array<string, mixed>
+     */
+    private function socialHistory(string $formType, int $seq = 0): array
+    {
+        if ($formType !== 'assessment') {
+            return ['smoking' => null, 'alcohol' => null, 'illicit_drugs' => null, 'sexually_active' => null];
+        }
+
+        $habits = ScreeningResponse::SOCIAL_HISTORY_VALUES; // yes | no | quit
+
+        return [
+            'smoking' => $habits[$seq % 3],
+            'alcohol' => $habits[($seq + 1) % 3],
+            'illicit_drugs' => 'no',
+            'sexually_active' => $seq % 2 === 0,
+        ];
     }
 }

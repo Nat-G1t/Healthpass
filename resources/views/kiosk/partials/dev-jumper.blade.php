@@ -9,6 +9,10 @@
     <button type="button" @click="go('consent')">consent</button>
     <button type="button" @click="go('vitals')">vitals</button>
     <button type="button" @click="go('questionnaire')">quest.</button>
+    {{-- D-68: only reachable in the real flow on an assessment visit, so the
+         jumper also flips state.formType — otherwise Review would send you
+         straight back to the questionnaire. --}}
+    <button type="button" @click="state.formType = 'assessment'; go('social-history')">social</button>
     <button type="button" @click="go('review')">review</button>
     <button type="button" @click="go('complete')">complete</button>
     <button type="button" @click="reset()">reset</button>

@@ -313,10 +313,29 @@ class DemoBatchSeeder extends Seeder
             'clinic_visit_id' => $visit->id,
             // All twelve of the form's Physical Signs rows answered NO (D-63).
             ...array_fill_keys(array_keys(ScreeningResponse::QUESTIONS), false),
+            // D-68: the Medical Assessment Form also asks the Personal /
+            // Social History; the Medical Clearance does not, so those visits
+            // store four NULLs — exactly what the kiosk itself writes.
+            ...$this->socialHistory($batch->form_type),
             'is_pregnant' => false,
         ]);
 
         return $visit;
+    }
+
+    /**
+     * Personal / Social History for a demo capture (D-68): four answers on a
+     * Medical Assessment Form batch, four NULLs on a Medical Clearance one.
+     *
+     * @return array<string, mixed>
+     */
+    private function socialHistory(string $formType): array
+    {
+        if ($formType !== 'assessment') {
+            return ['smoking' => null, 'alcohol' => null, 'illicit_drugs' => null, 'sexually_active' => null];
+        }
+
+        return ['smoking' => 'no', 'alcohol' => 'quit', 'illicit_drugs' => 'no', 'sexually_active' => false];
     }
 
     /**

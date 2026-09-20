@@ -46,6 +46,32 @@ class ScreeningResponse extends Model
     /** Longest optional detail a student may type under a YES answer (D-56). */
     public const DETAIL_MAX_LENGTH = 120;
 
+    /**
+     * Personal / Social History — section I of the Medical Assessment Form's
+     * back page (D-68), column => the form's label VERBATIM. Asked ONLY on an
+     * `assessment` visit; every one of these is NULL on a `clearance` visit,
+     * because the Medical Clearance has no such section.
+     *
+     * The three habit rows are separate from `sexually_active` because the
+     * paper gives them a third box: Yes / No / Quit.
+     *
+     * Mirrors SOCIAL_HISTORY in resources/js/kiosk/state-machine.js — keep the
+     * two lists in step.
+     *
+     * @var array<string, string>
+     */
+    public const SOCIAL_HISTORY = [
+        'smoking' => 'Smoking',
+        'alcohol' => 'Alcohol',
+        'illicit_drugs' => 'Illicit Drugs',
+    ];
+
+    /** The only values a SOCIAL_HISTORY column may hold (validation-gated). */
+    public const SOCIAL_HISTORY_VALUES = ['yes', 'no', 'quit'];
+
+    /** The fourth Personal / Social History row — Yes / No only, so a boolean. */
+    public const SEXUALLY_ACTIVE_LABEL = 'Sexually Active';
+
     protected $fillable = [
         'clinic_visit_id',
         'skin',
@@ -61,6 +87,11 @@ class ScreeningResponse extends Model
         'brain',
         'mental_disorder',
         'details',
+        // D-68 — Personal / Social History, Medical Assessment Form only.
+        'smoking',
+        'alcohol',
+        'illicit_drugs',
+        'sexually_active',
         'is_pregnant',
         'last_menstrual_period',
     ];
@@ -84,6 +115,9 @@ class ScreeningResponse extends Model
             // Question key => the student's typed detail, YES answers only.
             // The 'array' cast turns the JSON column into a PHP array and back.
             'details' => 'array',
+            // D-68. The three habit columns stay plain strings ('yes'|'no'|
+            // 'quit'), so no cast; only this one is a (nullable) boolean.
+            'sexually_active' => 'boolean',
             'is_pregnant' => 'boolean',
             'last_menstrual_period' => 'date',
         ];
@@ -113,6 +147,34 @@ class ScreeningResponse extends Model
         }
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * The four Personal / Social History rows ready to display (D-68), in the
+     * form's order, each as `['label' => …, 'answer' => 'Yes'|'No'|'Quit'|null]`.
+     * `null` means unanswered — which is every row on a Medical Clearance
+     * visit, and every row on a visit captured before D-68.
+     *
+     * The ONE place the stored value becomes display text, shared by the nurse
+     * encode card and the student's My Records modal.
+     *
+     * @return list<array{label: string, answer: ?string}>
+     */
+    public function socialHistoryRows(): array
+    {
+        $rows = [];
+
+        foreach (self::SOCIAL_HISTORY as $column => $label) {
+            $value = $this->{$column};
+            $rows[] = ['label' => $label, 'answer' => $value === null ? null : ucfirst((string) $value)];
+        }
+
+        $rows[] = [
+            'label' => self::SEXUALLY_ACTIVE_LABEL,
+            'answer' => $this->sexually_active === null ? null : ($this->sexually_active ? 'Yes' : 'No'),
+        ];
+
+        return $rows;
     }
 
     // ── Relationships ────────────────────────────────────────────────────────

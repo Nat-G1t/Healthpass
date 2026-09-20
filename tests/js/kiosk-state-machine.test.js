@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { SCREENS, kioskMachine } from '../../resources/js/kiosk/state-machine.js';
+import { SCREENS, SOCIAL_HISTORY, kioskMachine } from '../../resources/js/kiosk/state-machine.js';
 
 /**
  * Kiosk state-machine hardening (FR-KSK-05/06/07/08/15).
@@ -303,4 +303,181 @@ test('the heart-rate threshold comes from the injected config, not a literal', (
 
     assert.equal(m.hrFlagged(110), false); // under the clinic's own threshold
     assert.equal(m.hrFlagged(121), true);
+});
+
+// -- The kiosk follows the batch's form (FR-KSK-10a, D-68) --------------------
+// The SERVER decides which form today's appointment named and ships it in the
+// identity payload; the machine uses it ONLY to pick screens. Whatever it does
+// here, the server re-resolves the form at submit and stores accordingly — so
+// these tests are about the flow the student walks, not about what is saved.
+
+/** A headless component that has just arrived at Identity on this form. */
+function machineOnForm(formType) {
+    const m = kioskMachine();
+    m.$refs = { root: { dataset: {} } };
+    // No-op: the questionnaire's card-scroll nudge needs a DOM we don't have.
+    m.$nextTick = () => {};
+    m.config = CONFIG;
+    m.arriveAtIdentity({ firstName: 'Juan', hasAppointmentToday: true, formType });
+    return m;
+}
+
+/** Answer all 13 questionnaire items so goReview() is unlocked. */
+function answerQuestionnaire(m) {
+    for (const s of m.systemList) m.setSystem(s.key, false);
+    m.setPregnant(false);
+    return m;
+}
+
+/** Answer all four Personal / Social History rows. */
+function answerSocialHistory(m) {
+    m.setSocialHistory('smoking', 'quit');
+    m.setSocialHistory('alcohol', 'yes');
+    m.setSocialHistory('illicitDrugs', 'no');
+    m.setSocialHistory('sexuallyActive', 'yes');
+    return m;
+}
+
+test('the ordered flow puts social-history between questionnaire and review', () => {
+    assert.ok(SCREENS.includes('social-history'));
+    assert.equal(SCREENS.indexOf('social-history'), SCREENS.indexOf('questionnaire') + 1);
+    assert.equal(SCREENS.indexOf('review'), SCREENS.indexOf('social-history') + 1);
+});
+
+test('the identity payload sets the form type; anything unknown reads clearance', () => {
+    assert.equal(machineOnForm('assessment').state.formType, 'assessment');
+    assert.equal(machineOnForm('clearance').state.formType, 'clearance');
+    assert.equal(machineOnForm(undefined).state.formType, 'clearance');
+    assert.equal(machineOnForm('nonsense').state.formType, 'clearance');
+});
+
+test('a clearance student goes straight from the questionnaire to review', () => {
+    const m = answerQuestionnaire(machineOnForm('clearance'));
+
+    m.goReview();
+
+    assert.equal(m.state.screen, 'review');
+});
+
+test('an assessment student answers the social history first', () => {
+    const m = answerQuestionnaire(machineOnForm('assessment'));
+
+    m.goReview();
+
+    assert.equal(m.state.screen, 'social-history');
+});
+
+test('an unfinished questionnaire reaches neither screen', () => {
+    const m = machineOnForm('assessment');
+
+    m.goReview();
+
+    assert.equal(m.state.screen, 'identity');
+});
+
+test('continue is gated until all four social-history rows are answered', () => {
+    const m = answerQuestionnaire(machineOnForm('assessment'));
+    m.goReview();
+
+    assert.equal(m.socialHistoryComplete(), false);
+    m.goReviewFromSocialHistory();
+    assert.equal(m.state.screen, 'social-history'); // still held
+
+    answerSocialHistory(m);
+
+    assert.equal(m.socialHistoryComplete(), true);
+    m.goReviewFromSocialHistory();
+    assert.equal(m.state.screen, 'review');
+});
+
+test('a single missing row still blocks continue', () => {
+    const m = machineOnForm('assessment');
+
+    for (const { key } of SOCIAL_HISTORY.slice(0, 3)) m.setSocialHistory(key, 'no');
+
+    assert.equal(m.socialHistoryComplete(), false);
+});
+
+test('sexually active stores a boolean; the habits keep the form word', () => {
+    const m = answerSocialHistory(machineOnForm('assessment'));
+
+    assert.equal(m.state.socialHistory.smoking, 'quit');
+    assert.equal(m.state.socialHistory.alcohol, 'yes');
+    assert.equal(m.state.socialHistory.illicitDrugs, 'no');
+    assert.equal(m.state.socialHistory.sexuallyActive, true);
+
+    m.setSocialHistory('sexuallyActive', 'no');
+    assert.equal(m.state.socialHistory.sexuallyActive, false);
+    assert.equal(m.socialHistoryAnswer('sexuallyActive', 'no'), true);
+    assert.equal(m.socialHistoryAnswer('sexuallyActive', 'yes'), false);
+});
+
+test('a No answer is a real answer, not an absence', () => {
+    const m = machineOnForm('assessment');
+
+    m.setSocialHistory('sexuallyActive', 'no');
+
+    assert.equal(m.state.socialHistory.sexuallyActive, false);
+    assert.notEqual(m.state.socialHistory.sexuallyActive, null);
+});
+
+test('review steps back through the flow the student actually walked', () => {
+    assert.equal(machineOnForm('clearance').backFromReview() ?? 'x', 'x');
+
+    const clearance = machineOnForm('clearance');
+    clearance.state.screen = 'review';
+    clearance.backFromReview();
+    assert.equal(clearance.state.screen, 'questionnaire');
+
+    const assessment = machineOnForm('assessment');
+    assessment.state.screen = 'review';
+    assessment.backFromReview();
+    assert.equal(assessment.state.screen, 'social-history');
+});
+
+test('only an assessment student sees the Self Assessment heading', () => {
+    assert.match(machineOnForm('assessment').questionnaireHeading(), /\(Self Assessment\)$/);
+    assert.equal(machineOnForm('clearance').questionnaireHeading(), 'Physical Signs Disorder of:');
+});
+
+test('the submission carries the social history only on an assessment', () => {
+    const assessment = answerSocialHistory(answerQuestionnaire(machineOnForm('assessment')));
+    assessment.state.consentAt = new Date().toISOString();
+
+    const withHistory = assessment.buildSubmission();
+    assert.deepEqual(withHistory.socialHistory, {
+        smoking: 'quit', alcohol: 'yes', illicitDrugs: 'no', sexuallyActive: true,
+    });
+
+    const clearance = answerQuestionnaire(machineOnForm('clearance'));
+    clearance.state.consentAt = new Date().toISOString();
+
+    assert.equal('socialHistory' in clearance.buildSubmission(), false);
+});
+
+test('reset clears the social history and the form type with the session', () => {
+    const m = answerSocialHistory(answerQuestionnaire(machineOnForm('assessment')));
+    m.goReview();
+    assert.equal(m.state.screen, 'social-history');
+
+    m.reset();
+
+    assert.equal(m.state.screen, 'welcome');
+    assert.equal(m.state.formType, 'clearance');
+    assert.deepEqual(m.state.socialHistory, {
+        smoking: null, alcohol: null, illicitDrugs: null, sexuallyActive: null,
+    });
+});
+
+test('the idle reset wipes the social history from an abandoned screen', (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const m = answerSocialHistory(answerQuestionnaire(machineOnForm('assessment')));
+    m.goReview();
+    m.bumpIdle();
+
+    t.mock.timers.tick(IDLE_MS);
+
+    assert.equal(m.state.screen, 'welcome');
+    assert.equal(m.state.socialHistory.smoking, null);
+    assert.equal(m.state.identity, null);
 });

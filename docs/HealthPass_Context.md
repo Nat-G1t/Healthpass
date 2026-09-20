@@ -385,6 +385,7 @@ Every page in this section is shared by the nurse and the University Physician. 
     - Student header card (avatar, name, college · student number · time, Flagged badge if applicable).
     - **Vital Signs card — EDITABLE since D-65, and part of the assessment form** (one `<form>` wraps both columns). Height, Weight, Temperature, BP systolic, BP diastolic and Heart Rate are number inputs pre-filled from the kiosk's reading; **Respiratory Rate (breaths/min) opens empty** — no kiosk sensor measures it, and the clinic measures it here. All seven required, bounded by `config('healthpass.validation')` (systolic > diastolic). **BMI is display only**: live from height × weight in the browser, always recomputed server-side; a posted `bmi` is ignored. The kiosk's flag badges and the D-58 irregular-pulse note stay and still describe the **kiosk's** reading. On a Medical Assessment Form visit this card **is** the paper's "IV. Pertinent Physical Exam". Read-only (encoded) shows `clearance_records.encoded_vitals` with a grey "Kiosk: 150/95 mmHg" under any corrected value.
     - Questionnaire answers card: the form's twelve rows (D-63; Yes/No badges; Yes = flagged variant), with the student's typed detail under each Yes (D-56).
+    - **Personal / Social History (from the kiosk)** card — **`assessment` visits only (D-68)**, under the questionnaire: Smoking, Alcohol, Illicit Drugs (Yes / No / Quit) and Sexually Active (Yes / No), read-only, "—" for an unanswered row. A `clearance` visit has no such card.
   - **Right column** — "Doctor's Assessment" card:
     - **Fit / Unfit** selector (two cards; selected = peach bg + orange border).
     - **Medical Case Categories** multi-select checkboxes (D-23 — a case can span several systems; each persists as a `clearance_case_categories` row): Alimentary System, Respiratory System, Musculo-Skeletal System, Integumentary System, Urinary System, Metabolic Endocrine System, Cardiovascular System, Eyes, Ears, Nose & Throat Disorders. The kiosk's **vision/hearing answers are decision support** for the "Eyes, Ears, Nose & Throat Disorders" pick — they have no physical-sign row of their own. *(Those two kiosk questions were removed by D-56.)*
@@ -478,7 +479,13 @@ Welcome
   ├── QR scan (USB scanner as keyboard input; multi-line payload normalized to IDNo) → Identity
   └── "Lost ID?" → Email Login (virtual keyboard) → Identity
 
-Identity → schedule check (no appointment today → No Clinic Schedule Today → Back to start, D-61) → Privacy Consent → vital-height → vital-weight → vital-temp → vital-bp → Questionnaire → Review → Complete (12s auto-reset → Welcome)
+Identity → schedule check (no appointment today → No Clinic Schedule Today → Back to start, D-61) → Privacy Consent → vital-height → vital-weight → vital-temp → vital-bp → Questionnaire
+                                                                              │
+                          the batch's FORM decides what follows (D-68, resolved on the SERVER at scan/login AND again at submit)
+                              ├── clearance  → Review
+                              └── assessment → Personal / Social History → Review
+
+Review → Complete (12s auto-reset → Welcome)
 ```
 
 #### Screen 1 — Welcome
@@ -528,16 +535,28 @@ Each vital screen has:
 
 #### Screen 8 — Questionnaire (rewritten by D-56; rows replaced by D-63)
 - Heading **"Physical Signs Disorder of:"**, sub-line "Answer YES or NO for each."
+  **D-68:** on an `assessment` visit the heading reads **"Physical Signs Disorder of: (Self Assessment)"** — the Medical Assessment Form's own label for that table.
 - **2-column grid** of the new official forms' twelve rows, reading down the form's three columns:
   SKIN · HEAD · EYES · EARS · NOSE · THROAT · CHEST/LUNGS · HEART · ABDOMEN · KIDNEY/BLADDER · BRAIN · MENTAL DISORDER.
   Each card: the form's label verbatim + one plain-language helper line (e.g. SKIN — "Rashes, wounds, itching or other skin problems"; KIDNEY/BLADDER — "Kidney, bladder or urination problems"; MENTAL DISORDER — "Anxiety, depression or other mental health concerns"; the full list is FR-KSK-10) + Yes (orange when selected) / No (green when selected) buttons. One list: `ScreeningResponse::QUESTIONS`, mirrored by the kiosk's JS `SYSTEMS`.
 - **YES details:** a Yes card offers "Add details (optional)" → a full-width panel docked at the bottom of the screen with the question label, the typed text, an "N / 120" counter, **Done**, and the shared on-screen keyboard. Optional, max 120 characters, never blocks Review; switching to No clears it; the card then shows the detail truncated.
 - **Pregnancy question** below the grid (full width), in the form's wording: **Are you Pregnant?** Yes/No — "If YES, when is the last menstrual period?" If Yes: inline calendar (full month, tap to pick date — future dates disabled) for Last Menstrual Period.
-- Footer: "{N} of 13 answered" + "Review & Submit →" (disabled until all 13 answered including pregnancy). On the 1080×1920 panel the grid area scrolls when the twelve cards overflow; the footer stays on screen.
+- Footer: "{N} of 13 answered" + "Review & Submit →" (disabled until all 13 answered including pregnancy). On the 1080×1920 panel the grid area scrolls when the twelve cards overflow; the footer stays on screen. **D-68:** on an `assessment` visit that button leads to Screen 8a, not to Review.
+
+#### Screen 8a — Personal / Social History (FR-KSK-10a, D-68 — `assessment` batches only)
+- Shown **only** when the identity payload's server-decided `formType` is `assessment`; screen key `social-history`, partial `kiosk/screens/social-history.blade.php`. A `clearance` student goes from Screen 8 straight to Review and never sees this.
+- Heading **"Personal / Social History"** — section **I** of the Medical Assessment Form's back page — with the confidentiality line **"Your answers are confidential and are seen only by the clinic staff."**
+- **Four full-width rows**, one column, each with the form's label verbatim and the paper's own boxes as large touch buttons:
+  **Smoking** · **Alcohol** · **Illicit Drugs** — **Yes** (orange when selected) / **No** (green) / **Quit** (slate);
+  **Sexually Active** — **Yes** / **No** only.
+- One list: `ScreeningResponse::SOCIAL_HISTORY`, mirrored by the kiosk's JS `SOCIAL_HISTORY`. The three habits store the paper's own word (`yes`|`no`|`quit`); Sexually Active stores a boolean.
+- Footer: **"← Back"** (to Screen 8) + **"Review & Submit →"**, disabled until all four are answered. The 90 s idle reset applies as usual, and every answer lives in the single Alpine `state` object, so reset-to-Welcome clears them wholesale (FR-KSK-13).
+- At the 1080×1920 target the four rows plus header and footer fit without scrolling at `--k-zoom`.
 
 #### Screen 9 — Review
 - "Review Your Submission" in header.
 - Two-column cards: **Vital Signs** (key-value; flagged items in orange + ⚑ — since D-66 that includes Heart Rate and Respiratory Rate) + **Health Questionnaire** (Yes/No badges for the form's twelve rows — D-63 — each YES detail shown under its badge — D-56).
+- **D-68:** on an `assessment` visit a third card, **Personal / Social History**, lists the four answers. Back steps to Screen 8a on an `assessment` visit and to Screen 8 on a `clearance` one — one step through the flow the student actually walked.
 - "Submit to Clinic →" (xl, center).
 
 #### Screen 10 — Complete
@@ -711,6 +730,15 @@ kidney_bladder        boolean NULL
 brain                 boolean NULL
 mental_disorder       boolean NULL
 details               json NULL             -- question key → text typed under a YES (≤120 chars); NULL when none
+-- Personal / Social History (D-68): section I of the Medical Assessment
+-- Form's back page. ALL FOUR ARE NULL on a `clearance` visit — that form has
+-- no such section, so the questions are never asked — and on every visit
+-- captured before D-68. The value list is gated by validation, not by the
+-- column type, so MySQL and the SQLite suite behave identically.
+smoking               varchar(4) NULL       -- 'yes' | 'no' | 'quit'
+alcohol               varchar(4) NULL       -- 'yes' | 'no' | 'quit'
+illicit_drugs         varchar(4) NULL       -- 'yes' | 'no' | 'quit'
+sexually_active       boolean NULL          -- the paper offers only Yes / No here
 is_pregnant           boolean
 last_menstrual_period date NULL             -- required if is_pregnant = true
 created_at, updated_at

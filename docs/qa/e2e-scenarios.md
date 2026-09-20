@@ -1146,6 +1146,110 @@ lines on purpose — the type shrinks first (down to a floor) and the rest is
 cut. That is correct behaviour, not a bug: the clearance must never run to a
 second page. The printout and the PDF must clip at the *same* point.
 
+## E2E-21 — The kiosk follows the batch's form (D-68)
+
+**Goal:** the same student, walked through the kiosk twice on two batches —
+one **Medical Clearance**, one **Medical Assessment Form** — sees a *different*
+set of screens, and only the Assessment visit records a Personal / Social
+History. Since D-68 the form type is decided on the **server**, so the kiosk
+cannot be talked out of it.
+
+**Accounts:** CCS Admin `admin.ccs@healthpass.test`, Director
+`director@healthpass.test`, Student `juan.santos@psu.edu.ph`, Nurse
+`nurse@healthpass.test`. All passwords `password`.
+
+### Part A — a Medical Clearance batch: nothing changes
+
+1. Log in as `admin.ccs@healthpass.test` → **New Batch Request**. Pick the
+   **Medical Clearance** tile, Reason **Field Trip/Educational Tour**, click
+   **today** on the calendar, pick a **Start time** that has not ended yet,
+   tick **Juan Santos**, and submit. Log out.
+2. Log in as `director@healthpass.test` → **Batch Approvals** → **Approve**
+   that batch. Log out.
+3. Open the kiosk at `http://127.0.0.1:8080/kiosk`, click **Lost ID? Log in
+   with email**, sign in as `juan.santos@psu.edu.ph` / `password`, click
+   **That's me — Continue**, then **I Agree — Proceed**.
+4. Enter the four vitals manually (e.g. `165`, `60`, `36.8`, `118`/`76`/`72`).
+5. **Questionnaire.** → **Expect:** the heading reads exactly **"Physical Signs
+   Disorder of:"** — **no "(Self Assessment)"**. Answer **No** to all twelve
+   and to **Are you Pregnant?**, then click **Review & Submit →**.
+6. → **Expect:** you land **straight on Review**. There is **no** Personal /
+   Social History screen and **no** Personal / Social History card — only
+   **Vital Signs** and **Questionnaire**. The Back button reads **"← Back to
+   questionnaire"**.
+7. Click **Submit to Clinic →**. → **Expect:** the Complete screen, and still
+   **no Fit/Unfit anywhere** (FR-KSK-14).
+8. In another tab log in as `nurse@healthpass.test`, open the Live Queue and
+   click **Encode Result** on Juan's visit. → **Expect:** the left column has
+   the Vital Signs and Health Questionnaire cards and **no** "Personal / Social
+   History (from the kiosk)" card. Encode **Fit** and **Save & Close**.
+
+### Part B — a Medical Assessment Form batch: four extra questions
+
+9. Log back in as `admin.ccs@healthpass.test` → **New Batch Request**. This
+   time pick the **Medical Assessment Form** tile, Reason **On-the-job
+   Training**, **today**, a **Start time in a later hour that has not ended**,
+   tick **Juan Santos**, submit. Log out, approve it as the Director, log out.
+10. Open the kiosk again and take Juan through email login → **That's me** →
+    **I Agree** → the four vitals, exactly as before.
+11. **Questionnaire.** → **Expect:** the heading now reads **"Physical Signs
+    Disorder of: (Self Assessment)"**. The twelve cards, their helper lines and
+    the pregnancy question are **unchanged**. Answer all thirteen and click
+    **Review & Submit →**.
+12. → **Expect:** a **new screen**, headed **"Personal / Social History"**,
+    with the line **"Your answers are confidential and are seen only by the
+    clinic staff."** and four rows:
+    - **Smoking** — Yes / No / **Quit**
+    - **Alcohol** — Yes / No / **Quit**
+    - **Illicit Drugs** — Yes / No / **Quit**
+    - **Sexually Active** — **Yes / No only** (no Quit)
+    **Review & Submit →** is **disabled** while any row is unanswered.
+13. Answer **three** of the four and confirm the button is **still disabled**.
+    Then answer the fourth. → **Expect:** it enables.
+14. Click **← Back**. → **Expect:** you are on the questionnaire, answers
+    intact. Click **Review & Submit →** again. → **Expect:** you return to the
+    Personal / Social History with **your four answers still selected**.
+15. Set Smoking = **Quit**, Alcohol = **Yes**, Illicit Drugs = **No**,
+    Sexually Active = **Yes**, then **Review & Submit →**.
+16. **Review.** → **Expect:** a **third card**, **Personal / Social History**,
+    reading Quit / Yes / No / Yes. The Back button now reads **"← Back"** and
+    returns to the Personal / Social History screen, not the questionnaire.
+17. Click **Submit to Clinic →**. → **Expect:** the Complete screen, still with
+    **no Fit/Unfit and no interpretation of any answer**.
+18. As the nurse, open **Encode Result** on this second visit. → **Expect:** a
+    read-only card **"Personal / Social History (from the kiosk)"** in the left
+    column, **under** the Health Questionnaire, showing **Smoking Quit**,
+    **Alcohol Yes**, **Illicit Drugs No**, **Sexually Active Yes**. There is no
+    way to edit them here. Encode **Fit** and **Save & Close**.
+19. Log in as `juan.santos@psu.edu.ph` → **My Records** → **View** on the
+    **second** visit. → **Expect:** the modal's right column lists the twelve
+    Physical Signs rows **and then** a **Personal / Social History** section
+    with the same four answers. Open the **first** visit. → **Expect:** the
+    twelve rows and **no** Personal / Social History section at all.
+
+### Part C — the idle reset still clears it
+
+20. Start a third kiosk session as Juan (he has no third appointment today, so
+    use a student who does, or re-run Part B's steps up to the Personal /
+    Social History screen). Answer two rows, then **walk away for 90 seconds**
+    without touching the screen. → **Expect:** the kiosk returns to Welcome on
+    its own. Log in again and reach that screen: **all four rows are blank** —
+    nothing of the previous student survives (FR-KSK-13/15).
+
+**Pass criteria:** the Clearance walk never shows the new screen, the new card
+or the "(Self Assessment)" heading; the Assessment walk shows all three,
+requires all four answers, and carries them to the encode page and My Records;
+neither walk ever shows Fit/Unfit; and an abandoned Assessment session leaves
+no answers behind.
+
+**Note for the tester:** which screens you see is decided by the **server**
+from today's appointment, not by the browser — and the server decides again
+when you press Submit. There is nothing to click on the kiosk that can change
+the form, and a Clearance visit stores these four fields as blank on purpose,
+because the Medical Clearance form has no Personal / Social History section.
+
+---
+
 ---
 
 ## Recording results

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Student;
 
+use App\Models\Appointment;
+use App\Models\BatchRequest;
 use App\Models\ClearanceRecord;
 use App\Models\ClinicVisit;
 use App\Models\College;
@@ -264,5 +266,67 @@ class RecordsPageTest extends TestCase
             ->assertSee('Pending')        // pending badge present
             ->assertSee('Fit')            // encoded result badge present
             ->assertSee('View');          // encoded action button present
+    }
+
+    // -- 6. Personal / Social History in the modal data (D-68) ----------------
+
+    /** Put a visit on an approved batch that named $formType (D-62). */
+    private function attachBatch(ClinicVisit $visit, string $formType): void
+    {
+        static $seq = 0;
+        $seq++;
+
+        $batch = BatchRequest::create([
+            'reference_no' => sprintf('BR-2026-%03d', $seq),
+            'college_id' => $visit->college_id,
+            'requested_by' => $visit->student_id,
+            'form_type' => $formType,
+            'reason' => $formType === 'assessment' ? 'ojt' : 'fieldtrip',
+            'service_type' => 'medical',
+            'requested_date' => today()->toDateString(),
+            'scheduled_date' => today()->toDateString(),
+            'status' => 'approved',
+        ]);
+
+        $appointment = Appointment::factory()->create([
+            'student_id' => $visit->student_id,
+            'source' => 'batch',
+            'batch_request_id' => $batch->id,
+        ]);
+
+        $visit->update(['appointment_id' => $appointment->id]);
+    }
+
+    public function test_an_assessment_record_carries_its_social_history(): void
+    {
+        $student = $this->student();
+        $visit = $this->makeEncodedVisit($student, $this->nurse(), 'Fit', 'HP-2026-T040');
+        $this->attachBatch($visit, 'assessment');
+        $visit->screeningResponse->update([
+            'smoking' => 'quit',
+            'alcohol' => 'no',
+            'illicit_drugs' => 'no',
+            'sexually_active' => true,
+        ]);
+
+        $response = $this->actingAs($student)->get(route('student.records'));
+
+        $response->assertOk()
+            ->assertSee('Personal / Social History', false)
+            ->assertSee('Illicit Drugs', false)
+            ->assertSee('Quit', false);
+    }
+
+    public function test_a_clearance_record_carries_no_social_history(): void
+    {
+        $student = $this->student();
+        $visit = $this->makeEncodedVisit($student, $this->nurse(), 'Fit', 'HP-2026-T041');
+        $this->attachBatch($visit, 'clearance');
+
+        $response = $this->actingAs($student)->get(route('student.records'));
+
+        // The card only renders when the list is non-empty, so the modal's
+        // JSON must carry an empty list for a form that never asked these.
+        $response->assertOk()->assertSee('"social_history":[]', false);
     }
 }

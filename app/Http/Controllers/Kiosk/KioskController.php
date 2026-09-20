@@ -12,7 +12,6 @@ use App\Models\StudentProfile;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\View\View;
@@ -334,16 +333,22 @@ final class KioskController extends Controller
      * own display/state; they are NOT trusted at submit, which reads identity
      * from the server session instead (see submit()).
      *
-     * `hasAppointmentToday` is computed HERE, server-side, so the schedule
-     * check (FR-KSK-03a) can never be spoofed by client state: the front-end
-     * only uses this boolean to pick which screen to show. Submit re-resolves
-     * the appointment itself and refuses the visit without one (D-61).
+     * `hasAppointmentToday` and `formType` are computed HERE, server-side, so
+     * neither the schedule check (FR-KSK-03a) nor the choice of screens
+     * (D-68) can be spoofed by client state: the front-end only uses them to
+     * pick which screens to show. Submit re-resolves the appointment — and
+     * with it the form type — itself, and refuses the visit without one (D-61).
      */
     private function identityPayload(StudentProfile $profile, string $loginMethod): array
     {
         $first = trim($profile->first_name);
         $last = trim($profile->last_name);
         $initials = mb_strtoupper(mb_substr($first, 0, 1).mb_substr($last, 0, 1));
+
+        // ONE resolution for both fields — and the same one SubmitKioskVisit
+        // uses (Appointment::todayFor), so scan and submit can never pick
+        // different appointments and therefore different forms.
+        $appointment = Appointment::todayFor($profile->user_id);
 
         return [
             'studentUserId' => $profile->user_id,
@@ -355,27 +360,10 @@ final class KioskController extends Controller
             'college' => $profile->college?->name,
             'course' => $profile->course,
             'yearLevel' => $profile->year_level,
-            'hasAppointmentToday' => $this->hasAppointmentToday($profile->user_id),
+            'hasAppointmentToday' => $appointment !== null,
+            // D-62/D-68: which official form today's batch named. The kiosk
+            // uses it ONLY to choose screens — never to decide what is stored.
+            'formType' => $appointment?->formType() ?? 'clearance',
         ];
-    }
-
-    /**
-     * Schedule check (FR-KSK-03a, D-61): does this student hold a `scheduled`
-     * appointment today? When false, the kiosk shows "No Clinic Schedule
-     * Today", which only leads back to Welcome; when true, it goes straight to
-     * Privacy Consent.
-     *
-     * `scheduled` — not merely "not cancelled" — because that is the only kind
-     * of appointment SubmitKioskVisit::todaysAppointmentId() will link. A
-     * student whose appointment today is already `completed` (encoded) would
-     * otherwise pass this screen and be refused only after doing every vital.
-     */
-    private function hasAppointmentToday(int $studentId): bool
-    {
-        return Appointment::query()
-            ->where('student_id', $studentId)
-            ->whereDate('scheduled_date', Carbon::today())
-            ->where('status', 'scheduled')
-            ->exists();
     }
 }

@@ -25,7 +25,10 @@ class RecordsController extends Controller
         // so no cross-student leakage is possible.
         $visits = $request->user()->clinicVisits()
             ->with([
-                'appointment:id,service_type',
+                // D-68: batchRequest carries the form type, which decides
+                // whether the modal shows a Personal / Social History card.
+                'appointment:id,service_type,batch_request_id',
+                'appointment.batchRequest:id,form_type',
                 'vitalSigns',
                 'screeningResponse',
                 'clearanceRecord',

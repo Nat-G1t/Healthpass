@@ -77,6 +77,11 @@ Do not silently reconcile conflicts.
   `vitals` is a single screen with an internal `state.vitalStep` (1–4).
 - The kiosk route is **public** (no Laravel auth) — identity is established
   inside the flow via QR scan / email login.
+- **The screens shown follow the server-resolved form type of today's
+  appointment; submit re-resolves it.** One shared resolution,
+  `Appointment::todayFor()` (the D-54 rule), serves scan/login and submit, so
+  the screens a student saw and the row the server writes can never be about
+  different appointments. A `formType` in the request body is never read.
 - **Kiosk endpoints are network-restricted** (loopback or authenticated
   clinic staff, nurse or physician — `KioskAccess` middleware) but auth-less for the person at the
   terminal. Therefore **NEVER trust client-supplied identity or derived
@@ -176,8 +181,9 @@ npm run dev                       # terminal 2
   physician encoded. (Case categories were dropped by D-32.) Check clinic
   access with `User::isClinicStaff()`, never `role === 'nurse'`.
 - **Kiosk never shows Fit/Unfit to the student.** It captures vitals +
-  the official form's twelve Physical Signs rows (D-63) and routes to the
-  clinic queue (nurse or physician).
+  the official form's twelve Physical Signs rows (D-63) and, for Medical
+  Assessment Form batches, the form's Personal / Social History (D-68), and
+  routes to the clinic queue (nurse or physician).
 - **Students never self-schedule and never walk in (D-61)** — only
   Director-approved college batches create appointments; the kiosk refuses
   a student with no appointment today.

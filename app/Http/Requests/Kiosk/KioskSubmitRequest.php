@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Kiosk;
 
+use App\Models\Appointment;
 use App\Models\ScreeningResponse;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Arr;
 use Illuminate\Validation\Rule;
 
 /**
@@ -17,6 +19,10 @@ use Illuminate\Validation\Rule;
  * the browser already checked — ranges, completeness, consent — because the
  * kiosk is a public endpoint and client checks can be bypassed (NFR security).
  *
+ * Which questions are required at all depends on the batch's form (D-68),
+ * and that form is resolved from the SESSION-bound student's appointment for
+ * today — never from the request body, which could name the other one.
+ *
  * Plausibility bounds come from config/healthpass.php (FR-KSK-08), the SAME
  * source the front-end reads, so the two never drift. The authoritative flag
  * booleans are NOT computed here — they are derived from the stored values in
@@ -26,6 +32,13 @@ final class KioskSubmitRequest extends FormRequest
 {
     /** Answer values the `boolean` rule reads as YES. */
     private const YES_VALUES = [true, 1, '1'];
+
+    /**
+     * Which official form today's appointment named (D-68) — resolved ONCE
+     * per request from the session-bound student, never from the body.
+     * Null until formType() has looked it up.
+     */
+    private ?string $formType = null;
 
     /** The kiosk is public; identity was established earlier in the flow. */
     public function authorize(): bool
@@ -46,6 +59,52 @@ final class KioskSubmitRequest extends FormRequest
      * with a 422 rather than silently cut.
      */
     protected function prepareForValidation(): void
+    {
+        $this->cleanDetails();
+        $this->dropSocialHistoryUnlessAssessment();
+    }
+
+    /**
+     * D-68: only a Medical Assessment Form visit has a Personal / Social
+     * History. On a Medical Clearance visit the four questions were never
+     * asked, so anything posted under `socialHistory` is removed from the
+     * request HERE — before the rules run — and can therefore never reach
+     * validated(), the action, or the database. The decision comes from the
+     * server-resolved form type; a `formType` in the body is never read.
+     */
+    private function dropSocialHistoryUnlessAssessment(): void
+    {
+        if ($this->formType() !== 'assessment') {
+            $this->replace(Arr::except($this->all(), ['socialHistory']));
+        }
+    }
+
+    /**
+     * The form type of today's appointment for the SESSION-bound student
+     * (D-68). `Appointment::todayFor()` is the same resolution
+     * SubmitKioskVisit uses, so the rules below and the row that gets written
+     * always agree about which form this visit is.
+     *
+     * A student with no appointment today falls back to 'clearance': they are
+     * about to be refused by the action anyway (D-61), and this way the
+     * refusal is the schedule message rather than four confusing 422s about
+     * questions they were never shown.
+     */
+    private function formType(): string
+    {
+        if ($this->formType !== null) {
+            return $this->formType;
+        }
+
+        $studentId = $this->session()->get('kiosk.student_id');
+
+        return $this->formType = $studentId === null
+            ? 'clearance'
+            : (Appointment::todayFor((int) $studentId)?->formType() ?? 'clearance');
+    }
+
+    /** The D-56 YES-detail cleaning described above. */
+    private function cleanDetails(): void
     {
         $screening = $this->input('screening');
 
@@ -117,7 +176,30 @@ final class KioskSubmitRequest extends FormRequest
             $rules["screening.{$question}"] = ['required', 'boolean'];
         }
 
+        // Personal / Social History — Medical Assessment Form only (D-68).
+        // On a Medical Clearance visit no rule is added at all, because
+        // prepareForValidation() has already removed the whole block.
+        if ($this->formType() === 'assessment') {
+            $rules['socialHistory'] = ['required', 'array'];
+
+            foreach (['smoking', 'alcohol', 'illicitDrugs'] as $habit) {
+                $rules["socialHistory.{$habit}"] = ['required', Rule::in(ScreeningResponse::SOCIAL_HISTORY_VALUES)];
+            }
+
+            $rules['socialHistory.sexuallyActive'] = ['required', 'boolean'];
+        }
+
         return $rules;
+    }
+
+    /** Plain wording for the four Personal / Social History rows (D-68). */
+    public function messages(): array
+    {
+        return [
+            'socialHistory.required' => 'Please answer the Personal / Social History questions.',
+            'socialHistory.*.required' => 'Please answer all four Personal / Social History questions.',
+            'socialHistory.*.in' => 'Please answer Yes, No or Quit.',
+        ];
     }
 
     /**

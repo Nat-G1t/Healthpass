@@ -25,6 +25,9 @@ export const SCREENS = [
     'consent',
     'vitals',
     'questionnaire',
+    // D-68: Medical Assessment Form batches only — skipped on a Medical
+    // Clearance, whose paper has no Personal / Social History section.
+    'social-history',
     'review',
     'complete',
 ];
@@ -65,6 +68,38 @@ export const SYSTEMS = [
 
 // 12 form rows + the pregnancy item = 13 questions to answer (FR-KSK-10).
 export const QUESTION_COUNT = SYSTEMS.length + 1;
+
+/**
+ * Personal / Social History (FR-KSK-10a, D-68): section I of the Medical
+ * Assessment Form's back page. Pure DATA, like SYSTEMS — the Blade renders
+ * all four rows from this list. `key` is the field in state.socialHistory;
+ * `label` is the form's wording VERBATIM; `options` are the paper's boxes.
+ *
+ * The first three offer a third box, Quit; Sexually Active offers only Yes
+ * and No, which is why it is stored as a boolean and the other three as the
+ * paper's own word.
+ *
+ * Mirrors ScreeningResponse::SOCIAL_HISTORY — keep the two lists in step.
+ */
+export const SOCIAL_HISTORY = [
+    { key: 'smoking', label: 'Smoking', options: ['yes', 'no', 'quit'] },
+    { key: 'alcohol', label: 'Alcohol', options: ['yes', 'no', 'quit'] },
+    { key: 'illicitDrugs', label: 'Illicit Drugs', options: ['yes', 'no', 'quit'] },
+    { key: 'sexuallyActive', label: 'Sexually Active', options: ['yes', 'no'] },
+];
+
+/** The paper's box label for a stored value. */
+export const SOCIAL_HISTORY_LABELS = { yes: 'Yes', no: 'No', quit: 'Quit' };
+
+/**
+ * The questionnaire heading, by form type (D-68). The Medical Assessment Form
+ * labels its own twelve-row table "(Self Assessment)"; the Medical Clearance
+ * does not, so its students see the heading they have always seen.
+ */
+const QUESTIONNAIRE_HEADINGS = {
+    clearance: 'Physical Signs Disorder of:',
+    assessment: 'Physical Signs Disorder of: (Self Assessment)',
+};
 
 // Longest optional detail under a YES answer — the same cap the server enforces
 // (ScreeningResponse::DETAIL_MAX_LENGTH, D-56).
@@ -182,6 +217,13 @@ function freshState() {
         identity: null,
         consentAt: null,
 
+        // Which official form today's batch named (D-68), decided by the
+        // SERVER and copied out of the identity payload at scan/login. It
+        // chooses SCREENS ONLY — the server re-resolves it at submit and never
+        // reads this value, so a tampered copy changes nothing that is stored.
+        // 'clearance' is the neutral default for a fresh session.
+        formType: 'clearance',
+
         // Each vital step is its own 3-phase record (FR-KSK-05): ready →
         // scanning → captured. Steps 1–3 hold a single reading; step 4 (BP)
         // groups systolic/diastolic/heart-rate captured together.
@@ -212,6 +254,13 @@ function freshState() {
             calMonth: null,
         },
 
+        // Personal / Social History (FR-KSK-10a, D-68) — asked only on an
+        // assessment visit. The three habits hold the paper's own word;
+        // sexuallyActive holds true | false. null = unanswered, and all four
+        // must be answered before Continue. Living in `state` means the
+        // reset-to-Welcome wholesale replacement clears them (FR-KSK-13).
+        socialHistory: { smoking: null, alcohol: null, illicitDrugs: null, sexuallyActive: null },
+
         // The docked YES-details panel (D-56). `question` is the key being
         // typed into (null = closed). `shift`/`caps` are the on-screen
         // keyboard's modifiers while it types a detail — kept apart from
@@ -241,6 +290,10 @@ export function kioskMachine() {
         // The form's twelve rows, exposed so Blade can x-for over them
         // (FR-KSK-10) — the cards are data-driven, not twelve copies of markup.
         systemList: SYSTEMS,
+        // The four Personal / Social History rows, so Blade can x-for over
+        // them the same way (D-68), plus the box labels for their buttons.
+        socialHistoryList: SOCIAL_HISTORY,
+        socialHistoryLabels: SOCIAL_HISTORY_LABELS,
         detailMax: DETAIL_MAX, // shown as the details panel's "N / 120" counter
 
         // Web Serial UI status (FR-KSK-07). Lives on the COMPONENT, not in
@@ -958,6 +1011,9 @@ export function kioskMachine() {
         /** Store the resolved student and show Identity Confirm. */
         arriveAtIdentity(identity) {
             this.state.identity = identity;
+            // D-68: the server decided which form today's batch named; we keep
+            // it beside the identity so every later screen reads one value.
+            this.state.formType = identity?.formType === 'assessment' ? 'assessment' : 'clearance';
             this.state.screen = 'identity';
         },
 
@@ -1517,9 +1573,71 @@ export function kioskMachine() {
             return this.answeredCount() === QUESTION_COUNT;
         },
 
-        /** Advance to Review only once every question is answered. */
+        /**
+         * Advance once every question is answered (FR-KSK-10). D-68: an
+         * Assessment student answers the Personal / Social History first; a
+         * Clearance student, whose form has no such section, goes straight to
+         * Review.
+         */
         goReview() {
-            if (this.questionnaireComplete()) this.go('review');
+            if (!this.questionnaireComplete()) return;
+            this.go(this.isAssessment() ? 'social-history' : 'review');
+        },
+
+        // -- Personal / Social History (FR-KSK-10a, D-68) --------------------
+        /** True when today's batch named the Medical Assessment Form. */
+        isAssessment() {
+            return this.state.formType === 'assessment';
+        },
+
+        /** The questionnaire heading for this student's form (D-68). */
+        questionnaireHeading() {
+            return QUESTIONNAIRE_HEADINGS[this.state.formType] ?? QUESTIONNAIRE_HEADINGS.clearance;
+        },
+
+        /**
+         * Record one Personal / Social History answer. Sexually Active is
+         * stored as a boolean because the paper offers it only Yes/No; the
+         * three habits keep the paper's own word.
+         */
+        setSocialHistory(key, value) {
+            this.state.socialHistory = {
+                ...this.state.socialHistory,
+                [key]: key === 'sexuallyActive' ? value === 'yes' : value,
+            };
+        },
+
+        /** Whether this row currently holds `value` — drives the button styling. */
+        socialHistoryAnswer(key, value) {
+            const stored = this.state.socialHistory[key];
+            return key === 'sexuallyActive' ? stored === (value === 'yes') : stored === value;
+        },
+
+        /** All four answered -> Continue unlocks. */
+        socialHistoryComplete() {
+            return SOCIAL_HISTORY.every(({ key }) => this.state.socialHistory[key] !== null);
+        },
+
+        /** Continue -> Review, only once all four are answered. */
+        goReviewFromSocialHistory() {
+            if (this.socialHistoryComplete()) this.go('review');
+        },
+
+        /** One row's answer as the paper words it, for the Review card. */
+        socialHistoryLabel(key) {
+            const stored = this.state.socialHistory[key];
+            if (stored === null) return '';
+            if (key === 'sexuallyActive') return stored ? 'Yes' : 'No';
+            return SOCIAL_HISTORY_LABELS[stored] ?? '';
+        },
+
+        /**
+         * Review's Back button. It steps back through the ORDERED flow, so an
+         * Assessment student lands on their Personal / Social History and a
+         * Clearance student, who never saw that screen, on the questionnaire.
+         */
+        backFromReview() {
+            this.go(this.isAssessment() ? 'social-history' : 'questionnaire');
         },
 
         // ── Submit to clinic (FR-KSK-11 → stub) ──────────────────────────────
@@ -1565,6 +1683,11 @@ export function kioskMachine() {
                     isPregnant: q.isPregnant,
                     lastMenstrualPeriod: q.lmp,
                 },
+                // D-68: sent only when this student's form has the section. The
+                // server decides that for itself either way — it drops the block
+                // on a Clearance visit and requires it on an Assessment one,
+                // whatever the browser sends.
+                ...(this.isAssessment() ? { socialHistory: { ...this.state.socialHistory } } : {}),
             };
         },
 

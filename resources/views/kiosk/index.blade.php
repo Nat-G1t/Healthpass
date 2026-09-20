@@ -194,6 +194,8 @@
                 @include('kiosk.screens.consent')
                 @include('kiosk.screens.vitals')
                 @include('kiosk.screens.questionnaire')
+                {{-- D-68: shown only on a Medical Assessment Form visit. --}}
+                @include('kiosk.screens.social-history')
                 @include('kiosk.screens.review')
                 @include('kiosk.screens.complete')
 

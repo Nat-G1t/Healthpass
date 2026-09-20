@@ -27,7 +27,9 @@
         {{-- Header --}}
         <div class="flex flex-col items-center gap-2 text-center">
             <span class="rounded-full bg-hp-peach/40 px-3.5 py-1 text-xs font-semibold uppercase tracking-widest text-hp-orange">Questionnaire</span>
-            <h1 class="text-2xl font-semibold text-hp-slate">Physical Signs Disorder of:</h1>
+            {{-- D-68: an Assessment student's form labels this table
+                 "(Self Assessment)"; a Clearance student's does not. --}}
+            <h1 class="text-2xl font-semibold text-hp-slate" x-text="questionnaireHeading()"></h1>
             <p class="text-base text-hp-slate/60">Answer YES or NO for each.</p>
         </div>
 

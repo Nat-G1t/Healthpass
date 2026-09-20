@@ -635,4 +635,53 @@ class EncodePageTest extends TestCase
             ->assertOk()
             ->assertDontSee('Irregular pulse');
     }
+
+    // -- Personal / Social History card (D-68) --------------------------------
+
+    public function test_an_assessment_visit_shows_the_personal_social_history_card(): void
+    {
+        $visit = $this->makeVisit();
+        $this->attachBatch($visit, 'assessment', 'ojt');
+        $visit->screeningResponse->update([
+            'smoking' => 'quit',
+            'alcohol' => 'yes',
+            'illicit_drugs' => 'no',
+            'sexually_active' => true,
+        ]);
+
+        $this->actingAs($this->nurse())
+            ->get(route('nurse.visits.encode', $visit))
+            ->assertOk()
+            ->assertSee('Personal / Social History (from the kiosk)')
+            ->assertSee('Smoking')
+            ->assertSee('Quit')
+            ->assertSee('Illicit Drugs')
+            ->assertSee('Sexually Active');
+    }
+
+    public function test_a_clearance_visit_shows_no_personal_social_history_card(): void
+    {
+        // The Medical Clearance has no such section, so the student was never
+        // asked and the clinic is shown nothing.
+        $visit = $this->makeVisit();
+        $this->attachBatch($visit, 'clearance', 'fieldtrip');
+
+        $this->actingAs($this->nurse())
+            ->get(route('nurse.visits.encode', $visit))
+            ->assertOk()
+            ->assertDontSee('Personal / Social History');
+    }
+
+    public function test_an_assessment_visit_captured_before_d68_renders_dashes(): void
+    {
+        // Four NULLs must render as "-" rather than crash or read as "No".
+        $visit = $this->makeVisit();
+        $this->attachBatch($visit, 'assessment', 'sports');
+
+        $this->actingAs($this->nurse())
+            ->get(route('nurse.visits.encode', $visit))
+            ->assertOk()
+            ->assertSee('Personal / Social History (from the kiosk)')
+            ->assertDontSee('Quit');
+    }
 }

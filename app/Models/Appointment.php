@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Carbon;
 
 class Appointment extends Model
 {
@@ -65,6 +66,69 @@ class Appointment extends Model
         }
 
         return app(ClinicScheduleService::class)->label($this->scheduled_time);
+    }
+
+    /**
+     * Today's open appointment for this student, or null — THE one definition
+     * the kiosk uses, at scan/login and again at submit (D-54, D-61, D-68).
+     *
+     * It lives on the model, not in a controller, so the screen the kiosk
+     * shows and the visit the server writes can never disagree about which
+     * appointment (and therefore which form — D-68) today's session is.
+     *
+     * Only a `scheduled` appointment counts. Matching "not cancelled" would
+     * also catch `completed`, so a student returning after the nurse already
+     * encoded their morning visit would re-link that finished appointment; a
+     * second visit with no open appointment is refused instead (D-61).
+     *
+     * D-54: a student may legitimately hold two appointments on one day (seats
+     * on two batches whose hours don't overlap — BR-25), so the winner is the
+     * one whose hour STARTS closest to now(); a tie goes to the earlier hour.
+     * A row with no hour (pre-D-37) has nothing to measure, so it wins only
+     * when no timed appointment exists (lowest id first).
+     *
+     * `batchRequest` is eager-loaded because every caller then asks formType().
+     */
+    public static function todayFor(int $studentId): ?self
+    {
+        $appointments = self::query()
+            ->where('student_id', $studentId)
+            ->whereDate('scheduled_date', Carbon::today())
+            ->where('status', 'scheduled')
+            ->with('batchRequest:id,form_type')
+            ->orderBy('id')
+            ->get();
+
+        $timed = $appointments->whereNotNull('scheduled_time');
+
+        if ($timed->isEmpty()) {
+            return $appointments->first();
+        }
+
+        $checkIn = now()->getTimestamp();
+
+        // Seconds between check-in and the start of the appointment's hour.
+        $distance = fn (self $appointment): int => abs(
+            Carbon::parse(Carbon::today()->toDateString().' '.$appointment->scheduled_time)->getTimestamp() - $checkIn
+        );
+
+        // Closest first; on a tie, the earlier hour ('H:i:s' keys sort as times).
+        return $timed
+            ->sort(fn (self $a, self $b): int => [$distance($a), $a->scheduled_time] <=> [$distance($b), $b->scheduled_time])
+            ->first();
+    }
+
+    /**
+     * Which official form this appointment's batch named — 'clearance' or
+     * 'assessment' (D-62). A legacy appointment with no batch behind it used
+     * the Medical Clearance.
+     *
+     * D-68: this is what decides which screens the kiosk shows and which
+     * questions it asks. Callers should eager-load `batchRequest`.
+     */
+    public function formType(): string
+    {
+        return $this->batchRequest?->form_type ?? 'clearance';
     }
 
     /**

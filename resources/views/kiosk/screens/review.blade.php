@@ -1,13 +1,14 @@
-﻿{{-- Review (FR-KSK-11): two cards — Vital Signs and Questionnaire — then
-     "Submit to Clinic →". Flagged vitals show in orange with a ⚑; those flags
+﻿{{-- Review (FR-KSK-11): two cards — Vital Signs and Questionnaire — plus, on a
+     Medical Assessment Form visit only, a third for the Personal / Social
+     History (D-68) — then "Submit to Clinic →". Flagged vitals show in orange with a ⚑; those flags
      are DISPLAY-TIME ONLY, computed client-side from the thresholds published
      into the page from config (tempFlagged / bpFlagged / bmiFlagged, the same
      helpers the vitals badges use). The AUTHORITATIVE flag booleans are computed
      SERVER-side at submit (§7.4, FR-KSK-12). Per FR-KSK-14 the kiosk still never
      shows Fit/Unfit — only the neutral per-vital ⚑.
 
-     The two cards STACK vertically (was side-by-side on the old landscape
-     panel) — the 1080×1920 portrait screen has the height for both; the
+     The cards STACK vertically (was side-by-side on the old landscape
+     panel) — the 1080×1920 portrait screen has the height for them; the
      middle area scrolls as one column if anything overflows. --}}
 <section class="kiosk-screen" x-show="state.screen === 'review'" x-cloak
          x-transition:enter="transition ease-hp-out duration-hp-base"
@@ -110,6 +111,29 @@
                     </div>
                 </div>
             </div>
+
+            {{-- ── Personal / Social History card (D-68) — Medical Assessment
+                 Form visits only; a Clearance student was never asked these,
+                 so the card is not rendered at all for them ─────────────── --}}
+            <div class="rounded-2xl bg-hp-white p-5 shadow-sm" x-show="isAssessment()" x-cloak>
+                <p class="text-sm font-semibold uppercase tracking-wider text-hp-slate/50">Personal / Social History</p>
+                <div class="mt-2 flex flex-col divide-y divide-hp-slate/10">
+                    <template x-for="row in socialHistoryList" :key="row.key">
+                        <div class="flex items-center justify-between gap-2 py-2">
+                            <span class="text-base text-hp-slate/70" x-text="row.label"></span>
+                            <span
+                                class="rounded-full px-3 py-1 text-sm font-semibold"
+                                :class="socialHistoryAnswer(row.key, 'yes')
+                                    ? 'bg-hp-orange/15 text-hp-orange'
+                                    : (socialHistoryAnswer(row.key, 'no')
+                                        ? 'bg-emerald-50 text-emerald-600'
+                                        : 'bg-hp-slate/10 text-hp-slate')"
+                                x-text="socialHistoryLabel(row.key)"
+                            ></span>
+                        </div>
+                    </template>
+                </div>
+            </div>
         </div>
 
         {{-- Submit error (network / server) — fades in with one shake (§7). --}}
@@ -121,9 +145,13 @@
         <div class="mt-4 flex items-center justify-between">
             <button
                 type="button"
-                @click="go('questionnaire')"
+                {{-- D-68: back one screen in the ordered flow — the Personal /
+                     Social History for an Assessment student, the questionnaire
+                     for a Clearance one. --}}
+                @click="backFromReview()"
                 class="rounded-lg px-3 py-3 text-base font-medium text-hp-slate/60 transition hover:text-hp-orange"
-            >← Back to questionnaire</button>
+                x-text="isAssessment() ? '← Back' : '← Back to questionnaire'"
+            ></button>
             <button
                 type="button"
                 @click="submitToClinic()"

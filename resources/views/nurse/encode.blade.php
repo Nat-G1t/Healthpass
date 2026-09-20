@@ -6,7 +6,8 @@
        $readOnly = true  → encoded visit, same screen locked + Reprint
 
      Left column: everything the nurse assesses FROM (identity, vitals,
-     questionnaire) — all server-frozen capture-time values. Right column:
+     questionnaire, and on an Assessment visit the Personal / Social History —
+     D-68) — all server-frozen capture-time values. Right column:
      the assessment form itself. Save & Close encodes (FR-NRS-04); Preview &
      Print / Reprint post the form into a hidden print iframe (FR-NRS-05).
 ──────────────────────────────────────────────────────────────────────────────── --}}
@@ -335,6 +336,35 @@
                 <p class="mt-3 text-sm text-hp-slate/40">No questionnaire recorded for this visit.</p>
             @endif
         </x-hp.card>
+
+        {{-- ── Personal / Social History (D-68) — Medical Assessment Form
+             visits only. Read-only: it is the student's own answer to section I
+             of the form's back page, captured at the kiosk. A Medical Clearance
+             visit has no such section, so this card is not rendered at all. --}}
+        @if ($sr && $visit->formType() === 'assessment')
+            <x-hp.card>
+                <h3 class="text-sm font-semibold text-hp-slate">Personal / Social History (from the kiosk)</h3>
+                <p class="mt-0.5 text-xs text-hp-slate/50">Section I of the Medical Assessment Form, in the student's own words.</p>
+                <div class="mt-2 grid gap-x-8 sm:grid-cols-2">
+                    @foreach ($sr->socialHistoryRows() as $row)
+                        <div class="flex items-center justify-between gap-3 border-b border-hp-slate/10 py-2">
+                            <span class="text-sm text-hp-slate/70">{{ $row['label'] }}</span>
+                            @if ($row['answer'] === null)
+                                <span class="text-xs text-hp-slate/40">—</span>
+                            @else
+                                {{-- Kiosk colour language: orange = reported, green = no. --}}
+                                <span class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold
+                                             @if ($row['answer'] === 'Yes') bg-hp-orange/15 text-hp-orange
+                                             @elseif ($row['answer'] === 'No') bg-emerald-50 text-emerald-600
+                                             @else bg-hp-slate/10 text-hp-slate @endif">
+                                    {{ $row['answer'] }}
+                                </span>
+                            @endif
+                        </div>
+                    @endforeach
+                </div>
+            </x-hp.card>
+        @endif
     </div>
 
     {{-- ══ Right column — the assessment form (FR-NRS-03) ══════════════════════ --}}

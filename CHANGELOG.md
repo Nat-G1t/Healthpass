@@ -4,6 +4,51 @@
 
 ### Added
 
+* **The kiosk follows the batch's form: Medical Assessment Form students
+  also answer the Personal / Social History** (D-68). Requested by the clinic
+  on 2026-09-18; **pending adviser sign-off**. **FLAGGED SCHEMA CHANGE:**
+  `screening_responses` gains `smoking`, `alcohol`, `illicit_drugs`
+  (VARCHAR(4) NULL — `yes` | `no` | `quit`) and `sexually_active`
+  (BOOLEAN NULL). No new table, no new package.
+  - **The form type is decided on the server, twice.** `KioskController`
+    resolves today's appointment at QR scan and email login and puts
+    `formType: 'clearance'|'assessment'` in the identity payload; the kiosk
+    uses it **only** to choose screens. `SubmitKioskVisit` re-resolves it at
+    submit and never reads a posted one. Both go through the new
+    **`Appointment::todayFor()`** — the D-54 resolution lifted out of
+    `SubmitKioskVisit` onto the model — so scan and submit can never pick
+    different appointments, and therefore never different forms.
+  - **New kiosk screen** `kiosk/screens/social-history.blade.php`, between the
+    questionnaire and Review and shown only for `assessment`: section I of the
+    Medical Assessment Form's back page — Smoking, Alcohol and Illicit Drugs
+    (Yes / No / **Quit**) and Sexually Active (Yes / No), with the line
+    "Your answers are confidential and are seen only by the clinic staff."
+    All four are required; Back returns to the questionnaire; the idle reset
+    applies as usual. Every answer lives in the single Alpine `state` object,
+    so reset-to-Welcome still clears the session by wholesale replacement.
+  - **Assessment students see "Physical Signs Disorder of: (Self Assessment)"**
+    — that form's own label for the twelve-row table — and a third **Personal /
+    Social History** card on Review. Review's Back now steps back one screen
+    through the flow the student actually walked.
+  - **A Medical Clearance visit stores four NULLs.** That form has no such
+    section, so the questions are never asked and the absence is the honest
+    record. `KioskSubmitRequest` **drops** the whole block in
+    `prepareForValidation()` on a `clearance` visit — posted values can never
+    reach `validated()`, the action or the database — and **requires** all four
+    on an `assessment` visit, rejecting a value outside `yes|no|quit` with a
+    422. Forging `formType` in the body changes nothing either way.
+  - **Clinic and student views:** the encode page gains a read-only
+    "Personal / Social History (from the kiosk)" card under the questionnaire
+    on Assessment visits only, and My Records shows the four answers in the
+    record modal. An unanswered row renders "—" everywhere.
+  - Seeders give Assessment demo visits answers (all three boxes appear) and
+    Clearance ones NULLs. **Reseed the dev DB.**
+  - Tests: `Tests\Feature\Kiosk\KioskSocialHistoryTest` (14) covers the
+    payload, both submit paths, the forged form type, an invalid value and
+    that scan and submit agree on one appointment; `EncodePageTest` and
+    `RecordsPageTest` gain the per-form cards; `tests/js/kiosk-state-machine.test.js`
+    covers the flow with and without the screen and that reset clears it.
+
 * **The Medical Clearance is rebuilt to revision R04, and the clinic can
   save it as a PDF** (D-67). Requested by the clinic on 2026-09-18 (form
   revision R04); dompdf approved by Nat 2026-09-18; **pending adviser

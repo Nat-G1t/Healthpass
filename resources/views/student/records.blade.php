@@ -42,6 +42,11 @@
                 ])
                 ->values()
                 ->all(),
+            // D-68: section I of the Medical Assessment Form, or an empty list
+            // on a Medical Clearance visit, which never asks these questions.
+            'social_history' => $v->formType() === 'assessment' && $v->screeningResponse
+                ? $v->screeningResponse->socialHistoryRows()
+                : [],
         ])
         ->values()
         ->toArray();
@@ -340,7 +345,8 @@ function recordsPageData() {
                     </div>
 
                     {{-- Right: the form's twelve Physical Signs rows (D-63), with
-                         the student's own details under each Yes --}}
+                         the student's own details under each Yes, then the
+                         Personal / Social History on an Assessment visit (D-68) --}}
                     <div class="p-6">
                         <p class="mb-4 text-[11px] font-semibold uppercase
                                   tracking-widest text-hp-slate/40">Questionnaire</p>
@@ -367,6 +373,34 @@ function recordsPageData() {
                                 </div>
                             </template>
                         </dl>
+
+                        {{-- Personal / Social History (D-68) — the student's own
+                             answers on a Medical Assessment Form visit. Absent
+                             on a Clearance visit, which never asks them. --}}
+                        <template x-if="rec.social_history.length">
+                            <div class="mt-6 border-t border-hp-slate/10 pt-4">
+                                <p class="mb-4 text-[11px] font-semibold uppercase
+                                          tracking-widest text-hp-slate/40">Personal / Social History</p>
+
+                                <dl class="space-y-3">
+                                    <template x-for="row in rec.social_history" :key="row.label">
+                                        <div class="flex items-start justify-between gap-3">
+                                            <dt class="min-w-0 text-sm text-hp-slate/55" x-text="row.label"></dt>
+                                            <dd class="shrink-0">
+                                                <span class="inline-flex items-center rounded-full
+                                                             px-2.5 py-0.5 text-[11px] font-semibold
+                                                             leading-none"
+                                                      :class="row.answer === 'Yes'
+                                                              ? 'bg-hp-peach text-hp-orange'
+                                                              : 'bg-hp-slate/10 text-hp-slate'"
+                                                      x-text="row.answer ?? '—'">
+                                                </span>
+                                            </dd>
+                                        </div>
+                                    </template>
+                                </dl>
+                            </div>
+                        </template>
                     </div>
 
                 </div>

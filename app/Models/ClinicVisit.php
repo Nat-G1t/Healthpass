@@ -98,7 +98,10 @@ class ClinicVisit extends Model
      */
     public function formType(): string
     {
-        return $this->appointment?->batchRequest?->form_type ?? 'clearance';
+        // One definition, on the appointment (D-68) — the kiosk reads the same
+        // one at scan and at submit, so a visit's form can never disagree with
+        // the screens the student was actually shown.
+        return $this->appointment?->formType() ?? 'clearance';
     }
 
     /**
