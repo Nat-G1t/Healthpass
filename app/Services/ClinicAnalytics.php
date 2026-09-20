@@ -30,7 +30,7 @@ use Illuminate\Support\Facades\DB;
  *  - Clinic Visits by College (FR-ANL-09) / by Program (FR-ADM-08): kiosk
  *    check-ins per unit, with a Visits-by-Purpose breakdown from the linked
  *    appointments.
- *  - Vital-Sign Flags (FR-ANL-10): count + rate per flag column.
+ *  - Vital-Sign Flags (FR-ANL-10): count + rate per flag column (five since D-66).
  *  - Visits per Month trend (FR-ANL-11): whole-year, ignores the month.
  *  - BMI Distribution (FR-ANL-12): four rule-based buckets.
  *  - Students Screened by Sex (FR-ANL-04 as amended).
@@ -278,6 +278,14 @@ final class ClinicAnalytics
                 $tile('High Blood Pressure', 'is_bp_flagged', "≥ {$thresholds['bp_systolic']}/{$thresholds['bp_diastolic']} · locked threshold"),
                 $tile('Fever', 'is_temp_flagged', "> {$thresholds['temperature_max']} °C · per PRD business rule"),
                 $tile('Abnormal BMI', 'is_bmi_flagged', "BMI ≥ {$thresholds['bmi_obese']} · flagged at capture"),
+                // D-66. The heart-rate tile counts captures like the three
+                // above; the respiratory-rate one can only count visits the
+                // clinic has encoded, because that is where the rate is
+                // measured (D-65) — its rate therefore reads low against a
+                // month still being encoded, which the caption says outright.
+                $tile('High Heart Rate', 'is_hr_flagged', "> {$thresholds['heart_rate_max']} bpm · flagged at capture"),
+                $tile('Abnormal Respiratory Rate', 'is_rr_flagged',
+                    "outside {$thresholds['respiratory_rate_min']}–{$thresholds['respiratory_rate_max']}/min · measured by the clinic at encode"),
             ],
         ];
     }

@@ -184,8 +184,12 @@ Director analytics and flagged anomalies update from encoded records
 | Temperature | 36.1–37.2 °C | > 37.2 °C |
 | Blood pressure | < 120/80 mmHg | Systolic ≥ 140 OR diastolic ≥ 90 mmHg |
 | BMI | 18.5–24.9 | ≥ 30.0 (obese) |
+| Heart rate **(D-66)** | 60–100 bpm | > 100 bpm — **no low-HR flag**, a resting rate under 60 is common in healthy young students |
+| Respiratory rate **(D-66)** | 12–20 breaths/min | < 12 **or** > 20 breaths/min |
 
 Flags appear in the nurse queue's "Flags" column and the Director's Flagged Anomalies screen. BMI = weight(kg) ÷ height(m)².
+
+**When each flag is computed (D-66).** Four of the five are computed at **kiosk capture**, in `SubmitKioskVisit`, and stored as booleans. `is_rr_flagged` is the exception: the kiosk has **no sensor** for a respiratory rate (D-65), so that flag is computed at **encode**, in the same transaction that writes `vital_signs.respiratory_rate`. Until then it is `false`, meaning "not measured yet" — not "normal". Both rules live as static helpers on `App\Models\VitalSigns` (`isHeartRateFlagged()`, `isRespiratoryRateFlagged()`), shared by the kiosk submit, the encode controller and the seeders, and every threshold comes from `config('healthpass.thresholds')` (BR-13). Nothing is ever derived in the browser or read from a request body.
 
 ### Clearance encoding
 - ~~Only the **Nurse** encodes (4 roles total — no Doctor login).~~ **D-64:** a **nurse or the University Physician** encodes (5 roles total); `encoded_by` records who.
@@ -370,7 +374,7 @@ Every page in this section is shared by the nurse and the University Physician. 
 
 #### Live Queue (`nurse-dashboard`)
 - **Header**: blinking LIVE dot + "LIVE QUEUE" pill (peach bg, orange text) + "{n} students waiting · updated just now".
-- **Queue table** (full-width card, no outer padding): Student (avatar initials + name; first row tagged "NEXT" badge + highlighted peach-35 row — the longest-waiting student), College, **Vitals Summary** (all values inline, flagged values bold orange), **Flags** (flagged-variant badges for temp/bp/bmi, or "—"), Time (waiting since), Action ("Encode Result" button — primary for row 1, ghost for others).
+- **Queue table** (full-width card, no outer padding): Student (avatar initials + name; first row tagged "NEXT" badge + highlighted peach-35 row — the longest-waiting student), College, **Vitals Summary** (all values inline, flagged values bold orange), **Flags** (flagged-variant badges for temp/bp/bmi **and HR since D-66**, or "—" — there is no RR badge here: that vital is only measured at encode), Time (waiting since), Action ("Encode Result" button — primary for row 1, ghost for others).
 - Queue = clinic visits with status `captured`, ordered by `checked_in_at` asc (oldest first = top row — **first come, first served**). The top row is the next student to serve; new kiosk submissions append at the bottom.
 - Refresh by **polling** (every 3–5 seconds via `setInterval` + `fetch`) — meets SM-2 (queue reflects a submission within ≤ 5 s).
 - Sidebar "Enable Kiosk Mode" opens the nurse **Kiosk Devices** page (D-27): enroll the current browser/terminal as a trusted kiosk device, list enrolled devices, and revoke each. Reaching `/kiosk` requires a device-enrolled token **OR** an active nurse **OR** config-allowed loopback; everyone else sees a friendly branded restricted-access page (see the KioskAccess middleware).
@@ -449,15 +453,15 @@ then nurse-edited).
 > removed). The approved layout is `docs/prototypes/web/director-analytics-rescope.html`.
 - **Filters** (FR-ANL-13): the existing month picker + a new **college dropdown** (default "All colleges"). Both scope every card except the Visits-per-Month trend.
 - **Clinic Visits by College** (FR-ANL-09) — horizontal bar chart, one row per college (all 11 since D-43, zero-visit rows included), **a single Visits series in `#FF8C2A` — D-60 dropped the Medical / Dental split and its legend** — sorted by visits descending, total-visits headline, "View as table" toggle (college × visits). Visits = kiosk check-ins (`clinic_visits`, capture-time `college_id` snapshot). Includes a **Visits by Purpose** mini bar chart from the linked appointment's `purpose`/`purpose_other`; visits with no linked appointment or purpose fall into a "Not specified" bucket ("Walk-in / not specified" until D-61).
-- **Vital-Sign Flags** (FR-ANL-10) — three stat tiles (High BP, Fever, Abnormal BMI), each showing count **and rate** (% of the month's captured screenings). Recomputed server-side from `vital_signs` flags.
+- **Vital-Sign Flags** (FR-ANL-10) — **five** stat tiles since D-66 (High BP, Fever, Abnormal BMI, **High Heart Rate**, **Abnormal Respiratory Rate**), each showing count **and rate** (% of the month's captured screenings — the same denominator for all five). Recomputed server-side from `vital_signs` flags; every caption is built from `config('healthpass.thresholds')`, and the respiratory-rate tile's caption says "measured by the clinic at encode" because only encoded visits can contribute to its count. The College Admin's page and the printed monthly report carry the same five.
 - **Visits per Month** (FR-ANL-11) — line chart across all months with data, **one series**: clinic visits (D-60 dropped the dental series and its legend). Ignores the page filters by design (whole-year, all-college).
 - **Students Screened by Sex** (FR-ANL-04, retitled from "By-Sex donut") — Chart.js donut, 160px, Male (orange) + Female (peach), centre total, legend with count + %. Counts students screened (captured kiosk visits), so it already fits the system-collected scope; now obeys the college filter too.
 - **BMI Distribution** (FR-ANL-12, optional) — four rule-based buckets of captured screenings: Underweight (< 18.5), Normal (18.5–24.9), Overweight (25–29.9), Obese (≥ 30). Descriptive only, no profiling (no-AI lock).
 
 #### Flagged Anomalies (`director-flagged`)
-- **3 stat cards** (orange left border): High Blood Pressure count, Fever count, Abnormal BMI count.
+- **5 stat cards** (orange left border, D-66): High Blood Pressure, Fever, Abnormal BMI, **High Heart Rate**, **Abnormal Respiratory Rate** — each subtitle quoting its threshold from config.
 - **Table**: Student (600), College (muted — capture-time `clinic_visits.college_id` snapshot, not the student's current college), Flag (flagged badge), Value (orange 700), View (link). **The Category column is dropped (D-32).**
-- Source: clinic visits where `vital_signs.is_bp_flagged OR is_temp_flagged OR is_bmi_flagged` = true, joined to student name and the visit's snapshot college.
+- Source: `ClinicVisit::scopeFlagged()` — clinic visits where `vital_signs.is_bp_flagged OR is_temp_flagged OR is_bmi_flagged OR is_hr_flagged OR is_rr_flagged` = true (D-66), joined to student name and the visit's snapshot college. That one scope is also what the Director dashboard preview and the D-57 sidebar badge count, so all three moved together.
 - No Export button (FR-ANL-06 removed by D-32).
 
 ---
@@ -517,6 +521,7 @@ Each vital screen has:
 | 1/4 | Height | 📏 | Ultrasonic sensor. Captured: e.g. 163 cm, "Normal" badge. |
 | 2/4 | Weight | ⚖️ | Load cell scale. Captured: e.g. 64 kg + computed BMI panel (peach bg, shows BMI + status badge + "from Xcm + Ykg"). |
 | 3/4 | Temperature | 🌡️ | IR forehead thermometer. Captured: e.g. 37.9°C, "Slightly Elevated" (flagged badge), normal range note. |
+| — | *(BP step, heart-rate panel)* | ❤️ | **D-66:** the heart-rate sub-panel carries a status badge reading **"Normal" or "High"** (> 100 bpm, from the injected `thresholds.hrMax`) — a status, never an interpretation, and never Fit/Unfit. |
 | 4/4 | Blood Pressure | 💪 | Cuff BP monitor. Has its own instruction step ("Place your arm in the cuff") before measuring. Pulsing arm emoji during scan. Captured: e.g. 145/92 mmHg "Elevated — Flagged" + Heart Rate in peach panel (78 bpm, Normal badge). |
 
 #### Screen 8 — Questionnaire (rewritten by D-56; rows replaced by D-63)
@@ -530,7 +535,7 @@ Each vital screen has:
 
 #### Screen 9 — Review
 - "Review Your Submission" in header.
-- Two-column cards: **Vital Signs** (key-value; flagged items in orange + ⚑) + **Health Questionnaire** (Yes/No badges for the form's twelve rows — D-63 — each YES detail shown under its badge — D-56).
+- Two-column cards: **Vital Signs** (key-value; flagged items in orange + ⚑ — since D-66 that includes Heart Rate and Respiratory Rate) + **Health Questionnaire** (Yes/No badges for the form's twelve rows — D-63 — each YES detail shown under its badge — D-56).
 - "Submit to Clinic →" (xl, center).
 
 #### Screen 10 — Complete
@@ -675,6 +680,8 @@ entry_method          enum('sensor','manual','mixed') DEFAULT 'sensor'  -- prove
 is_temp_flagged       boolean DEFAULT false
 is_bp_flagged         boolean DEFAULT false
 is_bmi_flagged        boolean DEFAULT false
+is_hr_flagged         boolean DEFAULT false -- heart rate > thresholds.heart_rate_max (100 bpm); computed at kiosk capture (D-66)
+is_rr_flagged         boolean DEFAULT false -- respiratory rate outside 12-20; computed at ENCODE, with respiratory_rate (D-66)
 bp_device_reading     json NULL             -- Bluetooth BP monitor's record of the reading (irregular_pulse flag, raw hex, device_model …); NULL if typed/serial, never backfilled (D-58)
 created_at, updated_at
 ```

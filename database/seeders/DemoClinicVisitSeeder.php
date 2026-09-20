@@ -134,7 +134,12 @@ class DemoClinicVisitSeeder extends Seeder
     private function encodedVitals(ClinicVisit $visit, int $respiratoryRate, array $corrections = []): array
     {
         $vs = $visit->vitalSigns()->firstOrFail();
-        $vs->update(['respiratory_rate' => $respiratoryRate]);
+        // D-66: the flag comes from the SAME helper the encode controller uses,
+        // so seeded demo rows can never disagree with a real encode.
+        $vs->update([
+            'respiratory_rate' => $respiratoryRate,
+            'is_rr_flagged' => VitalSigns::isRespiratoryRateFlagged($respiratoryRate),
+        ]);
 
         $confirmed = [
             'height_cm' => (float) $vs->height_cm,
@@ -210,6 +215,7 @@ class DemoClinicVisitSeeder extends Seeder
             'is_bmi_flagged' => false,
             'is_temp_flagged' => false,
             'is_bp_flagged' => false,
+            'is_hr_flagged' => VitalSigns::isHeartRateFlagged(74),
         ]);
         ScreeningResponse::create([
             'clinic_visit_id' => $v1->id,
@@ -251,6 +257,7 @@ class DemoClinicVisitSeeder extends Seeder
             'is_bmi_flagged' => false,
             'is_temp_flagged' => false,
             'is_bp_flagged' => true,
+            'is_hr_flagged' => VitalSigns::isHeartRateFlagged(88),
         ]);
         ScreeningResponse::create([
             'clinic_visit_id' => $v2->id,
@@ -300,6 +307,7 @@ class DemoClinicVisitSeeder extends Seeder
             'is_bmi_flagged' => false,
             'is_temp_flagged' => false,
             'is_bp_flagged' => false,
+            'is_hr_flagged' => VitalSigns::isHeartRateFlagged(79),
         ]);
         ScreeningResponse::create([
             'clinic_visit_id' => $v3->id,
@@ -341,6 +349,7 @@ class DemoClinicVisitSeeder extends Seeder
             'is_bmi_flagged' => false,
             'is_temp_flagged' => false,
             'is_bp_flagged' => false,
+            'is_hr_flagged' => VitalSigns::isHeartRateFlagged(76),
         ]);
         ScreeningResponse::create([
             'clinic_visit_id' => $v4->id,
@@ -348,7 +357,7 @@ class DemoClinicVisitSeeder extends Seeder
             'is_pregnant' => false,
         ]);
 
-        // ── Captured visit 5 — Maria Reyes, Pending, temperature flagged ──────
+        // ── Captured visit 5 — Maria Reyes, Pending, temperature + HR flagged ─
         $v5 = ClinicVisit::create([
             'reference_no' => 'HP-2026-9005',
             'student_id' => $maria->id,
@@ -366,13 +375,14 @@ class DemoClinicVisitSeeder extends Seeder
             'weight_kg' => 52.5,
             'bmi' => 20.9,
             'temperature_c' => 38.1,  // fever → flagged
-            'heart_rate_bpm' => 95,
+            'heart_rate_bpm' => 112,  // D-66: > 100 → flagged, as a fever often runs
             'bp_systolic' => 125,
             'bp_diastolic' => 82,
             'entry_method' => 'manual',
             'is_bmi_flagged' => false,
             'is_temp_flagged' => true,
             'is_bp_flagged' => false,
+            'is_hr_flagged' => VitalSigns::isHeartRateFlagged(112),
         ]);
         ScreeningResponse::create([
             'clinic_visit_id' => $v5->id,
@@ -410,6 +420,7 @@ class DemoClinicVisitSeeder extends Seeder
             'is_bmi_flagged' => false,
             'is_temp_flagged' => false,
             'is_bp_flagged' => false,
+            'is_hr_flagged' => VitalSigns::isHeartRateFlagged(77),
         ]);
         ScreeningResponse::create([
             'clinic_visit_id' => $v6->id,
@@ -732,8 +743,10 @@ class DemoClinicVisitSeeder extends Seeder
      * Vitals covering every analytics bucket, still rule-consistent with
      * the capture thresholds (§7.4, D-10): the BMI cycle spans all four
      * FR-ANL-12 buckets but only the deliberate flag case reaches ≥ 30
-     * (the is_bmi_flagged rule); temperature and BP stay unflagged except
-     * for their own deliberate flag cases. Plus an all-clear questionnaire.
+     * (the is_bmi_flagged rule); temperature, BP and heart rate stay unflagged
+     * except for their own deliberate flag cases (D-66 added the heart rate).
+     * Every flag is derived through the VitalSigns helpers, never asserted.
+     * Plus an all-clear questionnaire.
      */
     private function createSpreadVitalsAndScreening(ClinicVisit $visit, int $seq): void
     {
@@ -741,6 +754,7 @@ class DemoClinicVisitSeeder extends Seeder
         $bpFlagged = $seq % 29 === 3;
         $tempFlagged = $seq % 31 === 8;
         $bmiFlagged = $seq % 23 === 11;
+        $hrFlagged = $seq % 37 === 5;   // D-66
 
         // All four BMI buckets: underweight, normal ×3, overweight ×2 …
         $bmiCycle = [17.9, 19.5, 21.2, 22.8, 24.1, 26.4, 28.3, 20.6];
@@ -755,13 +769,14 @@ class DemoClinicVisitSeeder extends Seeder
             'weight_kg' => $weightKg,
             'bmi' => $bmi,
             'temperature_c' => $tempFlagged ? 38.1 : 36.2 + ($seq % 6) / 10, // ≤ 36.7 unless fever
-            'heart_rate_bpm' => 66 + ($seq % 24),
+            'heart_rate_bpm' => $hrFlagged ? 108 : 66 + ($seq % 24),   // ≤ 89 unless flagged
             'bp_systolic' => $bpFlagged ? 150 : 105 + ($seq % 20),           // ≤ 124 unless flagged
             'bp_diastolic' => $bpFlagged ? 95 : 65 + ($seq % 15),
             'entry_method' => $seq % 2 === 0 ? 'manual' : 'sensor',
             'is_bmi_flagged' => $bmiFlagged,
             'is_temp_flagged' => $tempFlagged,
             'is_bp_flagged' => $bpFlagged,
+            'is_hr_flagged' => VitalSigns::isHeartRateFlagged($hrFlagged ? 108 : 66 + ($seq % 24)),
         ]);
 
         ScreeningResponse::create([

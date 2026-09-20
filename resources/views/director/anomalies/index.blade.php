@@ -2,8 +2,9 @@
 
     {{-- ── Stat cards (FR-ANL-05): one per flag type ─────────────────────
          Subtitles quote the thresholds from config/healthpass.php (BR-13:
-         one source — kiosk badges, queue flags, and this screen agree). --}}
-    <div class="hp-stagger mb-6 grid grid-cols-1 gap-5 sm:grid-cols-3">
+         one source — kiosk badges, queue flags, and this screen agree).
+         Five since D-66 — three at two columns, five at three. --}}
+    <div class="hp-stagger mb-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
         <x-hp.card class="border-l-4 border-l-hp-orange">
             <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
                 High Blood Pressure
@@ -31,6 +32,29 @@
             <p class="mt-3 text-3xl font-bold leading-none text-hp-slate" data-hp-countup>{{ $stats['bmi'] }}</p>
             <p class="mt-2 text-xs text-hp-slate/50">
                 BMI of {{ config('healthpass.thresholds.bmi_obese') }} or higher
+            </p>
+        </x-hp.card>
+
+        {{-- D-66 --}}
+        <x-hp.card class="border-l-4 border-l-hp-orange">
+            <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+                High Heart Rate
+            </p>
+            <p class="mt-3 text-3xl font-bold leading-none text-hp-slate" data-hp-countup>{{ $stats['hr'] }}</p>
+            <p class="mt-2 text-xs text-hp-slate/50">
+                above {{ config('healthpass.thresholds.heart_rate_max') }} bpm
+            </p>
+        </x-hp.card>
+
+        {{-- D-66. The one flag the kiosk cannot raise: the clinic measures the
+             respiratory rate at encode (D-65), so it counts encoded visits. --}}
+        <x-hp.card class="border-l-4 border-l-hp-orange">
+            <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+                Abnormal Respiratory Rate
+            </p>
+            <p class="mt-3 text-3xl font-bold leading-none text-hp-slate" data-hp-countup>{{ $stats['rr'] }}</p>
+            <p class="mt-2 text-xs text-hp-slate/50">
+                outside {{ config('healthpass.thresholds.respiratory_rate_min') }}&ndash;{{ config('healthpass.thresholds.respiratory_rate_max') }} breaths/min
             </p>
         </x-hp.card>
     </div>

@@ -87,7 +87,7 @@
             <p class="py-6 text-center text-sm text-hp-slate/50">No vitals recorded for this visit.</p>
         @else
             @php $vitals = $visit->vitalSigns; @endphp
-            <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
+            <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-7">
                 <div>
                     <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Height</p>
                     <p class="mt-1 text-lg font-bold text-hp-slate">{{ $vitals->height_cm }} cm</p>
@@ -116,7 +116,23 @@
                 </div>
                 <div>
                     <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Heart Rate</p>
-                    <p class="mt-1 text-lg font-bold text-hp-slate">{{ $vitals->heart_rate_bpm }} bpm</p>
+                    <p class="mt-1 text-lg font-bold {{ $vitals->is_hr_flagged ? 'text-hp-orange' : 'text-hp-slate' }}">
+                        {{ $vitals->heart_rate_bpm }} bpm
+                    </p>
+                    @if ($vitals->is_hr_flagged)
+                        <x-hp.badge variant="flagged" class="mt-1">Flagged</x-hp.badge>
+                    @endif
+                </div>
+                {{-- D-65/D-66: measured by the clinic at encode, so it reads
+                     "—" on a visit the clinic has not encoded yet. --}}
+                <div>
+                    <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Respiratory Rate</p>
+                    <p class="mt-1 text-lg font-bold {{ $vitals->is_rr_flagged ? 'text-hp-orange' : 'text-hp-slate' }}">
+                        {{ $vitals->respiratory_rate !== null ? $vitals->respiratory_rate.' breaths/min' : '—' }}
+                    </p>
+                    @if ($vitals->is_rr_flagged)
+                        <x-hp.badge variant="flagged" class="mt-1">Flagged</x-hp.badge>
+                    @endif
                 </div>
                 <div>
                     <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Blood Pressure</p>

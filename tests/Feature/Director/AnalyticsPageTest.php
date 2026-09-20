@@ -13,6 +13,7 @@ use App\Models\StudentProfile;
 use App\Models\User;
 use App\Models\VitalSigns;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 /**
@@ -98,6 +99,8 @@ class AnalyticsPageTest extends TestCase
             'is_bmi_flagged' => false,
             'is_temp_flagged' => false,
             'is_bp_flagged' => false,
+            'is_hr_flagged' => false,
+            'is_rr_flagged' => false,
             ...$vitals,
         ]);
 
@@ -113,7 +116,7 @@ class AnalyticsPageTest extends TestCase
         return $visit;
     }
 
-    private function page(string $query = ''): \Illuminate\Testing\TestResponse
+    private function page(string $query = ''): TestResponse
     {
         return $this->actingAs($this->director)->get('/director/analytics'.$query);
     }
@@ -242,7 +245,60 @@ class AnalyticsPageTest extends TestCase
             ['High Blood Pressure', 1, 25.0],
             ['Fever', 1, 25.0],
             ['Abnormal BMI', 0, 0.0],
+            ['High Heart Rate', 0, 0.0],
+            ['Abnormal Respiratory Rate', 0, 0.0],
         ], $tiles);
+    }
+
+    /**
+     * D-66 — the card carries FIVE tiles, and the two new flags count and rate
+     * against the same denominator (the month's captured screenings).
+     */
+    public function test_heart_rate_and_respiratory_rate_have_their_own_tiles(): void
+    {
+        // 5 screenings in June: one HR-flagged (still captured — HR is known
+        // from capture) and one RR-flagged (encoded — RR is measured there).
+        $student = $this->makeStudent($this->ccs);
+        $this->makeVisit($student, $this->ccs, '2026-06-01', visitStatus: 'captured', vitals: [
+            'heart_rate_bpm' => 118, 'is_hr_flagged' => true,
+        ]);
+        $this->makeVisit($student, $this->ccs, '2026-06-02', vitals: [
+            'respiratory_rate' => 26, 'is_rr_flagged' => true,
+        ]);
+        $this->makeVisit($student, $this->ccs, '2026-06-03');
+        $this->makeVisit($student, $this->ccs, '2026-06-04');
+        $this->makeVisit($student, $this->ccs, '2026-06-05');
+
+        $response = $this->page('?month=2026-06')->assertOk();
+
+        $this->assertSame(5, $response->viewData('screenings'));
+
+        $tiles = collect($response->viewData('flagTiles'))
+            ->map(fn (array $tile) => [$tile['label'], $tile['count'], $tile['rate']])
+            ->all();
+
+        $this->assertSame([
+            ['High Blood Pressure', 0, 0.0],
+            ['Fever', 0, 0.0],
+            ['Abnormal BMI', 0, 0.0],
+            ['High Heart Rate', 1, 20.0],
+            ['Abnormal Respiratory Rate', 1, 20.0],
+        ], $tiles);
+    }
+
+    /** D-66 — the tile captions quote config, never a literal. */
+    public function test_the_new_tile_captions_come_from_config(): void
+    {
+        $student = $this->makeStudent($this->ccs);
+        $this->makeVisit($student, $this->ccs, '2026-06-01');
+
+        $tiles = $this->page('?month=2026-06')->viewData('flagTiles');
+
+        $this->assertSame('> 100 bpm · flagged at capture', $tiles[3]['sub']);
+        $this->assertSame(
+            'outside 12–20/min · measured by the clinic at encode',
+            $tiles[4]['sub'],
+        );
     }
 
     public function test_flag_rates_round_to_one_decimal(): void

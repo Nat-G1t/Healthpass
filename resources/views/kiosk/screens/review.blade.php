@@ -62,10 +62,12 @@
                             <span x-show="bpFlagged(fieldValue('systolic'), fieldValue('diastolic'))" x-cloak>⚑ </span><span x-text="fieldValue('systolic')"></span>/<span x-text="fieldValue('diastolic')"></span> mmHg
                         </span>
                     </div>
-                    {{-- Heart Rate — no flag threshold (shown for completeness). --}}
+                    {{-- Heart Rate — flagged > 100 bpm (D-66). --}}
                     <div class="flex items-center justify-between py-2.5">
                         <span class="text-base text-hp-slate/70">Heart Rate</span>
-                        <span class="text-lg font-semibold text-hp-slate"><span x-text="fieldValue('heartRate')"></span> bpm</span>
+                        <span class="text-lg font-semibold" :class="hrFlagged(fieldValue('heartRate')) ? 'text-hp-orange' : 'text-hp-slate'">
+                            <span x-show="hrFlagged(fieldValue('heartRate'))" x-cloak>⚑ </span><span x-text="fieldValue('heartRate')"></span> bpm
+                        </span>
                     </div>
                 </div>
             </div>

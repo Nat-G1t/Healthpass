@@ -459,6 +459,53 @@ class KioskSubmitTest extends TestCase
         $this->assertTrue($row->is_bmi_flagged);
     }
 
+    /** D-66: heart-rate flag is "> 100": 100 is NOT flagged, 101 IS. */
+    public function test_heart_rate_flag_boundary(): void
+    {
+        $this->submit($this->student()->id, ['vitals' => ['heartRate' => 100]]);
+        $this->assertFalse(VitalSigns::latest('id')->first()->is_hr_flagged);
+
+        $this->submit($this->student()->id, ['vitals' => ['heartRate' => 101]]);
+        $this->assertTrue(VitalSigns::latest('id')->first()->is_hr_flagged);
+    }
+
+    /** D-66: there is deliberately no LOW heart-rate flag. */
+    public function test_a_low_heart_rate_is_not_flagged(): void
+    {
+        $this->submit($this->student()->id, ['vitals' => ['heartRate' => 48]]);
+
+        $this->assertFalse(VitalSigns::latest('id')->first()->is_hr_flagged);
+    }
+
+    /**
+     * D-66 trust boundary: /kiosk/submit is public, so a posted is_hr_flagged
+     * must be ignored — the boolean is derived from the heart rate itself,
+     * exactly like BMI and the other flags.
+     */
+    public function test_a_posted_heart_rate_flag_is_ignored(): void
+    {
+        // A calm 72 bpm posted alongside a forged "already flagged" boolean.
+        $this->submit($this->student()->id, ['vitals' => ['heartRate' => 72], 'is_hr_flagged' => true]);
+        $this->assertFalse(VitalSigns::latest('id')->first()->is_hr_flagged);
+
+        // And the reverse: 130 bpm posted with the flag forged OFF.
+        $this->submit($this->student()->id, ['vitals' => ['heartRate' => 130], 'is_hr_flagged' => false]);
+        $this->assertTrue(VitalSigns::latest('id')->first()->is_hr_flagged);
+    }
+
+    /**
+     * D-65/D-66: the kiosk measures no respiratory rate, so a capture leaves
+     * both the value and its flag empty for the clinic to fill at encode.
+     */
+    public function test_capture_leaves_the_respiratory_rate_and_its_flag_empty(): void
+    {
+        $this->submit($this->student()->id);
+
+        $row = VitalSigns::latest('id')->first();
+        $this->assertNull($row->respiratory_rate);
+        $this->assertFalse($row->is_rr_flagged);
+    }
+
     // ── Appointment linkage (BR-10) ───────────────────────────────────────────
 
     public function test_booked_student_links_todays_appointment(): void

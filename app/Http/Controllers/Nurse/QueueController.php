@@ -60,6 +60,7 @@ class QueueController extends Controller
             $ghostIndex = $visits
                 ->takeWhile(function (ClinicVisit $visit) use ($ghostAnchor, $ghost): bool {
                     $anchor = $visit->checked_in_at ?? $visit->created_at;
+
                     return $anchor < $ghostAnchor
                         || ($anchor == $ghostAnchor && $visit->id < $ghost->id);
                 })
@@ -116,6 +117,9 @@ class QueueController extends Controller
                 'is_temp_flagged' => (bool) $vs->is_temp_flagged,
                 'is_bp_flagged' => (bool) $vs->is_bp_flagged,
                 'is_bmi_flagged' => (bool) $vs->is_bmi_flagged,
+                // D-66. No is_rr_flagged: the respiratory rate is measured at
+                // encode (D-65), so the queue never has one to show.
+                'is_hr_flagged' => (bool) $vs->is_hr_flagged,
             ] : null,
             'time_human' => $capturedAt?->diffForHumans(),
             // Where the row's "Encode Result" link points (FR-NRS-03) — built

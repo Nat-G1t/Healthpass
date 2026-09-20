@@ -166,7 +166,8 @@ npm run dev                       # terminal 2
 
 - **No AI features.** No predictive risk profiling, no LLM calls. The
   system is scheduling + digital clearance with simple rule-based vital
-  flagging only. (BP flag threshold locked at **140/90**; other
+  flagging only. (BP flag threshold locked at **140/90**;
+  heart rate > 100 and respiratory rate < 12 / > 20 (D-66); other
   thresholds per PRD business rules.)
 - **Five roles:** Student, College Admin, Nurse, Physician (D-64), Clinic
   Director. Nurse and Physician share the Clinic Dashboard (`/nurse/*`) and

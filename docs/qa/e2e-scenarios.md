@@ -169,9 +169,11 @@ since D-61 there are none.)
    shown with an **Abnormal BMI / Obese** status (threshold ≥ 30.0).
 6. **Temperature:** enter `38.5` → **Expect:** a **Fever** badge (threshold
    > 37.2 °C).
-7. **Blood Pressure:** enter systolic `150`, diastolic `95`, HR `88` →
+7. **Blood Pressure:** enter systolic `150`, diastolic `95`, HR `112` →
    **Expect:** a **High Blood Pressure** badge (systolic ≥ 140 OR diastolic
-   ≥ 90).
+   ≥ 90), and **(D-66)** the heart-rate panel below it reading **High**
+   (> 100 bpm). The wording is a status only — never "tachycardia" or any
+   other interpretation.
 8. **Questionnaire with YES details (D-56, rows per D-63):** answer **Yes** on
    **SKIN**, tap **Add details (optional)** and type `itchy rash on left arm`
    on the on-screen keyboard. → **Expect:** a panel docked at the bottom of the
@@ -185,8 +187,9 @@ since D-61 there are none.)
    **Yes** with their details under them; KIDNEY/BLADDER shows **No** with no
    detail. Click **Submit to Clinic →**.
 9. Log in as `nurse@healthpass.test`. On the Live Queue, find Maria's row. →
-   **Expect:** the **Flags column shows badges for temp, BP and BMI**, and the
-   flagged values are bold orange.
+   **Expect:** the **Flags column shows badges for temp, BP, BMI and HR**
+   (D-66), and the flagged values — the bpm included — are bold orange.
+   There is **no RR badge**: the respiratory rate has not been measured yet.
 10. Open **Encode Result**. → **Expect (D-56/D-63):** the questionnaire card
     shows each detail under its Yes; there are **twelve** Physical Signs rows;
     **SKIN** and **THROAT** are pre-checked **Yes** and the other ten **No**;
@@ -198,12 +201,15 @@ since D-61 there are none.)
     **REMARKS** show both lines; the Physical Signs table has twelve rows in
     three columns and the page still fits one sheet. Click **Save & Close**.
 11. Log in as `director@healthpass.test`, open **Flagged Anomalies**. →
-    **Expect:** Maria appears under High Blood Pressure, Fever, and Abnormal
-    BMI, with her college (CCS) shown.
+    **Expect (D-66):** **five** stat cards — High Blood Pressure, Fever,
+    Abnormal BMI, High Heart Rate, Abnormal Respiratory Rate — and Maria's
+    row listing four flags with their values (`150/95 mmHg`, `38.5°C`,
+    `33.2`, `112 bpm`), with her college (CCS) shown.
 
-**Pass criteria:** all three flags computed at capture, visible in the queue
-**immediately** (before encoding), Unfit encoded, and the visit surfaces in
-Flagged Anomalies. (Flags show from capture; case counts need encoding.)
+**Pass criteria:** all four capture-time flags computed at capture, visible in
+the queue **immediately** (before encoding), Unfit encoded, and the visit
+surfaces in Flagged Anomalies. (Flags show from capture; case counts need
+encoding.)
 
 ---
 
@@ -1002,6 +1008,64 @@ reading.
 **Note for the tester:** the ⚑ Flagged badge stays beside the temperature even
 after the clinic's correction — it describes the **kiosk's** screening (BR-14),
 which is what the "Kiosk: 38.1 °C" line underneath it names.
+
+---
+
+## E2E-19 — Heart-rate and respiratory-rate flag boundaries (D-66)
+
+**Goal:** prove the two new thresholds are exact on both sides, that the
+respiratory-rate flag is raised at **encode** and not at capture, and that both
+reach the Director's screens. Run it after E2E-2, which already covers the
+"clearly flagged" path.
+
+**Accounts:** a student with an appointment today, then Nurse, then Director.
+
+**Steps:**
+
+1. Put a student through the kiosk with **HR = 100** at the Blood Pressure
+   step, everything else normal. → **Expect:** the heart-rate panel reads
+   **Normal** (green), and Review shows the bpm in plain slate with no ⚑.
+2. As the Nurse, check the Live Queue row. → **Expect:** **no HR badge**, and
+   the bpm is **not** orange.
+3. Put a second student through with **HR = 101**, everything else normal.
+   → **Expect:** the heart-rate panel reads **High** (orange) and Review
+   shows the bpm orange with a ⚑.
+4. As the Nurse, check that row. → **Expect:** an **HR** badge in the Flags
+   column and an orange bpm. Open **Encode Result** → the Heart Rate input
+   carries a **⚑ Flagged** badge, and the Respiratory Rate input carries
+   none (its flag does not exist yet).
+5. In that encode form, type **Respiratory Rate = 20** and Save & Close.
+   Reopen the visit read-only. → **Expect:** the Respiratory Rate tile reads
+   `20 breaths/min` with **no** Flagged badge — 20 is in range.
+6. Encode another visit with **Respiratory Rate = 21**. Reopen it read-only.
+   → **Expect:** `21 breaths/min` **with** a ⚑ Flagged badge.
+7. Repeat step 6 with **Respiratory Rate = 11** → flagged; and **12** →
+   not flagged.
+8. Log in as the **Director**, open **Flagged Anomalies**. → **Expect:**
+   five stat cards; the **High Heart Rate** count includes the 101-bpm student
+   and **not** the 100-bpm one; the **Abnormal Respiratory Rate** count
+   includes the 21 and the 11 and **not** the 20 or the 12. Each flagged row
+   lists the label with its value (`101 bpm`, `21 breaths/min`).
+9. Open **Analytics** for the same month. → **Expect:** the Vital-Sign Flags
+   card shows **five** tiles; the High Heart Rate and Abnormal Respiratory Rate
+   counts match step 8, and their rates are a % of the month's captured
+   screenings. The respiratory tile's caption reads **"measured by the clinic
+   at encode"**.
+10. Log in as a **College Admin** for that college, open **Analytics** → the
+    same five tiles; click **Print monthly report** → the Vital-Sign Flags
+    table has **five** rows with the same counts and rates.
+11. As the 101-bpm student, open **My Records** and view the encoded visit.
+    → **Expect:** the Heart Rate row carries a **Flagged** chip, and so does
+    the Respiratory Rate row on the visit encoded with 21.
+
+**Pass criteria:** 100 is not flagged and 101 is; 12 and 20 are not flagged and
+11 and 21 are; the respiratory-rate flag appears only after encoding; and every
+screen — queue, Flagged Anomalies, both analytics pages, the printed report
+and My Records — agrees with the stored booleans.
+
+**Note for the tester:** a respiratory rate that is blank is **not** a flag. A
+visit the clinic has not encoded shows `—` and counts toward nothing; that is
+"not measured yet", not "normal".
 
 ---
 

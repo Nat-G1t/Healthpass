@@ -163,7 +163,8 @@
                 <p class="mt-1 text-xs text-hp-slate/40">Flag tiles fill in as kiosk screenings are captured.</p>
             </div>
         @else
-            <div class="grid gap-3.5 sm:grid-cols-3">
+            {{-- Five tiles since D-66 — two per row on narrow, then three, then all five. --}}
+            <div class="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
                 @foreach ($flagTiles as $tile)
                     <div class="rounded-xl border border-hp-slate/10 px-4 py-4">
                         <p class="text-[11px] font-semibold uppercase tracking-wider text-hp-slate/50">{{ $tile['label'] }}</p>

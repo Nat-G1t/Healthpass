@@ -155,6 +155,11 @@
                 'tempMax' => config('healthpass.thresholds.temperature_max'),
                 'bpSystolic' => config('healthpass.thresholds.bp_systolic'),
                 'bpDiastolic' => config('healthpass.thresholds.bp_diastolic'),
+                // D-66. The kiosk shows a heart-rate status badge, so its
+                // threshold rides in here too — never a literal in the JS.
+                // There is no respiratory-rate threshold: the kiosk does not
+                // measure that vital (D-65).
+                'hrMax' => config('healthpass.thresholds.heart_rate_max'),
             ],
             'kiosk' => [
                 'completeResetSeconds' => config('healthpass.kiosk.complete_reset_seconds'),

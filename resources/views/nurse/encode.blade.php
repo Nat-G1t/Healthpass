@@ -47,9 +47,14 @@
     $vitalValue = fn (string $field) => old($field, $vs?->{$field});
 
     // The kiosk's screening flag (BR-14) that belongs beside a given input.
+    // D-66: heart rate is flagged at capture like the others. The respiratory
+    // rate's own flag (is_rr_flagged) is only computed when this form is saved,
+    // so it has nothing to show while the form is still being filled in — it
+    // appears on the read-only tiles below.
     $kioskFlag = fn (string $field) => match ($field) {
         'temperature_c' => (bool) $vs?->is_temp_flagged,
         'bp_systolic', 'bp_diastolic' => (bool) $vs?->is_bp_flagged,
+        'heart_rate_bpm' => (bool) $vs?->is_hr_flagged,
         default => false,
     };
 
@@ -69,9 +74,10 @@
             $pair($whole($confirmed['bp_systolic'] ?? null), $whole($confirmed['bp_diastolic'] ?? null)) ?? '—',
             $pair($whole($vs?->bp_systolic), $whole($vs?->bp_diastolic)),
             (bool) $vs?->is_bp_flagged],
-        ['Heart Rate', $unit($whole($confirmed['heart_rate_bpm'] ?? null), 'bpm'), $unit($whole($vs?->heart_rate_bpm), 'bpm'), false],
+        ['Heart Rate', $unit($whole($confirmed['heart_rate_bpm'] ?? null), 'bpm'), $unit($whole($vs?->heart_rate_bpm), 'bpm'), (bool) $vs?->is_hr_flagged],
         // The kiosk never measures this one, so there is nothing to compare to.
-        ['Respiratory Rate', $unit($whole($confirmed['respiratory_rate'] ?? null), 'breaths/min'), null, false],
+        // Its flag (D-66) was computed from the rate saved here at encode.
+        ['Respiratory Rate', $unit($whole($confirmed['respiratory_rate'] ?? null), 'breaths/min'), null, (bool) $vs?->is_rr_flagged],
     ];
 @endphp
 

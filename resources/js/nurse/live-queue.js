@@ -72,20 +72,25 @@ function vitalsHtml(vitals) {
         `<span class="${vitals.is_temp_flagged ? FLAGGED : NORMAL}">${esc(vitals.temperature_c)}°C</span>${dot}` +
         `<span class="${vitals.is_bp_flagged ? FLAGGED : NORMAL}">${esc(vitals.bp_systolic)}/${esc(vitals.bp_diastolic)}</span>${dot}` +
         `<span class="${vitals.is_bmi_flagged ? FLAGGED : NORMAL}">BMI ${esc(vitals.bmi)}</span>${dot}` +
-        `<span class="${NORMAL}">${esc(vitals.heart_rate_bpm)} bpm</span>` +
+        `<span class="${vitals.is_hr_flagged ? FLAGGED : NORMAL}">${esc(vitals.heart_rate_bpm)} bpm</span>` +
         '</div>'
     );
 }
 
 /** Flag badges, or a dash when nothing is flagged (mirrors the Blade). */
 function flagsHtml(vitals) {
-    if (!vitals || (!vitals.is_temp_flagged && !vitals.is_bp_flagged && !vitals.is_bmi_flagged)) {
+    if (
+        !vitals ||
+        (!vitals.is_temp_flagged && !vitals.is_bp_flagged && !vitals.is_bmi_flagged && !vitals.is_hr_flagged)
+    ) {
         return '<span class="text-hp-slate/30">—</span>';
     }
     const badges = [];
     if (vitals.is_temp_flagged) badges.push(`<span class="${BADGE}">Temp</span>`);
     if (vitals.is_bp_flagged) badges.push(`<span class="${BADGE}">BP</span>`);
     if (vitals.is_bmi_flagged) badges.push(`<span class="${BADGE}">BMI</span>`);
+    // D-66. HR only — the respiratory rate is measured at encode (D-65).
+    if (vitals.is_hr_flagged) badges.push(`<span class="${BADGE}">HR</span>`);
     return `<div class="flex flex-wrap gap-1.5">${badges.join('')}</div>`;
 }
 

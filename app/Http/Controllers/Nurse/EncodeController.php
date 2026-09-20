@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Nurse\StoreClearanceRequest;
 use App\Models\ClearanceRecord;
 use App\Models\ClinicVisit;
+use App\Models\VitalSigns;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Arr;
@@ -113,8 +114,16 @@ class EncodeController extends Controller
 
                 // D-65: the respiratory rate is a vital like any other — the
                 // kiosk simply has no sensor for it, so encode is where it is
-                // written. It is the ONLY vitals column encode may change.
-                $visit->vitalSigns?->update(['respiratory_rate' => $encodedVitals['respiratory_rate']]);
+                // written. It and its own flag are the ONLY vitals columns
+                // encode may change.
+                //
+                // D-66: is_rr_flagged is derived HERE, from the value being
+                // written, through the same VitalSigns helper the kiosk submit
+                // and the seeders use — never posted by the form.
+                $visit->vitalSigns?->update([
+                    'respiratory_rate' => $encodedVitals['respiratory_rate'],
+                    'is_rr_flagged' => VitalSigns::isRespiratoryRateFlagged($encodedVitals['respiratory_rate']),
+                ]);
 
                 $visit->update(['status' => 'encoded']);
 

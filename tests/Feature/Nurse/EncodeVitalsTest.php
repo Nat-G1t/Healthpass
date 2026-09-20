@@ -210,6 +210,40 @@ class EncodeVitalsTest extends TestCase
         $this->assertSame(19, $visit->vitalSigns->fresh()->respiratory_rate);
     }
 
+    /**
+     * D-66 — the respiratory-rate flag is derived at encode, from the value
+     * being written, through the same VitalSigns helper the kiosk submit uses.
+     */
+    public function test_the_respiratory_rate_flag_is_computed_at_encode(): void
+    {
+        $inRange = $this->makeVisit();
+        $this->save($this->nurse(), $inRange, EncodePayload::make(['respiratory_rate' => 16]));
+        $this->assertFalse($inRange->vitalSigns->fresh()->is_rr_flagged);
+
+        $tooFast = $this->makeVisit();
+        $this->save($this->nurse(), $tooFast, EncodePayload::make(['respiratory_rate' => 24]));
+        $this->assertTrue($tooFast->vitalSigns->fresh()->is_rr_flagged);
+
+        $tooSlow = $this->makeVisit();
+        $this->save($this->nurse(), $tooSlow, EncodePayload::make(['respiratory_rate' => 9]));
+        $this->assertTrue($tooSlow->vitalSigns->fresh()->is_rr_flagged);
+    }
+
+    /** D-66 boundary: 12 and 20 are IN range; 11 and 21 are not. */
+    public function test_respiratory_rate_flag_boundary(): void
+    {
+        foreach ([11 => true, 12 => false, 20 => false, 21 => true] as $rate => $expected) {
+            $visit = $this->makeVisit();
+            $this->save($this->nurse(), $visit, EncodePayload::make(['respiratory_rate' => $rate]));
+
+            $this->assertSame(
+                $expected,
+                $visit->vitalSigns->fresh()->is_rr_flagged,
+                "{$rate} breaths/min flagged wrongly",
+            );
+        }
+    }
+
     public function test_the_kiosk_reading_and_its_flags_are_never_overwritten(): void
     {
         $visit = $this->makeVisit();
@@ -236,6 +270,9 @@ class EncodeVitalsTest extends TestCase
         $this->assertTrue($vitals->is_bp_flagged);
         $this->assertFalse($vitals->is_temp_flagged);
         $this->assertFalse($vitals->is_bmi_flagged);
+        // D-66: the corrected 61 bpm does not clear the capture's own HR flag
+        // either — 78 bpm was never flagged, and it stays that way.
+        $this->assertFalse($vitals->is_hr_flagged);
     }
 
     public function test_bmi_is_recomputed_server_side_and_a_posted_bmi_is_ignored(): void

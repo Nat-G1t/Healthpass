@@ -274,9 +274,20 @@
                 <template x-if="state.vitalStep === 4 && fieldValue('heartRate') !== null">
                     <div class="w-full rounded-xl bg-hp-peach/30 p-4">
                         <p class="text-xs font-semibold uppercase tracking-wider text-hp-orange/80">Heart Rate</p>
-                        <div class="mt-1.5 flex items-baseline justify-center gap-2">
-                            <span class="text-3xl font-bold text-hp-slate" x-text="fieldValue('heartRate')"></span>
-                            <span class="text-base font-medium text-hp-slate/50">bpm</span>
+                        <div class="mt-1.5 flex flex-wrap items-center justify-center gap-3">
+                            <span class="flex items-baseline gap-2">
+                                <span class="text-3xl font-bold text-hp-slate" x-text="fieldValue('heartRate')"></span>
+                                <span class="text-base font-medium text-hp-slate/50">bpm</span>
+                            </span>
+                            {{-- Heart-rate status badge (D-66) — same pattern and
+                                 neutral wording rule as temperature and BP
+                                 (FR-KSK-14): a status, never an interpretation. --}}
+                            <span
+                                class="rounded-full px-3 py-1 text-sm font-semibold"
+                                :class="hrBadgeClass(fieldValue('heartRate'))"
+                            >
+                                <span x-show="hrFlagged(fieldValue('heartRate'))" x-cloak>⚑ </span><span x-text="hrStatus(fieldValue('heartRate'))"></span>
+                            </span>
                         </div>
                     </div>
                 </template>

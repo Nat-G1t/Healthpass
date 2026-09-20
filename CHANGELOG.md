@@ -4,6 +4,73 @@
 
 ### Added
 
+* **Heart rate and respiratory rate get flag thresholds, shown everywhere
+  vitals are** (D-66). Requested by the clinic on 2026-09-18; **pending
+  adviser sign-off**. **Flagged schema change** (migration
+  `2026_09_20_000007_add_hr_rr_flags_to_vital_signs_table`): new
+  `vital_signs.is_hr_flagged` and `vital_signs.is_rr_flagged`, both BOOLEAN
+  NOT NULL DEFAULT false. Neither is backfilled. Reseed the dev DB.
+  - **Thresholds in `config/healthpass.php` → `thresholds`**, the one place
+    BR-13 allows: `heart_rate_max` **100** (a rate **> 100 bpm** sets
+    `is_hr_flagged`, "High Heart Rate") and `respiratory_rate_min` **12** /
+    `respiratory_rate_max` **20** (a rate **< 12 or > 20 breaths/min** sets
+    `is_rr_flagged`, "Abnormal Respiratory Rate"). **There is no low-heart-rate
+    flag** — a resting rate under 60 is common in healthy young students.
+    The **140/90 lock is unchanged**.
+  - **The rules live in one place too:** the static helpers
+    `VitalSigns::isHeartRateFlagged()` and
+    `VitalSigns::isRespiratoryRateFlagged()`, called by the kiosk submit, the
+    encode controller and the seeders, so none of the three can drift.
+  - **Computed at two different moments, always server-side.**
+    `is_hr_flagged` is computed at **kiosk capture** in `SubmitKioskVisit`,
+    beside the other three flags — `/kiosk/submit` is public, so a posted
+    `is_hr_flagged` is ignored exactly as a posted BMI is. `is_rr_flagged` is
+    computed at **encode**, in the same transaction that writes
+    `vital_signs.respiratory_rate` (D-65), because the kiosk has no sensor for
+    that vital. Until then it is `false`, which means "not measured yet", not
+    "normal".
+  - **Kiosk:** the BP step's heart-rate sub-panel gains a status badge reading
+    **"Normal" / "High"** — the same pattern and the same neutral-wording
+    rule as the temperature and BP badges (FR-KSK-14), never a diagnosis —
+    and the Review screen marks a flagged heart rate orange with ⚑. The
+    threshold rides in on the page's server-injected `thresholds` block as
+    `hrMax` (`kiosk/index.blade.php`); no literal in the JS. Still no
+    Fit/Unfit on the kiosk.
+  - **Live Queue:** an **HR** badge in the flags column and an orange bpm
+    value, in `components/nurse/queue-row.blade.php` *and*
+    `resources/js/nurse/live-queue.js`, with `is_hr_flagged` added to the JSON
+    feed. **No RR badge** — that vital is measured at encode, by which time
+    the visit has left the queue.
+  - **`ClinicVisit::scopeFlagged()` gains both flags**, which is what carries
+    them, with no further code, to **Flagged Anomalies**, the **Director
+    dashboard preview** and the **D-57 Flagged Anomalies nav badge**.
+  - **Flagged Anomalies:** **five** stat cards (High Blood Pressure, Fever,
+    Abnormal BMI, High Heart Rate, Abnormal Respiratory Rate), each subtitle
+    quoting config; the table's Flag and Value columns carry the two new flags
+    through `VitalSigns::flagDetails()`; the record page shows a flagged heart
+    rate and a Respiratory Rate tile ("—" before the clinic encodes).
+  - **Vital-Sign Flags card:** **five** tiles on the Director and College
+    Admin analytics and in the printable monthly report, each with count, rate
+    and a config-derived caption. The rate denominator stays the month's
+    captured screenings for all five; the respiratory-rate caption reads
+    "measured by the clinic at encode".
+  - **Encode card:** HR and RR flag badges; the read-only tiles use the saved
+    flags. The respiratory-rate input shows no badge while the form is being
+    filled in — its flag does not exist until Save & Close computes it.
+  - **My Records:** the Heart Rate and Respiratory Rate rows get the same
+    Flagged chip the other vitals carry.
+  - **Seeders** derive both flags through the shared helpers, never as
+    literals, and include flagged demo rows (HP-2026-9005's fever now carries
+    the 112 bpm that usually goes with it; the analytics spread sprinkles a
+    high heart rate the way it already sprinkles the other flags).
+  - **Tests:** new `tests/Feature/VitalSignFlagsTest.php` (rule boundaries,
+    the config read, `scopeFlagged` for HR-only and RR-only visits, the
+    dashboard preview and the nav badge), plus boundary and trust-boundary
+    cases in `KioskSubmitTest`, the encode flag in `EncodeVitalsTest`, five
+    tiles in both analytics tests, five cards in `AnomaliesPageTest`, the HR
+    flag in `QueueFeedTest`, and the kiosk HR badge in
+    `tests/js/kiosk-state-machine.test.js`.
+
 * **The clinic confirms the vitals on the encode page, and records a
   respiratory rate** (D-65; supersedes D-6, strikes FR-PRT-03). Requested by
   the clinic on 2026-09-18; **pending adviser sign-off**. **Flagged schema

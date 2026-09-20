@@ -27,6 +27,9 @@
                 'is_bmi_flagged'  => $v->vitalSigns?->is_bmi_flagged ?? false,
                 'is_temp_flagged' => $v->vitalSigns?->is_temp_flagged ?? false,
                 'is_bp_flagged'   => $v->vitalSigns?->is_bp_flagged ?? false,
+                // D-66
+                'is_hr_flagged'   => $v->vitalSigns?->is_hr_flagged ?? false,
+                'is_rr_flagged'   => $v->vitalSigns?->is_rr_flagged ?? false,
             ],
             // The form's twelve rows (D-63): label, the student's Yes/No
             // (null = unanswered) and any detail they typed under a Yes.
@@ -294,16 +297,30 @@ function recordsPageData() {
 
                             <div class="flex items-center justify-between">
                                 <dt class="text-sm text-hp-slate/55">Heart Rate</dt>
-                                <dd class="text-sm font-medium text-hp-slate"
-                                    x-text="rec.vitals.heart_rate_bpm + ' bpm'"></dd>
+                                <dd class="flex items-center gap-2">
+                                    <span class="text-sm font-medium text-hp-slate"
+                                          x-text="rec.vitals.heart_rate_bpm + ' bpm'"></span>
+                                    <span x-show="rec.vitals.is_hr_flagged"
+                                          class="rounded-full bg-hp-peach px-2 py-0.5
+                                                 text-[11px] font-semibold text-hp-orange">
+                                        Flagged
+                                    </span>
+                                </dd>
                             </div>
 
                             <div class="flex items-center justify-between">
                                 <dt class="text-sm text-hp-slate/55">Respiratory Rate</dt>
-                                <dd class="text-sm font-medium text-hp-slate"
-                                    x-text="rec.vitals.respiratory_rate
-                                            ? rec.vitals.respiratory_rate + ' breaths/min'
-                                            : '—'"></dd>
+                                <dd class="flex items-center gap-2">
+                                    <span class="text-sm font-medium text-hp-slate"
+                                          x-text="rec.vitals.respiratory_rate
+                                                  ? rec.vitals.respiratory_rate + ' breaths/min'
+                                                  : '—'"></span>
+                                    <span x-show="rec.vitals.is_rr_flagged"
+                                          class="rounded-full bg-hp-peach px-2 py-0.5
+                                                 text-[11px] font-semibold text-hp-orange">
+                                        Flagged
+                                    </span>
+                                </dd>
                             </div>
 
                             <div class="flex items-center justify-between">

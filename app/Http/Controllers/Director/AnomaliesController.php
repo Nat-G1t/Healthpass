@@ -10,11 +10,13 @@ use App\Models\VitalSigns;
 use Illuminate\View\View;
 
 /**
- * Flagged Anomalies (FR-ANL-05): three stat cards — one per flag type —
- * and the flagged-visits table.
+ * Flagged Anomalies (FR-ANL-05): five stat cards — one per flag type (D-66
+ * added heart rate and respiratory rate) — and the flagged-visits table.
  *
  * Scope (FR-ANL-07): flags surface from CAPTURE, so still-captured
- * (un-encoded) visits appear here too.
+ * (un-encoded) visits appear here too. The respiratory-rate flag is the one
+ * exception by nature, not by scope: the kiosk cannot measure that vital, so
+ * it can only appear once the clinic types the rate at encode (D-65/D-66).
  */
 class AnomaliesController extends Controller
 {
@@ -28,6 +30,8 @@ class AnomaliesController extends Controller
             'bp' => VitalSigns::where('is_bp_flagged', true)->count(),
             'temp' => VitalSigns::where('is_temp_flagged', true)->count(),
             'bmi' => VitalSigns::where('is_bmi_flagged', true)->count(),
+            'hr' => VitalSigns::where('is_hr_flagged', true)->count(),
+            'rr' => VitalSigns::where('is_rr_flagged', true)->count(),
         ];
 
         // Newest first — same ordering as the dashboard preview this page

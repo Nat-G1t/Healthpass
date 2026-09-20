@@ -27,6 +27,9 @@ class VitalSigns extends Model
         'is_temp_flagged',
         'is_bp_flagged',
         'is_bmi_flagged',
+        // D-66: computed at kiosk capture (HR) and at encode (RR).
+        'is_hr_flagged',
+        'is_rr_flagged',
         'bp_device_reading',
     ];
 
@@ -44,6 +47,8 @@ class VitalSigns extends Model
             'is_temp_flagged' => 'boolean',
             'is_bp_flagged' => 'boolean',
             'is_bmi_flagged' => 'boolean',
+            'is_hr_flagged' => 'boolean',
+            'is_rr_flagged' => 'boolean',
             // D-58: the Bluetooth BP monitor's record of the reading, or null.
             'bp_device_reading' => 'array',
         ];
@@ -61,13 +66,47 @@ class VitalSigns extends Model
         return round($weightKg / ($metres * $metres), 1);
     }
 
+    // ── Flag rules (BR-13/BR-14) ─────────────────────────────────────────────
+    // Thresholds live in config/healthpass.php and NOWHERE else. These static
+    // helpers are the one implementation of each rule: the kiosk submit, the
+    // clinic's encode and the demo seeders all call them, so a threshold change
+    // can never leave one screen disagreeing with another.
+
+    /** D-66: > heart_rate_max bpm → "High Heart Rate". No low-HR flag. */
+    public static function isHeartRateFlagged(?int $bpm): bool
+    {
+        if ($bpm === null) {
+            return false;
+        }
+
+        return $bpm > (int) config('healthpass.thresholds.heart_rate_max');
+    }
+
+    /**
+     * D-66: outside respiratory_rate_min … respiratory_rate_max breaths/min →
+     * "Abnormal Respiratory Rate". Null (not yet typed at encode, D-65) is not
+     * a flag — it is simply not measured yet.
+     */
+    public static function isRespiratoryRateFlagged(?int $rate): bool
+    {
+        if ($rate === null) {
+            return false;
+        }
+
+        $thresholds = config('healthpass.thresholds');
+
+        return $rate < (int) $thresholds['respiratory_rate_min']
+            || $rate > (int) $thresholds['respiratory_rate_max'];
+    }
+
     // ── Display helpers ──────────────────────────────────────────────────────
 
     /**
      * One ['label' => …, 'value' => …] pair per tripped flag — the Flagged
      * Anomalies table (FR-ANL-05) renders label and value in separate
-     * columns. Reads the STORED flag booleans — thresholds are computed
-     * once at kiosk submit, never here.
+     * columns. Reads the STORED flag booleans — the thresholds are applied
+     * once when the reading is written (capture, or encode for the
+     * respiratory rate), never here.
      *
      * @return list<array{label: string, value: string}>
      */
@@ -85,6 +124,17 @@ class VitalSigns extends Model
 
         if ($this->is_bmi_flagged) {
             $flags[] = ['label' => 'Abnormal BMI', 'value' => (string) $this->bmi];
+        }
+
+        // D-66. Heart rate is known from capture; respiratory rate only after
+        // the clinic types it at encode, so an un-encoded visit shows neither
+        // an RR value nor an RR flag.
+        if ($this->is_hr_flagged) {
+            $flags[] = ['label' => 'High Heart Rate', 'value' => "{$this->heart_rate_bpm} bpm"];
+        }
+
+        if ($this->is_rr_flagged) {
+            $flags[] = ['label' => 'Abnormal Respiratory Rate', 'value' => "{$this->respiratory_rate} breaths/min"];
         }
 
         return $flags;

@@ -1296,6 +1296,22 @@ export function kioskMachine() {
                 : 'bg-emerald-50 text-emerald-600';
         },
 
+        // ── Heart-rate status badge (D-66; FR-KSK-14 — neutral wording ONLY) ─
+        // > hrMax bpm → is_hr_flagged, from config (BR-13). No low-heart-rate
+        // flag: a resting rate under 60 is common in healthy young students.
+        // The server recomputes this at submit — the badge is display only.
+        hrFlagged(bpm) {
+            return bpm != null && bpm > (this.config.thresholds?.hrMax ?? 100);
+        },
+        hrStatus(bpm) {
+            return this.hrFlagged(bpm) ? 'High' : 'Normal';
+        },
+        hrBadgeClass(bpm) {
+            return this.hrFlagged(bpm)
+                ? 'bg-hp-orange/15 text-hp-orange'
+                : 'bg-emerald-50 text-emerald-600';
+        },
+
         // ── Questionnaire: the form's twelve rows (FR-KSK-10, D-63) ────────────
         /**
          * Record a Yes (true) / No (false) answer for one card. Switching to No

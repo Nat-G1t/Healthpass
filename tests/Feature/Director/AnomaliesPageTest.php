@@ -19,7 +19,8 @@ use Tests\TestCase;
  *    visits — flags surface from capture while the donut stays
  *    encoded-only (FR-ANL-07). The PRD AC's cross-check lives here: a
  *    captured flagged visit is on this screen but in no analytics count;
- *  - three stat cards counting each flag type independently;
+ *  - five stat cards counting each flag type independently (D-66 added
+ *    heart rate and respiratory rate);
  *  - College column = the capture-time snapshot (FR-STU-09, D-17).
  */
 class AnomaliesPageTest extends TestCase
@@ -79,6 +80,8 @@ class AnomaliesPageTest extends TestCase
             'is_bp_flagged' => false,
             'is_temp_flagged' => false,
             'is_bmi_flagged' => false,
+            'is_hr_flagged' => false,
+            'is_rr_flagged' => false,
         ], $vitalOverrides));
 
         return $visit;
@@ -123,7 +126,10 @@ class AnomaliesPageTest extends TestCase
             ->assertSee('38.1');
 
         $this->assertSame(1, $response->viewData('visits')->count());
-        $this->assertSame(['bp' => 0, 'temp' => 1, 'bmi' => 0], $response->viewData('stats'));
+        $this->assertSame(
+            ['bp' => 0, 'temp' => 1, 'bmi' => 0, 'hr' => 0, 'rr' => 0],
+            $response->viewData('stats'),
+        );
 
         // On Analytics: invisible — the donut counts encoded visits only.
         $analytics = $this->actingAs($this->director)->get('/director/analytics');
@@ -164,8 +170,38 @@ class AnomaliesPageTest extends TestCase
 
         $response = $this->actingAs($this->director)->get('/director/anomalies');
 
-        $this->assertSame(['bp' => 1, 'temp' => 1, 'bmi' => 1], $response->viewData('stats'));
+        $this->assertSame(
+            ['bp' => 1, 'temp' => 1, 'bmi' => 1, 'hr' => 0, 'rr' => 0],
+            $response->viewData('stats'),
+        );
         // Two flagged visits — the double-flagged one is ONE table row.
+        $this->assertSame(2, $response->viewData('visits')->count());
+    }
+
+    /**
+     * D-66 — the page carries FIVE cards, and the two new flags reach both the
+     * counts and the table's flag/value columns.
+     */
+    public function test_heart_rate_and_respiratory_rate_flags_get_their_own_cards(): void
+    {
+        $this->makeVisit($this->ccs, ['is_hr_flagged' => true, 'heart_rate_bpm' => 118]);
+        // Respiratory rate is measured at encode (D-65), so its flagged visit
+        // is an encoded one.
+        $rr = $this->makeVisit($this->cea, ['is_rr_flagged' => true, 'respiratory_rate' => 26]);
+        $this->encode($rr);
+
+        $response = $this->actingAs($this->director)
+            ->get('/director/anomalies')
+            ->assertOk()
+            ->assertSee('High Heart Rate')
+            ->assertSee('118 bpm')
+            ->assertSee('Abnormal Respiratory Rate')
+            ->assertSee('26 breaths/min');
+
+        $this->assertSame(
+            ['bp' => 0, 'temp' => 0, 'bmi' => 0, 'hr' => 1, 'rr' => 1],
+            $response->viewData('stats'),
+        );
         $this->assertSame(2, $response->viewData('visits')->count());
     }
 

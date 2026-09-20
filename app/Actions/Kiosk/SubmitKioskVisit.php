@@ -26,9 +26,11 @@ use Illuminate\Validation\ValidationException;
  *
  * Three things are authoritative on the SERVER, never trusted from the browser:
  *   • BMI is recomputed from height + weight.
- *   • The three flag booleans are derived from config('healthpass.thresholds')
+ *   • The four flag booleans are derived from config('healthpass.thresholds')
  *     (§7.4, BR-13/14) — the single source of truth shared with the queue and
- *     Director screens. Flags are advisory only; they never block submission.
+ *     Director screens. The fifth, is_rr_flagged, is computed at encode
+ *     (D-66), because only the clinic measures a respiratory rate (D-65).
+ *     Flags are advisory only; they never block submission.
  *   • Whether the student may submit at all (D-61): only a student holding a
  *     `scheduled` appointment today. There are no walk-ins, and the kiosk's
  *     "No Clinic Schedule Today" screen is only a courtesy — this is the gate.
@@ -109,6 +111,11 @@ final class SubmitKioskVisit
                 'is_bp_flagged' => (int) $vitals['systolic'] >= $thresholds['bp_systolic']
                     || (int) $vitals['diastolic'] >= $thresholds['bp_diastolic'],
                 'is_bmi_flagged' => $bmi >= $thresholds['bmi_obese'],
+                // D-66. Same trust rule: a posted is_hr_flagged is ignored —
+                // the boolean is derived here from the heart rate itself.
+                // There is no is_rr_flagged yet; the kiosk cannot measure a
+                // respiratory rate, so encode computes that one (D-65).
+                'is_hr_flagged' => VitalSigns::isHeartRateFlagged((int) $vitals['heartRate']),
             ]);
 
             $visit->screeningResponse()->create([

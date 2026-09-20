@@ -76,7 +76,7 @@
                 <span class="text-hp-slate/20">·</span>
                 <span class="{{ $vs->is_bmi_flagged ? $flagged : $normal }}">BMI {{ $vs->bmi }}</span>
                 <span class="text-hp-slate/20">·</span>
-                <span class="{{ $normal }}">{{ $vs->heart_rate_bpm }} bpm</span>
+                <span class="{{ $vs->is_hr_flagged ? $flagged : $normal }}">{{ $vs->heart_rate_bpm }} bpm</span>
             </div>
         @else
             <span class="text-hp-slate/30">—</span>
@@ -85,11 +85,15 @@
 
     {{-- Flags column — a badge per flagged vital, or a dash --}}
     <td class="py-4 pr-6 whitespace-nowrap" data-cell="flags">
-        @if ($vs && ($vs->is_temp_flagged || $vs->is_bp_flagged || $vs->is_bmi_flagged))
+        {{-- D-66 added HR. There is deliberately no RR badge here: the
+             respiratory rate is measured at encode (D-65), so at queue time
+             it is not known yet. --}}
+        @if ($vs && ($vs->is_temp_flagged || $vs->is_bp_flagged || $vs->is_bmi_flagged || $vs->is_hr_flagged))
             <div class="flex flex-wrap gap-1.5">
                 @if ($vs->is_temp_flagged) <x-hp.badge variant="flagged">Temp</x-hp.badge> @endif
                 @if ($vs->is_bp_flagged)   <x-hp.badge variant="flagged">BP</x-hp.badge>   @endif
                 @if ($vs->is_bmi_flagged)  <x-hp.badge variant="flagged">BMI</x-hp.badge>  @endif
+                @if ($vs->is_hr_flagged)   <x-hp.badge variant="flagged">HR</x-hp.badge>   @endif
             </div>
         @else
             <span class="text-hp-slate/30">—</span>

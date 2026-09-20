@@ -23,7 +23,7 @@ const CONFIG = {
         bp_diastolic: { min: 30, max: 160 },
         heart_rate: { min: 30, max: 220 },
     },
-    thresholds: { tempMax: 37.2, bpSystolic: 140, bpDiastolic: 90 },
+    thresholds: { tempMax: 37.2, bpSystolic: 140, bpDiastolic: 90, hrMax: 100 },
     bmiObese: 30,
     kiosk: { idleTimeoutSeconds: 90, completeResetSeconds: 12 },
 };
@@ -261,4 +261,46 @@ test('the no-schedule screen offers no way forward, only back to Welcome', () =>
     m.reset();
     assert.equal(m.state.screen, 'welcome');
     assert.equal(m.state.identity, null);
+});
+
+// ── Heart-rate status badge (D-66) ───────────────────────────────────────────
+// The kiosk shows a STATUS, never an interpretation (FR-KSK-14), and reads its
+// threshold from the server-injected config (BR-13) — never a literal here.
+
+test('the heart-rate badge reads Normal at or below the threshold', () => {
+    const m = machineAtVitals(4);
+
+    assert.equal(m.hrFlagged(100), false);
+    assert.equal(m.hrStatus(100), 'Normal');
+    assert.match(m.hrBadgeClass(100), /emerald/);
+});
+
+test('the heart-rate badge reads High above the threshold', () => {
+    const m = machineAtVitals(4);
+
+    assert.equal(m.hrFlagged(101), true);
+    assert.equal(m.hrStatus(101), 'High');
+    assert.match(m.hrBadgeClass(101), /hp-orange/);
+});
+
+test('a low heart rate is not flagged — there is no low-HR rule', () => {
+    const m = machineAtVitals(4);
+
+    assert.equal(m.hrFlagged(48), false);
+    assert.equal(m.hrStatus(48), 'Normal');
+});
+
+test('no heart-rate reading yet shows Normal rather than throwing', () => {
+    const m = machineAtVitals(4);
+
+    assert.equal(m.hrFlagged(null), false);
+    assert.equal(m.hrFlagged(undefined), false);
+});
+
+test('the heart-rate threshold comes from the injected config, not a literal', () => {
+    const m = machineAtVitals(4);
+    m.config = { ...CONFIG, thresholds: { ...CONFIG.thresholds, hrMax: 120 } };
+
+    assert.equal(m.hrFlagged(110), false); // under the clinic's own threshold
+    assert.equal(m.hrFlagged(121), true);
 });

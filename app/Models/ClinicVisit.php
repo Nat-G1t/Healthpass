@@ -77,7 +77,12 @@ class ClinicVisit extends Model
         return $query->whereHas('vitalSigns', function (Builder $vitals): void {
             $vitals->where('is_bp_flagged', true)
                 ->orWhere('is_temp_flagged', true)
-                ->orWhere('is_bmi_flagged', true);
+                ->orWhere('is_bmi_flagged', true)
+                // D-66. is_hr_flagged is set at capture like the three above;
+                // is_rr_flagged only once the clinic types the rate at encode,
+                // so a visit can start unflagged here and join later.
+                ->orWhere('is_hr_flagged', true)
+                ->orWhere('is_rr_flagged', true);
         });
     }
 

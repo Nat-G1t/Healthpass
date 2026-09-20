@@ -62,6 +62,7 @@ class QueueFeedTest extends TestCase
             'is_temp_flagged' => false,
             'is_bp_flagged' => false,
             'is_bmi_flagged' => false,
+            'is_hr_flagged' => false,
         ], $vitals));
 
         return $visit;
@@ -140,5 +141,26 @@ class QueueFeedTest extends TestCase
 
         // Humanized time is present and reads as relative.
         $this->assertStringContainsString('ago', $response->json('visits.0.time_human'));
+    }
+
+    /**
+     * D-66 — the feed carries the heart-rate flag so a row that arrives after
+     * page load gets the same HR badge the Blade row renders. There is no
+     * respiratory-rate flag here: that vital is measured at encode (D-65), by
+     * which time the visit has already left the queue.
+     */
+    public function test_row_carries_the_heart_rate_flag(): void
+    {
+        $this->makeVisit('Ben Lim', now()->subMinutes(4)->toDateTimeString(), [
+            'heart_rate_bpm' => 118,
+            'is_hr_flagged' => true,
+        ]);
+
+        $this->actingAs($this->nurse())
+            ->getJson(route('nurse.queue.feed'))
+            ->assertOk()
+            ->assertJsonPath('visits.0.vitals.heart_rate_bpm', 118)
+            ->assertJsonPath('visits.0.vitals.is_hr_flagged', true)
+            ->assertJsonMissingPath('visits.0.vitals.is_rr_flagged');
     }
 }

@@ -305,6 +305,8 @@ class DemoBatchSeeder extends Seeder
             'is_temp_flagged' => false,
             'is_bp_flagged' => false,
             'is_bmi_flagged' => false,
+            // D-66: derived through the shared helper, like a real capture.
+            'is_hr_flagged' => VitalSigns::isHeartRateFlagged(78),
         ]);
 
         ScreeningResponse::create([
@@ -341,7 +343,13 @@ class DemoBatchSeeder extends Seeder
         // D-65: the clinic confirmed the kiosk's reading unchanged and measured
         // the respiratory rate — the same pair Save & Close writes.
         $vitals = $visit->vitalSigns->fresh();
-        $vitals->update(['respiratory_rate' => $bpFlagged ? 22 : 16]);
+        // D-66: the flagged demo row's 22 breaths/min is outside 12-20, so the
+        // helper raises is_rr_flagged exactly as the encode controller would.
+        $respiratoryRate = $bpFlagged ? 22 : 16;
+        $vitals->update([
+            'respiratory_rate' => $respiratoryRate,
+            'is_rr_flagged' => VitalSigns::isRespiratoryRateFlagged($respiratoryRate),
+        ]);
 
         ClearanceRecord::create([
             'clinic_visit_id' => $visit->id,

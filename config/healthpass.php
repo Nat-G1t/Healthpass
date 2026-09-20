@@ -82,6 +82,18 @@ return [
         'bp_systolic' => 140,    // systolic ≥ 140  → is_bp_flagged ("High Blood Pressure"); D-10 canonical
         'bp_diastolic' => 90,     // OR diastolic ≥ 90 → is_bp_flagged
         'bmi_obese' => 30.0,   // ≥ 30.0 → is_bmi_flagged ("Abnormal BMI / Obese")
+
+        // D-66. Heart rate: > 100 bpm → is_hr_flagged ("High Heart Rate"). There
+        // is deliberately NO low-heart-rate flag — a resting rate under 60 is
+        // common in healthy young students and would flag the fit, not the sick.
+        'heart_rate_max' => 100,
+
+        // D-66. Respiratory rate, the one vital the kiosk cannot measure: it is
+        // typed by the clinic at encode (D-65), and a rate OUTSIDE 12–20 breaths
+        // per minute → is_rr_flagged ("Abnormal Respiratory Rate"). Two-sided,
+        // unlike heart rate: too slow is as clinically meaningful as too fast.
+        'respiratory_rate_min' => 12,
+        'respiratory_rate_max' => 20,
     ],
 
     // FR-KSK-08: Server-side plausibility bounds; out-of-range input triggers re-entry prompt.
