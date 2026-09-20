@@ -48,6 +48,8 @@ class EncodeController extends Controller
             'vitalSigns',
             'screeningResponse',
             'clearanceRecord.encoder',
+            // D-69: the Assessment sections, shown read-only once encoded.
+            'clearanceRecord.medicalAssessment',
         ]);
 
         return view('nurse.encode', [
@@ -86,6 +88,11 @@ class EncodeController extends Controller
                 $validated = Arr::except($request->validated(), [
                     'printed',
                     ...array_keys(ClearanceRecord::ENCODED_VITALS),
+                    // D-69: the Assessment sections are their own table.
+                    'medical_history',
+                    'immunizations',
+                    'family_planning_access',
+                    'surgical_history',
                 ]);
 
                 // D-65: the vitals the clinic confirmed on the card, with BMI
@@ -94,7 +101,7 @@ class EncodeController extends Controller
                 // screening measured, and the flags still describe it.
                 $encodedVitals = $request->encodedVitals();
 
-                ClearanceRecord::create([
+                $record = ClearanceRecord::create([
                     ...$validated,
                     'encoded_vitals' => $encodedVitals,
                     // D-64: a physician's own encode prints their name and
@@ -111,6 +118,16 @@ class EncodeController extends Controller
                     // lands here. Reprints re-stamp via the print controller.
                     'printed_at' => $request->boolean('printed') ? now() : null,
                 ]);
+
+                // D-69: a Medical Assessment Form visit records the paper's
+                // own sections (histories, immunizations, family planning) in
+                // `medical_assessments` — one row per Assessment encode, and
+                // none at all for a Medical Clearance, whose form has no such
+                // sections. Same transaction, so a record can never exist
+                // without them.
+                if ($visit->formType() === 'assessment') {
+                    $record->medicalAssessment()->create($request->medicalAssessmentAttributes());
+                }
 
                 // D-65: the respiratory rate is a vital like any other — the
                 // kiosk simply has no sensor for it, so encode is where it is

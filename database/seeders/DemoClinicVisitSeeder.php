@@ -8,6 +8,7 @@ use App\Models\BatchRequestStudent;
 use App\Models\ClearanceRecord;
 use App\Models\ClinicVisit;
 use App\Models\College;
+use App\Models\MedicalAssessment;
 use App\Models\ScreeningResponse;
 use App\Models\User;
 use App\Models\VitalSigns;
@@ -270,7 +271,7 @@ class DemoClinicVisitSeeder extends Seeder
             ...$this->socialHistory($v2->formType(), 1), // D-68: assessment
             'is_pregnant' => false,
         ]);
-        ClearanceRecord::create([
+        $r2 = ClearanceRecord::create([
             'clinic_visit_id' => $v2->id,
             'encoded_by' => $physician->id,
             ...$v2->batchPurpose(),   // D-62: as the real encode copies it
@@ -283,6 +284,7 @@ class DemoClinicVisitSeeder extends Seeder
             ...ClearanceRecord::physicianBlockFor($physician), // D-64: name + license print
             'encoded_at' => Carbon::parse('2026-03-05 10:45:00'),
         ]);
+        $this->medicalAssessment($r2, $v2->formType(), 1); // D-69
 
         // ── Encoded visit 3 — Maria Reyes, Fit ───────────────────────────────
         $v3 = ClinicVisit::create([
@@ -317,7 +319,7 @@ class DemoClinicVisitSeeder extends Seeder
             ...$this->socialHistory($v3->formType(), 2), // D-68: assessment
             'is_pregnant' => false,
         ]);
-        ClearanceRecord::create([
+        $r3 = ClearanceRecord::create([
             'clinic_visit_id' => $v3->id,
             'encoded_by' => $nurse->id,
             ...$v3->batchPurpose(),   // D-62: as the real encode copies it
@@ -326,6 +328,7 @@ class DemoClinicVisitSeeder extends Seeder
             ...ClearanceRecord::physicianBlockFor($nurse), // D-64: nurse → blank block
             'encoded_at' => Carbon::parse('2026-02-03 12:15:00'),
         ]);
+        $this->medicalAssessment($r3, $v3->formType(), 2); // D-69
 
         // ── Captured visit 4 — Juan Santos, Pending, normal vitals ────────────
         $v4 = ClinicVisit::create([
@@ -556,7 +559,8 @@ class DemoClinicVisitSeeder extends Seeder
      * Purge stale pre-rework demo bands (single-month 91xx spread and the
      * Apr–Jun 9200–9399 bands) so re-seeding an old dev DB starts clean. Only
      * touches the synthetic HP-2026-91xx/92xx reference band — never real
-     * visits. clearance_records restricts visit deletes, so it goes first;
+     * visits. medical_assessments restricts clearance_record deletes and
+     * clearance_records restricts visit deletes, so they go innermost-first;
      * vital_signs / screening_responses cascade with the visit.
      */
     private function purgeStaleAnalyticsBands(): void
@@ -572,7 +576,13 @@ class DemoClinicVisitSeeder extends Seeder
             return;
         }
 
-        ClearanceRecord::whereIn('clinic_visit_id', $staleIds)->delete();
+        // D-69: medical_assessments restricts clearance_record deletes the
+        // same way clearance_records restricts visit deletes — so the chain
+        // unwinds innermost-first.
+        $staleRecordIds = ClearanceRecord::whereIn('clinic_visit_id', $staleIds)->pluck('id');
+        MedicalAssessment::whereIn('clearance_record_id', $staleRecordIds)->delete();
+
+        ClearanceRecord::whereKey($staleRecordIds->all())->delete();
         ClinicVisit::whereKey($staleIds->all())->delete();
 
         $this->command->info("DemoClinicVisitSeeder: purged {$staleIds->count()} stale analytics-band visits.");
@@ -630,7 +640,7 @@ class DemoClinicVisitSeeder extends Seeder
         $this->createSpreadVitalsAndScreening($visit, $visitSeq, $batch->form_type);
 
         if (! $isCaptured) {
-            ClearanceRecord::create([
+            $record = ClearanceRecord::create([
                 'clinic_visit_id' => $visit->id,
                 'encoded_by' => $encoder->id,
                 // D-65: 12-20 breaths/min, with roughly one in nineteen above
@@ -641,6 +651,9 @@ class DemoClinicVisitSeeder extends Seeder
                 ...ClearanceRecord::physicianBlockFor($encoder), // D-64
                 'encoded_at' => $checkedIn->copy()->addHours(2),
             ]);
+
+            // D-69: the Assessment form's own sections; a Clearance gets none.
+            $this->medicalAssessment($record, $batch->form_type, $visitSeq);
         }
     }
 
@@ -814,6 +827,43 @@ class DemoClinicVisitSeeder extends Seeder
         $details = array_filter($yes, fn (?string $detail) => $detail !== null);
 
         return [...$answers, 'details' => $details === [] ? null : $details];
+    }
+
+    /**
+     * D-69 — the Medical Assessment Form's own sections for a demo visit: one
+     * `medical_assessments` row per ASSESSMENT encode, and none at all for a
+     * Medical Clearance, exactly as Save & Close behaves. $seq varies the
+     * answers so the demo screens show ticked and untouched rows alike.
+     */
+    private function medicalAssessment(ClearanceRecord $record, string $formType, int $seq = 0): void
+    {
+        if ($formType !== 'assessment') {
+            return;
+        }
+
+        $conditions = MedicalAssessment::conditionKeys();
+        $vaccines = MedicalAssessment::immunizationKeys();
+
+        // Every third demo record reports nothing — an empty section is the
+        // common case at the clinic, and the screens must read well that way.
+        $reportsNothing = $seq % 3 === 2;
+
+        $record->medicalAssessment()->create([
+            'medical_history' => $reportsNothing
+                ? ['patient' => [], 'family' => [], 'specify' => []]
+                : [
+                    'patient' => ['asthma'],
+                    'family' => ['hypertension', $conditions[$seq % count($conditions)]],
+                    'specify' => ['hypertension' => '150/95'],
+                ],
+            'immunizations' => $reportsNothing
+                ? ['given' => ['child_none'], 'others' => null]
+                : ['given' => ['bcg', 'measles', $vaccines[$seq % count($vaccines)]], 'others' => null],
+            'family_planning_access' => $seq % 2 === 0,
+            'surgical_history' => $reportsNothing
+                ? ['procedures' => null, 'date_done' => null]
+                : ['procedures' => 'Appendectomy', 'date_done' => (string) (2015 + $seq % 8)],
+        ]);
     }
 
     /**

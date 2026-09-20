@@ -65,6 +65,13 @@ class PrintClearanceController extends Controller
         $validated = Arr::except($request->validated(), [
             'printed',
             ...array_keys(ClearanceRecord::ENCODED_VITALS),
+            // D-69: an Assessment visit also posts the form's own sections —
+            // they live in `medical_assessments`, not on this record. Prompt 12
+            // is what prints them.
+            'medical_history',
+            'immunizations',
+            'family_planning_access',
+            'surgical_history',
         ]);
 
         $record = new ClearanceRecord([

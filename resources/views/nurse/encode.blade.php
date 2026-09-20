@@ -30,6 +30,45 @@
 
     $capturedAt = $visit->checked_in_at ?? $visit->created_at;
 
+    // ── Medical Assessment Form sections (D-69) ──────────────────────────────
+    // Shown only for an `assessment` visit, and always from the SERVER's own
+    // form-type resolution (D-62) — never from anything the page posts.
+    $isAssessment = $visit->formType() === 'assessment';
+    $assessment   = $record?->medicalAssessment;
+
+    // What each box opens with: a failed submit's own input first, then the
+    // saved row in read-only mode, then nothing on a fresh form.
+    $conditionChecked = fn (string $column, string $key) => $readOnly
+        ? (bool) $assessment?->hasCondition($column, $key)
+        : in_array($key, (array) old("medical_history.{$column}", []), true);
+
+    $specifyValue = fn (string $key) => $readOnly
+        ? $assessment?->specifyFor($key)
+        : old("medical_history.specify.{$key}");
+
+    $immunizationChecked = fn (string $key) => $readOnly
+        ? (bool) $assessment?->hasImmunization($key)
+        : in_array($key, (array) old('immunizations.given', []), true);
+
+    $immunizationOthers = fn () => $readOnly
+        ? ($assessment?->immunizations['others'] ?? null)
+        : old('immunizations.others');
+
+    // '1' / '0' / null — null is "not answered", which is not the same as No.
+    $familyPlanning = function () use ($readOnly, $assessment) {
+        if (! $readOnly) {
+            return old('family_planning_access');
+        }
+
+        return $assessment?->family_planning_access === null
+            ? null
+            : (string) (int) $assessment->family_planning_access;
+    };
+
+    $surgical = fn (string $key) => $readOnly
+        ? ($assessment?->surgical_history[$key] ?? null)
+        : old("surgical_history.{$key}");
+
     // ── Vital Signs card (D-65) ──────────────────────────────────────────────
     // Normalize every number to ONE string shape before it is displayed or
     // compared: encoded_vitals stores JSON floats while vital_signs casts to
@@ -288,7 +327,13 @@
 
         {{-- ── Questionnaire — the form's twelve rows (D-63) + pregnancy/LMP (FR-KSK-10) ── --}}
         <x-hp.card>
-            <h3 class="text-sm font-semibold text-hp-slate">Health Questionnaire</h3>
+            {{-- D-69: on the Medical Assessment Form this table IS the paper's
+                 "Physical Signs Disorder of: (Self Assessment)" — the student's
+                 own answers are what prints, so the clinic never re-encodes
+                 them and the Assessment fieldset below is not rendered. --}}
+            <h3 class="text-sm font-semibold text-hp-slate">
+                {{ $isAssessment ? 'Physical Signs Disorder of (Self Assessment)' : 'Health Questionnaire' }}
+            </h3>
             <p class="mt-0.5 text-xs text-hp-slate/50">The student's own answers at the kiosk, with any details they typed.</p>
             @if ($sr)
                 <div class="mt-2 grid gap-x-8 sm:grid-cols-2">
@@ -365,6 +410,19 @@
                 </div>
             </x-hp.card>
         @endif
+
+        {{-- ── The Medical Assessment Form's own sections (D-69) ─────────────
+             In the paper's order, Assessment visits only. Each is a partial of
+             its own under nurse/encode/assessment/ — this page is long enough.
+             The sections V-VI and the Pertinent Physical Examination follow in
+             D-70; "IV. Pertinent Physical Exam" is the Vital Signs card above
+             (D-65), never a second set of inputs. --}}
+        @if ($isAssessment)
+            @include('nurse.encode.assessment.medical-history')
+            @include('nurse.encode.assessment.immunizations')
+            @include('nurse.encode.assessment.family-planning')
+            @include('nurse.encode.assessment.surgical-history')
+        @endif
     </div>
 
     {{-- ══ Right column — the assessment form (FR-NRS-03) ══════════════════════ --}}
@@ -437,7 +495,13 @@
             {{-- Physical Signs Disorder of (D-22): the physician examines the
                  student at the clinic; the nurse records the findings here.
                  Each row is optional — unanswered rows print as blank bubbles
-                 on the official form (FR-PRT-02). --}}
+                 on the official form (FR-PRT-02).
+
+                 D-69: the Medical Assessment Form prints the STUDENT'S OWN
+                 answers to this table, so an Assessment visit does not show
+                 these rows at all and saves no ps_* value — the read-only
+                 Self Assessment card in the left column is that section. --}}
+            @unless ($isAssessment)
             <div>
                 <span class="text-sm font-semibold text-hp-slate">Physical Signs Disorder of</span>
                 <p class="mt-0.5 text-xs text-hp-slate/50">
@@ -480,6 +544,7 @@
                     @endforeach
                 </div>
             </div>
+            @endunless
 
             {{-- Clinic Notes (D-64 label; the column stays nurse_notes) print
                  under REMARKS (FR-PRT-02). A visit not yet

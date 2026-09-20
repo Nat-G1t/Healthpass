@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Http\Requests\Nurse;
 
 use App\Models\ClearanceRecord;
+use App\Models\ClinicVisit;
+use App\Models\MedicalAssessment;
 use App\Models\VitalSigns;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -64,6 +66,13 @@ class StoreClearanceRequest extends FormRequest
             $rules[$field][] = "max:{$bounds[$vital['bounds']]['max']}";
         }
 
+        // D-69: the two forms diverge from here. A Medical Assessment visit
+        // prints the STUDENT'S OWN physical-signs answers, so the clinic never
+        // re-encodes them — no ps_* rules, and a posted one is dropped.
+        if ($this->formType() === 'assessment') {
+            return [...$rules, ...$this->assessmentRules()];
+        }
+
         // Physical-signs exam findings (D-22): each row optional — an
         // unanswered radio pair simply isn't in the payload, leaving the
         // column NULL (prints as blank bubbles).
@@ -72,6 +81,106 @@ class StoreClearanceRequest extends FormRequest
         }
 
         return $rules;
+    }
+
+    /**
+     * Which official form this visit follows (D-62) — read from the SERVER's
+     * own resolution on the bound visit, never from the request body, exactly
+     * as the kiosk does. The route model binding already loaded the visit.
+     */
+    private function formType(): string
+    {
+        $visit = $this->route('visit');
+
+        return $visit instanceof ClinicVisit ? $visit->formType() : 'clearance';
+    }
+
+    /**
+     * D-69 — the Medical Assessment Form's own sections. EVERY field here is
+     * optional: only the Result and the seven vitals are required (Nat,
+     * 2026-09-18), because a student may simply have nothing to report.
+     *
+     * The checkbox keys are checked against the model's constants, so a forged
+     * value is rejected rather than stored; `array:` does the same for the
+     * specify map's KEYS, which only the rows with a text box may use.
+     *
+     * @return array<string, mixed>
+     */
+    private function assessmentRules(): array
+    {
+        $conditions = MedicalAssessment::conditionKeys();
+
+        return [
+            'medical_history' => ['nullable', 'array:patient,family,specify'],
+            'medical_history.patient' => ['nullable', 'array'],
+            'medical_history.patient.*' => [Rule::in($conditions)],
+            'medical_history.family' => ['nullable', 'array'],
+            'medical_history.family.*' => [Rule::in($conditions)],
+            'medical_history.specify' => ['nullable', 'array:'.implode(',', MedicalAssessment::specifyKeys())],
+            'medical_history.specify.*' => ['nullable', 'string', 'max:'.MedicalAssessment::SPECIFY_MAX_LENGTH],
+
+            'immunizations' => ['nullable', 'array:given,others'],
+            'immunizations.given' => ['nullable', 'array'],
+            'immunizations.given.*' => [Rule::in(MedicalAssessment::immunizationKeys())],
+            'immunizations.others' => ['nullable', 'string', 'max:'.MedicalAssessment::IMMUNIZATION_OTHERS_MAX_LENGTH],
+
+            'family_planning_access' => ['nullable', 'boolean'],
+
+            'surgical_history' => ['nullable', 'array:procedures,date_done'],
+            'surgical_history.procedures' => ['nullable', 'string', 'max:'.MedicalAssessment::PROCEDURES_MAX_LENGTH],
+            'surgical_history.date_done' => ['nullable', 'string', 'max:'.MedicalAssessment::DATE_DONE_MAX_LENGTH],
+        ];
+    }
+
+    /**
+     * The `medical_assessments` row an Assessment encode writes (D-69), built
+     * from the validated payload only — the keys are re-filtered against the
+     * constants here too, so nothing unknown can reach a JSON column even if a
+     * rule is ever loosened.
+     *
+     * @return array<string, mixed>
+     */
+    public function medicalAssessmentAttributes(): array
+    {
+        $history = $this->validated('medical_history') ?? [];
+        $specify = array_intersect_key(
+            array_filter($history['specify'] ?? [], fn (?string $text): bool => filled($text)),
+            array_flip(MedicalAssessment::specifyKeys()),
+        );
+
+        return [
+            'medical_history' => [
+                'patient' => $this->conditionKeys($history['patient'] ?? []),
+                'family' => $this->conditionKeys($history['family'] ?? []),
+                'specify' => $specify,
+            ],
+            'immunizations' => [
+                'given' => array_values(array_intersect(
+                    $this->validated('immunizations.given') ?? [],
+                    MedicalAssessment::immunizationKeys(),
+                )),
+                'others' => $this->validated('immunizations.others') ?: null,
+            ],
+            // NULL when neither box was ticked — "not answered", not "No".
+            'family_planning_access' => $this->has('family_planning_access')
+                ? $this->boolean('family_planning_access')
+                : null,
+            'surgical_history' => [
+                'procedures' => $this->validated('surgical_history.procedures') ?: null,
+                'date_done' => $this->validated('surgical_history.date_done') ?: null,
+            ],
+        ];
+    }
+
+    /**
+     * The given keys, keeping only real conditions and the form's own order.
+     *
+     * @param  list<string>  $keys
+     * @return list<string>
+     */
+    private function conditionKeys(array $keys): array
+    {
+        return array_values(array_intersect(MedicalAssessment::conditionKeys(), $keys));
     }
 
     /**

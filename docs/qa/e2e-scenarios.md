@@ -1250,6 +1250,72 @@ because the Medical Clearance form has no Personal / Social History section.
 
 ---
 
+## E2E-22 — The Medical Assessment encode records the form's histories (D-69)
+
+**Covers:** FR-NRS-10, FR-NRS-03, FR-NRS-04, BR-16.
+**Roles:** Nurse (or Physician).
+**Setup:** one **captured** visit from a **Medical Assessment Form** batch and
+one from a **Medical Clearance** batch. The demo seed has both; the Live Queue
+tags every row with its form.
+
+### Part A — an Assessment encode
+
+1. Open the Live Queue and click **Encode Result** on a row badged
+   **Medical Assessment Form**. → **Expect:** under the identity and Vital
+   Signs cards, the questionnaire card is headed **"Physical Signs Disorder of
+   (Self Assessment)"**, followed by the Personal / Social History card and
+   then four new cards: **Past Medical History & Family History**, **II.
+   Immunization Profile**, **III. Family Planning Access** and **Past Surgical
+   History / Procedures**. The right-hand Assessment card shows Result, the
+   read-only Purpose and Clinic Notes — and **no** twelve Yes/No exam rows.
+2. In the history table, tick **Allergy** under *Past Medical History
+   (Patient)*. → **Expect:** the specify box on that row becomes typable (it
+   was greyed out). Type `Peanuts`.
+3. Tick **Hypertension (Highest BP)** under *Family History (Lineal)* and type
+   `160/100`. Tick **Asthma** under Patient (it has no specify box).
+4. Tick **BCG**, **HepB1** and **HPV** in the Immunization Profile, and type
+   `Typhoid (2024)` in **Others**.
+5. Choose **Yes** for family planning access. Type `Appendectomy` as the
+   procedure and `Grade 5` as the Date Done.
+6. Pick **Fit**, enter a respiratory rate, and press **Save & Close**. →
+   **Expect:** back on the Live Queue with the confirmation, and the row is
+   gone.
+7. Reopen that visit from the Clinic Dashboard's encode history. → **Expect:**
+   the same four cards, now **read-only**: Allergy and Asthma still ticked
+   under Patient, Hypertension under Family, `Peanuts` and `160/100` still in
+   their boxes, the three vaccines and `Typhoid (2024)` still there, **Yes**
+   still chosen, and `Appendectomy` / `Grade 5` still filled in. Nothing can be
+   edited, and there is no second Save button.
+
+### Part B — a Clearance encode is unchanged
+
+8. Go back to the Live Queue and encode a row badged **Medical Clearance**. →
+   **Expect:** the questionnaire card is headed **"Health Questionnaire"**, the
+   right-hand card still has the **twelve Yes/No Physical Signs rows**
+   pre-filled from the kiosk, and **none** of the four new cards appear.
+9. Save it as usual. → **Expect:** it saves exactly as it always did.
+
+### Part C — nothing is required
+
+10. Encode a third **Assessment** visit and touch none of the four new
+    sections — set only the Result and the respiratory rate. → **Expect:** it
+    saves. Reopening it shows the four cards with nothing ticked and empty
+    boxes; the family planning question shows **neither** Yes nor No, because
+    "not answered" is not the same as "No".
+
+**Pass criteria:** the four sections appear on Assessment visits only, the
+specify boxes unlock per row, everything typed comes back on the read-only
+view, a Clearance encode is untouched, and an Assessment encode saves with
+every section left blank.
+
+**Note for the tester:** which form a visit uses is decided by the **server**
+from the batch the appointment came from — there is nothing on the page that
+can change it. Printing the Assessment form itself is a later change: for now
+**Preview & Print** on an Assessment visit still renders the Medical
+Clearance, with its Physical Signs boxes blank.
+
+---
+
 ---
 
 ## Recording results

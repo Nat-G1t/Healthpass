@@ -4,6 +4,43 @@
 
 ### Added
 
+* **The Medical Assessment encode records the form's histories, immunization
+  profile and family planning access** (D-69). Requested by the clinic on
+  2026-09-18; **pending adviser sign-off**. **FLAGGED SCHEMA CHANGE: a new
+  domain table, `medical_assessments` — the eleventh** — 1:0..1 with
+  `clearance_records` (unique FK, restrict on delete), written **only for
+  `assessment` visits**: `medical_history`, `immunizations` and
+  `surgical_history` JSON NULL, `family_planning_access` BOOLEAN NULL, plus
+  `menstrual_history`, `ob_history` and `physical_exam` JSON NULL created
+  empty for the next change. No new package; dev DB reseeded.
+  * A table, not a dozen more `clearance_records` columns: a Medical
+    Clearance encode has none of these sections. One JSON column per section,
+    because the sections are recorded and printed whole and no analytics read
+    them.
+  * The lists are model constants, verbatim from PSU-QSP-OSS-004-FO010-R00 —
+    `MedicalAssessment::CONDITIONS` (eighteen rows; Allergy, Cancer,
+    Hepatitis, Hypertension's "Highest BP" and Others carry a specify box,
+    max 60 chars) and `IMMUNIZATIONS` (four groups; the paper's two "None"
+    boxes are the separate keys `child_none` and `adult_none`).
+  * **Encode, Assessment visits only:** four new cards in the paper's order —
+    Past Medical History & Family History (two ☐ Present columns, the specify
+    box enabling once either is ticked), II. Immunization Profile, III. Family
+    Planning Access, and Past Surgical History / Procedures + Date Done (free
+    text; open to every student regardless of sex) — each its own partial
+    under `resources/views/nurse/encode/assessment/`. "IV. Pertinent Physical
+    Exam" is the D-65 Vital Signs card; there is no second vitals input.
+  * The **`ps_*` fieldset is not rendered or saved** on an Assessment visit —
+    that form prints the student's own twelve answers, shown read-only in the
+    left column as "Physical Signs Disorder of (Self Assessment)". **Medical
+    Clearance visits are unchanged.**
+  * Every section field is **optional** — only the Result and the seven vitals
+    are required. Validation branches on the **server-resolved** form type,
+    never a posted one; unknown keys are rejected and filtered again when the
+    row is built. Save writes the row in the same transaction as the clearance
+    record.
+  * Printing the Assessment form is the next change; until then an Assessment
+    visit still prints the interim Medical Clearance.
+
 * **The kiosk follows the batch's form: Medical Assessment Form students
   also answer the Personal / Social History** (D-68). Requested by the clinic
   on 2026-09-18; **pending adviser sign-off**. **FLAGGED SCHEMA CHANGE:**

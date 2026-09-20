@@ -385,17 +385,18 @@ Every page in this section is shared by the nurse and the University Physician. 
     - Student header card (avatar, name, college · student number · time, Flagged badge if applicable).
     - **Vital Signs card — EDITABLE since D-65, and part of the assessment form** (one `<form>` wraps both columns). Height, Weight, Temperature, BP systolic, BP diastolic and Heart Rate are number inputs pre-filled from the kiosk's reading; **Respiratory Rate (breaths/min) opens empty** — no kiosk sensor measures it, and the clinic measures it here. All seven required, bounded by `config('healthpass.validation')` (systolic > diastolic). **BMI is display only**: live from height × weight in the browser, always recomputed server-side; a posted `bmi` is ignored. The kiosk's flag badges and the D-58 irregular-pulse note stay and still describe the **kiosk's** reading. On a Medical Assessment Form visit this card **is** the paper's "IV. Pertinent Physical Exam". Read-only (encoded) shows `clearance_records.encoded_vitals` with a grey "Kiosk: 150/95 mmHg" under any corrected value.
     - Questionnaire answers card: the form's twelve rows (D-63; Yes/No badges; Yes = flagged variant), with the student's typed detail under each Yes (D-56).
+    - **The Medical Assessment Form's own sections — `assessment` visits only (D-69)**, in the paper's order, under the Personal / Social History card and each in its own partial (`resources/views/nurse/encode/assessment/`): **Past Medical History & Family History** (the eighteen conditions, a ☐ Present box in each of the two columns — Past Medical History (Patient) and Family History (Lineal) — and, on the rows the paper gives a blank line, an inline specify box that enables once either box on the row is ticked, ≤ 60 chars); **II. Immunization Profile** (For Children / For Adults / For Elderly & Immunocompromised + a free-text Others; the two "None" boxes are separate keys); **III. Family Planning Access** (Yes / No — neither means not answered); **Past Surgical History / Procedures** + **Date Done** (free text, and open to every student regardless of sex). All optional. Saved to the new `medical_assessments` table; the read-only view shows them disabled. Sections V–VI and the Pertinent Physical Examination come with D-70, the printed form with D-71.
     - **Personal / Social History (from the kiosk)** card — **`assessment` visits only (D-68)**, under the questionnaire: Smoking, Alcohol, Illicit Drugs (Yes / No / Quit) and Sexually Active (Yes / No), read-only, "—" for an unanswered row. A `clearance` visit has no such card.
   - **Right column** — "Doctor's Assessment" card:
     - **Fit / Unfit** selector (two cards; selected = peach bg + orange border).
     - **Medical Case Categories** multi-select checkboxes (D-23 — a case can span several systems; each persists as a `clearance_case_categories` row): Alimentary System, Respiratory System, Musculo-Skeletal System, Integumentary System, Urinary System, Metabolic Endocrine System, Cardiovascular System, Eyes, Ears, Nose & Throat Disorders. The kiosk's **vision/hearing answers are decision support** for the "Eyes, Ears, Nose & Throat Disorders" pick — they have no physical-sign row of their own. *(Those two kiosk questions were removed by D-56.)*
     - **Purpose / Cleared For** — **read-only since D-62**: the batch reason's label (plus its specify text for Others), copied onto the clearance record on Save. The page header shows the form-type badge (Medical Clearance / Medical Assessment Form). The nurse picker and the `<x-hp.purpose-fieldset>` component are gone (D-24/D-28 superseded).
-    - **Physical Signs Disorder of** (D-22, rows per D-63): twelve Yes/No rows — SKIN, HEAD, EYES, EARS, NOSE, THROAT, CHEST/LUNGS, HEART, ABDOMEN, KIDNEY/BLADDER, BRAIN, MENTAL DISORDER. The physician examines the student at the clinic; the nurse records the findings. Each row optional — an unanswered row prints as blank bubbles on the form. Stored in `clearance_records.ps_*`. **Kiosk pre-fill (D-56/D-63):** the kiosk asks these same twelve rows, so every row opens pre-checked with the student's answer, **YES and NO alike** (`ps_<key>` ← `<key>`), for the nurse to confirm or correct after the exam; a NULL kiosk answer leaves the row blank. *(Before D-56 the kiosk asked different self-report systems, mapped skin→SKIN, digestive→ABDOMEN (GIT), nose→HEENT, respiratory→CHEST/LUNGS, bones→EXTREMITIES, heart→HEART/CVS, nervous→NEUROLOGICAL, and GUT/BREAST always opened blank. From D-56 to D-63 the rows were the old form's nine — SKIN, ABDOMEN (GIT), HEENT, GUT, CHEST/LUNGS, EXTREMITIES, HEART/CVS, NEUROLOGICAL, BREAST.)*
+    - **Physical Signs Disorder of** — **Medical Clearance visits only since D-69.** On an `assessment` visit these rows are **not rendered and not saved**: that paper prints the student's own answers, so the left column's questionnaire card is titled "Physical Signs Disorder of (Self Assessment)" and is the section. What follows describes the Clearance fieldset. (D-22, rows per D-63): twelve Yes/No rows — SKIN, HEAD, EYES, EARS, NOSE, THROAT, CHEST/LUNGS, HEART, ABDOMEN, KIDNEY/BLADDER, BRAIN, MENTAL DISORDER. The physician examines the student at the clinic; the nurse records the findings. Each row optional — an unanswered row prints as blank bubbles on the form. Stored in `clearance_records.ps_*`. **Kiosk pre-fill (D-56/D-63):** the kiosk asks these same twelve rows, so every row opens pre-checked with the student's answer, **YES and NO alike** (`ps_<key>` ← `<key>`), for the nurse to confirm or correct after the exam; a NULL kiosk answer leaves the row blank. *(Before D-56 the kiosk asked different self-report systems, mapped skin→SKIN, digestive→ABDOMEN (GIT), nose→HEENT, respiratory→CHEST/LUNGS, bones→EXTREMITIES, heart→HEART/CVS, nervous→NEUROLOGICAL, and GUT/BREAST always opened blank. From D-56 to D-63 the rows were the old form's nine — SKIN, ABDOMEN (GIT), HEENT, GUT, CHEST/LUNGS, EXTREMITIES, HEART/CVS, NEUROLOGICAL, BREAST.)*
     - **Clinic Notes** textarea (optional; labelled "Nurse Notes" before D-64 — the column is still `nurse_notes`) — prints under REMARKS. For a visit not yet encoded it opens **pre-filled with the student's YES details**, one `SKIN: <detail>` line each in the form's order (D-56; the twelve-row order since D-63); `old()` input wins and the nurse edits freely. A read-only encoded record shows its saved notes only.
     - "Preview & Print Medical Clearance" button (ghost style, full width, Download icon).
     - "← Back" (ghost) + "Save & Close Appointment" (primary, flex-2) — Save disabled until Fit/Unfit chosen.
 
-- **On Save**: update clinic visit `status` → `encoded`, create `clearance_records` row, return to queue. **D-65:** the same transaction stores the confirmed vitals in `clearance_records.encoded_vitals` (BMI recomputed) and the measured `vital_signs.respiratory_rate`; **no other `vital_signs` column or flag is ever touched** — the kiosk's reading is what the flags and the analytics describe (BR-14). **D-64:** the physician block is stamped from the encoder — a physician's own name (`UPPER(name), MD`) and license, NULL for a nurse. An encoded visit's read-only notice reads "encoded by <name> (<role>)".
+- **On Save**: update clinic visit `status` → `encoded`, create `clearance_records` row, return to queue. **D-69:** on an `assessment` visit the same transaction also creates the one `medical_assessments` row; a Medical Clearance visit creates none. **D-65:** the same transaction stores the confirmed vitals in `clearance_records.encoded_vitals` (BMI recomputed) and the measured `vital_signs.respiratory_rate`; **no other `vital_signs` column or flag is ever touched** — the kiosk's reading is what the flags and the analytics describe (BR-14). **D-64:** the physician block is stamped from the encoder — a physician's own name (`UPPER(name), MD`) and license, NULL for a nurse. An encoded visit's read-only notice reads "encoded by <name> (<role>)".
 
 #### Print Medical Clearance (modal)
 - Fixed overlay (z-index 2000), modal 92% wide / 92vh.
@@ -567,12 +568,13 @@ Each vital screen has:
 
 ---
 
-## 8. Database schema (10 tables)
+## 8. Database schema (11 tables)
 
-> Locked at 10 tables. `clearance_case_categories` (added as table #11 on
+> Was locked at 10 tables; **D-69 (September 20, 2026) adds `medical_assessments`**
+> as table #11 — the Medical Assessment Form's own sections, written only for
+> visits that use that form. `clearance_case_categories` (added as table #11 on
 > July 9, 2026 by D-23) was **removed by D-32** (July 18, 2026) when the
-> Medical Cases analytics and the case-category concept were dropped — the
-> schema returns to the original 10.
+> Medical Cases analytics and the case-category concept were dropped.
 > (The `kiosk_devices` device-auth table, D-27, is documented in the PRD
 > data dictionary as a flagged extension and is not shown in this section.)
 
@@ -778,6 +780,28 @@ printed_at            timestamp NULL
 created_at, updated_at
 ```
 
+### `medical_assessments`
+```sql
+-- D-69 — the Medical Assessment Form's (PSU-QSP-OSS-004-FO010-R00) own
+-- sections. ONE row per ENCODED `assessment` visit; a Medical Clearance
+-- encode creates none, and that absence is the honest record.
+-- One JSON column per section: the sections are recorded and printed whole,
+-- nothing filters or aggregates on a single condition, and no analytics read
+-- them. The keys are validated against MedicalAssessment's constants.
+id                     bigint PK
+clearance_record_id    bigint UNIQUE FK → clearance_records.id  -- restrict on delete
+medical_history        json NULL   -- {"patient": [condition keys], "family": [condition keys], "specify": {key: text ≤ 60}}
+immunizations          json NULL   -- {"given": [keys], "others": text|null ≤ 120}; child_none / adult_none are separate keys
+family_planning_access boolean NULL -- NULL = not answered (NOT a No)
+surgical_history       json NULL   -- {"procedures": text|null ≤ 200, "date_done": text|null ≤ 40}; date_done is free text ("2019", "Grade 5")
+-- Created empty by the D-69 migration, written by D-70 (sections V-VI and
+-- the Pertinent Physical Examination) — one migration for one table.
+menstrual_history      json NULL
+ob_history             json NULL
+physical_exam          json NULL
+created_at, updated_at
+```
+
 ---
 
 ## 9. Key relationships summary
@@ -801,7 +825,7 @@ appointments ──|── clinic_visits (appointment_id, nullable)
 
 clinic_visits ──|| vital_signs          (1:1)
               ──|| screening_responses  (1:1)
-              ──|  clearance_records    (1:0..1)
+              ──|  clearance_records    (1:0..1)  ──|  medical_assessments (1:0..1 — `assessment` visits only, D-69)
 ```
 
 ---

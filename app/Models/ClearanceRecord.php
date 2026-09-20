@@ -7,6 +7,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class ClearanceRecord extends Model
 {
@@ -187,5 +188,16 @@ class ClearanceRecord extends Model
     public function encoder(): BelongsTo
     {
         return $this->belongsTo(User::class, 'encoded_by');
+    }
+
+    /**
+     * D-69 — the Medical Assessment Form's own sections. `hasOne` is Laravel's
+     * one-to-one relation: this record has at most one row over there, found
+     * by its `clearance_record_id`. It is NULL on every Medical Clearance
+     * record, because that form has none of those sections.
+     */
+    public function medicalAssessment(): HasOne
+    {
+        return $this->hasOne(MedicalAssessment::class);
     }
 }

@@ -370,7 +370,7 @@ class DemoBatchSeeder extends Seeder
             'is_rr_flagged' => VitalSigns::isRespiratoryRateFlagged($respiratoryRate),
         ]);
 
-        ClearanceRecord::create([
+        $record = ClearanceRecord::create([
             'clinic_visit_id' => $visit->id,
             'encoded_by' => $this->nurse->id,
             'result' => $result,
@@ -390,6 +390,21 @@ class DemoBatchSeeder extends Seeder
                 : null,
             'encoded_at' => Carbon::parse($date)->setTime(10, 15),
         ]);
+
+        // D-69: a Medical Assessment Form visit also carries the paper's own
+        // sections; a Medical Clearance one carries none.
+        if ($batch->form_type === 'assessment') {
+            $record->medicalAssessment()->create([
+                'medical_history' => [
+                    'patient' => ['asthma'],
+                    'family' => ['hypertension'],
+                    'specify' => ['hypertension' => '150/95'],
+                ],
+                'immunizations' => ['given' => ['bcg', 'measles', 'hpv'], 'others' => null],
+                'family_planning_access' => true,
+                'surgical_history' => ['procedures' => null, 'date_done' => null],
+            ]);
+        }
 
         // The nurse's encode is what completes the appointment
         // (Nurse\EncodeController) — the Batch Results popup reads that as
