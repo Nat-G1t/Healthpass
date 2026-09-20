@@ -138,8 +138,10 @@ class PrintFlowTest extends TestCase
             ->assertOk()
             ->assertSee('MEDICAL CLEARANCE')
             ->assertSee('Preview-only observation.')
-            // D-64: a nurse is previewing, so the physician block is blank.
-            ->assertSee('License No. ________')
+            // D-64: a nurse is previewing, so the physician block is blank —
+            // an empty name line and an empty licence line to fill in by hand.
+            ->assertSee('<div class="name"></div>', false)
+            ->assertSee('University Physician')
             ->assertDontSee(', MD')
             // The marker the encode screen's print script keys on.
             ->assertSee('data-hp-print-doc', false);
@@ -155,7 +157,8 @@ class PrintFlowTest extends TestCase
             ->post(route('nurse.visits.print.preview', $visit), EncodePayload::make())
             ->assertOk()
             ->assertSee('ANA B. CRUZ, MD')
-            ->assertSee('License No. 123456');
+            ->assertSee('License No.')
+            ->assertSee('123456');
     }
 
     public function test_preview_shades_the_posted_result_and_physical_signs(): void
@@ -173,12 +176,12 @@ class PrintFlowTest extends TestCase
 
         // UNFIT bubble shaded, FIT blank.
         $this->assertMatchesRegularExpression(
-            '~<span class="bb"></span> <b>FIT</b>\s*<span class="bb"[^>]*>●</span> <b>UNFIT</b>~u',
+            '~<span class="bb"></span> <b>FIT</b>\s*<span class="bb on"[^>]*></span> <b>UNFIT</b>~u',
             $html
         );
-        // Posted '1' → CHEST/LUNGS YES shaded.
+        // Posted '1' → CHEST/LUNGS YES box marked, NO box blank.
         $this->assertMatchesRegularExpression(
-            '~CHEST/LUNGS</b></td>\s*<td class="bubbles"><span class="bb">●</span></td>~u',
+            '~<td class="sname">CHEST/LUNGS</td>\s*<td class="sbox"><span class="bx on"></span></td>\s*<td class="sbox"><span class="bx"></span></td>~u',
             $html
         );
     }
@@ -261,8 +264,10 @@ class PrintFlowTest extends TestCase
             ->assertOk()
             ->getContent();
 
+        // D-67: REMARKS is wrapped and sized server-side onto the form's two
+        // ruled lines — a short note keeps the full 10pt.
         $this->assertMatchesRegularExpression(
-            '~<div class="remarks-text" id="remarks-text">SKIN: Itchy rash on left arm</div>~',
+            '~<div class="rline" style="font-size: 10pt;">SKIN: Itchy rash on left arm</div>~',
             $html
         );
     }

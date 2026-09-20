@@ -400,19 +400,21 @@ Every page in this section is shared by the nurse and the University Physician. 
 - Fixed overlay (z-index 2000), modal 92% wide / 92vh.
 - Modal header: "Medical Clearance — Document Preview" + "Kiosk data pre-filled. Review before printing." + Close + Print buttons.
 - Body: `<iframe>` renders the **official PamSU form** as an HTML document, pre-filled from student + the clinic's confirmed vitals (`encoded_vitals`, D-65) + the nurse-encoded assessment (result, purpose, notes, physical-signs exam findings) + the questionnaire's pregnancy/LMP answer (D-22).
+- **D-67:** the read-only (encoded) screen also offers **Save as PDF** beside Reprint — `GET /nurse/visits/{visit}/pdf`, the same document rendered by dompdf at Letter and returned as `{reference_no}-medical-clearance.pdf`. It deliberately does **not** stamp `printed_at`.
 
-**Official form details (DHVSU-QSP-OSS-004-FO002-R03):**
+**Official form details (PSU-QSP-OSS-004-FO002-R04, D-67 — replaces …-R03):**
+- **One template, two renderers:** `resources/views/forms/medical-clearance.blade.php` is rendered BOTH by the browser print (iframe + `window.print()`) and by **dompdf** for the PDF. It is a standalone HTML document (no app layout, no Vite, no Tailwind) written in dompdf-safe CSS only — tables, block and inline-block, fixed widths, borders, `page-break-*`; **no flexbox, no grid, no JavaScript**. Letter portrait, `@page` margins 0.6in / 0.9in / 0.3in / 0.9in, one page. The logos are base64 `data:` URIs from print-sized copies in `public/images/form/print/`. All the view data is built once in `App\Support\ClearanceDocument`.
 - Header: "Republic of the Philippines / PAMPANGA STATE UNIVERSITY / (former Don Honorio Ventura State University) / Office of Student Welfare and Formation / Health Services Unit / MEDICAL CLEARANCE"
-- Font: Times New Roman, 11.5px, black on white, print margins 12–16mm.
+- Font: **"Times New Roman", Times, serif** for the body and **Arial/Helvetica** for the letterhead — both are core PDF fonts, so the browser and dompdf render the same type. Black on white.
 - Student fields: Surname / First Name / Middle Name (3-column underlines), Course/Year/Section, Address, Age, Sex (radio), Civil Status (radio), Date of Birth, Place of Birth.
-- Vitals grid (3 columns): Height, Heart Rate, Temperature, Weight, Blood Pressure, **Respiratory Rate — printed since D-65** (the clinic measures it at encode; FR-PRT-03 struck), plus the BMI row (a flagged scan divergence). Every value is the clinic's confirmed copy from `clearance_records.encoded_vitals`, **not** the kiosk's `vital_signs` reading; a record encoded before D-65 has none and falls back to its kiosk reading.
-- Physical signs table (D-63, interim until D-67/D-71 rebuild the documents): YES/NO bubbles for the twelve rows in the form's three columns of four — SKIN, HEAD, EYES, EARS | NOSE, THROAT, CHEST/LUNGS, HEART | ABDOMEN, KIDNEY/BLADDER, BRAIN, MENTAL DISORDER — shaded from the nurse-encoded exam findings (`clearance_records.ps_*`, D-22); unanswered rows print blank.
-- Remarks / notes line — nurse notes only; case details are the physician's hand-written annotation (D-22).
+- Vitals in **three column pairs**: Height / Weight · Heart Rate / Blood Pressure · Temperature / **Respiratory Rate** — printed since D-65 (the clinic measures it at encode; FR-PRT-03 struck). **(D-67) There is no BMI row** — R04 has no BMI box, so the old flagged scan divergence is gone; BMI stays on the student's My Records. Every value is the clinic's confirmed copy from `clearance_records.encoded_vitals`, **not** the kiosk's `vital_signs` reading; a record encoded before D-65 has none and falls back to its kiosk reading.
+- Physical signs table (D-63; rebuilt as R04's bordered grid by D-67): YES/NO boxes for the twelve rows in the form's three column groups of four — a marked box prints **solid black**, and (like every bubble on the form) the fill is drawn with **border, not background colour**, because Chrome leaves "Background graphics" unchecked by default — SKIN, HEAD, EYES, EARS | NOSE, THROAT, CHEST/LUNGS, HEART | ABDOMEN, KIDNEY/BLADDER, BRAIN, MENTAL DISORDER — shaded from the nurse-encoded exam findings (`clearance_records.ps_*`, D-22); unanswered rows print blank.
+- Remarks — two ruled lines of Clinic Notes only; case details are the physician's hand-written annotation (D-22). **(D-67)** dompdf runs no JavaScript, so the old in-page shrink-to-fit script is replaced by a **server-side** rule in `ClearanceDocument::remarks()`: the note is wrapped to the two lines at one size chosen from 10pt down to a **7pt floor**, and anything still over is clipped. Print and PDF get the identical lines and size.
 - Pregnancy question (YES/NO radio + LMP line) — pre-filled from the kiosk questionnaire (`screening_responses`).
-- Fitness declaration: "He/She is physically/mentally ☐ FIT ☐ UNFIT to undergo in:" + purpose bubbles — **the visit's form type's purposes (D-62)**, the saved batch-reason label shaded — incl. "Others, Specify: ___" — an Others purpose shades that bubble and prints the specified event on the line, clipped to fit (D-24). The college is NOT printed anywhere on the form (D-25).
+- Fitness declaration (D-67 wording, from the R04 scan): "He/She is physically / mentally ○ FIT ○ UNFIT **to participate in:**" + purpose bubbles — **the visit's form type's purposes (D-62)**, the saved batch-reason label shaded — incl. "Others, Specify: ___" — an Others purpose shades that bubble and prints the specified event on the line, clipped to fit (D-24). The college is NOT printed anywhere on the form (D-25).
 - Physician block (D-64, conditional): when a **physician** encoded — their name, "University Physician", "License No. {license}"; when a **nurse** encoded — a blank name line, "University Physician", "License No. ________". Always a blank signature line above for the wet signature. *(Was the pre-printed "REYNALDO S. ALIPIO, MD · License No. 60252".)*
-- Date line + form code bottom-right.
-- Print via `window.print()`.
+- **Date** line — the encode date (today on a pre-save preview), never an input — and the form code **PSU-QSP-OSS-004-FO002-R04** bottom-**left**.
+- Print via `window.print()`; the same template is saved as a PDF via dompdf (FR-PRT-06).
 
 **Physical-signs source (D-22, supersedes the earlier questionnaire → form mapping):**
 the form's Physical Signs rows (twelve since D-63) shade from the nurse-encoded exam findings
@@ -821,12 +823,14 @@ clinic_visits ──|| vital_signs          (1:1)
 
 ## 12. Print form reference
 
-**Form code**: DHVSU-QSP-OSS-004-FO002-R03  
+**Form code**: PSU-QSP-OSS-004-FO002-R04 (D-67; replaces DHVSU-QSP-OSS-004-FO002-R03)  
 **Title**: MEDICAL CLEARANCE  
 **Issuing office**: Office of Student Welfare and Formation — Health Services Unit  
 **Physician block** (D-64): the encoding physician's name + license when a physician encoded; blank name line and "License No. ________" when a nurse encoded (was pre-printed REYNALDO S. ALIPIO, MD · License No. 60252)  
-**Respiratory Rate**: intentionally blank (not a captured vital in HealthPass)  
-**Printing**: Blade view generates an HTML document rendered in an `<iframe>` inside the Encode Result screen; `window.print()` is triggered from the iframe's content window.
+**Respiratory Rate**: printed since D-65 — the clinic measures it on the encode page  
+**Template**: `resources/views/forms/medical-clearance.blade.php` — ONE template per form, shared by the print and the PDF, in dompdf-safe CSS (D-67). View data from `App\Support\ClearanceDocument`.  
+**Printing**: the Blade document is rendered in an `<iframe>` inside the Encode Result screen; `window.print()` is triggered from the iframe's content window.  
+**PDF**: `barryvdh/laravel-dompdf` renders the same template at Letter for `GET /nurse/visits/{visit}/pdf` (FR-PRT-06). Needs PHP's **gd** extension for the letterhead images.
 
 ---
 

@@ -481,7 +481,7 @@ class EncodeSaveTest extends TestCase
             ->getContent();
 
         // The saved label's bubble is the shaded one.
-        $this->assertMatchesRegularExpression('~<span class="bb">●</span> Outbound Activities~', $html);
+        $this->assertMatchesRegularExpression('~<span class="bb on"></span> Outbound Activities~', $html);
     }
 
     public function test_the_print_preview_uses_the_batch_purpose_too(): void
@@ -495,7 +495,7 @@ class EncodeSaveTest extends TestCase
             ->assertOk()
             ->getContent();
 
-        $this->assertMatchesRegularExpression('~<span class="bb">●</span> Others, Specify:~', $html);
+        $this->assertMatchesRegularExpression('~<span class="bb on"></span> Others, Specify:~', $html);
         $this->assertStringContainsString('Quiz bee', $html);
     }
 }

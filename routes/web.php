@@ -195,16 +195,20 @@ Route::middleware(['auth', 'role:nurse,physician'])
         // visit to encoded — one-time, guarded in the controller + DB unique.
         Route::post('/visits/{visit}/encode', [NurseEncodeController::class, 'store'])
             ->middleware('throttle:40,1,encode-store')->name('visits.encode.store');
-        // Printable Medical Clearance (Module PRT, FR-PRT-01..05 / FR-NRS-05) —
-        // the official DHVSU form as a standalone document.
+        // Medical Clearance document (Module PRT, FR-PRT-01..06 / FR-NRS-05) —
+        // official form PSU-QSP-OSS-004-FO002-R04 (D-67) as a standalone
+        // document, rendered from one Blade template by both renderers.
         //  GET  print         — plain view of an encoded visit's form, no side effects
         //  POST print-preview — captured visit: the encode form posts its unsaved
         //                       fields into the hidden print iframe (pre-save preview)
         //  POST print         — encoded visit: Reprint — re-stamps printed_at and
         //                       returns the form for the iframe to print
+        //  GET  pdf           — Save as PDF (FR-PRT-06): the same document via
+        //                       dompdf, as a download; never stamps printed_at
         Route::get('/visits/{visit}/print', [NursePrintClearanceController::class, 'show'])->name('visits.print');
         Route::post('/visits/{visit}/print-preview', [NursePrintClearanceController::class, 'preview'])->name('visits.print.preview');
         Route::post('/visits/{visit}/print', [NursePrintClearanceController::class, 'reprint'])->name('visits.print.reprint');
+        Route::get('/visits/{visit}/pdf', [NursePrintClearanceController::class, 'pdf'])->name('visits.pdf');
 
         // Enable Kiosk Mode (FR-NRS-06, D-27): enroll/list/revoke trusted kiosk
         // DEVICES so a clinic terminal can open /kiosk without anyone signing in

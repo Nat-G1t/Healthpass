@@ -475,6 +475,19 @@
                                  formtarget="hp-print-frame">
                         Reprint
                     </x-hp.button>
+
+                    {{-- Save as PDF (FR-PRT-06, D-67): a plain GET link, not a
+                         submit — the response is the same document rendered by
+                         dompdf and sent as a download, so nothing on this page
+                         navigates and printed_at is NOT re-stamped. --}}
+                    <a href="{{ route('nurse.visits.pdf', $visit) }}"
+                       class="inline-flex w-full items-center justify-center gap-2 rounded-full
+                              border-[1.5px] border-hp-slate/30 px-6 py-2.5 text-sm font-semibold
+                              text-hp-slate transition-colors duration-hp-fast hover:bg-hp-slate/8
+                              focus-visible:outline-none focus-visible:ring-2
+                              focus-visible:ring-hp-slate focus-visible:ring-offset-1">
+                        Save as PDF
+                    </a>
                 @else
                     {{-- Flipped to 1 once Preview & Print fires, so Save & Close
                          can stamp printed_at (FR-NRS-05) — the clearance row

@@ -12,15 +12,19 @@ use App\Models\College;
 use App\Models\ScreeningResponse;
 use App\Models\User;
 use App\Models\VitalSigns;
+use App\Support\ClearanceDocument;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * Module PRT (FR-PRT-01..04, BR-17) — printable Medical Clearance
- * (DHVSU-QSP-OSS-004-FO002-R03): nurse-only, encoded visits only, populated
- * per FR-PRT-02 as amended by D-22 (physical signs + pregnancy shade from the
- * kiosk questionnaire; no Student No.), Respiratory Rate intentionally blank,
- * physician block pre-printed from the record's stored defaults.
+ * Module PRT (FR-PRT-01..06, BR-17) — the Medical Clearance document, official
+ * form PSU-QSP-OSS-004-FO002-R04 (D-67): clinic-staff only, encoded visits
+ * only, populated per FR-PRT-02 as amended by D-22 (the physical-signs boxes
+ * come from the clinic's exam findings, never the kiosk questionnaire; no
+ * Student No.), the clinic's confirmed vitals incl. Respiratory Rate (D-65),
+ * and a physician block that prints only on a physician's own record (D-64).
+ *
+ * The PDF built from this same template is covered by ClearancePdfTest.
  */
 class PrintViewTest extends TestCase
 {
@@ -177,7 +181,8 @@ class PrintViewTest extends TestCase
             ->assertSee('MEDICAL CLEARANCE')
             ->assertSee('Office of Student Welfare and Formation')
             ->assertSee('Health Services Unit')
-            ->assertSee('DHVSU-QSP-OSS-004-FO002-R03')
+            ->assertSee('PSU-QSP-OSS-004-FO002-R04')
+            ->assertSee('to participate in:')
             // Student identity — name split into the form's three segments
             ->assertSeeInOrder(['Cruz', 'SURNAME', 'Ana', 'FIRST NAME', 'Reyes', 'MIDDLE NAME'])
             ->assertSee('Bachelor of Science in Information Technology')
@@ -190,14 +195,13 @@ class PrintViewTest extends TestCase
             ->assertSee('San Fernando')
             // Age computed from DOB at the encode date, not registration
             ->assertSee((string) (int) $visit->student->studentProfile->date_of_birth->diffInYears($record->encoded_at))
-            // Vitals incl. BMI (FR-PRT-02)
+            // Vitals — the clinic's confirmed copy (D-65). R04 has no BMI box,
+            // so BMI is NOT printed (D-67); it stays on the student's records.
             ->assertSee('165.0 cm')
             ->assertSee('60.0 kg')
-            ->assertSee('21.5')
             ->assertSee('36.5 °C', false)
             ->assertSee('115/75 mmHg')
             ->assertSee('75 bpm')
-            // Respiratory Rate present on the form but intentionally blank (FR-PRT-03)
             ->assertSee('Respiratory Rate')
             // Result + purpose + notes
             ->assertSee('FIT')
@@ -228,19 +232,19 @@ class PrintViewTest extends TestCase
             ->assertOk()
             ->getContent();
 
-        // ps_chest_lungs=true → CHEST/LUNGS: YES shaded, NO blank
+        // ps_chest_lungs=true → CHEST/LUNGS: YES marked, NO blank
         $this->assertMatchesRegularExpression(
-            '~CHEST/LUNGS</b></td>\s*<td class="bubbles"><span class="bb">●</span></td>\s*<td class="bubbles"><span class="bb"></span></td>~u',
+            '~<td class="sname">CHEST/LUNGS</td>\s*<td class="sbox"><span class="bx on"></span></td>\s*<td class="sbox"><span class="bx"></span></td>~u',
             $html
         );
-        // ps_skin=false → SKIN: YES blank, NO shaded
+        // ps_skin=false → SKIN: YES blank, NO marked
         $this->assertMatchesRegularExpression(
-            '~SKIN</b></td>\s*<td class="bubbles"><span class="bb"></span></td>\s*<td class="bubbles"><span class="bb">●</span></td>~u',
+            '~<td class="sname">SKIN</td>\s*<td class="sbox"><span class="bx"></span></td>\s*<td class="sbox"><span class="bx on"></span></td>~u',
             $html
         );
-        // ps_kidney_bladder NULL (not examined) → both bubbles blank
+        // ps_kidney_bladder NULL (not examined) → both boxes blank
         $this->assertMatchesRegularExpression(
-            '~KIDNEY/BLADDER</b></td>\s*<td class="bubbles"><span class="bb"></span></td>\s*<td class="bubbles"><span class="bb"></span></td>~u',
+            '~<td class="sname">KIDNEY/BLADDER</td>\s*<td class="sbox"><span class="bx"></span></td>\s*<td class="sbox"><span class="bx"></span></td>~u',
             $html
         );
     }
@@ -259,7 +263,7 @@ class PrintViewTest extends TestCase
             ->getContent();
 
         $this->assertMatchesRegularExpression(
-            '~CHEST/LUNGS</b></td>\s*<td class="bubbles"><span class="bb"></span></td>\s*<td class="bubbles"><span class="bb"></span></td>~u',
+            '~<td class="sname">CHEST/LUNGS</td>\s*<td class="sbox"><span class="bx"></span></td>\s*<td class="sbox"><span class="bx"></span></td>~u',
             $html
         );
     }
@@ -277,7 +281,7 @@ class PrintViewTest extends TestCase
             ->getContent();
 
         $this->assertMatchesRegularExpression(
-            '~Are you Pregnant</span>\s*<span class="bb">●</span>\s*<b>YES</b>~u',
+            '~Are you Pregnant\s*<span class="bb on"></span> <b>YES</b>~u',
             $html
         );
     }
@@ -294,7 +298,7 @@ class PrintViewTest extends TestCase
             ->getContent();
 
         $this->assertMatchesRegularExpression(
-            '~Are you Pregnant</span>\s*<span class="bb"></span>\s*<b>YES</b>\s*<span class="bb"[^>]*>●</span>\s*<b>NO</b>~u',
+            '~Are you Pregnant\s*<span class="bb"></span> <b>YES</b>\s*<span class="bb on"[^>]*></span> <b>NO</b>~u',
             $html
         );
     }
@@ -311,7 +315,8 @@ class PrintViewTest extends TestCase
             ->assertOk()
             ->assertSee('REYNALDO S. ALIPIO, MD')
             ->assertSee('University Physician')
-            ->assertSee('License No. 60252');
+            ->assertSee('License No.')
+            ->assertSee('60252');
     }
 
     public function test_physician_block_is_blank_on_a_nurse_record(): void
@@ -325,8 +330,11 @@ class PrintViewTest extends TestCase
             ->get(route('nurse.visits.print', $visit))
             ->assertOk()
             ->assertSee('University Physician')
-            ->assertSee('License No. ________')
-            ->assertSee('class="name blank"', false)
+            ->assertSee('License No.')
+            // An empty name line and an empty licence line, both to be filled
+            // in by hand on the wet-signed copy.
+            ->assertSee('<div class="name"></div>', false)
+            ->assertSee('<span class="fill-inline" style="width: 0.8in;"></span>', false)
             ->assertDontSee('REYNALDO');
     }
 
@@ -373,8 +381,8 @@ class PrintViewTest extends TestCase
 
         // The saved label shades its own bubble, and only that one.
         $html = $response->getContent();
-        $this->assertMatchesRegularExpression('~<span class="bb">●</span> Outbound Activities~u', $html);
-        $this->assertDoesNotMatchRegularExpression('~<span class="bb">●</span> Field Trip/Educational Tour~u', $html);
+        $this->assertMatchesRegularExpression('~<span class="bb on"></span> Outbound Activities~u', $html);
+        $this->assertDoesNotMatchRegularExpression('~<span class="bb on"></span> Field Trip/Educational Tour~u', $html);
     }
 
     public function test_an_assessment_batch_prints_the_assessment_purposes(): void
@@ -410,8 +418,116 @@ class PrintViewTest extends TestCase
             ->getContent();
 
         $this->assertMatchesRegularExpression(
-            '~<span class="bb">●</span> Others, Specify:~u',
+            '~<span class="bb on"></span> Others, Specify:~u',
             $html
         );
+    }
+
+    // ── 4. The R04 document itself (D-67) ─────────────────────────────────────
+
+    public function test_the_document_prints_the_r04_code_and_all_twelve_physical_sign_rows(): void
+    {
+        $nurse = $this->nurse();
+        $visit = $this->makeVisit();
+        $this->encode($visit, $nurse);
+
+        $response = $this->actingAs($nurse)
+            ->get(route('nurse.visits.print', $visit))
+            ->assertOk()
+            ->assertSee(ClearanceDocument::FORM_CODE)
+            // The old revision must be gone everywhere.
+            ->assertDontSee('DHVSU-QSP-OSS-004-FO002-R03')
+            ->assertSee('Physical Signs Disorder of:')
+            ->assertSee('to participate in:');
+
+        // D-63: all twelve rows, read DOWN the form's three column groups.
+        $response->assertSeeInOrder([
+            'SKIN', 'NOSE', 'ABDOMEN',
+            'HEAD', 'THROAT', 'KIDNEY/BLADDER',
+            'EYES', 'CHEST/LUNGS', 'BRAIN',
+            'EARS', 'HEART', 'MENTAL DISORDER',
+        ]);
+    }
+
+    /** D-65: the clinic measures it at encode, and R04 prints it. */
+    public function test_respiratory_rate_prints_with_the_clinics_confirmed_vitals(): void
+    {
+        $nurse = $this->nurse();
+        $visit = $this->makeVisit();
+        $this->encode($visit, $nurse, [
+            'encoded_vitals' => [
+                'height_cm' => 168.0,
+                'weight_kg' => 62.0,
+                'bmi' => 22.0,
+                'temperature_c' => 36.8,
+                'bp_systolic' => 118,
+                'bp_diastolic' => 76,
+                'heart_rate_bpm' => 72,
+                'respiratory_rate' => 18,
+            ],
+        ]);
+
+        $this->actingAs($nurse)
+            ->get(route('nurse.visits.print', $visit))
+            ->assertOk()
+            ->assertSee('Respiratory Rate')
+            ->assertSee('18 breaths/min')
+            // The clinic's confirmed copy, not the kiosk's reading (165/60).
+            ->assertSee('168.0 cm')
+            ->assertDontSee('165.0 cm');
+    }
+
+    /**
+     * FR-PRT-05 — REMARKS sits on two ruled lines that never move. dompdf runs
+     * no JavaScript, so the size is chosen SERVER-side from the note's length
+     * and is therefore identical in the print and in the PDF (D-67).
+     */
+    public function test_a_short_clinic_note_keeps_the_full_ten_point_size(): void
+    {
+        $nurse = $this->nurse();
+        $visit = $this->makeVisit();
+        $this->encode($visit, $nurse, ['nurse_notes' => 'Advised rest and hydration.']);
+
+        $this->actingAs($nurse)
+            ->get(route('nurse.visits.print', $visit))
+            ->assertOk()
+            ->assertSee('<div class="rline" style="font-size: 10pt;">Advised rest and hydration.</div>', false);
+    }
+
+    public function test_a_long_clinic_note_shrinks_to_fit_the_two_ruled_lines(): void
+    {
+        $nurse = $this->nurse();
+        $visit = $this->makeVisit();
+        $this->encode($visit, $nurse, [
+            'nurse_notes' => str_repeat('Persistent cough on exertion, advised follow-up. ', 6),
+        ]);
+
+        $html = $this->actingAs($nurse)
+            ->get(route('nurse.visits.print', $visit))
+            ->assertOk()
+            ->getContent();
+
+        // Smaller than the 10pt a short note keeps, and never below the 7pt floor.
+        preg_match_all('~class="rline[^"]*" style="font-size: ([0-9.]+)pt;"~', $html, $matches);
+        $this->assertCount(2, $matches[1], 'the form prints exactly two ruled remarks lines');
+        $this->assertSame($matches[1][0], $matches[1][1], 'both lines print at the same size');
+        $this->assertLessThan(10.0, (float) $matches[1][0]);
+        $this->assertGreaterThanOrEqual(7.0, (float) $matches[1][0]);
+    }
+
+    /** The two ruled lines are the whole budget — the rest is clipped. */
+    public function test_a_note_longer_than_the_two_lines_is_clipped_not_wrapped(): void
+    {
+        $nurse = $this->nurse();
+        $visit = $this->makeVisit();
+        $this->encode($visit, $nurse, ['nurse_notes' => str_repeat('Follow-up advised. ', 60)]);
+
+        $html = $this->actingAs($nurse)
+            ->get(route('nurse.visits.print', $visit))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertSame(2, preg_match_all('~class="rline~', $html));
+        $this->assertStringContainsString('font-size: 7pt;', $html);
     }
 }

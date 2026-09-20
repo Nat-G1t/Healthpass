@@ -4,6 +4,68 @@
 
 ### Added
 
+* **The Medical Clearance is rebuilt to revision R04, and the clinic can
+  save it as a PDF** (D-67). Requested by the clinic on 2026-09-18 (form
+  revision R04); dompdf approved by Nat 2026-09-18; **pending adviser
+  sign-off**. **No schema change.** New package **`barryvdh/laravel-dompdf`**
+  — a pure-PHP HTML-to-PDF renderer, so nothing extra is installed on the
+  hosted VPS or the Pi. It needs PHP's **gd** extension for the letterhead
+  images (`extension=gd` in `php.ini`); enable it before running the suite.
+  - **One template, two renderers.** The printed clearance is now official
+    form **PSU-QSP-OSS-004-FO002-R04** (replacing
+    DHVSU-QSP-OSS-004-FO002-R03), and the browser print and the PDF render
+    the *same* file: `resources/views/forms/medical-clearance.blade.php`. The
+    old `resources/views/nurse/print.blade.php` is deleted.
+  - **dompdf-safe CSS only:** tables, block and inline-block, fixed widths,
+    borders and `page-break-*`. **No flexbox, no grid, no JavaScript** —
+    dompdf runs none of them. Letter portrait, one page. The physical-signs
+    grid deliberately uses **auto** table layout: dompdf's `table-layout:
+    fixed` ignores the column widths and squeezes the long labels.
+  - **A chosen bubble or box is filled SOLID**, and the fill is made of
+    **border, not background colour**: Chrome's print dialog leaves
+    "Background graphics" unchecked by default, so a background fill would
+    print as an empty box on an official form. `.bb.on` / `.bx.on` set
+    `width/height: 0` and thicken the border until it closes into a solid disc
+    or square — stated as border alone because Chrome (border-box) and
+    dompdf (content-box) disagree about whether a border sits inside a stated
+    width. A background colour rides along underneath purely to fill the
+    hairline seams where dompdf joins its four corner arcs. Verified solid in
+    dompdf **and** in Chrome with background graphics off.
+  - **The logos are base64 `data:` URIs**, from new print-sized copies in
+    `public/images/form/print/`, so neither renderer fetches a URL. The
+    archival Bagong Pilipinas is 3840px wide and would have added ~4MB of
+    base64 to every clearance; the print copies are capped at 300px.
+  - **One source of view data:** `App\Support\ClearanceDocument` builds
+    everything the document prints — identity, age at the encode date, the
+    confirmed vitals (D-65), the twelve physical-signs rows (D-63), the
+    purposes (D-62), the physician block (D-64) and the date. The print, the
+    pre-save preview, the clinic PDF and (D-71) the student download all call
+    it, so the renderings cannot disagree.
+  - **REMARKS is now fitted server-side.** dompdf runs no JavaScript, so the
+    old in-page shrink-to-fit script is replaced by
+    `ClearanceDocument::remarks()`: the note is collapsed to one paragraph,
+    wrapped to the form's **two ruled lines** at one size chosen from **10pt
+    down to a 7pt floor**, and anything still over is **clipped**. Print and
+    PDF receive the identical lines and size.
+  - **New `GET /nurse/visits/{visit}/pdf`** (FR-PRT-06) behind the existing
+    `/nurse` group — nurse or physician only. It returns the document at
+    Letter as `{reference_no}-medical-clearance.pdf`, 404s on a captured
+    visit, and **never stamps `printed_at`**: saving a copy is not printing
+    one. The read-only encode screen gains a **Save as PDF** link beside
+    Reprint.
+  - **Content changes from the R04 scan:** the fitness line reads
+    "**to participate in:**" (was "to undergo in:"), and **BMI no longer
+    prints** — R04 has no BMI box, so the old flagged scan divergence is
+    gone. BMI is unchanged on the student's My Records.
+  - **Interim:** an `assessment` visit still prints this Medical Clearance
+    until **D-71** adds `forms/medical-assessment.blade.php`; there is a TODO
+    naming it in `PrintClearanceController`.
+  - **Tests:** `tests/Feature/Nurse/ClearancePdfTest.php` (access control, the
+    attachment filename, no `printed_at` stamp, and the PDF's `/Type /Page`
+    count proving **one page**) plus new R04 cases in `PrintViewTest`
+    (the form code, all twelve row labels, "to participate in:", the printed
+    respiratory rate, and the REMARKS sizing floor).
+
 * **Heart rate and respiratory rate get flag thresholds, shown everywhere
   vitals are** (D-66). Requested by the clinic on 2026-09-18; **pending
   adviser sign-off**. **Flagged schema change** (migration

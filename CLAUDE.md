@@ -54,7 +54,8 @@ Do not silently reconcile conflicts.
 - Laravel 12 + Breeze (Blade stack) + Tailwind, MySQL via XAMPP, Windows
 - Project root: `C:\Capstone\healthpass`
 - Repo: `https://github.com/Nat-G1t/Healthpass.git`
-- Charts: Chart.js (Director analytics). Print: Blade view + `window.print()`
+- Charts: Chart.js (Director analytics). Print: Blade view + `window.print()`;
+  PDF: `barryvdh/laravel-dompdf` from the same view
 - Production target: internet deployment for web app; Raspberry Pi 4 running
   Chromium kiosk mode hitting Laravel on `localhost` (Web Serial requires
   a secure context — this is why the Pi runs the app locally)
@@ -215,7 +216,10 @@ npm run dev                       # terminal 2
   FR-DIRA-06's old warn-but-allow**. The pushback path is
   **reject with a written reason** (required, 10–500 chars), which the
   College Admin reads on Batch Tracking.
-- Printed clearance must match official form DHVSU-QSP-OSS-004-FO002-R03.
+- The printed Medical Clearance must match official form
+  **PSU-QSP-OSS-004-FO002-R04** (D-67). Print and PDF share one template
+  per form (`resources/views/forms/`), written in dompdf-safe CSS (tables,
+  no flex/grid, no JS).
 
 ## Database
 

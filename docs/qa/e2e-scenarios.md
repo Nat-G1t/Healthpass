@@ -1,4 +1,4 @@
-# HealthPass — End-to-End UAT Scenarios (E2E-1…E2E-17)
+# HealthPass — End-to-End UAT Scenarios (E2E-1…E2E-20)
 
 Source: `docs/HealthPass_PRD.md` §13 (Acceptance & UAT). These are the
 Week-11 end-to-end acceptance runs, written as step-by-step checklists a
@@ -1066,6 +1066,85 @@ and My Records — agrees with the stored booleans.
 **Note for the tester:** a respiratory rate that is blank is **not** a flag. A
 visit the clinic has not encoded shows `—` and counts toward nothing; that is
 "not measured yet", not "normal".
+
+---
+
+## E2E-20 — The Medical Clearance matches form R04, and saves as a PDF (D-67)
+
+**Who:** a clinic tester (nurse or physician) with a **blank printed copy of
+official form PSU-QSP-OSS-004-FO002-R04** in hand. This is the **SM-3
+sign-off** run.
+
+**Why:** since D-67 the printout and the downloadable PDF come from the *same*
+template, so they must match the official blank **and each other**.
+
+1. Log in as `nurse@healthpass.test` / `password` and open the **Clinic
+   Dashboard**. Pick any **encoded** visit and click **Encode Result** to open
+   it read-only.
+2. Click **Reprint**. → **Expect:** the browser print dialog opens on the
+   dashboard itself (no new tab) with the clearance in its preview pane.
+   Set the paper to **Letter** and the margins to **Default**.
+3. **Print it** (or save the preview), then lay the printout **beside the blank
+   R04 form** and check, top to bottom:
+   - the letterhead — "Republic of the Philippines", **PAMPANGA STATE
+     UNIVERSITY**, "(former Don Honorio Ventura State University)", the PSU
+     seal and Bagong Pilipinas on the right, then the OSWF logo with "Office of
+     Student Welfare and Formation / Health Services Unit" and the rule;
+   - the title **MEDICAL CLEARANCE**, underlined and letter-spaced;
+   - Name over **SURNAME / FIRST NAME / MIDDLE NAME**; Course, Year & Section
+     (**no college**); Address; Age / Sex / Civil Status; Date of Birth /
+     Place of Birth;
+   - the vitals in three column pairs — Height / Weight, Heart Rate /
+     Blood Pressure, Temperature / **Respiratory Rate**. **There is no BMI
+     box** on R04, and none should print;
+   - **Physical Signs Disorder of:** as a bordered grid of **three column
+     groups of four** — SKIN, HEAD, EYES, EARS | NOSE, THROAT, CHEST/LUNGS,
+     HEART | ABDOMEN, KIDNEY/BLADDER, BRAIN, MENTAL DISORDER — each with
+     YES and NO boxes, then "*If YES, give details under Remarks.*";
+   - **REMARKS** on **two ruled lines**;
+   - "Are you Pregnant ○ YES ○ NO   *If YES, when is the last
+     menstrual period?*";
+   - "He/She is physically / mentally ○ FIT ○ UNFIT **to participate
+     in:**" with **three** options — Field Trip/Educational Tour, Outbound
+     Activities, "Others, Specify: ___";
+   - the physician block — signature line, name (only on a record a
+     **physician** encoded), "University Physician", "License No.";
+   - **Date:** (the encode date) and the code **PSU-QSP-OSS-004-FO002-R04**
+     bottom-left.
+   → **Expect:** every label, its wording and its position match the blank
+   form, and the whole document is **one page**. Every answered bubble and
+   box is a **solid** filled circle or square — never a small dot, and
+   never an empty outline — **even though "Background graphics" is left
+   unchecked**. Record any difference as a Fail with a photo.
+4. Back on the same read-only screen, click **Save as PDF**. → **Expect:**
+   the browser downloads a file named
+   **`HP-…-medical-clearance.pdf`** (the visit's reference number). No new tab
+   opens and the page does not navigate.
+5. Open the downloaded PDF. → **Expect:** it is **exactly one page**, it is
+   **Letter** sized, and it is the **same document** as the printout from step
+   3 — same values, same wording, same layout, same REMARKS text at the
+   same size.
+6. Reload the Clinic Dashboard and find that visit's row. → **Expect:** the
+   **Printed** column is unchanged by step 4 — downloading the PDF is not
+   printing, so it must **not** move Printed to Yes or change the printed
+   timestamp. (Step 2's Reprint is what sets it.)
+7. Find a visit that is still **captured** (in the Live Queue, not yet
+   encoded). Its encode screen has **no** Save as PDF button — only
+   **Preview & Print**. → **Expect:** Preview & Print still opens the print
+   dialog with the same R04 document, filled from what is on screen.
+8. Log in as a **student**, a **College Admin** and the **Director** in turn
+   and paste the PDF address from step 4 into the address bar. → **Expect:**
+   each one is bounced to their own dashboard — the clearance PDF is
+   clinic-staff only.
+
+**Pass criteria:** the printout matches the blank R04 form field for field; the
+saved PDF matches the printout; both are one page; Save as PDF does not stamp
+Printed; and no other role can reach the PDF.
+
+**Note for the tester:** a long Clinic Note is **clipped** to the two ruled
+lines on purpose — the type shrinks first (down to a floor) and the rest is
+cut. That is correct behaviour, not a bug: the clearance must never run to a
+second page. The printout and the PDF must clip at the *same* point.
 
 ---
 

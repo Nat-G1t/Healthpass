@@ -8,13 +8,16 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Nurse\StoreClearanceRequest;
 use App\Models\ClearanceRecord;
 use App\Models\ClinicVisit;
+use App\Support\ClearanceDocument;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\Response;
 use Illuminate\Support\Arr;
 use Illuminate\View\View;
 
 /**
- * Module PRT (FR-PRT-01..05, BR-17) + FR-NRS-05 — the printable Medical
- * Clearance, a field-for-field reproduction of official form
- * DHVSU-QSP-OSS-004-FO002-R03, reached three ways:
+ * Module PRT (FR-PRT-01..06, BR-17) + FR-NRS-05 — the Medical Clearance
+ * document, a field-for-field reproduction of official form
+ * PSU-QSP-OSS-004-FO002-R04 (D-67), reached four ways:
  *
  *  - GET  show    — encoded visits, no side effects (a plain view of the form)
  *  - POST preview — captured visits: the encode form posts its UNSAVED field
@@ -24,6 +27,17 @@ use Illuminate\View\View;
  *  - POST reprint — encoded visits: re-stamps `printed_at` and returns the
  *    form; the Reprint button targets this at the same hidden iframe
  *    (reprints allowed, FR-NRS-05).
+ *  - GET  pdf     — Save as PDF (FR-PRT-06): the SAME template rendered by
+ *    dompdf and sent as a download. It does NOT stamp `printed_at` —
+ *    saving a copy is not printing one.
+ *
+ * All four build their view data in App\Support\ClearanceDocument, so the
+ * printed page and the saved PDF cannot disagree about a single field.
+ *
+ * TODO (prompt 12 / D-71): an `assessment` visit currently prints this
+ * Medical Clearance as an interim. Prompt 12 adds
+ * `resources/views/forms/medical-assessment.blade.php` and this controller
+ * then picks the template by `$visit->formType()`.
  */
 class PrintClearanceController extends Controller
 {
@@ -86,31 +100,43 @@ class PrintClearanceController extends Controller
     }
 
     /**
-     * Load everything the form prints and render it. $preview substitutes a
-     * transient record for the (not yet existing) saved one.
+     * Save as PDF (FR-PRT-06, D-67) — the encoded visit's clearance as a
+     * downloaded file, rendered by dompdf from the same Blade template the
+     * browser prints. `Pdf::loadView()` renders the view to HTML and lays it
+     * out in PHP; `download()` returns it with a Content-Disposition
+     * attachment header so the browser saves rather than displays it.
+     *
+     * No `printed_at` stamp: FR-NRS-05's column records when the clearance
+     * was PRINTED, and saving a copy is a different act.
      */
+    public function pdf(ClinicVisit $visit): Response
+    {
+        abort_unless($visit->status === 'encoded', 404);
+
+        return Pdf::loadView('forms.medical-clearance', $this->documentData($visit))
+            ->setPaper('letter')
+            ->download("{$visit->reference_no}-medical-clearance.pdf");
+    }
+
+    /** Render the official document for the browser's print frame. */
     private function render(ClinicVisit $visit, ?ClearanceRecord $preview = null): View
     {
-        $visit->load([
-            'student.studentProfile',
-            'college',          // capture-time snapshot (FR-STU-09/D-17)
-            'appointment.batchRequest', // D-62: the form type's purpose list
-            'vitalSigns',
-            'screeningResponse', // shades the Physical Signs + pregnancy fields (D-22)
-            'clearanceRecord',
-        ]);
+        return view('forms.medical-clearance', $this->documentData($visit, $preview));
+    }
 
-        if ($preview !== null) {
-            // The view reads $visit->clearanceRecord — hand it the transient
-            // record without touching the database.
-            $visit->setRelation('clearanceRecord', $preview);
-        }
-
+    /**
+     * Everything the document prints. $preview substitutes a transient record
+     * for the (not yet existing) saved one.
+     *
+     * @return array<string, mixed>
+     */
+    private function documentData(ClinicVisit $visit, ?ClearanceRecord $preview = null): array
+    {
         // `encoded` without its 1:1 record means corrupted data, not a URL
         // someone can reach through the UI — fail closed rather than render
         // a half-empty official form.
-        abort_unless($visit->clearanceRecord !== null, 404);
+        abort_unless($preview !== null || $visit->clearanceRecord !== null, 404);
 
-        return view('nurse.print', ['visit' => $visit]);
+        return ClearanceDocument::for($visit, $preview);
     }
 }
