@@ -123,6 +123,39 @@ class DemoClinicVisitSeeder extends Seeder
     }
 
     /**
+     * D-65 — what the clinic confirmed at encode: the kiosk's reading with the
+     * respiratory rate it measured, and any value it corrected. Writes the
+     * respiratory rate onto the vitals row and returns the `encoded_vitals`
+     * attribute, exactly the pair Save & Close writes.
+     *
+     * @param  array<string, int|float>  $corrections  clinic-corrected vitals
+     * @return array{encoded_vitals: array<string, int|float>}
+     */
+    private function encodedVitals(ClinicVisit $visit, int $respiratoryRate, array $corrections = []): array
+    {
+        $vs = $visit->vitalSigns()->firstOrFail();
+        $vs->update(['respiratory_rate' => $respiratoryRate]);
+
+        $confirmed = [
+            'height_cm' => (float) $vs->height_cm,
+            'weight_kg' => (float) $vs->weight_kg,
+            'temperature_c' => (float) $vs->temperature_c,
+            'bp_systolic' => $vs->bp_systolic,
+            'bp_diastolic' => $vs->bp_diastolic,
+            'heart_rate_bpm' => $vs->heart_rate_bpm,
+            'respiratory_rate' => $respiratoryRate,
+            ...$corrections,
+        ];
+
+        return ['encoded_vitals' => [
+            ...$confirmed,
+            // Always recomputed, never copied (FR-KSK-09) — a corrected height
+            // or weight must move the BMI with it.
+            'bmi' => VitalSigns::computeBmi((float) $confirmed['height_cm'], (float) $confirmed['weight_kg']),
+        ]];
+    }
+
+    /**
      * The original 6 My-Records demo visits (HP-2026-9001–9006).
      */
     private function seedRecordsPageVisits(): void
@@ -187,6 +220,7 @@ class DemoClinicVisitSeeder extends Seeder
             'clinic_visit_id' => $v1->id,
             'encoded_by' => $nurse->id,
             ...$v1->batchPurpose(),   // D-62: as the real encode copies it
+            ...$this->encodedVitals($v1, 16), // D-65: nothing corrected
             'result' => 'Fit',
             ...ClearanceRecord::physicianBlockFor($nurse), // D-64: nurse → blank block
             'encoded_at' => Carbon::parse('2026-01-10 10:30:00'),
@@ -231,6 +265,11 @@ class DemoClinicVisitSeeder extends Seeder
             'clinic_visit_id' => $v2->id,
             'encoded_by' => $physician->id,
             ...$v2->batchPurpose(),   // D-62: as the real encode copies it
+            // D-65 demo: the clinic re-took the BP and got a calmer reading, so
+            // the printed form carries 138/88 while the kiosk's 145/93 keeps
+            // its flag in the analytics. The encode page shows "Kiosk: 145/93".
+            // The respiratory rate is outside 12-20, for prompt 07 to flag.
+            ...$this->encodedVitals($v2, 24, ['bp_systolic' => 138, 'bp_diastolic' => 88]),
             'result' => 'Unfit',
             ...ClearanceRecord::physicianBlockFor($physician), // D-64: name + license print
             'encoded_at' => Carbon::parse('2026-03-05 10:45:00'),
@@ -271,6 +310,7 @@ class DemoClinicVisitSeeder extends Seeder
             'clinic_visit_id' => $v3->id,
             'encoded_by' => $nurse->id,
             ...$v3->batchPurpose(),   // D-62: as the real encode copies it
+            ...$this->encodedVitals($v3, 14), // D-65: nothing corrected
             'result' => 'Fit',
             ...ClearanceRecord::physicianBlockFor($nurse), // D-64: nurse → blank block
             'encoded_at' => Carbon::parse('2026-02-03 12:15:00'),
@@ -574,6 +614,9 @@ class DemoClinicVisitSeeder extends Seeder
             ClearanceRecord::create([
                 'clinic_visit_id' => $visit->id,
                 'encoded_by' => $encoder->id,
+                // D-65: 12-20 breaths/min, with roughly one in nineteen above
+                // it for prompt 07's flag to find.
+                ...$this->encodedVitals($visit, $visitSeq % 19 === 5 ? 26 : 12 + ($visitSeq % 9)),
                 'result' => $visitSeq % 6 === 5 ? 'Unfit' : 'Fit',
                 ...$visit->batchPurpose(),   // D-62: as the real encode copies it
                 ...ClearanceRecord::physicianBlockFor($encoder), // D-64

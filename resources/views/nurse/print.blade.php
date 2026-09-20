@@ -11,9 +11,15 @@
      the Physical Signs YES/NO bubbles from the NURSE-ENCODED physician exam
      findings (clearance_records.ps_*; unanswered rows print blank), the
      pregnancy/LMP line from the kiosk questionnaire, the encoded Result,
-     Purpose where set, encode date, and nurse notes under REMARKS. Prints
-     BLANK on purpose:
-       - Respiratory Rate — not a captured vital (FR-PRT-03 / D-6)
+     Purpose where set, encode date, and nurse notes under REMARKS.
+
+     The VITALS are the clinic's confirmed copy (clearance_records.encoded_vitals,
+     D-65) — the kiosk pre-filled them on the encode card and the nurse or
+     physician corrected whatever was re-measured; vital_signs keeps the kiosk's
+     own reading. Respiratory Rate prints with them (D-65 supersedes D-6, and
+     FR-PRT-03 is struck).
+
+     Prints BLANK on purpose:
        - Case Category — the physician hand-writes case details under
          REMARKS, judging the shaded YES physical signs (D-22)
 
@@ -26,6 +32,22 @@
     $vs      = $visit->vitalSigns;
     $sr      = $visit->screeningResponse;
     $record  = $visit->clearanceRecord;
+
+    // The vitals the clinic confirmed (D-65). A record encoded before D-65 has
+    // none and falls back to the kiosk's reading, exactly as it printed then.
+    $vitals  = $record->printedVitals($vs);
+
+    // One decimal for the vitals that carry one (ENCODED_VITALS' `step`), whole
+    // numbers for the rest — JSON gives back a bare 37 where the form wants 37.0.
+    $show = function (string $key, string $unit = '') use ($vitals) {
+        if (! isset($vitals[$key])) {
+            return '';
+        }
+        $carriesDecimal = $key === 'bmi'
+            || (\App\Models\ClearanceRecord::ENCODED_VITALS[$key]['step'] ?? '1') === '0.1';
+
+        return trim(number_format((float) $vitals[$key], $carriesDecimal ? 1 : 0).' '.$unit);
+    };
 
     // Age at ENCODE date, not "today" — a reprint years later must still show
     // the age the clearance was issued at.
@@ -265,22 +287,22 @@
         <span class="line grow">{{ $profile->place_of_birth ?? '' }}</span>
     </div>
 
-    {{-- ── Vitals (FR-PRT-02) — capture-time server-frozen values ─────────────
-         Respiratory Rate intentionally blank (FR-PRT-03 / D-6). BMI row is a
-         scan divergence: no BMI box on the official form, FR-PRT-02 needs it. --}}
+    {{-- ── Vitals (FR-PRT-02) — the clinic's confirmed copy (D-65) ────────────
+         Respiratory Rate prints with them since D-65. BMI row is a scan
+         divergence: no BMI box on the official form, FR-PRT-02 needs it. --}}
     <table class="vitals">
         <tr>
-            <td><span class="lbl">Height:</span> <span class="line" style="min-width: 70px;">{{ $vs ? $vs->height_cm.' cm' : '' }}</span></td>
-            <td><span class="lbl">Heart Rate:</span> <span class="line" style="min-width: 80px;">{{ $vs ? $vs->heart_rate_bpm.' bpm' : '' }}</span></td>
-            <td><span class="lbl">Temperature:</span> <span class="line" style="min-width: 70px;">{{ $vs ? $vs->temperature_c.' °C' : '' }}</span></td>
+            <td><span class="lbl">Height:</span> <span class="line" style="min-width: 70px;">{{ $show('height_cm', 'cm') }}</span></td>
+            <td><span class="lbl">Heart Rate:</span> <span class="line" style="min-width: 80px;">{{ $show('heart_rate_bpm', 'bpm') }}</span></td>
+            <td><span class="lbl">Temperature:</span> <span class="line" style="min-width: 70px;">{{ $show('temperature_c', '°C') }}</span></td>
         </tr>
         <tr>
-            <td><span class="lbl">Weight:</span> <span class="line" style="min-width: 70px;">{{ $vs ? $vs->weight_kg.' kg' : '' }}</span></td>
-            <td><span class="lbl">Blood Pressure:</span> <span class="line" style="min-width: 80px;">{{ $vs ? $vs->bp_systolic.'/'.$vs->bp_diastolic.' mmHg' : '' }}</span></td>
-            <td><span class="lbl">Respiratory Rate:</span> <span class="line" style="min-width: 60px;"></span></td>
+            <td><span class="lbl">Weight:</span> <span class="line" style="min-width: 70px;">{{ $show('weight_kg', 'kg') }}</span></td>
+            <td><span class="lbl">Blood Pressure:</span> <span class="line" style="min-width: 80px;">{{ isset($vitals['bp_systolic'], $vitals['bp_diastolic']) ? $show('bp_systolic').'/'.$show('bp_diastolic').' mmHg' : '' }}</span></td>
+            <td><span class="lbl">Respiratory Rate:</span> <span class="line" style="min-width: 60px;">{{ $show('respiratory_rate', 'breaths/min') }}</span></td>
         </tr>
         <tr>
-            <td><span class="lbl">BMI:</span> <span class="line" style="min-width: 70px;">{{ $vs?->bmi }}</span></td>
+            <td><span class="lbl">BMI:</span> <span class="line" style="min-width: 70px;">{{ $show('bmi') }}</span></td>
             <td></td>
             <td></td>
         </tr>

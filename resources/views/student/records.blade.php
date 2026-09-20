@@ -19,6 +19,9 @@
                 'bmi'             => $v->vitalSigns?->bmi,
                 'temperature_c'   => $v->vitalSigns?->temperature_c,
                 'heart_rate_bpm'  => $v->vitalSigns?->heart_rate_bpm,
+                // D-65: measured by the clinic at encode, not by the kiosk —
+                // null until then, and the modal renders it "—".
+                'respiratory_rate' => $v->vitalSigns?->respiratory_rate,
                 'bp_systolic'     => $v->vitalSigns?->bp_systolic,
                 'bp_diastolic'    => $v->vitalSigns?->bp_diastolic,
                 'is_bmi_flagged'  => $v->vitalSigns?->is_bmi_flagged ?? false,
@@ -293,6 +296,14 @@ function recordsPageData() {
                                 <dt class="text-sm text-hp-slate/55">Heart Rate</dt>
                                 <dd class="text-sm font-medium text-hp-slate"
                                     x-text="rec.vitals.heart_rate_bpm + ' bpm'"></dd>
+                            </div>
+
+                            <div class="flex items-center justify-between">
+                                <dt class="text-sm text-hp-slate/55">Respiratory Rate</dt>
+                                <dd class="text-sm font-medium text-hp-slate"
+                                    x-text="rec.vitals.respiratory_rate
+                                            ? rec.vitals.respiratory_rate + ' breaths/min'
+                                            : '—'"></dd>
                             </div>
 
                             <div class="flex items-center justify-between">

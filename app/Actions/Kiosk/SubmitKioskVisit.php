@@ -8,6 +8,7 @@ use App\Models\Appointment;
 use App\Models\ClinicVisit;
 use App\Models\ScreeningResponse;
 use App\Models\StudentProfile;
+use App\Models\VitalSigns;
 use App\Services\ReferenceNumberService;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
@@ -51,7 +52,7 @@ final class SubmitKioskVisit
         $screening = $data['screening'];
         $thresholds = config('healthpass.thresholds');
 
-        $bmi = $this->bmi((float) $vitals['height'], (float) $vitals['weight']);
+        $bmi = VitalSigns::computeBmi((float) $vitals['height'], (float) $vitals['weight']);
 
         // generateVisitRef() locks its sequence row for the life of this
         // transaction, so the reference number and the INSERT are atomic.
@@ -229,14 +230,6 @@ final class SubmitKioskVisit
         }
 
         return Arr::only($claimed, ['device_model', 'raw', 'taken_at', 'mean_arterial', 'flags', 'suspect', 'received_at']);
-    }
-
-    /** BMI = weight(kg) ÷ height(m)², 1 decimal — matches the kiosk display (FR-KSK-09). */
-    private function bmi(float $heightCm, float $weightKg): float
-    {
-        $metres = $heightCm / 100;
-
-        return round($weightKg / ($metres * $metres), 1);
     }
 
     /** Roll the per-step methods up to one provenance value (FR-KSK-06). */

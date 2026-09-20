@@ -10,6 +10,7 @@ use App\Models\ClearanceRecord;
 use App\Models\ClinicVisit;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
@@ -25,8 +26,11 @@ use Illuminate\View\View;
  *    record with a Reprint button. Encoding is one-time (FR-NRS-04), so an
  *    encoded visit can never be edited back into the queue.
  *
- * Everything displayed (vitals, flags, BMI) is the server-frozen capture-time
- * value — never recomputed, same trust rule as the Live Queue.
+ * The flags shown are the server-frozen capture-time booleans — never
+ * recomputed, same trust rule as the Live Queue. The vitals THEMSELVES are
+ * editable since D-65: the kiosk's reading pre-fills the card, the clinic
+ * corrects what it needs to, and the confirmed copy is saved on the clearance
+ * record (`encoded_vitals`) — `vital_signs` keeps what the screening measured.
  */
 class EncodeController extends Controller
 {
@@ -76,13 +80,22 @@ class EncodeController extends Controller
 
         try {
             DB::transaction(function () use ($request, $visit): void {
-                // `printed` is a screen flag, not a clearance_records column —
-                // pull it out before the record create.
-                $validated = $request->validated();
-                unset($validated['printed']);
+                // `printed` is a screen flag and the seven vitals are their
+                // own JSON column — pull both out before the record create.
+                $validated = Arr::except($request->validated(), [
+                    'printed',
+                    ...array_keys(ClearanceRecord::ENCODED_VITALS),
+                ]);
+
+                // D-65: the vitals the clinic confirmed on the card, with BMI
+                // recomputed server-side. The kiosk's own reading in
+                // `vital_signs` is never touched (BR-14) — it is what the
+                // screening measured, and the flags still describe it.
+                $encodedVitals = $request->encodedVitals();
 
                 ClearanceRecord::create([
                     ...$validated,
+                    'encoded_vitals' => $encodedVitals,
                     // D-64: a physician's own encode prints their name and
                     // license; a nurse's leaves the block blank (both NULL).
                     ...ClearanceRecord::physicianBlockFor($request->user()),
@@ -97,6 +110,11 @@ class EncodeController extends Controller
                     // lands here. Reprints re-stamp via the print controller.
                     'printed_at' => $request->boolean('printed') ? now() : null,
                 ]);
+
+                // D-65: the respiratory rate is a vital like any other — the
+                // kiosk simply has no sensor for it, so encode is where it is
+                // written. It is the ONLY vitals column encode may change.
+                $visit->vitalSigns?->update(['respiratory_rate' => $encodedVitals['respiratory_rate']]);
 
                 $visit->update(['status' => 'encoded']);
 

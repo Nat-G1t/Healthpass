@@ -948,6 +948,63 @@ license, only physicians carry one, and the correction updates the list.
 
 ---
 
+## E2E-18 — The clinic corrects a kiosk vital and records the respiratory rate (D-65)
+
+**Goal:** what the clinic confirms is what prints; what the kiosk measured is
+what the analytics keep counting.
+
+**Accounts:** Nurse `nurse@healthpass.test`, Director
+`director@healthpass.test`, Student `maria.reyes@psu.edu.ph` (after
+`migrate:fresh --seed`). Use seeded captured visit **HP-2026-9005** (Maria
+Reyes) — the kiosk recorded a **fever, 38.1 °C**, and a BP of 125/82.
+
+**Steps:**
+
+1. Log in as the **nurse**, open **Live Queue** → **Encode Result** on that
+   visit. → **Expect:** the **Vital Signs** card on the left is now a set of
+   **input boxes**, pre-filled with the kiosk's numbers, with an **empty
+   Respiratory Rate (breaths/min)** box and a **BMI** tile that is not
+   editable. The ⚑ Flagged badge sits next to the flagged vital.
+2. Change **Height** to **175** and **Weight** to **80**. → **Expect:** the BMI
+   tile updates to **26.1** as you type, without reloading the page.
+3. Set the vitals back: height **158.5**, weight **52.5**. Now correct the two
+   the clinic re-took: **Temperature 37.0** and **BP 118 / 76**. Leave
+   Respiratory Rate **empty**, choose **Fit**, click **Save & Close**. →
+   **Expect:** refused, with the message **"Measure and enter the respiratory
+   rate before saving."** Nothing was saved.
+4. Type **4** in Respiratory Rate and save. → **Expect:** refused — "The
+   respiratory rate field must be at least 8."
+5. Type **18**, click **Preview & Print**. → **Expect:** the printed form's
+   vitals read **37.0 °C** and **118/76 mmHg** (not the kiosk's 38.1 and
+   125/82) and **Respiratory Rate: 18 breaths/min**. Close the print dialog.
+6. Click **Save & Close**. → **Expect:** back at the Live Queue, the visit gone.
+7. Re-open the same visit from **Clinic Dashboard**. → **Expect:** read-only;
+   the Vital Signs card shows **37.0 °C** with a small grey **"Kiosk: 38.1 °C"**
+   under it and **118/76 mmHg** with **"Kiosk: 125/82 mmHg"** under it, and
+   **no** such line under Height, Weight or Heart Rate (they were not
+   corrected). The **Respiratory Rate** tile reads **18 breaths/min**.
+8. Click **Reprint**. → **Expect:** the same 37.0 °C, 118/76 and
+   18 breaths/min.
+9. Log in as the **Director** and open **Flagged Anomalies**. → **Expect:** the
+   visit is still listed as **Fever — 38.1°C**, and **37.0 appears nowhere on
+   the page**. The clinic's correction did **not** rewrite what the screening
+   measured.
+10. Log in as the **student** whose visit it was, open **My Records** and click
+    **View** on that record. → **Expect:** a **Respiratory Rate** row reading
+    **18 breaths/min**. Open a record that has not been encoded — it reads
+    **—**.
+
+**Pass criteria:** the respiratory rate is required and range-checked; the
+printed form and the read-only card show the clinic's confirmed values with a
+"Kiosk:" hint only where they differ; Flagged Anomalies still shows the kiosk's
+reading.
+
+**Note for the tester:** the ⚑ Flagged badge stays beside the temperature even
+after the clinic's correction — it describes the **kiosk's** screening (BR-14),
+which is what the "Kiosk: 38.1 °C" line underneath it names.
+
+---
+
 ## Recording results
 
 For each scenario, record: **Pass / Fail / Blocked (not built)**, the tester

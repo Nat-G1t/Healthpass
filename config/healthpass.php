@@ -92,6 +92,10 @@ return [
         'bp_systolic' => ['min' => 60,   'max' => 260],
         'bp_diastolic' => ['min' => 30,   'max' => 160],
         'heart_rate' => ['min' => 30,   'max' => 220],
+        // D-65: typed by the clinic on the encode page, not by the kiosk (no
+        // sensor for it) — but validated from the same place as every other
+        // vital so the two screens can never drift apart.
+        'respiratory_rate' => ['min' => 8,    'max' => 60],
     ],
 
     // FR-KSK-13, FR-KSK-15: Kiosk session lifecycle timings.

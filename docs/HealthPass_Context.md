@@ -193,7 +193,7 @@ Flags appear in the nurse queue's "Flags" column and the Director's Flagged Anom
 - `result` = Fit or Unfit (required to save).
 - Case categories (0..n, D-23) are optional. **The purpose is not nurse-entered (D-62):** it is the batch's reason, shown read-only and copied onto the clearance record on Save (label → `purpose`, specify text → `purpose_other`; NULL with no batch). A posted purpose is ignored.
 - ~~The printed form carries the **pre-printed physician signature: REYNALDO S. ALIPIO, MD, License No. 60252**.~~ **D-64:** the physician block prints the encoder's name (`UPPER(name), MD`) and license **only when a physician encoded**; a nurse's record prints a blank name line and "License No. ________" for the wet signature.
-- **Respiratory Rate** is intentionally blank on the print form — it is not a captured vital.
+- ~~**Respiratory Rate** is intentionally blank on the print form — it is not a captured vital.~~ **D-65:** the clinic measures the respiratory rate on the encode page (`vital_signs.respiratory_rate`, 8–60) and **it prints**. The printed vitals are the clinic's confirmed copy (`clearance_records.encoded_vitals`); the kiosk's own reading is never overwritten.
 
 ### Reference number formats
 
@@ -315,7 +315,7 @@ Students are scheduled only through their college (a batch request the Clinic Di
 #### My Records (`student-records`)
 - Table: Date, Service, Result (Fit/Unfit badge), Reference No., View.
 - "View" opens a **Record modal** (fixed overlay, max-width 700px):
-  - Left column: "Kiosk Vital Signs" (height, weight, BMI, temp, HR, BP key-value list) + one Medical Case Category chip per assigned category (0..n, D-23).
+  - Left column: "Kiosk Vital Signs" (height, weight, BMI, temp, HR, **Respiratory Rate — D-65, from `vital_signs.respiratory_rate`, "—" before encode**, BP key-value list) + one Medical Case Category chip per assigned category (0..n, D-23).
   - Right column: the new forms' twelve Physical Signs rows (D-63; Yes/No badges — Yes = flagged variant), each Yes followed by the detail the student typed at the kiosk (D-56).
 
 #### My ID & Profile (`student-profile`)
@@ -379,7 +379,7 @@ Every page in this section is shared by the nurse and the University Physician. 
 - **Two-column layout** (1fr + 1fr):
   - **Left column**:
     - Student header card (avatar, name, college · student number · time, Flagged badge if applicable).
-    - Vital Signs grid (3-col, flagged cells highlighted with peach bg + orange-40 border + orange value).
+    - **Vital Signs card — EDITABLE since D-65, and part of the assessment form** (one `<form>` wraps both columns). Height, Weight, Temperature, BP systolic, BP diastolic and Heart Rate are number inputs pre-filled from the kiosk's reading; **Respiratory Rate (breaths/min) opens empty** — no kiosk sensor measures it, and the clinic measures it here. All seven required, bounded by `config('healthpass.validation')` (systolic > diastolic). **BMI is display only**: live from height × weight in the browser, always recomputed server-side; a posted `bmi` is ignored. The kiosk's flag badges and the D-58 irregular-pulse note stay and still describe the **kiosk's** reading. On a Medical Assessment Form visit this card **is** the paper's "IV. Pertinent Physical Exam". Read-only (encoded) shows `clearance_records.encoded_vitals` with a grey "Kiosk: 150/95 mmHg" under any corrected value.
     - Questionnaire answers card: the form's twelve rows (D-63; Yes/No badges; Yes = flagged variant), with the student's typed detail under each Yes (D-56).
   - **Right column** — "Doctor's Assessment" card:
     - **Fit / Unfit** selector (two cards; selected = peach bg + orange border).
@@ -390,18 +390,18 @@ Every page in this section is shared by the nurse and the University Physician. 
     - "Preview & Print Medical Clearance" button (ghost style, full width, Download icon).
     - "← Back" (ghost) + "Save & Close Appointment" (primary, flex-2) — Save disabled until Fit/Unfit chosen.
 
-- **On Save**: update clinic visit `status` → `encoded`, create `clearance_records` row, return to queue. **D-64:** the physician block is stamped from the encoder — a physician's own name (`UPPER(name), MD`) and license, NULL for a nurse. An encoded visit's read-only notice reads "encoded by <name> (<role>)".
+- **On Save**: update clinic visit `status` → `encoded`, create `clearance_records` row, return to queue. **D-65:** the same transaction stores the confirmed vitals in `clearance_records.encoded_vitals` (BMI recomputed) and the measured `vital_signs.respiratory_rate`; **no other `vital_signs` column or flag is ever touched** — the kiosk's reading is what the flags and the analytics describe (BR-14). **D-64:** the physician block is stamped from the encoder — a physician's own name (`UPPER(name), MD`) and license, NULL for a nurse. An encoded visit's read-only notice reads "encoded by <name> (<role>)".
 
 #### Print Medical Clearance (modal)
 - Fixed overlay (z-index 2000), modal 92% wide / 92vh.
 - Modal header: "Medical Clearance — Document Preview" + "Kiosk data pre-filled. Review before printing." + Close + Print buttons.
-- Body: `<iframe>` renders the **official PamSU form** as an HTML document, pre-filled from student + vitals + the nurse-encoded assessment (result, purpose, notes, physical-signs exam findings) + the questionnaire's pregnancy/LMP answer (D-22).
+- Body: `<iframe>` renders the **official PamSU form** as an HTML document, pre-filled from student + the clinic's confirmed vitals (`encoded_vitals`, D-65) + the nurse-encoded assessment (result, purpose, notes, physical-signs exam findings) + the questionnaire's pregnancy/LMP answer (D-22).
 
 **Official form details (DHVSU-QSP-OSS-004-FO002-R03):**
 - Header: "Republic of the Philippines / PAMPANGA STATE UNIVERSITY / (former Don Honorio Ventura State University) / Office of Student Welfare and Formation / Health Services Unit / MEDICAL CLEARANCE"
 - Font: Times New Roman, 11.5px, black on white, print margins 12–16mm.
 - Student fields: Surname / First Name / Middle Name (3-column underlines), Course/Year/Section, Address, Age, Sex (radio), Civil Status (radio), Date of Birth, Place of Birth.
-- Vitals grid (3 columns): Height, Heart Rate, Temperature, Weight, Blood Pressure, Respiratory Rate (**left blank — not captured**).
+- Vitals grid (3 columns): Height, Heart Rate, Temperature, Weight, Blood Pressure, **Respiratory Rate — printed since D-65** (the clinic measures it at encode; FR-PRT-03 struck), plus the BMI row (a flagged scan divergence). Every value is the clinic's confirmed copy from `clearance_records.encoded_vitals`, **not** the kiosk's `vital_signs` reading; a record encoded before D-65 has none and falls back to its kiosk reading.
 - Physical signs table (D-63, interim until D-67/D-71 rebuild the documents): YES/NO bubbles for the twelve rows in the form's three columns of four — SKIN, HEAD, EYES, EARS | NOSE, THROAT, CHEST/LUNGS, HEART | ABDOMEN, KIDNEY/BLADDER, BRAIN, MENTAL DISORDER — shaded from the nurse-encoded exam findings (`clearance_records.ps_*`, D-22); unanswered rows print blank.
 - Remarks / notes line — nurse notes only; case details are the physician's hand-written annotation (D-22).
 - Pregnancy question (YES/NO radio + LMP line) — pre-filled from the kiosk questionnaire (`screening_responses`).

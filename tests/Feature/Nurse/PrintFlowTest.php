@@ -11,6 +11,7 @@ use App\Models\ScreeningResponse;
 use App\Models\User;
 use App\Models\VitalSigns;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\EncodePayload;
 use Tests\TestCase;
 
 /**
@@ -129,6 +130,7 @@ class PrintFlowTest extends TestCase
 
         $this->actingAs($this->nurse())
             ->post(route('nurse.visits.print.preview', $visit), [
+                ...EncodePayload::vitals(),
                 'result' => 'Unfit',
                 'nurse_notes' => 'Preview-only observation.',
                 'purpose' => 'Sports Activities',
@@ -150,7 +152,7 @@ class PrintFlowTest extends TestCase
 
         // Same rule as Save & Close, applied to the signed-in user (D-64).
         $this->actingAs($physician)
-            ->post(route('nurse.visits.print.preview', $visit), ['result' => 'Fit'])
+            ->post(route('nurse.visits.print.preview', $visit), EncodePayload::make())
             ->assertOk()
             ->assertSee('ANA B. CRUZ, MD')
             ->assertSee('License No. 123456');
@@ -162,6 +164,7 @@ class PrintFlowTest extends TestCase
 
         $html = $this->actingAs($this->nurse())
             ->post(route('nurse.visits.print.preview', $visit), [
+                ...EncodePayload::vitals(),
                 'result' => 'Unfit',
                 'ps_chest_lungs' => '1',
             ])
@@ -185,7 +188,7 @@ class PrintFlowTest extends TestCase
         $visit = $this->makeVisit();
 
         $this->actingAs($this->nurse())
-            ->post(route('nurse.visits.print.preview', $visit), ['result' => 'Fit'])
+            ->post(route('nurse.visits.print.preview', $visit), EncodePayload::make())
             ->assertOk();
 
         $this->assertDatabaseCount('clearance_records', 0);
@@ -210,7 +213,7 @@ class PrintFlowTest extends TestCase
         $this->encode($visit, $nurse);
 
         $this->actingAs($nurse)
-            ->post(route('nurse.visits.print.preview', $visit), ['result' => 'Fit'])
+            ->post(route('nurse.visits.print.preview', $visit), EncodePayload::make())
             ->assertNotFound();
     }
 
@@ -218,12 +221,12 @@ class PrintFlowTest extends TestCase
     {
         $visit = $this->makeVisit();
 
-        $this->post(route('nurse.visits.print.preview', $visit), ['result' => 'Fit'])
+        $this->post(route('nurse.visits.print.preview', $visit), EncodePayload::make())
             ->assertRedirect(route('login'));
 
         $student = User::factory()->create(['role' => 'student']);
         $this->actingAs($student)
-            ->post(route('nurse.visits.print.preview', $visit), ['result' => 'Fit'])
+            ->post(route('nurse.visits.print.preview', $visit), EncodePayload::make())
             ->assertRedirect('/student/dashboard');
     }
 
@@ -246,6 +249,7 @@ class PrintFlowTest extends TestCase
         // …the nurse saves it as pre-filled (the textarea posts it back)…
         $this->actingAs($nurse)
             ->post(route('nurse.visits.encode.store', $visit), [
+                ...EncodePayload::vitals(),
                 'result' => 'Fit',
                 'nurse_notes' => 'SKIN: Itchy rash on left arm',
             ])
@@ -329,6 +333,7 @@ class PrintFlowTest extends TestCase
 
         $this->actingAs($this->nurse())
             ->post(route('nurse.visits.encode.store', $visit), [
+                ...EncodePayload::vitals(),
                 'result' => 'Fit',
                 'printed' => '1',
             ])
@@ -343,6 +348,7 @@ class PrintFlowTest extends TestCase
 
         $this->actingAs($this->nurse())
             ->post(route('nurse.visits.encode.store', $visit), [
+                ...EncodePayload::vitals(),
                 'result' => 'Fit',
                 'printed' => '0',
             ])

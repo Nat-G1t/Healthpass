@@ -13,6 +13,7 @@ use App\Models\ScreeningResponse;
 use App\Models\User;
 use App\Models\VitalSigns;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\EncodePayload;
 use Tests\TestCase;
 
 /**
@@ -109,11 +110,13 @@ class EncodeSaveTest extends TestCase
     }
 
     /** POST Save & Close as a nurse. @param array<string, mixed> $payload */
-    private function save(User $nurse, ClinicVisit $visit, array $payload = ['result' => 'Fit'])
+    private function save(User $nurse, ClinicVisit $visit, ?array $payload = null)
     {
+        // D-65: the seven confirmed vitals are required now, so the default
+        // payload carries them unchanged from the kiosk's reading.
         return $this->actingAs($nurse)
             ->from(route('nurse.visits.encode', $visit))
-            ->post(route('nurse.visits.encode.store', $visit), $payload);
+            ->post(route('nurse.visits.encode.store', $visit), $payload ?? EncodePayload::make());
     }
 
     // ── 1. Access control ─────────────────────────────────────────────────────
@@ -122,7 +125,7 @@ class EncodeSaveTest extends TestCase
     {
         $visit = $this->makeVisit();
 
-        $this->post(route('nurse.visits.encode.store', $visit), ['result' => 'Fit'])
+        $this->post(route('nurse.visits.encode.store', $visit), EncodePayload::make())
             ->assertRedirect(route('login'));
 
         $this->assertDatabaseCount('clearance_records', 0);
@@ -134,7 +137,7 @@ class EncodeSaveTest extends TestCase
         $student = User::factory()->create(['role' => 'student']);
 
         $this->actingAs($student)
-            ->post(route('nurse.visits.encode.store', $visit), ['result' => 'Fit'])
+            ->post(route('nurse.visits.encode.store', $visit), EncodePayload::make())
             ->assertRedirect('/student/dashboard');
 
         $this->assertDatabaseCount('clearance_records', 0);
@@ -158,7 +161,7 @@ class EncodeSaveTest extends TestCase
     {
         $visit = $this->makeVisit();
 
-        $this->save($this->nurse(), $visit, ['result' => 'Maybe'])
+        $this->save($this->nurse(), $visit, EncodePayload::make(['result' => 'Maybe']))
             ->assertSessionHasErrors('result');
 
         $this->assertDatabaseCount('clearance_records', 0);
@@ -171,6 +174,7 @@ class EncodeSaveTest extends TestCase
         $visit = $this->makeVisit();
 
         $this->save($this->nurse(), $visit, [
+            ...EncodePayload::vitals(),
             'result' => 'Fit',
             'purpose' => 'Vacation',
             'purpose_other' => 'tampered',
@@ -187,7 +191,7 @@ class EncodeSaveTest extends TestCase
     {
         $visit = $this->makeVisit();
 
-        $this->save($this->nurse(), $visit, ['result' => 'Fit', 'ps_skin' => '2'])
+        $this->save($this->nurse(), $visit, EncodePayload::make(['ps_skin' => '2']))
             ->assertSessionHasErrors('ps_skin');
 
         $this->assertDatabaseCount('clearance_records', 0);
@@ -201,6 +205,7 @@ class EncodeSaveTest extends TestCase
         // D-22: the nurse records the physician's exam findings; answered
         // rows persist, unanswered rows stay NULL (print as blank bubbles).
         $this->save($nurse, $visit, [
+            ...EncodePayload::vitals(),
             'result' => 'Fit',
             'ps_skin' => '0',
             'ps_chest_lungs' => '1',
@@ -219,7 +224,7 @@ class EncodeSaveTest extends TestCase
         $nurse = $this->nurse();
         $visit = $this->makeVisit(); // legacy row: no appointment
 
-        $this->save($nurse, $visit, ['result' => 'Fit'])
+        $this->save($nurse, $visit, EncodePayload::make())
             ->assertRedirect(route('nurse.queue'))
             ->assertSessionHas('status');
 
@@ -242,7 +247,7 @@ class EncodeSaveTest extends TestCase
         $physician = User::factory()->physician('Reynaldo S. Alipio', '60252')->create();
         $visit = $this->makeVisit();
 
-        $this->save($physician, $visit, ['result' => 'Fit'])
+        $this->save($physician, $visit, EncodePayload::make())
             ->assertRedirect(route('nurse.queue'));
 
         // D-64: upper-cased name + ", MD", and the license, copied at encode time.
@@ -261,6 +266,7 @@ class EncodeSaveTest extends TestCase
 
         // A forged post cannot put a physician's name on a nurse's record.
         $this->save($nurse, $visit, [
+            ...EncodePayload::vitals(),
             'result' => 'Fit',
             'physician_name' => 'FORGED, MD',
             'physician_license_no' => '99999',
@@ -277,6 +283,7 @@ class EncodeSaveTest extends TestCase
         $visit = $this->makeVisit();
 
         $this->save($nurse, $visit, [
+            ...EncodePayload::vitals(),
             'result' => 'Unfit',
             'nurse_notes' => 'Advised rest and follow-up in one week.',
         ])->assertRedirect(route('nurse.queue'));
@@ -330,11 +337,11 @@ class EncodeSaveTest extends TestCase
         $nurse = $this->nurse();
         $visit = $this->makeVisit();
 
-        $this->save($nurse, $visit, ['result' => 'Fit']);
+        $this->save($nurse, $visit, EncodePayload::make());
 
         // Re-submit (stale tab / double click): friendly redirect, no 2nd row,
         // and the first record is untouched.
-        $this->save($nurse, $visit, ['result' => 'Unfit'])
+        $this->save($nurse, $visit, EncodePayload::make(['result' => 'Unfit']))
             ->assertRedirect(route('nurse.visits.encode', $visit))
             ->assertSessionHas('status');
 
@@ -357,7 +364,7 @@ class EncodeSaveTest extends TestCase
             'encoded_at' => now(),
         ]);
 
-        $this->save($nurse, $visit, ['result' => 'Unfit'])
+        $this->save($nurse, $visit, EncodePayload::make(['result' => 'Unfit']))
             ->assertRedirect(route('nurse.visits.encode', $visit))
             ->assertSessionHas('status');
 
@@ -380,7 +387,7 @@ class EncodeSaveTest extends TestCase
             ->assertSeeText('Pending')
             ->assertDontSeeText('Fit');
 
-        $this->save($this->nurse(), $visit, ['result' => 'Fit']);
+        $this->save($this->nurse(), $visit, EncodePayload::make());
 
         $this->actingAs($student)
             ->get(route('student.records'))
@@ -419,7 +426,7 @@ class EncodeSaveTest extends TestCase
     {
         $visit = $this->makeVisit($this->batchAppointment('assessment', 'ojt'));
 
-        $this->save($this->nurse(), $visit, ['result' => 'Fit'])
+        $this->save($this->nurse(), $visit, EncodePayload::make())
             ->assertRedirect(route('nurse.queue'));
 
         $this->assertDatabaseHas('clearance_records', [
@@ -433,7 +440,7 @@ class EncodeSaveTest extends TestCase
     {
         $visit = $this->makeVisit($this->batchAppointment('clearance', 'others', 'Regional quiz bee at PSU Lubao'));
 
-        $this->save($this->nurse(), $visit, ['result' => 'Fit']);
+        $this->save($this->nurse(), $visit, EncodePayload::make());
 
         $this->assertDatabaseHas('clearance_records', [
             'clinic_visit_id' => $visit->id,
@@ -448,6 +455,7 @@ class EncodeSaveTest extends TestCase
         $visit = $this->makeVisit($this->batchAppointment('clearance', 'fieldtrip'));
 
         $this->save($this->nurse(), $visit, [
+            ...EncodePayload::vitals(),
             'result' => 'Fit',
             'purpose' => 'On-the-job Training',
             'purpose_other' => 'tampered',
@@ -465,7 +473,7 @@ class EncodeSaveTest extends TestCase
         $nurse = $this->nurse();
         $visit = $this->makeVisit($this->batchAppointment('clearance', 'outbound'));
 
-        $this->save($nurse, $visit, ['result' => 'Fit']);
+        $this->save($nurse, $visit, EncodePayload::make());
 
         $html = $this->actingAs($nurse)
             ->get(route('nurse.visits.print', $visit))
@@ -483,7 +491,7 @@ class EncodeSaveTest extends TestCase
         $visit = $this->makeVisit($this->batchAppointment('clearance', 'others', 'Quiz bee'));
 
         $html = $this->actingAs($nurse)
-            ->post(route('nurse.visits.print.preview', $visit), ['result' => 'Fit', 'purpose' => 'On-the-job Training'])
+            ->post(route('nurse.visits.print.preview', $visit), EncodePayload::make(['purpose' => 'On-the-job Training']))
             ->assertOk()
             ->getContent();
 

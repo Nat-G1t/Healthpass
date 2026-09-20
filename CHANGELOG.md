@@ -4,6 +4,48 @@
 
 ### Added
 
+* **The clinic confirms the vitals on the encode page, and records a
+  respiratory rate** (D-65; supersedes D-6, strikes FR-PRT-03). Requested by
+  the clinic on 2026-09-18; **pending adviser sign-off**. **Flagged schema
+  change** (migrations `2026_09_20_000005_add_respiratory_rate_to_vital_signs_table`
+  and `2026_09_20_000006_add_encoded_vitals_to_clearance_records_table`): new
+  `vital_signs.respiratory_rate` TINYINT UNSIGNED NULL and new
+  `clearance_records.encoded_vitals` JSON NULL. Neither is backfilled. Reseed
+  the dev DB.
+  - **Editable Vital Signs card.** One `<form>` now wraps both columns of
+    `nurse/encode.blade.php`. Height, Weight, Temperature, BP systolic, BP
+    diastolic and Heart Rate open as inputs pre-filled from the kiosk's
+    reading; **Respiratory Rate (breaths/min) opens empty** — no kiosk sensor
+    measures it. BMI is display only: an Alpine getter computes it live from
+    height and weight, and the server always recomputes it
+    (`VitalSigns::computeBmi()`, the formula `SubmitKioskVisit` now shares).
+    The flag badges and the D-58 irregular-pulse note stay.
+  - **The kiosk's reading is never overwritten** (BR-14). The confirmed copy
+    goes to `clearance_records.encoded_vitals`
+    (`{height_cm, weight_kg, bmi, temperature_c, bp_systolic, bp_diastolic,
+    heart_rate_bpm, respiratory_rate}`). Only `respiratory_rate` is written
+    onto `vital_signs`, in the same transaction — it is a vital, and encode
+    is simply where it can be measured. `entry_method` is unchanged.
+  - **Validation** (`StoreClearanceRequest`): all seven required, bounds from
+    `config('healthpass.validation')` — new
+    `'respiratory_rate' => ['min' => 8, 'max' => 60]` — and
+    `bp_systolic` `gt:bp_diastolic`, the kiosk's own rule. No number is
+    written into the request class. New `ClearanceRecord::ENCODED_VITALS`
+    (label, unit, bounds key, input step) is the one list the request, the
+    card and the print share.
+  - **Read-only view** shows `encoded_vitals` with a small grey
+    "Kiosk: 150/95 mmHg" under any value the clinic corrected.
+  - **Print:** `nurse/print.blade.php` takes its vitals from
+    `ClearanceRecord::printedVitals()` and **prints the respiratory rate**;
+    a record encoded before D-65 falls back to its kiosk reading. The
+    pre-save preview prints the posted values, a reprint the saved ones.
+  - **My Records** adds a Respiratory Rate row ("—" before encode).
+  - **Seeders** fill both columns for encoded demo records; HP-2026-9002 now
+    demonstrates a clinic correction (kiosk 145/93, confirmed 138/88) and a
+    few respiratory rates sit outside 12–20 for D-66's flag.
+  - **Tests:** new `tests/Feature/Nurse/EncodeVitalsTest.php` (12) and shared
+    `tests/Support/EncodePayload`.
+
 * **Physician accounts with license numbers; the Clinic Dashboard is shared
   by nurse and physician** (D-64; supersedes D-2, amends D-47). Requested by
   the clinic on 2026-09-18; **pending adviser sign-off**. **Flagged schema

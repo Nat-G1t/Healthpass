@@ -28,6 +28,51 @@
     $sexLabel = match ($profile?->sex) { 'M' => 'Male', 'F' => 'Female', default => '—' };
 
     $capturedAt = $visit->checked_in_at ?? $visit->created_at;
+
+    // ── Vital Signs card (D-65) ──────────────────────────────────────────────
+    // Normalize every number to ONE string shape before it is displayed or
+    // compared: encoded_vitals stores JSON floats while vital_signs casts to
+    // decimal strings, so 165 and "165.0" are the same reading and must not
+    // read as a correction.
+    $decimal = fn ($value) => $value === null ? null : number_format((float) $value, 1);
+    $whole   = fn ($value) => $value === null ? null : (string) (int) $value;
+
+    // The clinic's confirmed copy (read-only mode); pre-D-65 records fall back
+    // to the kiosk reading, which is what they always printed.
+    $confirmed = $record?->printedVitals($vs) ?? [];
+
+    // What an editable input opens with: a failed submit's own value first,
+    // then the kiosk's reading. Respiratory rate has no kiosk counterpart, so
+    // it opens empty.
+    $vitalValue = fn (string $field) => old($field, $vs?->{$field});
+
+    // The kiosk's screening flag (BR-14) that belongs beside a given input.
+    $kioskFlag = fn (string $field) => match ($field) {
+        'temperature_c' => (bool) $vs?->is_temp_flagged,
+        'bp_systolic', 'bp_diastolic' => (bool) $vs?->is_bp_flagged,
+        default => false,
+    };
+
+    // Read-only tiles: [label, confirmed value, the kiosk's value, flagged?].
+    // Blood pressure reads as one "145/92 mmHg" tile, the way it always has.
+    $pair = fn (?string $systolic, ?string $diastolic) => ($systolic === null || $diastolic === null)
+        ? null
+        : "{$systolic}/{$diastolic} mmHg";
+    $unit = fn (?string $value, string $unit) => $value === null ? '—' : trim("{$value} {$unit}");
+
+    $confirmedTiles = [
+        ['Height', $unit($decimal($confirmed['height_cm'] ?? null), 'cm'), $unit($decimal($vs?->height_cm), 'cm'), false],
+        ['Weight', $unit($decimal($confirmed['weight_kg'] ?? null), 'kg'), $unit($decimal($vs?->weight_kg), 'kg'), false],
+        ['BMI', $unit($decimal($confirmed['bmi'] ?? null), ''), $unit($decimal($vs?->bmi), ''), (bool) $vs?->is_bmi_flagged],
+        ['Temperature', $unit($decimal($confirmed['temperature_c'] ?? null), '°C'), $unit($decimal($vs?->temperature_c), '°C'), (bool) $vs?->is_temp_flagged],
+        ['Blood Pressure',
+            $pair($whole($confirmed['bp_systolic'] ?? null), $whole($confirmed['bp_diastolic'] ?? null)) ?? '—',
+            $pair($whole($vs?->bp_systolic), $whole($vs?->bp_diastolic)),
+            (bool) $vs?->is_bp_flagged],
+        ['Heart Rate', $unit($whole($confirmed['heart_rate_bpm'] ?? null), 'bpm'), $unit($whole($vs?->heart_rate_bpm), 'bpm'), false],
+        // The kiosk never measures this one, so there is nothing to compare to.
+        ['Respiratory Rate', $unit($whole($confirmed['respiratory_rate'] ?? null), 'breaths/min'), null, false],
+    ];
 @endphp
 
 {{-- ── Page header: back link, title, lifecycle badge ─────────────────────────── --}}
@@ -75,9 +120,14 @@
     </div>
 @endif
 
-<div class="grid items-start gap-5 lg:grid-cols-3">
+{{-- ONE form around both columns (D-65): the Vital Signs card on the left is
+     now part of the assessment, so Save & Close and Preview & Print post the
+     confirmed vitals together with the result. --}}
+<form method="POST" action="{{ route('nurse.visits.encode.store', $visit) }}"
+      class="grid items-start gap-5 lg:grid-cols-3">
+    @csrf
 
-    {{-- ══ Left column — what the nurse assesses FROM ══════════════════════════ --}}
+    {{-- ══ Left column — the visit, and the vitals the clinic confirms ════════ --}}
     <div class="space-y-5 lg:col-span-2">
 
         {{-- ── Student identity ────────────────────────────────────────────── --}}
@@ -113,24 +163,26 @@
             </dl>
         </x-hp.card>
 
-        {{-- ── Vital signs — server-frozen values + flag badges (BR-14) ─────── --}}
+        {{-- ── Vital Signs (D-65) — the clinic confirms the kiosk's reading ───
+             Editable: every value is pre-filled from the kiosk and the clinic
+             corrects what it re-measured; Respiratory Rate starts empty
+             because no kiosk sensor measures it. What is saved goes to
+             clearance_records.encoded_vitals — vital_signs keeps the kiosk's
+             own reading untouched (BR-14), which is what the flag badges and
+             the analytics describe. Read-only: the confirmed copy, with the
+             kiosk's value underneath wherever the two differ. --}}
         <x-hp.card>
             <div class="flex items-center justify-between gap-3">
                 <h3 class="text-sm font-semibold text-hp-slate">Vital Signs</h3>
                 @if ($vs)
-                    <span class="text-xs text-hp-slate/40">Entry: {{ ucfirst($vs->entry_method) }}</span>
+                    <span class="text-xs text-hp-slate/40">Kiosk entry: {{ ucfirst($vs->entry_method) }}</span>
                 @endif
             </div>
-            @if ($vs)
+
+            @if ($readOnly)
+                <p class="mt-0.5 text-xs text-hp-slate/50">As confirmed by the clinic when this visit was encoded.</p>
                 <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                    @foreach ([
-                        ['Height',         $vs->height_cm.' cm',                          false],
-                        ['Weight',         $vs->weight_kg.' kg',                          false],
-                        ['BMI',            $vs->bmi,                                      $vs->is_bmi_flagged],
-                        ['Temperature',    $vs->temperature_c.' °C',                      $vs->is_temp_flagged],
-                        ['Blood Pressure', $vs->bp_systolic.'/'.$vs->bp_diastolic.' mmHg', $vs->is_bp_flagged],
-                        ['Heart Rate',     $vs->heart_rate_bpm.' bpm',                    false],
-                    ] as [$label, $value, $isFlagged])
+                    @foreach ($confirmedTiles as [$label, $value, $kioskValue, $isFlagged])
                         <div class="rounded-xl bg-hp-bg p-3">
                             <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">{{ $label }}</p>
                             <div class="mt-1 flex flex-wrap items-center gap-2">
@@ -139,21 +191,92 @@
                                     <x-hp.badge variant="flagged">⚑ Flagged</x-hp.badge>
                                 @endif
                             </div>
+                            {{-- Only where the clinic corrected the kiosk's number. --}}
+                            @if ($kioskValue !== null && $kioskValue !== $value)
+                                <p class="mt-1 text-[11px] text-hp-slate/45">Kiosk: {{ $kioskValue }}</p>
+                            @endif
                         </div>
                     @endforeach
                 </div>
-                {{-- D-58: the Bluetooth BP monitor's own irregular-heartbeat
-                     indicator, kept from the device reading. Shown to the nurse
-                     only — the kiosk never displays it. --}}
-                @if ($vs->hasIrregularPulse())
-                    <p class="mt-3 flex flex-wrap items-center gap-2 text-sm text-hp-slate">
-                        <x-hp.badge variant="flagged">⚑ Irregular pulse</x-hp.badge>
-                        Detected by the blood-pressure monitor during this reading.
-                    </p>
-                @endif
             @else
-                <p class="mt-3 text-sm text-hp-slate/40">No vitals recorded for this visit.</p>
+                <p class="mt-0.5 text-xs text-hp-slate/50">
+                    Pre-filled from the kiosk — correct anything the clinic re-measured.
+                    Respiratory rate is measured here.
+                </p>
+                {{-- Alpine.js (the app's small reactive JS library) keeps the BMI
+                     tile in step with the height and weight boxes as they are
+                     typed. Display only: the server recomputes BMI from the
+                     posted height and weight and ignores anything sent for
+                     it (FR-KSK-09). --}}
+                <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3"
+                     x-data="{
+                         heightCm: {{ Js::from($vitalValue('height_cm')) }},
+                         weightKg: {{ Js::from($vitalValue('weight_kg')) }},
+                         get bmi() {
+                             const metres = Number(this.heightCm) / 100;
+                             const kg = Number(this.weightKg);
+                             if (!(metres > 0) || !(kg > 0)) return '—';
+                             return (kg / (metres * metres)).toFixed(1);
+                         },
+                     }">
+                    @foreach (\App\Models\ClearanceRecord::ENCODED_VITALS as $field => $vital)
+                        @php $bounds = config("healthpass.validation.{$vital['bounds']}"); @endphp
+                        <div>
+                            <div class="flex flex-wrap items-center gap-1.5">
+                                <label for="vital-{{ $field }}"
+                                       class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+                                    {{ $vital['label'] }} <span class="normal-case tracking-normal">({{ $vital['unit'] }})</span>
+                                </label>
+                                {{-- The kiosk's own screening flag (BR-14) — it
+                                     describes the reading below as captured. --}}
+                                @if ($kioskFlag($field))
+                                    <x-hp.badge variant="flagged">⚑ Flagged</x-hp.badge>
+                                @endif
+                            </div>
+                            <input type="number" id="vital-{{ $field }}" name="{{ $field }}"
+                                   value="{{ $vitalValue($field) }}"
+                                   step="{{ $vital['step'] }}" min="{{ $bounds['min'] }}" max="{{ $bounds['max'] }}"
+                                   inputmode="{{ $vital['step'] === '1' ? 'numeric' : 'decimal' }}"
+                                   required
+                                   @if ($field === 'height_cm') x-model="heightCm" @endif
+                                   @if ($field === 'weight_kg') x-model="weightKg" @endif
+                                   class="mt-1 w-full rounded-lg border-[1.5px] border-hp-slate/25 px-3 py-2
+                                          text-lg font-bold text-hp-slate transition-colors duration-hp-fast
+                                          focus:border-hp-orange focus:ring-1 focus:ring-hp-orange focus:outline-none
+                                          @error($field) border-red-400 hp-anim-shake @enderror">
+                            @error($field)
+                                <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+                    @endforeach
+
+                    {{-- BMI is never typed — computed live here, recomputed on the server. --}}
+                    <div>
+                        <div class="flex flex-wrap items-center gap-1.5">
+                            <span class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">BMI</span>
+                            @if ($vs?->is_bmi_flagged)
+                                <x-hp.badge variant="flagged">⚑ Flagged</x-hp.badge>
+                            @endif
+                        </div>
+                        <p class="mt-1 rounded-lg bg-hp-bg px-3 py-2 text-lg font-bold text-hp-slate" x-text="bmi">—</p>
+                        <p class="mt-1 text-[11px] text-hp-slate/45">From height &amp; weight</p>
+                    </div>
+                </div>
             @endif
+
+            {{-- D-58: the Bluetooth BP monitor's own irregular-heartbeat
+                 indicator, kept from the device reading. Shown to the clinic
+                 only — the kiosk never displays it. --}}
+            @if ($vs?->hasIrregularPulse())
+                <p class="mt-3 flex flex-wrap items-center gap-2 text-sm text-hp-slate">
+                    <x-hp.badge variant="flagged">⚑ Irregular pulse</x-hp.badge>
+                    Detected by the blood-pressure monitor during this reading.
+                </p>
+            @endif
+
+            @unless ($vs)
+                <p class="mt-3 text-sm text-hp-slate/40">The kiosk recorded no vitals for this visit — enter them here.</p>
+            @endunless
         </x-hp.card>
 
         {{-- ── Questionnaire — the form's twelve rows (D-63) + pregnancy/LMP (FR-KSK-10) ── --}}
@@ -218,9 +341,7 @@
         {{-- Save & Close POSTs the assessment (FR-NRS-04). Fields re-populate
              from old() after a validation failure, falling back to the saved
              record in read-only mode. --}}
-        <form method="POST" action="{{ route('nurse.visits.encode.store', $visit) }}" class="mt-5 space-y-5">
-            @csrf
-
+        <div class="mt-5 space-y-5">
             {{-- Result — Fit / Unfit, the one required field (BR-16).
                  Radios are visually-hidden (.sr-only) siblings of the styled
                  tiles; Tailwind's peer-checked does the "toggle" look with no
@@ -374,10 +495,10 @@
                                  data-pending-label="Saving…">Save &amp; Close</x-hp.button>
                 @endif
             </div>
-        </form>
+        </div>
     </x-hp.card>
 
-</div>
+</form>
 
 {{-- Hidden print frame (FR-NRS-05): both print buttons post the official form
      in here. 0×0 instead of display:none — Chrome won't reliably print an

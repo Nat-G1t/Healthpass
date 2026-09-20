@@ -19,6 +19,8 @@ class VitalSigns extends Model
         'bmi',
         'temperature_c',
         'heart_rate_bpm',
+        // D-65: typed at encode, not by the kiosk — NULL until then.
+        'respiratory_rate',
         'bp_systolic',
         'bp_diastolic',
         'entry_method',
@@ -36,6 +38,7 @@ class VitalSigns extends Model
             'bmi' => 'decimal:1',
             'temperature_c' => 'decimal:1',
             'heart_rate_bpm' => 'integer',
+            'respiratory_rate' => 'integer',
             'bp_systolic' => 'integer',
             'bp_diastolic' => 'integer',
             'is_temp_flagged' => 'boolean',
@@ -44,6 +47,18 @@ class VitalSigns extends Model
             // D-58: the Bluetooth BP monitor's record of the reading, or null.
             'bp_device_reading' => 'array',
         ];
+    }
+
+    /**
+     * BMI = weight(kg) ÷ height(m)², 1 decimal (FR-KSK-09). The ONE formula:
+     * the kiosk submit and the clinic's encode both recompute through it, so a
+     * posted BMI is never trusted from either screen.
+     */
+    public static function computeBmi(float $heightCm, float $weightKg): float
+    {
+        $metres = $heightCm / 100;
+
+        return round($weightKg / ($metres * $metres), 1);
     }
 
     // ── Display helpers ──────────────────────────────────────────────────────

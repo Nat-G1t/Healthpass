@@ -10,6 +10,7 @@ use App\Models\ScreeningResponse;
 use App\Models\User;
 use App\Models\VitalSigns;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\EncodePayload;
 use Tests\TestCase;
 
 /**
@@ -107,7 +108,7 @@ class QueueGhostRowTest extends TestCase
         $visit = $this->makeVisit();
 
         $encode = $this->actingAs($nurse)
-            ->post(route('nurse.visits.encode.store', $visit), ['result' => 'Fit']);
+            ->post(route('nurse.visits.encode.store', $visit), EncodePayload::make());
         $encode->assertRedirect(route('nurse.queue'));
         $encode->assertSessionHas('encoded_visit_id', $visit->id);
 
@@ -133,7 +134,7 @@ class QueueGhostRowTest extends TestCase
         $waiting = $this->makeVisit(minutesAgo: 10, name: 'Carla Reyes');
 
         $this->actingAs($nurse)
-            ->post(route('nurse.visits.encode.store', $oldest), ['result' => 'Fit'])
+            ->post(route('nurse.visits.encode.store', $oldest), EncodePayload::make())
             ->assertRedirect(route('nurse.queue'));
 
         $page = $this->actingAs($nurse)->get(route('nurse.queue'));
@@ -162,7 +163,7 @@ class QueueGhostRowTest extends TestCase
         $visit = $this->makeVisit();
 
         $this->actingAs($nurse)
-            ->post(route('nurse.visits.encode.store', $visit), ['result' => 'Fit']);
+            ->post(route('nurse.visits.encode.store', $visit), EncodePayload::make());
 
         // First load consumes the one-request flash…
         $this->actingAs($nurse)->get(route('nurse.queue'))->assertSee('data-leaving', false);

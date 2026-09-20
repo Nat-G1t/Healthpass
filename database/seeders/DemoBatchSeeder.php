@@ -338,10 +338,25 @@ class DemoBatchSeeder extends Seeder
             ]);
         }
 
+        // D-65: the clinic confirmed the kiosk's reading unchanged and measured
+        // the respiratory rate — the same pair Save & Close writes.
+        $vitals = $visit->vitalSigns->fresh();
+        $vitals->update(['respiratory_rate' => $bpFlagged ? 22 : 16]);
+
         ClearanceRecord::create([
             'clinic_visit_id' => $visit->id,
             'encoded_by' => $this->nurse->id,
             'result' => $result,
+            'encoded_vitals' => [
+                'height_cm' => (float) $vitals->height_cm,
+                'weight_kg' => (float) $vitals->weight_kg,
+                'bmi' => (float) $vitals->bmi,
+                'temperature_c' => (float) $vitals->temperature_c,
+                'bp_systolic' => $vitals->bp_systolic,
+                'bp_diastolic' => $vitals->bp_diastolic,
+                'heart_rate_bpm' => $vitals->heart_rate_bpm,
+                'respiratory_rate' => $vitals->respiratory_rate,
+            ],
             ...$visit->batchPurpose(),   // D-62: as the real encode copies it
             'nurse_notes' => $result === 'Unfit'
                 ? 'Blood pressure above threshold on two readings. Advised to consult before clearance is re-issued.'

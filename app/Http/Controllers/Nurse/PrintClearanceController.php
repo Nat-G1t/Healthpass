@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Nurse\StoreClearanceRequest;
 use App\Models\ClearanceRecord;
 use App\Models\ClinicVisit;
+use Illuminate\Support\Arr;
 use Illuminate\View\View;
 
 /**
@@ -45,12 +46,18 @@ class PrintClearanceController extends Controller
     {
         abort_unless($visit->status === 'captured', 404);
 
-        $validated = $request->validated();
-        // `printed` is a screen flag, not a clearance_records column.
-        unset($validated['printed']);
+        // `printed` is a screen flag and the seven vitals (D-65) are their own
+        // JSON column — neither is a plain clearance_records field.
+        $validated = Arr::except($request->validated(), [
+            'printed',
+            ...array_keys(ClearanceRecord::ENCODED_VITALS),
+        ]);
 
         $record = new ClearanceRecord([
             ...$validated,
+            // D-65: the vitals exactly as Save & Close would store them, so the
+            // preview prints what the nurse is looking at, not the kiosk's copy.
+            'encoded_vitals' => $request->encodedVitals(),
             // D-62: the batch reason, exactly as Save & Close will store it.
             ...$visit->batchPurpose(),
             // D-64: the same physician-block rule Save & Close applies, for the

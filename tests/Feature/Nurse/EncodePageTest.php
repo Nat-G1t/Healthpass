@@ -193,9 +193,12 @@ class EncodePageTest extends TestCase
             ->assertSee('Ana Cruz')
             ->assertSee('College of Computing Studies')
             ->assertSee('3rd Year')
-            // Vitals
-            ->assertSee('36.5')
-            ->assertSee('115/75')
+            // Vitals — editable inputs since D-65, so the kiosk's reading
+            // arrives as each box's value, not as one "115/75" line.
+            ->assertSee('value="36.5"', false)
+            ->assertSee('name="bp_systolic"', false)
+            ->assertSee('name="bp_diastolic"', false)
+            ->assertSee('name="respiratory_rate"', false)
             // Form controls + buttons (stubs today)
             ->assertSee('Fit')
             ->assertSee('Unfit')

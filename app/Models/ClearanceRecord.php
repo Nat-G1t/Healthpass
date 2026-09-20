@@ -51,6 +51,32 @@ class ClearanceRecord extends Model
     ];
 
     /**
+     * The vitals the clinic confirms at encode (D-65) — the keys of the
+     * `encoded_vitals` JSON, each named after its `vital_signs` column, with
+     * the label and unit every screen shows. Order is the order the encode
+     * card and the printed form lay them out.
+     *
+     * `respiratory_rate` is the one the kiosk cannot measure: it starts empty
+     * on the encode card and is copied onto `vital_signs` at Save & Close.
+     * BMI is NOT here — it is never typed, always recomputed from height and
+     * weight (VitalSigns::computeBmi()).
+     *
+     * `step` is the number input's granularity on the encode card — the three
+     * vitals that carry a decimal are the three the kiosk stores as decimals.
+     *
+     * @var array<string, array{label: string, unit: string, bounds: string, step: string}>
+     */
+    public const ENCODED_VITALS = [
+        'height_cm' => ['label' => 'Height', 'unit' => 'cm', 'bounds' => 'height_cm', 'step' => '0.1'],
+        'weight_kg' => ['label' => 'Weight', 'unit' => 'kg', 'bounds' => 'weight_kg', 'step' => '0.1'],
+        'temperature_c' => ['label' => 'Temperature', 'unit' => '°C', 'bounds' => 'temperature_c', 'step' => '0.1'],
+        'bp_systolic' => ['label' => 'BP Systolic', 'unit' => 'mmHg', 'bounds' => 'bp_systolic', 'step' => '1'],
+        'bp_diastolic' => ['label' => 'BP Diastolic', 'unit' => 'mmHg', 'bounds' => 'bp_diastolic', 'step' => '1'],
+        'heart_rate_bpm' => ['label' => 'Heart Rate', 'unit' => 'bpm', 'bounds' => 'heart_rate', 'step' => '1'],
+        'respiratory_rate' => ['label' => 'Respiratory Rate', 'unit' => 'breaths/min', 'bounds' => 'respiratory_rate', 'step' => '1'],
+    ];
+
+    /**
      * The physician block (FR-PRT-04 / BR-17, D-64) for a record this user
      * encodes. A physician's own encode prints their name and license; a
      * nurse's prints nothing, leaving a blank line for a wet signature. Used
@@ -78,6 +104,8 @@ class ClearanceRecord extends Model
         'purpose',
         'purpose_other',
         'nurse_notes',
+        // D-65: the clinic's confirmed copy of the vitals + respiratory rate.
+        'encoded_vitals',
         'ps_skin',
         'ps_head',
         'ps_eyes',
@@ -101,6 +129,10 @@ class ClearanceRecord extends Model
         return [
             'encoded_at' => 'datetime',
             'printed_at' => 'datetime',
+            // D-65: {height_cm, weight_kg, bmi, temperature_c, bp_systolic,
+            // bp_diastolic, heart_rate_bpm, respiratory_rate}, or NULL on a
+            // record encoded before D-65.
+            'encoded_vitals' => 'array',
             // Nullable booleans: a cast still returns NULL for NULL columns.
             'ps_skin' => 'boolean',
             'ps_head' => 'boolean',
@@ -114,6 +146,32 @@ class ClearanceRecord extends Model
             'ps_kidney_bladder' => 'boolean',
             'ps_brain' => 'boolean',
             'ps_mental_disorder' => 'boolean',
+        ];
+    }
+
+    /**
+     * The vitals that print and that the student sees (D-65): the clinic's
+     * confirmed copy. A record encoded BEFORE D-65 has none — fall back to
+     * the kiosk's frozen reading so an old form still prints exactly as it
+     * did (with no respiratory rate, which was never captured then).
+     *
+     * @return array<string, int|float|string|null>
+     */
+    public function printedVitals(?VitalSigns $kioskReading): array
+    {
+        if (is_array($this->encoded_vitals)) {
+            return $this->encoded_vitals;
+        }
+
+        if ($kioskReading === null) {
+            return [];
+        }
+
+        return [
+            ...collect(array_keys(self::ENCODED_VITALS))
+                ->mapWithKeys(fn (string $key): array => [$key => $kioskReading->{$key}])
+                ->all(),
+            'bmi' => $kioskReading->bmi,
         ];
     }
 
