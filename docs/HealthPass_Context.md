@@ -420,6 +420,57 @@ Every page in this section is shared by the nurse and the University Physician. 
 - **Date** line — the encode date (today on a pre-save preview), never an input — and the form code **PSU-QSP-OSS-004-FO002-R04** bottom-**left**.
 - Print via `window.print()`; the same template is saved as a PDF via dompdf (FR-PRT-06).
 
+**Official form details (PSU-QSP-OSS-004-FO010-R00 — the Medical Assessment Form, D-71):**
+- **Which document prints is the SERVER's call.** `PrintClearanceController` picks the
+  template, the paper and the PDF filename from `ClinicVisit::formType()` (D-62) —
+  `clearance` → the R04 above, `assessment` → this one. Nothing in the request body
+  can change it.
+- **One template, two renderers**, exactly as D-67:
+  `resources/views/forms/medical-assessment.blade.php`, a standalone dompdf-safe
+  HTML document (tables, fixed widths, borders, `page-break-*`; no flexbox, no grid,
+  no JavaScript; base64 logos; Times/Arial). **US Legal portrait (8.5 × 14in "long
+  bond"), `@page` margins 0.5in / 0.7in / 0.35in / 0.7in, TWO pages** — front and
+  back, printed back-to-back on ONE sheet — each carrying the form code at its foot.
+  All view data is built once in `App\Support\AssessmentDocument`, which **calls
+  `ClearanceDocument`** for the halves both papers share.
+- **Front page:** letterhead **without the OSWF block** (this form has no OSWF line) ·
+  title MEDICAL ASSESSMENT FORM · Name (Surname / First / Middle), Course Year &
+  Section, Address, Age / Sex / Civil Status, Date & Place of Birth ·
+  **"Physical Signs Disorder of: (Self Assessment)"** — the same twelve-row grid as
+  R04, but shaded from the **student's kiosk answers** (`screening_responses`, D-63),
+  **not** from `ps_*`: the student self-assesses and certifies it · the pregnancy /
+  LMP line · "I certify that the above informations are true and correct." with the
+  Patient's Signature line · the **eighteen-row PAST MEDICAL HISTORY & FAMILY
+  HISTORY** table (Medical Condition / Disease · Past Medical History (Patient)
+  ☐ Present · Family History (Lineal) ☐ Present) from
+  `medical_assessments.medical_history`, each specify text printed **inside its own
+  blank** — "Allergy (Specify: seafood)", "Hypertension (Highest BP: 150/100 mmHg)".
+- **Back page:** left column **I. Personal / Social History** (the kiosk's Yes/No/Quit
+  answers, D-68), **II. Immunization Profile** (the four groups + Others),
+  **III. Family Planning Access**; right column **IV. Pertinent Physical Exam** —
+  the clinic's confirmed vitals (`encoded_vitals`, D-65) in **this paper's units,
+  height in METRES** (cm ÷ 100, 2 dp), weight kg, BP mmHg, Temp °C, HR /min,
+  RR /min — **V. Menstrual History**, **VI. OB/Pregnancy History** and
+  **Past Surgical History / Procedures + Date Done**. V and VI print **blank — never
+  "N/A" — for a student who is not female**. Then the full-width
+  **PERTINENT PHYSICAL EXAMINATION** (the eight groups A–H of D-70 in three columns,
+  ☐/☑ + each group's Others) · "He/She is physically / mentally ○FIT ○UNFIT
+  **to undergo in:**" with the five Assessment purposes, the batch's own shaded
+  (D-62) · **"Interviewed/Assessed by:" = the ENCODER** (nurse or physician) ·
+  the **University Physician** block, name and License No. only on a physician's
+  encode (D-64) · **"Date:" = the encode date**, never an input.
+- **Print front / Print back (manual duplex).** Clinic printers rarely duplex, so
+  the encode screen shows two buttons instead of one; each posts the encode form to
+  the existing preview (unsaved) or reprint (saved) endpoint with `side=front|back`,
+  and the template renders just that page. After a front print the screen hints
+  "Put the printed sheet back in the tray, then click Print back." — **which way up
+  the sheet goes back depends on the printer** (see `docs/qa/e2e-scenarios.md`).
+  A `side` outside `front|back` is ignored and the whole document prints.
+- **Save as PDF** returns **one file with BOTH pages** at Legal, named
+  `{reference_no}-medical-assessment.pdf` — a duplex-capable printer prints that
+  with "Two-sided" on, which is why there is no third print button. As with the
+  clearance, the download never stamps `printed_at`.
+
 **Physical-signs source (D-22, supersedes the earlier questionnaire → form mapping):**
 the form's Physical Signs rows (twelve since D-63) shade from the nurse-encoded exam findings
 (`clearance_records.ps_*` — the physician examines, the nurse records), never

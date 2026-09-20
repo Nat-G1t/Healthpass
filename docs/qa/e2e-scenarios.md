@@ -1384,11 +1384,77 @@ back on the read-only view.
 **Note for the tester:** the grey-out is only what you can see — the rule is on
 the server. Even if the male student's boxes were forced open, the saved record
 would still hold nothing for sections V and VI. Printing the Medical Assessment
-Form itself is a later change (D-71).
+Form itself is D-71 — E2E-24 below.
 
 ---
 
----
+## E2E-24 — The Medical Assessment Form prints front and back on long bond (D-71)
+
+**Covers:** FR-PRT-05, FR-PRT-06, **FR-PRT-07**, FR-NRS-05, SM-3, R-5.
+
+**You need:** a Medical Assessment batch with an encoded visit (run E2E-22 /
+E2E-23 first), the **blank official FO010-R00 long-bond form** to compare
+against, the clinic printer, and a **stack of US Legal (8.5 × 14in) paper** —
+not A4, not Letter.
+
+### Part A — the PDF
+
+1. Open the encoded Assessment visit's encode screen. → **Expect:** the buttons
+   read **Print front**, **Print back** and **Save as PDF** — no "Reprint", and
+   the read-only banner names Print front / Print back.
+2. Click **Save as PDF**. → **Expect:** a file named
+   `HP-…-medical-assessment.pdf` downloads. Open it: **exactly two pages**, each
+   **8.5 × 14in** (your reader's document properties should say Legal, or
+   612 × 1008 pt), with **PSU-QSP-OSS-004-FO010-R00** at the bottom left of
+   **both**.
+3. Lay page 1 beside the blank front and page 2 beside the blank back. →
+   **Expect:** every heading, row and box is in the same place and reads the
+   same words. Check in particular: the Self Assessment table shows what the
+   **student** answered at the kiosk (not the clinic's exam rows); **Height is
+   in metres** (e.g. `1.65 m`), not centimetres; the batch's purpose bubble is
+   the one shaded on "to undergo in:"; "Interviewed/Assessed by" is the person
+   who encoded it; and the University Physician name + License No. are filled
+   only if a **physician** encoded (blank for a nurse's record).
+
+### Part B — the manual duplex print
+
+4. Load the printer tray with **Legal / long bond** paper. In the print dialog,
+   set paper size to **Legal** and scaling to **100% / Actual size** (not "Fit
+   to page" — that shrinks the official layout).
+5. Click **Print front** and print one sheet. → **Expect:** the front page fills
+   the sheet with no cut-off edges, and the hint appears on screen: *"Put the
+   printed sheet back in the tray, then click Print back."*
+6. Put that printed sheet back into the tray. → ⚠️ **Which way up and which way
+   round depends on the printer** — face-up vs. face-down and top-first vs.
+   bottom-first differ by model. **Try one orientation, print, and if the back
+   comes out upside-down or on the printed side, try another.**
+7. Click **Print back**. → **Expect:** the back page prints on the blank side of
+   the same sheet, the right way up, giving **one correctly aligned
+   double-sided sheet**.
+8. **Record here, for the clinic's own printer, the orientation that worked:**
+
+   | Printer (make / model) | Sheet goes back in as | Tester | Date | Result |
+   |---|---|---|---|---|
+   | _(to fill in on the first test print)_ | _(e.g. printed side down, top edge first)_ | | | |
+
+9. Repeat steps 5–7 on a **captured (not yet encoded)** Assessment visit, before
+   Save & Close. → **Expect:** both buttons print the same two pages from what is
+   currently typed on the screen, and Save & Close afterwards records the print.
+
+### Part C — a Medical Clearance is unaffected
+
+10. Open an encoded **Medical Clearance** visit. → **Expect:** the buttons still
+    read **Reprint** and **Save as PDF**, the PDF is **one Letter page**, and it
+    carries **PSU-QSP-OSS-004-FO002-R04** — the R04 document is untouched.
+
+**Pass criteria:** the PDF is two Legal pages matching both sides of the blank
+FO010-R00; Print front and Print back each print exactly one side; the sheet
+re-fed per the orientation recorded in step 8 comes out as a correct
+double-sided form; and the Medical Clearance still prints as one Letter page.
+
+**Note for the tester:** if the printer *can* do two-sided, don't use Print
+front / Print back — print the **saved PDF** with "Two-sided" on. That is the
+whole reason there is no third button.
 
 ---
 

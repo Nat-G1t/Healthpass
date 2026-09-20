@@ -4,6 +4,53 @@
 
 ### Added
 
+* **The Medical Assessment Form prints: two US Legal pages, front and back,
+  plus a PDF** (D-71). Requested by the clinic on 2026-09-18 (form
+  **PSU-QSP-OSS-004-FO010-R00**; the print front/back design was agreed with
+  Nat); **pending adviser sign-off**. **No schema change** — the document is
+  built from rows D-63, D-65, D-68, D-69 and D-70 already store; no new
+  package (dompdf came with D-67).
+  * New template `resources/views/forms/medical-assessment.blade.php`:
+    **two pages on one sheet of US Legal (8.5 × 14in "long bond"), printed
+    back-to-back**, each carrying the form code at its foot, in the same
+    dompdf-safe CSS the Medical Clearance uses (tables, no flex/grid, no JS,
+    base64 logos, Times/Arial, boxes filled with border rather than a
+    background colour).
+  * **Front:** letterhead without the OSWF block, identity, **"Physical Signs
+    Disorder of: (Self Assessment)"** shaded from the *student's* kiosk
+    answers (not the clinic's `ps_*` exam — the student certifies and signs
+    it), pregnancy / LMP, the certification and signature line, and the
+    eighteen-row Past Medical History & Family History table with each
+    specify text printed inside its own blank ("Allergy (Specify: seafood)").
+  * **Back:** I. Personal / Social History, II. Immunization Profile,
+    III. Family Planning Access, IV. Pertinent Physical Exam (the clinic's
+    confirmed vitals, **height in metres**), V. Menstrual History and
+    VI. OB/Pregnancy History — **blank, never "N/A", for a student who is not
+    female** — Past Surgical History + Date Done, the eight-group Pertinent
+    Physical Examination, the "to undergo in:" fitness line with the batch
+    purpose shaded, **"Interviewed/Assessed by:" = the encoder**, the
+    University Physician block (name and licence only on a physician's
+    encode) and the encode date.
+  * **Print front / Print back.** Clinic printers rarely duplex, so the
+    encode screen prints one side at a time: both buttons post the encode
+    form with `side=front|back` and the template renders that page alone.
+    After a front print a hint reads "Put the printed sheet back in the tray,
+    then click Print back." **Which way up the sheet goes back in depends on
+    the printer.**
+  * **Save as PDF** returns one file with **both** Legal pages, named
+    `{reference_no}-medical-assessment.pdf`, for a printer that *can* do
+    two-sided — which is why there is no fourth button. It still never
+    stamps `printed_at`.
+  * **The template is chosen by the visit's server-resolved form type** for
+    show, preview, reprint and PDF alike; a `side` outside `front|back` is
+    ignored, not trusted. A Medical Clearance is unchanged — Letter, one
+    page, R04, and its Preview & Print / Reprint / Save as PDF buttons.
+  * View data is built once in **`App\Support\AssessmentDocument`**, which
+    calls `ClearanceDocument` for the halves both papers share, so the print,
+    the pre-save preview, the clinic PDF and the student download cannot
+    disagree. The pre-save print rebuilds the sections as a transient
+    `MedicalAssessment` from the same request method Save & Close uses.
+
 * **The Medical Assessment encode gains the menstrual and OB/pregnancy
   histories and the Pertinent Physical Examination** (D-70). Requested by the
   clinic on 2026-09-18; **pending adviser sign-off**. **No schema change** —

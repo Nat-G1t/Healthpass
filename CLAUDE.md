@@ -223,9 +223,11 @@ npm run dev                       # terminal 2
   **reject with a written reason** (required, 10–500 chars), which the
   College Admin reads on Batch Tracking.
 - The printed Medical Clearance must match official form
-  **PSU-QSP-OSS-004-FO002-R04** (D-67). Print and PDF share one template
-  per form (`resources/views/forms/`), written in dompdf-safe CSS (tables,
-  no flex/grid, no JS).
+  **PSU-QSP-OSS-004-FO002-R04** (D-67), and the printed Medical Assessment
+  Form must match **PSU-QSP-OSS-004-FO010-R00** (D-71): US Legal, two pages
+  back-to-back; the clinic prints front and back separately (manual duplex).
+  Print and PDF share one template per form (`resources/views/forms/`),
+  written in dompdf-safe CSS (tables, no flex/grid, no JS).
 
 ## Database
 

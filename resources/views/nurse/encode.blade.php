@@ -199,7 +199,15 @@
             by <span class="font-semibold">{{ $record->encoder->name ?? '—' }}</span>@if ($record->encoder) ({{ $record->encoder->roleLabel() }})@endif
             on {{ $record->encoded_at?->format('M j, Y g:i A') ?? '—' }}
         @endif
-        — the assessment below is read-only. Use <span class="font-semibold">Reprint</span> for another copy.
+        — the assessment below is read-only. Use
+        @if ($isAssessment)
+            {{-- D-71: two Legal pages, printed one side at a time. --}}
+            <span class="font-semibold">Print front</span> and
+            <span class="font-semibold">Print back</span>
+        @else
+            <span class="font-semibold">Reprint</span>
+        @endif
+        for another copy.
     </div>
 @endif
 
@@ -598,8 +606,25 @@
             <x-hp.textarea label="Clinic Notes" name="nurse_notes" rows="4" :disabled="$readOnly"
                            placeholder="Observations, advice given, follow-ups…">{{ old('nurse_notes', $notes) }}</x-hp.textarea>
 
+            {{-- The Medical Assessment Form is TWO Legal pages printed
+                 back-to-back on one sheet (D-71), and clinic printers rarely
+                 duplex — so it gets Print front and Print back instead of one
+                 button. `name="side"` on a submit BUTTON posts that button's
+                 own value, which is how the two reach the same endpoint and
+                 ask for different pages. --}}
             <div class="flex flex-col gap-2.5 pt-1">
                 @if ($readOnly)
+                    @if ($isAssessment)
+                        @foreach (['front' => 'Print front', 'back' => 'Print back'] as $side => $label)
+                            <x-hp.button type="submit" variant="soft" class="w-full"
+                                         data-print-trigger data-print-side="{{ $side }}"
+                                         name="side" value="{{ $side }}"
+                                         formaction="{{ route('nurse.visits.print.reprint', $visit) }}"
+                                         formtarget="hp-print-frame">
+                                {{ $label }}
+                            </x-hp.button>
+                        @endforeach
+                    @else
                     {{-- Reprint (FR-NRS-05): formaction re-routes this submit to
                          the reprint endpoint, which re-stamps printed_at and
                          returns the official form INTO the hidden iframe below
@@ -610,6 +635,7 @@
                                  formtarget="hp-print-frame">
                         Reprint
                     </x-hp.button>
+                    @endif
 
                     {{-- Save as PDF (FR-PRT-06, D-67): a plain GET link, not a
                          submit — the response is the same document rendered by
@@ -632,13 +658,26 @@
                     {{-- Preview & Print (FR-NRS-05): posts the CURRENT (unsaved)
                          assessment to the preview route, targeted at the hidden
                          iframe — Chrome's print dialog is the preview. The
-                         required Result radio gates this submit too. --}}
-                    <x-hp.button type="submit" variant="ghost" class="w-full"
-                                 data-print-trigger
-                                 formaction="{{ route('nurse.visits.print.preview', $visit) }}"
-                                 formtarget="hp-print-frame">
-                        Preview &amp; Print
-                    </x-hp.button>
+                         required Result radio gates this submit too. An
+                         Assessment posts the same way, once per side (D-71). --}}
+                    @if ($isAssessment)
+                        @foreach (['front' => 'Print front', 'back' => 'Print back'] as $side => $label)
+                            <x-hp.button type="submit" variant="ghost" class="w-full"
+                                         data-print-trigger data-print-side="{{ $side }}"
+                                         name="side" value="{{ $side }}"
+                                         formaction="{{ route('nurse.visits.print.preview', $visit) }}"
+                                         formtarget="hp-print-frame">
+                                {{ $label }}
+                            </x-hp.button>
+                        @endforeach
+                    @else
+                        <x-hp.button type="submit" variant="ghost" class="w-full"
+                                     data-print-trigger
+                                     formaction="{{ route('nurse.visits.print.preview', $visit) }}"
+                                     formtarget="hp-print-frame">
+                            Preview &amp; Print
+                        </x-hp.button>
+                    @endif
                     {{-- data-pending-label: spinner + disable while the save
                          navigates (§5.6) — belt-and-braces double-submit
                          protection on top of the controller's one-shot guard.
@@ -647,6 +686,16 @@
                          page-motion.js keys off the SUBMITTER's target. --}}
                     <x-hp.button type="submit" variant="primary" class="w-full"
                                  data-pending-label="Saving…">Save &amp; Close</x-hp.button>
+                @endif
+
+                {{-- Shown once a FRONT print has fired (D-71): the two pages
+                     go on one sheet, so the sheet has to be fed back in. Which
+                     way up depends on the printer — see docs/qa. --}}
+                @if ($isAssessment)
+                    <p id="hp-flip-hint" hidden
+                       class="rounded-xl border border-hp-peach bg-hp-peach/30 px-3 py-2 text-xs text-hp-slate">
+                        Put the printed sheet back in the tray, then click <span class="font-semibold">Print back</span>.
+                    </p>
                 @endif
             </div>
         </div>
@@ -670,10 +719,17 @@
     (function () {
         const frame = document.getElementById('hp-print-frame');
         const printedFlag = document.getElementById('hp-printed-flag');
+        const flipHint = document.getElementById('hp-flip-hint');
         let armed = false;
+        // Which side the last click asked for (D-71), so the "put the sheet
+        // back in the tray" hint appears only after a FRONT print.
+        let side = null;
 
         document.querySelectorAll('[data-print-trigger]').forEach((btn) => {
-            btn.addEventListener('click', () => { armed = true; });
+            btn.addEventListener('click', () => {
+                armed = true;
+                side = btn.dataset.printSide || null;
+            });
         });
 
         frame.addEventListener('load', () => {
@@ -684,6 +740,7 @@
             if (!doc || !doc.body || !doc.body.hasAttribute('data-hp-print-doc')) return;
 
             if (printedFlag) printedFlag.value = '1';
+            if (flipHint) flipHint.hidden = side !== 'front';
             frame.contentWindow.focus();
             frame.contentWindow.print();
         });
