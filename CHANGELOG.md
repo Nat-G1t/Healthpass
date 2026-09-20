@@ -4,6 +4,50 @@
 
 ### Added
 
+* **Students open their full clinic record as a page, and save the official
+  document as a PDF** (D-73). Requested by the clinic on 2026-09-18; settled
+  with Nat 2026-09-18/19; **pending adviser sign-off**. No schema change, no
+  new package.
+  * **My Records' Service column now names the official form** — "Medical
+    Clearance" or "Medical Assessment Form" (D-62), read through
+    `ClinicVisit::formType()`. It rendered `appointments.service_type` before,
+    which since dental was dropped (D-60) had one value left, so every row read
+    "Medical Clearance" — Assessment visits included.
+  * **My Records' View is now a link, not a modal.** The detail modal and the
+    record JSON the list used to embed are **removed**: beyond the Fit/Unfit
+    badge, nothing clinical reaches the browser until a record is opened.
+  * **New `GET /student/records/{visit}`** (`student.records.show`) — the
+    record page: reference no., visit date, form type, purpose, the **Result**
+    badge and "Encoded by <name> (<role>)" (D-64); the **vitals as the clinic
+    encoded them** (D-65) with the D-66 flag chips and a **"re-checked"** tag
+    on any reading re-taken after a D-72 rest; the official form's twelve
+    Physical Signs rows (D-63) with the student's answers and typed details —
+    and, on a **Medical Clearance**, the clinic's own `ps_*` findings beside
+    them, because those are what print; pregnancy / LMP; and the clinic notes.
+  * **Assessment visits** additionally show the Medical Assessment Form's own
+    sections (D-68/D-69/D-70) in the paper's order: Personal / Social History,
+    Past Medical & Family History, Immunization, Family Planning, Past Surgical
+    History, the Pertinent Physical Examination, and — **female students only**,
+    as the paper is — Menstrual and OB/Pregnancy History. Every label comes from
+    the `MedicalAssessment` constants the encode screen and the print share.
+  * **New `GET /student/records/{visit}/pdf`** (`student.records.pdf`,
+    `throttle:10,1,record-pdf`) — **Save as PDF**: the SAME template the clinic
+    prints (D-67/D-71), as **one file**. US Letter and one page for a Medical
+    Clearance; US Legal and **both pages together** for a Medical Assessment
+    Form, for a print shop to run back-to-back. Students get no front/back
+    buttons, and a download never stamps `printed_at` — that stays the clinic's
+    record of a print (FR-NRS-05).
+  * **Ownership, on both routes,** resolves through
+    `$request->user()->clinicVisits()`, so another student's visit id is a
+    **404, never a 403** — a 403 would confirm the id exists. Only `encoded`
+    visits have a page or a PDF, so a `captured` or `resting` (D-72) visit is a
+    404 as well (FR-STU-08, now enforced by the route itself).
+  * **New `App\Support\VisitDocument`** holds the one definition of a visit's
+    template, paper size and filename; the clinic's print, its PDF and the
+    student's all read it, so the two copies of a document cannot disagree.
+  * The kiosk still shows the student nothing (FR-KSK-14 / FR-STU-08
+    unchanged), and the D-57 My Records badge still stamps on the list page.
+
 * **The kiosk asks a student with a high temperature, blood pressure or heart
   rate to rest and re-take it — before the visit ever reaches the clinic**
   (D-72). Requested by the clinic (nurses) on 2026-09-18; kiosk-side design by

@@ -16,10 +16,11 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * FR-STU-07 — My Records page: lists clinic visits, opens a detail modal with
- *             kiosk vitals + 9-system questionnaire.
- * FR-STU-08 — Fit/Unfit determination is hidden until a nurse encodes the visit.
- *             Captured (pending) visits show "Pending" and have no View action.
+ * FR-STU-07 — My Records page: the LIST of the student's clinic visits, each
+ *             encoded one linking to its own record page (D-73 — the detail
+ *             modal and its embedded record JSON are gone).
+ * FR-STU-08 — Fit/Unfit determination is hidden until the clinic encodes the
+ *             visit. Captured (pending) visits show "Pending" and have no View.
  */
 class RecordsPageTest extends TestCase
 {
@@ -211,41 +212,41 @@ class RecordsPageTest extends TestCase
             ->assertDontSee('Results pending');
     }
 
-    public function test_encoded_visit_data_present_in_page_for_modal(): void
+    /** D-73: View is a link to the record page, not a modal trigger. */
+    public function test_the_view_action_links_to_the_record_page(): void
     {
         $student = $this->student();
-        $nurse = $this->nurse();
-        $visit = $this->makeEncodedVisit($student, $nurse, 'Fit', 'HP-2026-T022');
+        $visit = $this->makeEncodedVisit($student, $this->nurse(), 'Fit', 'HP-2026-T022');
 
-        // The visitData JSON is embedded in the page for the Alpine modal.
-        // Assert that the reference number appears in the serialised data.
         $this->actingAs($student)
             ->get(route('student.records'))
             ->assertOk()
-            ->assertSee('HP-2026-T022');
+            ->assertSee('HP-2026-T022')
+            ->assertSee(route('student.records.show', $visit), false);
     }
 
-    public function test_modal_data_carries_the_form_labels_and_the_students_details(): void
+    /**
+     * D-73 — the modal is gone, and with it the record JSON the page used to
+     * embed. Nothing clinical beyond the result badge reaches the browser
+     * until the student opens a record of their own.
+     */
+    public function test_the_list_page_no_longer_carries_the_modal(): void
     {
         $student = $this->student();
-        $visit = $this->makeEncodedVisit($student, $this->nurse(), 'Fit', 'HP-2026-T040');
+        $visit = $this->makeEncodedVisit($student, $this->nurse(), 'Fit', 'HP-2026-T023');
         $visit->screeningResponse->update([
             'abdomen' => true,
             'details' => ['abdomen' => 'Stomach pain after meals'],
         ]);
 
-        $response = $this->actingAs($student)->get(route('student.records'))->assertOk();
-
-        // D-63: the new forms' labels (slash-free ones — @json escapes "/").
-        foreach (['SKIN', 'HEAD', 'EYES', 'EARS', 'NOSE', 'THROAT', 'HEART', 'ABDOMEN', 'BRAIN', 'MENTAL DISORDER'] as $label) {
-            $response->assertSee($label, false);
-        }
-
-        $response->assertSee('Stomach pain after meals', false)
-            ->assertDontSee('Nervous System')
-            ->assertDontSee('Bones / Joints')
-            ->assertDontSee('HEENT')
-            ->assertDontSee('NEUROLOGICAL');
+        $this->actingAs($student)
+            ->get(route('student.records'))
+            ->assertOk()
+            ->assertDontSee('recordsPageData')
+            ->assertDontSee('openRecord')
+            ->assertDontSee('Stomach pain after meals')
+            ->assertDontSee('Questionnaire')
+            ->assertDontSee('Vital Signs');
     }
 
     // ── 5. Mixed — pending visit beside encoded visit ─────────────────────────
@@ -265,10 +266,10 @@ class RecordsPageTest extends TestCase
             ->assertSee('HP-2026-T031')  // encoded visit reference visible
             ->assertSee('Pending')        // pending badge present
             ->assertSee('Fit')            // encoded result badge present
-            ->assertSee('View');          // encoded action button present
+            ->assertSee('View');          // encoded action link present
     }
 
-    // -- 6. Personal / Social History in the modal data (D-68) ----------------
+    // -- 6. The list leaks nothing the record page owns (D-68 / D-73) --------
 
     /** Put a visit on an approved batch that named $formType (D-62). */
     private function attachBatch(ClinicVisit $visit, string $formType): void
@@ -297,7 +298,41 @@ class RecordsPageTest extends TestCase
         $visit->update(['appointment_id' => $appointment->id]);
     }
 
-    public function test_an_assessment_record_carries_its_social_history(): void
+    /**
+     * D-62 / D-73 — the Service column names the official FORM the visit's
+     * batch chose. Before this it read `service_type` and said "Medical
+     * Clearance" on every row, including an Assessment one — dental was gone
+     * (D-60), so that column had only ever one value left to print.
+     */
+    public function test_the_service_column_names_the_visits_form(): void
+    {
+        $student = $this->student();
+
+        $assessment = $this->makeEncodedVisit($student, $this->nurse(), 'Fit', 'HP-2026-T050');
+        $this->attachBatch($assessment, 'assessment');
+
+        $this->actingAs($student)
+            ->get(route('student.records'))
+            ->assertOk()
+            ->assertSee('Medical Assessment Form')
+            ->assertDontSee('Medical Clearance');
+
+        $clearance = $this->makeEncodedVisit($student, $this->nurse(), 'Fit', 'HP-2026-T051');
+        $this->attachBatch($clearance, 'clearance');
+
+        $this->actingAs($student)
+            ->get(route('student.records'))
+            ->assertOk()
+            ->assertSee('Medical Assessment Form')
+            ->assertSee('Medical Clearance');
+    }
+
+    /**
+     * D-73 — the Personal / Social History belongs to the record PAGE now
+     * (RecordPageTest covers it there). The list must not leak it: the same
+     * visit's answers appear on neither an Assessment nor a Clearance row.
+     */
+    public function test_the_list_leaks_no_social_history(): void
     {
         $student = $this->student();
         $visit = $this->makeEncodedVisit($student, $this->nurse(), 'Fit', 'HP-2026-T040');
@@ -309,24 +344,10 @@ class RecordsPageTest extends TestCase
             'sexually_active' => true,
         ]);
 
-        $response = $this->actingAs($student)->get(route('student.records'));
-
-        $response->assertOk()
-            ->assertSee('Personal / Social History', false)
-            ->assertSee('Illicit Drugs', false)
-            ->assertSee('Quit', false);
-    }
-
-    public function test_a_clearance_record_carries_no_social_history(): void
-    {
-        $student = $this->student();
-        $visit = $this->makeEncodedVisit($student, $this->nurse(), 'Fit', 'HP-2026-T041');
-        $this->attachBatch($visit, 'clearance');
-
-        $response = $this->actingAs($student)->get(route('student.records'));
-
-        // The card only renders when the list is non-empty, so the modal's
-        // JSON must carry an empty list for a form that never asked these.
-        $response->assertOk()->assertSee('"social_history":[]', false);
+        $this->actingAs($student)
+            ->get(route('student.records'))
+            ->assertOk()
+            ->assertDontSee('Personal / Social History', false)
+            ->assertDontSee('Illicit Drugs', false);
     }
 }

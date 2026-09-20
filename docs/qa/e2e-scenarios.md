@@ -1573,6 +1573,78 @@ before the cutoff and **Absent** after it; and BMI never triggers any of it.
 
 ---
 
+## E2E-26 — A student reads their own record and saves it as a PDF (D-73)
+
+**Roles:** Student · Nurse (to encode) · a second Student (the 404 check)
+**Preconditions:** two students on approved batches for today — **one on a
+`clearance` batch and one on an `assessment` batch** (the demo seeder's
+HP-2026-9001 / HP-2026-9005 pair works). Both have completed a kiosk pass.
+
+### Part A — a Medical Clearance record
+
+1. Sign in as the **nurse**, encode the clearance student's visit (Result
+   **Fit**, a note under Clinic Notes), and Save & Close.
+2. Sign in as that **student** → **My Records**. → **Expect:** the row shows
+   the **Fit** badge and a **View** link. Nothing opens in place: View is a
+   link, not a modal. View the page source — there is **no record JSON**
+   embedded in the list any more, and no `recordsPageData`.
+3. Click **View**. → **Expect:** a Clinic Record page carrying the reference
+   no., the visit date, the **Medical Clearance** badge, the purpose from the
+   batch, the **Fit** result, and "Encoded by <nurse name> (Nurse)".
+4. Read the **Vital Signs** card. → **Expect:** seven tiles showing the numbers
+   the **clinic confirmed at encode** (not the kiosk's, if they differ), with
+   the respiratory rate present and any flagged reading orange with ⚑.
+5. Read the **Physical Signs** card. → **Expect:** the twelve rows, each with
+   **your** answer and, beside it under "Clinic", the clinic's own finding —
+   and your typed detail under any Yes. Then the pregnancy row.
+6. Read the **Clinic Notes** card. → **Expect:** the nurse's note verbatim.
+7. Narrow the browser to **phone width (~390px)**. → **Expect:** every card
+   stacks and stays readable; no horizontal scrolling.
+8. Click **Save as PDF**. → **Expect:** a download named
+   `HP-…-medical-clearance.pdf`. Open it: **one US Letter page**, identical to
+   what the clinic prints. Sign back in as the nurse and open the visit. →
+   **Expect:** the encode screen still says the document has **not** been
+   printed — a student's download is not a clinic print.
+
+### Part B — a Medical Assessment Form record
+
+9. As the nurse, encode the **assessment** student's visit, filling some of
+   each section (a couple of history rows, an immunization, a surgical
+   procedure, a physical-exam finding; for a female student also section V/VI).
+10. As that **student**, open the record page. → **Expect:** everything from
+    Part A, plus, in the paper's order: **I. Personal / Social History** (your
+    own kiosk answers), **Past Medical History & Family History**, **II.
+    Immunization Profile**, **III. Family Planning Access**, **Past Surgical
+    History / Procedures**, **V. Menstrual History** and **VI. OB/Pregnancy
+    History** (female students only — a male student's page has neither), and
+    the **Pertinent Physical Examination** showing only the findings the clinic
+    ticked.
+11. Click **Save as PDF**. → **Expect:** one file named
+    `HP-…-medical-assessment.pdf`. Open it and check the page count: **two US
+    Legal pages in the one file** — front and back. There are **no** "front" /
+    "back" buttons on the student's page.
+
+### Part C — nothing you shouldn't see
+
+12. Copy the other student's record URL (`/student/records/<their id>`) and open
+    it while signed in as the first student. → **Expect:** **404**, not 403.
+    Same for `/student/records/<their id>/pdf`.
+13. Take a student whose visit is still **awaiting encode** (`captured`) and
+    open their own record URL. → **Expect:** **404** — nothing clinical exists
+    before the clinic encodes it (FR-STU-08). Same for a **resting** visit
+    (D-72), which the list does not show at all.
+14. Reload the PDF URL more than **ten times in a minute**. → **Expect:** a
+    **429**; the page itself still loads.
+
+**Pass criteria:** the record page shows the clinic's confirmed vitals, the
+twelve rows with the clinic's findings, the notes and — on an Assessment — that
+form's own sections, with V/VI only for a female student; Save as PDF returns
+the clinic's own document as one file (Letter ×1 / Legal ×2) and never stamps
+`printed_at`; another student's record and an un-encoded visit are both 404;
+and My Records carries no record data of its own.
+
+---
+
 ---
 
 ## Recording results

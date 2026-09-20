@@ -77,8 +77,19 @@ Route::middleware(['auth', 'role:student'])
         //
         // nav.seen (D-57): opening the page marks its sidebar badge as seen —
         // the argument is the badge's key. See App\Http\Middleware\MarkNavSeen.
-        Route::get('/records', StudentRecordsController::class)
+        Route::get('/records', [StudentRecordsController::class, 'index'])
             ->middleware('nav.seen:student.records')->name('records');
+        // One visit's full record (FR-STU-07, D-73) and its Save as PDF
+        // (FR-STU-15). {visit} is NOT route-model-bound: the controller looks
+        // the id up through the signed-in student's own clinicVisits(), so
+        // another student's id is a 404 rather than a 403.
+        //
+        // The PDF gets its own throttle bucket — for an authed user the
+        // rate-limit key is the user id with no path, so without the 3rd-arg
+        // prefix it would share one counter with every other student route.
+        Route::get('/records/{visit}', [StudentRecordsController::class, 'show'])->name('records.show');
+        Route::get('/records/{visit}/pdf', [StudentRecordsController::class, 'pdf'])
+            ->middleware('throttle:10,1,record-pdf')->name('records.pdf');
         // Kiosk Tutorial (FR-STU-11): static walkthrough, no data to prepare —
         // Route::view renders the Blade view directly, no controller needed.
         Route::view('/tutorial', 'student.tutorial')->name('tutorial');

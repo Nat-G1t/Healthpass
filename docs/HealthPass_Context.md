@@ -269,7 +269,7 @@ Home, Calendar, FileText, QrCode, Plus, List, Activity, Edit, BarChart, Alert, C
 
 | Role | Nav items |
 |---|---|
-| Student | Dashboard · My Records · My ID (D-61 removed Book Appointment and My Appointments) |
+| Student | Dashboard · My Records (+ the D-73 Clinic Record page) · My ID (D-61 removed Book Appointment and My Appointments) |
 | College Admin | Dashboard · New Batch Request · Batch Tracking |
 | Nurse | Live Queue · Encode Result · Enable Kiosk Mode (Kiosk Devices: enroll/revoke trusted terminals, D-27) |
 | Clinic Director | Dashboard · Batch Approvals · Analytics · Flagged Anomalies |
@@ -333,10 +333,19 @@ Progress steps: Consent → Account Info → Email Verify → Link ID
 Students are scheduled only through their college (a batch request the Clinic Director approves), so the booking page, its confirmation screen (and the first-booking tutorial modal on it), the availability JSON, the cancel action and the My Appointments page (FR-STU-14, D-51) are gone. Every old URL (`/student/appointments…`, `/student/my-appointments`) returns 404. The month roll-up they used lives on in `ClinicScheduleService` for the College Admin's batch calendar.
 
 #### My Records (`student-records`)
-- Table: Date, Service, Result (Fit/Unfit badge), Reference No., View.
-- "View" opens a **Record modal** (fixed overlay, max-width 700px):
-  - Left column: "Kiosk Vital Signs" (height, weight, BMI, temp, HR, **Respiratory Rate — D-65, from `vital_signs.respiratory_rate`, "—" before encode**, BP key-value list) + one Medical Case Category chip per assigned category (0..n, D-23).
-  - Right column: the new forms' twelve Physical Signs rows (D-63; Yes/No badges — Yes = flagged variant), each Yes followed by the detail the student typed at the kiosk (D-56).
+- Table: Date, **Service — the visit's official form (D-62): "Medical Clearance" or "Medical Assessment Form", from `ClinicVisit::formType()`; it used to read `service_type` and so said "Medical Clearance" on every row**, Result (Fit/Unfit badge), Reference No., View.
+- **(D-73)** "View" is a **link to a page**, `GET /student/records/{visit}` — the old record modal is **removed**, and with it the record JSON the list used to embed, so nothing clinical beyond the result badge reaches the browser until a record is opened. A pending (un-encoded) row still shows a "Pending" badge and no View.
+  - *Superseded modal, for the record: a fixed overlay, max-width 700px, with kiosk vitals on the left and the twelve Physical Signs rows on the right.*
+
+#### Clinic Record page (`student-record`) — D-73
+- Reached from My Records' View; **encoded visits only** (FR-STU-08). Another student's id, a `captured` visit or a `resting` one (D-72) is a **404** — the lookup runs through the student's own `clinicVisits()` relation, so a 403 never leaks that the id exists.
+- Header: back link to My Records, "Clinic Record", the **form-type** badge (D-62), reference no. and visit date.
+- **Result card**: the Fit/Unfit result large plus its badge, Purpose (the batch reason, with the admin's specify text), "Encoded by <name> (<role>)" (D-64), encode date, the student's own name and number — and the **Save as PDF** button (FR-STU-15) with a one-line note on what comes down (Letter, one page / Legal, both pages).
+- **Vital Signs card**: the clinic's confirmed copy (`clearance_records.encoded_vitals`, D-65) as seven tiles — Height, Weight, BMI, Temperature, Blood Pressure, Heart Rate, Respiratory Rate — each with the D-66 "⚑ Flagged" chip where the stored flag is set, and a **"re-checked"** line under any reading re-taken after a D-72 rest, above a peach note giving the pre-rest reading and its time. A closing line says a flag is a reading outside the usual range, not a result.
+- **Physical Signs card**: the twelve rows (D-63) with the student's Yes/No pill (orange = reported, green = clear, "—" = unanswered) and the detail they typed under a Yes; on a **Clearance** visit each row also shows the clinic's own `ps_*` finding under a "Clinic" label, because that column is what prints. Then pregnancy / LMP.
+- **Clinic Notes card**: `nurse_notes` verbatim — what prints under REMARKS.
+- **Assessment visits only** (D-69/D-70), each its own card in the paper's order: I. Personal / Social History · Past Medical History & Family History (the eighteen rows, Patient / Family columns, with the typed specify text) · II. Immunization Profile (given vaccines highlighted, the rest greyed, plus "Others") · III. Family Planning Access · Past Surgical History / Procedures · **V. Menstrual History and VI. OB/Pregnancy History — female students only**, as the paper is (`ClinicVisit::studentIsFemale()`, server-side) · Pertinent Physical Examination (only the findings the clinic ticked, plus each group's "Others"; a group with none reads "No findings recorded").
+- **Save as PDF** (`GET /student/records/{visit}/pdf`, `throttle:10,1,record-pdf`): the SAME template the clinic prints, via `App\Support\VisitDocument` — one Letter page for a Medical Clearance, both Legal pages in ONE file for a Medical Assessment Form. No front/back buttons for the student, and no `printed_at` stamp.
 
 #### My ID & Profile (`student-profile`)
 - Two-column layout (240px left + 1fr right):

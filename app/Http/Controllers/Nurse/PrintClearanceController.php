@@ -10,7 +10,7 @@ use App\Models\ClearanceRecord;
 use App\Models\ClinicVisit;
 use App\Models\MedicalAssessment;
 use App\Support\AssessmentDocument;
-use App\Support\ClearanceDocument;
+use App\Support\VisitDocument;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -149,15 +149,9 @@ class PrintClearanceController extends Controller
     {
         abort_unless($visit->status === 'encoded', 404);
 
-        $isAssessment = $visit->formType() === 'assessment';
-
-        return Pdf::loadView($this->template($visit), $this->documentData($visit))
-            ->setPaper($isAssessment ? 'legal' : 'letter')
-            ->download(sprintf(
-                '%s-medical-%s.pdf',
-                $visit->reference_no,
-                $isAssessment ? 'assessment' : 'clearance',
-            ));
+        return Pdf::loadView(VisitDocument::template($visit), VisitDocument::data($visit))
+            ->setPaper(VisitDocument::paper($visit))
+            ->download(VisitDocument::filename($visit));
     }
 
     /** Render the official document for the browser's print frame. */
@@ -167,41 +161,10 @@ class PrintClearanceController extends Controller
         ?MedicalAssessment $previewSections = null,
         ?string $side = null,
     ): View {
-        return view($this->template($visit), $this->documentData($visit, $preview, $previewSections, $side));
-    }
-
-    /** The template for this visit's form type (D-62) — never the request's. */
-    private function template(ClinicVisit $visit): string
-    {
-        return $visit->formType() === 'assessment'
-            ? 'forms.medical-assessment'
-            : 'forms.medical-clearance';
-    }
-
-    /**
-     * Everything the document prints. $preview / $previewSections substitute
-     * transient rows for the (not yet existing) saved ones.
-     *
-     * @return array<string, mixed>
-     */
-    private function documentData(
-        ClinicVisit $visit,
-        ?ClearanceRecord $preview = null,
-        ?MedicalAssessment $previewSections = null,
-        ?string $side = null,
-    ): array {
-        // `encoded` without its 1:1 record means corrupted data, not a URL
-        // someone can reach through the UI — fail closed rather than render
-        // a half-empty official form.
-        abort_unless($preview !== null || $visit->clearanceRecord !== null, 404);
-
-        if ($visit->formType() === 'assessment') {
-            return AssessmentDocument::for($visit, $preview, $previewSections, $side);
-        }
-
-        // The Medical Clearance is one page and has no sides; `side` is
-        // simply not part of that document.
-        return ClearanceDocument::for($visit, $preview);
+        return view(
+            VisitDocument::template($visit),
+            VisitDocument::data($visit, $preview, $previewSections, $side),
+        );
     }
 
     /**
