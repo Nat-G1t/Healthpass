@@ -4,6 +4,45 @@
 
 ### Added
 
+* **The Medical Assessment encode gains the menstrual and OB/pregnancy
+  histories and the Pertinent Physical Examination** (D-70). Requested by the
+  clinic on 2026-09-18; **pending adviser sign-off**. **No schema change** —
+  the D-69 migration already created `menstrual_history`, `ob_history` and
+  `physical_exam`; no new package; dev DB reseeded.
+  * **V. Menstrual History and VI. OB/Pregnancy History are female-only.**
+    The gate is `student_profiles.sex`, read on the server: for anyone else
+    both cards render greyed with the note "For female students only" and
+    every input disabled — and the server **ignores the posted values and
+    stores both columns NULL**, because a disabled attribute is a courtesy,
+    never the rule. Past Surgical History sits under VI on paper but is *not*
+    female-only and stays open to everyone.
+  * Every field is optional; a value that *is* given has to be possible.
+    Ranges live in `MedicalAssessment::MENSTRUAL_RANGES` / `OB_RANGES`, so the
+    inputs' min/max and the validation read one list: menarche 5–25, onset of
+    sexual intercourse 8–60, period duration 1–15 days, pads per day 0–20,
+    interval cycle 10–90 days, menopause age 30–70, Gravida / Para / T / P /
+    A / L each 0–20. Menopause and Pregnancy Induced Hypertension are Yes/No
+    where neither ticked means *not answered*, not No.
+  * **The Last Menstrual Period pre-fills from the kiosk's own answer**
+    (`screening_responses.last_menstrual_period`) and stays editable; it is
+    validated as a date **not in the future**.
+  * **Pertinent Physical Examination:** the paper's eight groups A–H in
+    `MedicalAssessment::PHYSICAL_EXAM`, labels verbatim, each a checkbox list
+    plus its own Others text (≤ 60). **No sex gating** — which is why the DRE
+    group keeps the form's own "Not Applicable" box — and **"Essentially
+    Normal" is deliberately not exclusive** with the findings under it,
+    because the paper lets the examiner tick both.
+  * **JSON shapes:** `menstrual_history` = `{menarche_age,
+    first_intercourse_age, lmp (Y-m-d), period_days, pads_per_day, cycle_days,
+    contraceptive, menopause (bool|null), menopause_age}`; `ob_history` =
+    `{gravida, para, term, preterm, abortion, living, delivery_type, pih
+    (bool|null)}`; `physical_exam` = `{group: {findings: [keys], others:
+    text|null}}` for all eight groups, always. A missing value is null, and an
+    unknown group or a finding key borrowed from another group is **dropped**
+    rather than stored.
+  * Three new partials under `resources/views/nurse/encode/assessment/`; the
+    read-only view shows the saved values disabled. Printing is D-71.
+
 * **The Medical Assessment encode records the form's histories, immunization
   profile and family planning access** (D-69). Requested by the clinic on
   2026-09-18; **pending adviser sign-off**. **FLAGGED SCHEMA CHANGE: a new

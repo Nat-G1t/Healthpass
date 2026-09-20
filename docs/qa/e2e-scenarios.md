@@ -1314,6 +1314,80 @@ can change it. Printing the Assessment form itself is a later change: for now
 **Preview & Print** on an Assessment visit still renders the Medical
 Clearance, with its Physical Signs boxes blank.
 
+## E2E-23 — Menstrual / OB history and the physical examination (D-70)
+
+**Covers:** FR-NRS-10, FR-NRS-03, FR-NRS-04.
+**Roles:** Nurse (or Physician).
+**Setup:** two **captured** visits from a **Medical Assessment Form** batch —
+one **female** student and one **male** student. The demo seed has both; the
+student's sex is on the identity card at the top of the encode screen.
+
+### Part A — a female Assessment encode
+
+1. Open the Live Queue and click **Encode Result** on the female student's row
+   (badged **Medical Assessment Form**). → **Expect:** below the four D-69
+   cards, three more: **V. Menstrual History**, **VI. OB/Pregnancy History**
+   and **Pertinent Physical Examination**. V and VI are at full opacity, every
+   box is usable, and neither shows a "For female students only" note.
+2. Look at **Last Menstrual Period**. → **Expect:** if the student answered the
+   LMP question at the kiosk, the box already holds that date; otherwise it is
+   empty. Either way you can change it.
+3. Type `13` in Menarche, `5` in Period Duration, `0` in No. of Pads per Day,
+   `28` in Interval Cycle and `None` as the Contraceptive Method. Choose **No**
+   for Menopause.
+4. Try to break the ranges: type `2` in Menarche and `200` in Interval Cycle,
+   and set the LMP to **tomorrow**. Press **Save & Close**. → **Expect:** the
+   page comes back with an error under each of those three boxes and **nothing
+   is saved**. Put the good values back.
+5. In **VI**, enter Gravida `1`, Para `1`, T `1`, P `0`, A `0`, L `1`, type
+   `Normal spontaneous delivery` and choose **Yes** for Pregnancy Induced
+   Hypertension.
+6. In the **Pertinent Physical Examination**, tick **Essentially Normal** under
+   **A. HEENT**, tick **Not Applicable** under **F. DIGITAL RECTAL EXAMINATION
+   (DRE)** and type `Deferred` in that group's **Others** line. Tick both
+   *Essentially Normal* **and** a finding under **G. SKIN & EXTREMITIES**. →
+   **Expect:** both stay ticked — the form allows it, so the screen does too.
+7. Pick **Fit**, enter a respiratory rate and press **Save & Close**. →
+   **Expect:** back on the Live Queue, row gone.
+8. Reopen that visit from the encode history. → **Expect:** all three cards are
+   **read-only** and still show every value: `13`, `5`, `0`, `28`, `None`, the
+   LMP, Menopause **No**, the six OB counts, `Normal spontaneous delivery`,
+   PIH **Yes**, and the exam ticks including `Deferred`. Nothing is editable.
+
+### Part B — a male Assessment encode
+
+9. Encode the **male** student's visit. → **Expect:** **V. Menstrual History**
+   and **VI. OB/Pregnancy History** are visibly **greyed out**, each headed
+   with the note **"For female students only"**, and every box inside them
+   refuses to be clicked or typed in. **Past Surgical History** above them is
+   **not** greyed — it is open to everyone.
+10. The **Pertinent Physical Examination** is at full opacity: tick
+    **Essentially Normal** under **H. NEUROLOGICAL EXAMINATION** and type a
+    note in **F. DRE**'s Others line. → **Expect:** both work normally.
+11. Save it as **Fit**, then reopen it. → **Expect:** the examination comes
+    back filled in and read-only, while V and VI are still greyed and empty —
+    the server stores nothing there for a male student.
+
+### Part C — phone width
+
+12. Narrow the browser to a phone width (or open the encode screen on a phone)
+    on the female visit. → **Expect:** the eight examination groups stack into
+    a single column, V and VI stack to one field per row, nothing overflows
+    sideways and no text is cut off.
+
+**Pass criteria:** V and VI are usable for a female student and greyed for a
+male one; out-of-range values and a future LMP are refused with the record
+unsaved; the LMP pre-fills from the kiosk; the examination works for every
+student, allows Normal *and* a finding together, and everything saved comes
+back on the read-only view.
+
+**Note for the tester:** the grey-out is only what you can see — the rule is on
+the server. Even if the male student's boxes were forced open, the saved record
+would still hold nothing for sections V and VI. Printing the Medical Assessment
+Form itself is a later change (D-71).
+
+---
+
 ---
 
 ---

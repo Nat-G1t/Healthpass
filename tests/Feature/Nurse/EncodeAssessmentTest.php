@@ -42,8 +42,11 @@ class EncodeAssessmentTest extends TestCase
         return College::firstOrCreate(['code' => 'CCS'], ['name' => 'College of Computing Studies']);
     }
 
-    /** A captured visit on an approved batch that uses the given form (D-62). */
-    private function makeVisit(string $formType): ClinicVisit
+    /**
+     * A captured visit on an approved batch that uses the given form (D-62).
+     * The student's sex decides whether sections V and VI apply (D-70).
+     */
+    private function makeVisit(string $formType, string $sex = 'F'): ClinicVisit
     {
         static $seq = 1;
 
@@ -53,7 +56,7 @@ class EncodeAssessmentTest extends TestCase
             'student_number' => fake()->unique()->numerify('2023-######'),
             'first_name' => 'Ana',
             'last_name' => 'Cruz',
-            'sex' => 'F',
+            'sex' => $sex,
             'course' => 'Bachelor of Science in Information Technology',
             'year_level' => '3rd Year',
             'date_of_birth' => '2004-05-10',
@@ -364,5 +367,275 @@ class EncodeAssessmentTest extends TestCase
             '/family_planning_access" value="0"[^>]*checked/s',
             $html,
         );
+    }
+
+    // ── 4. Sections V and VI — female students only (D-70) ────────────────────
+
+    /**
+     * A filled-in V + VI + physical examination payload.
+     *
+     * @param  array<string, mixed>  $overrides
+     * @return array<string, mixed>
+     */
+    private function femalePayload(array $overrides = []): array
+    {
+        return $this->assessmentPayload([
+            'menstrual_history' => [
+                'menarche_age' => '13',
+                'first_intercourse_age' => '',
+                'lmp' => '2026-09-01',
+                'period_days' => '5',
+                'pads_per_day' => '0',
+                'cycle_days' => '28',
+                'contraceptive' => 'None',
+                'menopause' => '0',
+                'menopause_age' => '',
+            ],
+            'ob_history' => [
+                'gravida' => '1',
+                'para' => '1',
+                'term' => '1',
+                'preterm' => '0',
+                'abortion' => '0',
+                'living' => '1',
+                'delivery_type' => 'Normal spontaneous delivery',
+                'pih' => '1',
+            ],
+            'physical_exam' => [
+                'heent' => ['findings' => ['normal'], 'others' => null],
+                'dre' => ['findings' => ['not_applicable'], 'others' => 'Deferred'],
+            ],
+            ...$overrides,
+        ]);
+    }
+
+    public function test_a_female_encode_stores_the_menstrual_and_ob_history(): void
+    {
+        $visit = $this->makeVisit('assessment', 'F');
+
+        $this->save($visit, $this->femalePayload())->assertRedirect(route('nurse.queue'));
+
+        $assessment = ClearanceRecord::firstOrFail()->medicalAssessment;
+
+        $this->assertSame([
+            'menarche_age' => 13,
+            // An untouched box is null, not 0 — and 0 pads a day is a real
+            // answer, which is why pads_per_day below is 0 and not null.
+            'first_intercourse_age' => null,
+            'lmp' => '2026-09-01',
+            'period_days' => 5,
+            'pads_per_day' => 0,
+            'cycle_days' => 28,
+            'contraceptive' => 'None',
+            'menopause' => false,
+            'menopause_age' => null,
+        ], $assessment->menstrual_history);
+
+        $this->assertSame([
+            'gravida' => 1,
+            'para' => 1,
+            'term' => 1,
+            'preterm' => 0,
+            'abortion' => 0,
+            'living' => 1,
+            'delivery_type' => 'Normal spontaneous delivery',
+            'pih' => true,
+        ], $assessment->ob_history);
+    }
+
+    public function test_a_male_encode_stores_null_for_both_sections_even_when_posted(): void
+    {
+        // The greyed inputs are a courtesy; THIS is the rule (D-70).
+        $visit = $this->makeVisit('assessment', 'M');
+
+        $this->save($visit, $this->femalePayload())->assertRedirect(route('nurse.queue'));
+
+        $assessment = ClearanceRecord::firstOrFail()->medicalAssessment;
+
+        $this->assertNull($assessment->menstrual_history);
+        $this->assertNull($assessment->ob_history);
+        // The examination is NOT sex-gated, so it still saves.
+        $this->assertSame(['normal'], $assessment->physical_exam['heent']['findings']);
+    }
+
+    public function test_an_untouched_female_section_saves_all_nulls(): void
+    {
+        $visit = $this->makeVisit('assessment', 'F');
+
+        $this->save($visit, EncodePayload::make())->assertRedirect(route('nurse.queue'));
+
+        $assessment = ClearanceRecord::firstOrFail()->medicalAssessment;
+
+        $this->assertSame(
+            array_fill_keys(array_keys($assessment->menstrual_history), null),
+            $assessment->menstrual_history,
+        );
+        $this->assertSame(
+            array_fill_keys(array_keys($assessment->ob_history), null),
+            $assessment->ob_history,
+        );
+    }
+
+    public function test_a_value_outside_its_range_is_rejected(): void
+    {
+        $visit = $this->makeVisit('assessment', 'F');
+
+        $this->save($visit, $this->femalePayload([
+            'menstrual_history' => ['menarche_age' => '2', 'cycle_days' => '200'],
+            'ob_history' => ['gravida' => '25'],
+        ]))->assertSessionHasErrors([
+            'menstrual_history.menarche_age',
+            'menstrual_history.cycle_days',
+            'ob_history.gravida',
+        ]);
+
+        $this->assertDatabaseCount('medical_assessments', 0);
+    }
+
+    public function test_a_last_menstrual_period_in_the_future_is_rejected(): void
+    {
+        $visit = $this->makeVisit('assessment', 'F');
+
+        $this->save($visit, $this->femalePayload([
+            'menstrual_history' => ['lmp' => today()->addDay()->toDateString()],
+        ]))->assertSessionHasErrors('menstrual_history.lmp');
+    }
+
+    public function test_the_last_menstrual_period_prefills_from_the_kiosk(): void
+    {
+        $visit = $this->makeVisit('assessment', 'F');
+        $visit->screeningResponse->update(['last_menstrual_period' => '2026-09-05']);
+
+        $this->actingAs($this->nurse())
+            ->get(route('nurse.visits.encode', $visit))
+            ->assertOk()
+            ->assertSee('name="menstrual_history[lmp]"', false)
+            ->assertSee('value="2026-09-05"', false);
+    }
+
+    // ── 5. Pertinent Physical Examination (D-70) ──────────────────────────────
+
+    public function test_the_examination_stores_all_eight_groups(): void
+    {
+        $visit = $this->makeVisit('assessment', 'F');
+
+        $this->save($visit, $this->femalePayload())->assertRedirect(route('nurse.queue'));
+
+        $exam = ClearanceRecord::firstOrFail()->medicalAssessment->physical_exam;
+
+        $this->assertSame(MedicalAssessment::physicalExamGroups(), array_keys($exam));
+        $this->assertSame(['findings' => ['not_applicable'], 'others' => 'Deferred'], $exam['dre']);
+        // A group nobody ticked is recorded empty, not missing.
+        $this->assertSame(['findings' => [], 'others' => null], $exam['skin']);
+    }
+
+    public function test_an_unknown_exam_group_or_finding_key_is_dropped(): void
+    {
+        $visit = $this->makeVisit('assessment', 'F');
+
+        $this->save($visit, $this->femalePayload([
+            'physical_exam' => [
+                // A finding borrowed from another group, and a group that does
+                // not exist at all — both are meaningless, so both are dropped.
+                'heent' => ['findings' => ['normal', 'enlarged_prostate'], 'others' => null],
+                'wizardry' => ['findings' => ['normal'], 'others' => null],
+            ],
+        ]))->assertRedirect(route('nurse.queue'));
+
+        $exam = ClearanceRecord::firstOrFail()->medicalAssessment->physical_exam;
+
+        $this->assertSame(['normal'], $exam['heent']['findings']);
+        $this->assertArrayNotHasKey('wizardry', $exam);
+    }
+
+    public function test_an_exam_others_text_over_its_limit_is_rejected(): void
+    {
+        $visit = $this->makeVisit('assessment', 'F');
+
+        $this->save($visit, $this->femalePayload([
+            'physical_exam' => [
+                'heent' => [
+                    'findings' => [],
+                    'others' => str_repeat('z', MedicalAssessment::SPECIFY_MAX_LENGTH + 1),
+                ],
+            ],
+        ]))->assertSessionHasErrors('physical_exam.heent.others');
+    }
+
+    // ── 6. The encode screen (D-70) ───────────────────────────────────────────
+
+    public function test_a_male_student_sees_the_two_sections_greyed_and_disabled(): void
+    {
+        $visit = $this->makeVisit('assessment', 'M');
+
+        $html = $this->actingAs($this->nurse())
+            ->get(route('nurse.visits.encode', $visit))
+            ->assertOk()
+            ->assertSee('V. Menstrual History')
+            ->assertSee('VI. OB/Pregnancy History')
+            ->assertSee('For female students only')
+            // The examination is open to everyone.
+            ->assertSee('F. DIGITAL RECTAL EXAMINATION (DRE)')
+            ->getContent();
+
+        $this->assertMatchesRegularExpression('/menstrual_history\[menarche_age\]"[^>]*\sdisabled\s+class=/s', $html);
+        $this->assertMatchesRegularExpression('/ob_history\[gravida\]"[^>]*\sdisabled\s+class=/s', $html);
+        // @disabled emits a BARE `disabled`, and Tailwind's disabled:
+        // variants put that word inside every class attribute too — so the
+        // patterns anchor on the attribute's own position in the tag.
+        $this->assertDoesNotMatchRegularExpression(
+            '/physical_exam\[heent\]\[findings\]\[\]" value="normal"[^>]*\sdisabled>/s',
+            $html,
+        );
+    }
+
+    public function test_a_female_student_gets_the_two_sections_enabled(): void
+    {
+        $visit = $this->makeVisit('assessment', 'F');
+
+        $html = $this->actingAs($this->nurse())
+            ->get(route('nurse.visits.encode', $visit))
+            ->assertOk()
+            ->assertDontSee('For female students only')
+            ->getContent();
+
+        $this->assertDoesNotMatchRegularExpression(
+            '/menstrual_history\[menarche_age\]"[^>]*\sdisabled\s+class=/s',
+            $html,
+        );
+    }
+
+    public function test_the_read_only_view_shows_the_saved_sections(): void
+    {
+        $visit = $this->makeVisit('assessment', 'F');
+        $this->save($visit, $this->femalePayload());
+
+        $html = $this->actingAs($this->nurse())
+            ->get(route('nurse.visits.encode', $visit))
+            ->assertOk()
+            ->assertSee('value="Normal spontaneous delivery"', false)
+            ->assertSee('value="Deferred"', false)
+            ->getContent();
+
+        $this->assertMatchesRegularExpression(
+            '/physical_exam\[dre\]\[findings\]\[\]" value="not_applicable".*?checked\s+disabled/s',
+            $html,
+        );
+        $this->assertMatchesRegularExpression('/ob_history\[pih\]" value="1".*?checked\s+disabled/s', $html);
+    }
+
+    public function test_a_clearance_visit_shows_no_examination_and_stores_none(): void
+    {
+        $visit = $this->makeVisit('clearance', 'F');
+
+        $this->actingAs($this->nurse())
+            ->get(route('nurse.visits.encode', $visit))
+            ->assertOk()
+            ->assertDontSee('Pertinent Physical Examination')
+            ->assertDontSee('V. Menstrual History');
+
+        $this->save($visit, $this->femalePayload())->assertRedirect(route('nurse.queue'));
+
+        $this->assertDatabaseCount('medical_assessments', 0);
     }
 }

@@ -848,6 +848,9 @@ class DemoClinicVisitSeeder extends Seeder
         // common case at the clinic, and the screens must read well that way.
         $reportsNothing = $seq % 3 === 2;
 
+        // Sections V and VI belong to female students only (D-70).
+        $isFemale = $record->clinicVisit?->studentIsFemale() ?? false;
+
         $record->medicalAssessment()->create([
             'medical_history' => $reportsNothing
                 ? ['patient' => [], 'family' => [], 'specify' => []]
@@ -863,7 +866,57 @@ class DemoClinicVisitSeeder extends Seeder
             'surgical_history' => $reportsNothing
                 ? ['procedures' => null, 'date_done' => null]
                 : ['procedures' => 'Appendectomy', 'date_done' => (string) (2015 + $seq % 8)],
+            // D-70: V and VI only for a female student — exactly what Save &
+            // Close writes; a male demo record keeps them NULL.
+            'menstrual_history' => $isFemale ? [
+                'menarche_age' => 12 + $seq % 3,
+                'first_intercourse_age' => null,
+                'lmp' => now()->subDays(10 + $seq)->toDateString(),
+                'period_days' => 4 + $seq % 3,
+                'pads_per_day' => 3,
+                'cycle_days' => 28,
+                'contraceptive' => $reportsNothing ? null : 'None',
+                'menopause' => false,
+                'menopause_age' => null,
+            ] : null,
+            'ob_history' => $isFemale ? [
+                'gravida' => 0,
+                'para' => 0,
+                'term' => 0,
+                'preterm' => 0,
+                'abortion' => 0,
+                'living' => 0,
+                'delivery_type' => null,
+                'pih' => false,
+            ] : null,
+            // Every Assessment record carries some exam findings, so the demo
+            // screens and the D-71 print never render an empty examination.
+            'physical_exam' => $this->physicalExam($seq),
         ]);
+    }
+
+    /**
+     * D-70 — demo Pertinent Physical Examination findings: all eight groups,
+     * "Essentially Normal" throughout except one group that shows a real
+     * finding and an Others note, so the screens display both states.
+     *
+     * @return array<string, array{findings: list<string>, others: ?string}>
+     */
+    private function physicalExam(int $seq): array
+    {
+        $groups = MedicalAssessment::physicalExamGroups();
+        $abnormal = $groups[$seq % count($groups)];
+        $exam = [];
+
+        foreach ($groups as $group) {
+            $keys = MedicalAssessment::findingKeys($group);
+
+            $exam[$group] = $group === $abnormal
+                ? ['findings' => [$keys[1]], 'others' => 'For follow-up']
+                : ['findings' => ['normal'], 'others' => null];
+        }
+
+        return $exam;
     }
 
     /**

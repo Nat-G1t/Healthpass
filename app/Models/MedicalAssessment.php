@@ -97,6 +97,138 @@ class MedicalAssessment extends Model
         ],
     ];
 
+    /**
+     * "V. MENSTRUAL HISTORY" — the numeric boxes and the plausibility range
+     * each one accepts, `key => [min, max]`. Every field is optional; a value
+     * that IS given has to be possible. One list serves the number inputs'
+     * min/max attributes, the validation and (from D-71) the print.
+     *
+     * @var array<string, array{int, int}>
+     */
+    public const MENSTRUAL_RANGES = [
+        'menarche_age' => [5, 25],
+        'first_intercourse_age' => [8, 60],
+        'period_days' => [1, 15],
+        'pads_per_day' => [0, 20],
+        'cycle_days' => [10, 90],
+        'menopause_age' => [30, 70],
+    ];
+
+    /**
+     * "VI. OB/PREGNANCY HISTORY" — the GPTPAL counts, all 0–20.
+     * `term`, `preterm`, `abortion` and `living` are the paper's T, P, A, L.
+     *
+     * @var array<string, array{int, int}>
+     */
+    public const OB_RANGES = [
+        'gravida' => [0, 20],
+        'para' => [0, 20],
+        'term' => [0, 20],
+        'preterm' => [0, 20],
+        'abortion' => [0, 20],
+        'living' => [0, 20],
+    ];
+
+    /**
+     * "PERTINENT PHYSICAL EXAMINATION" — the eight groups A–H of the back
+     * page, each a checkbox list plus its own "Others: ____" line. Group key
+     * => the printed heading and the group's findings (key => label, verbatim
+     * from the paper).
+     *
+     * "Essentially Normal" is NOT exclusive with the findings below it: the
+     * paper lets the examiner tick both, and inventing a rule the form does
+     * not have would lose what the clinician meant.
+     *
+     * @var array<string, array{label: string, findings: array<string, string>}>
+     */
+    public const PHYSICAL_EXAM = [
+        'heent' => [
+            'label' => 'A. HEENT',
+            'findings' => [
+                'normal' => 'Essentially Normal',
+                'abnormal_pupillary_reaction' => 'Abnormal Pupillary Reaction',
+                'cervical_lymphadenopathy' => 'Cervical Lymphadenopathy',
+                'dry_mucus_membrane' => 'Dry Mucus Membrane',
+                'pale_mucosa' => 'Pale Mucosa / Conjunctiva',
+                'sunken_eyeball' => 'Sunken Eyeball / Fontanelle',
+            ],
+        ],
+        'chest' => [
+            'label' => 'B. CHEST / BREAST / LUNGS',
+            'findings' => [
+                'normal' => 'Essentially Normal',
+                'asymmetrical_expansion' => 'Asymmetrical Chest Expansion',
+                'decreased_breath_sounds' => 'Decreased Breath Sounds',
+                'wheezes_crackles_rales' => 'Wheezes / Crackles / Rales',
+                'breast_lumps' => 'Lumps over Breast Tissue',
+                'intercostal_retractions' => 'Intercostal Retractions',
+            ],
+        ],
+        'cardiovascular' => [
+            'label' => 'C. CARDIOVASCULAR SYSTEM',
+            'findings' => [
+                'normal' => 'Essentially Normal',
+                'apex_beat_displacement' => 'Displacement of Apex Beat',
+                'heaves_thrills_murmurs' => 'Heaves / Thrills / Murmurs',
+                'irregular_rhythm' => 'Irregular Rhythm / Tachycardia',
+                'muffled_heart_sounds' => 'Muffled Heart Sounds',
+                'pericardial_bulge' => 'Pericardial Bulge',
+            ],
+        ],
+        'abdominal' => [
+            'label' => 'D. ABDOMINAL REGION',
+            'findings' => [
+                'normal' => 'Essentially Normal',
+                'rigidity_tenderness' => 'Abdominal Rigidity / Tenderness',
+                'hyperactive_bowel_sounds' => 'Hyperactive Bowel Sounds',
+                'palpable_masses' => 'Palpable Masses / Organomegaly',
+                'tympanitic_dull_abdomen' => 'Tympanitic Dull Abdomen',
+                'uterine_contractions' => 'Visible Uterine Contractions',
+            ],
+        ],
+        'genitourinary' => [
+            'label' => 'E. GENITOURINARY SYSTEM',
+            'findings' => [
+                'normal' => 'Essentially Normal',
+                'blood_stained_internal_exam' => 'Blood Stained Internal Exam',
+                'cervical_dilation' => 'Cervical Dilation Observed',
+                'abnormal_discharge' => 'Presence of Abnormal Discharge',
+            ],
+        ],
+        'dre' => [
+            'label' => 'F. DIGITAL RECTAL EXAMINATION (DRE)',
+            'findings' => [
+                'normal' => 'Essentially Normal',
+                'enlarged_prostate' => 'Enlarged Prostate Gland',
+                'palpable_mass_stricture' => 'Palpable Mass / Stricture',
+                'hemorrhoids' => 'Hemorrhoids (Internal/External)',
+                'pus_or_blood' => 'Presence of PUS / Blood',
+                'not_applicable' => 'Not Applicable',
+            ],
+        ],
+        'skin' => [
+            'label' => 'G. SKIN & EXTREMITIES',
+            'findings' => [
+                'normal' => 'Essentially Normal',
+                'digital_clubbing' => 'Digital Clubbing / Cyanosis',
+                'cold_clammy_skin' => 'Cold Clammy Skin / Mottling',
+                'edema' => 'Edema / Severe Swelling',
+                'decreased_mobility' => 'Decreased Range of Mobility',
+                'pale_nailbeds' => 'Pale Nailbeds / Weak Pulses',
+            ],
+        ],
+        'neurological' => [
+            'label' => 'H. NEUROLOGICAL EXAMINATION',
+            'findings' => [
+                'normal' => 'Essentially Normal',
+                'abnormal_gait' => 'Abnormal Gait / Poor Coordination',
+                'abnormal_sensation' => 'Abnormal Motion Sense / Sensation',
+                'abnormal_reflexes' => 'Abnormal Reflexes',
+                'poor_muscle_tone' => 'Poor Muscle Tone / Strength',
+            ],
+        ],
+    ];
+
     /** Longest text each free-text box on this form may hold. */
     public const SPECIFY_MAX_LENGTH = 60;
 
@@ -145,13 +277,35 @@ class MedicalAssessment extends Model
         return array_merge(...array_map('array_keys', array_values(self::IMMUNIZATIONS)));
     }
 
+    /**
+     * The eight Pertinent Physical Examination group keys, in the paper's
+     * order — the allow-list the save filters a posted `physical_exam` with.
+     *
+     * @return list<string>
+     */
+    public static function physicalExamGroups(): array
+    {
+        return array_keys(self::PHYSICAL_EXAM);
+    }
+
+    /**
+     * The finding keys one exam group allows. A posted key outside its own
+     * group is meaningless ("enlarged_prostate" under HEENT) and is dropped.
+     *
+     * @return list<string>
+     */
+    public static function findingKeys(string $group): array
+    {
+        return array_keys(self::PHYSICAL_EXAM[$group]['findings'] ?? []);
+    }
+
     protected $fillable = [
         'clearance_record_id',
         'medical_history',
         'immunizations',
         'family_planning_access',
         'surgical_history',
-        // Prompt 11 (D-70) fills these three.
+        // D-70 — sections V, VI and the Pertinent Physical Examination.
         'menstrual_history',
         'ob_history',
         'physical_exam',
@@ -195,6 +349,20 @@ class MedicalAssessment extends Model
     public function hasImmunization(string $key): bool
     {
         return in_array($key, $this->immunizations['given'] ?? [], true);
+    }
+
+    /** True when this exam group recorded the given finding (D-70). */
+    public function hasFinding(string $group, string $key): bool
+    {
+        // data_get() copes with physical_exam being NULL, which it is on every
+        // row encoded before D-70.
+        return in_array($key, (array) data_get($this->physical_exam, "{$group}.findings", []), true);
+    }
+
+    /** The "Others" text typed under an exam group, or null. */
+    public function findingOthers(string $group): ?string
+    {
+        return data_get($this->physical_exam, "{$group}.others");
     }
 
     // ── Relationships ────────────────────────────────────────────────────────

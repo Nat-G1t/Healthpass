@@ -69,6 +69,43 @@
         ? ($assessment?->surgical_history[$key] ?? null)
         : old("surgical_history.{$key}");
 
+    // ── Sections V, VI and the physical examination (D-70) ───────────────────
+    // V and VI are for female students only; the greyed inputs are a courtesy,
+    // the rule is the server's (StoreClearanceRequest ignores them otherwise).
+    $isFemale = $visit->studentIsFemale();
+
+    // The LMP box opens with the kiosk's own answer when the student gave one;
+    // every other box opens empty.
+    // data_get() reads a key out of an array that may itself be null —
+    // which menstrual_history and ob_history are for a male student.
+    $menstrual = fn (string $key) => $readOnly
+        ? data_get($assessment?->menstrual_history, $key)
+        : old("menstrual_history.{$key}", $key === 'lmp'
+            ? $sr?->last_menstrual_period?->format('Y-m-d')
+            : null);
+
+    $ob = fn (string $key) => $readOnly
+        ? data_get($assessment?->ob_history, $key)
+        : old("ob_history.{$key}");
+
+    // '1' / '0' / null for a Yes / No pair inside one of those JSON sections —
+    // same string comparison the Family Planning pair uses.
+    $yesNo = function (string $section, string $key) use ($readOnly, $assessment) {
+        $answer = $readOnly
+            ? data_get($assessment?->{$section}, $key)
+            : old("{$section}.{$key}");
+
+        return $answer === null ? null : (string) (int) $answer;
+    };
+
+    $finding = fn (string $group, string $key) => $readOnly
+        ? (bool) $assessment?->hasFinding($group, $key)
+        : in_array($key, (array) old("physical_exam.{$group}.findings", []), true);
+
+    $findingOthers = fn (string $group) => $readOnly
+        ? $assessment?->findingOthers($group)
+        : old("physical_exam.{$group}.others");
+
     // ── Vital Signs card (D-65) ──────────────────────────────────────────────
     // Normalize every number to ONE string shape before it is displayed or
     // compared: encoded_vitals stores JSON floats while vital_signs casts to
@@ -414,14 +451,17 @@
         {{-- ── The Medical Assessment Form's own sections (D-69) ─────────────
              In the paper's order, Assessment visits only. Each is a partial of
              its own under nurse/encode/assessment/ — this page is long enough.
-             The sections V-VI and the Pertinent Physical Examination follow in
-             D-70; "IV. Pertinent Physical Exam" is the Vital Signs card above
+             Sections V and VI are female-only (D-70) and grey out for anyone
+             else; "IV. Pertinent Physical Exam" is the Vital Signs card above
              (D-65), never a second set of inputs. --}}
         @if ($isAssessment)
             @include('nurse.encode.assessment.medical-history')
             @include('nurse.encode.assessment.immunizations')
             @include('nurse.encode.assessment.family-planning')
             @include('nurse.encode.assessment.surgical-history')
+            @include('nurse.encode.assessment.menstrual-history')
+            @include('nurse.encode.assessment.ob-history')
+            @include('nurse.encode.assessment.physical-exam')
         @endif
     </div>
 

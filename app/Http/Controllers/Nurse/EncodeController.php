@@ -93,6 +93,10 @@ class EncodeController extends Controller
                     'immunizations',
                     'family_planning_access',
                     'surgical_history',
+                    // D-70: sections V, VI and the physical examination.
+                    'menstrual_history',
+                    'ob_history',
+                    'physical_exam',
                 ]);
 
                 // D-65: the vitals the clinic confirmed on the card, with BMI

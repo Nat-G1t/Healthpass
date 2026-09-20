@@ -105,6 +105,18 @@ class ClinicVisit extends Model
     }
 
     /**
+     * D-70 — whether this visit's student is female, which is what opens the
+     * Medical Assessment Form's sections V (Menstrual History) and VI
+     * (OB/Pregnancy History). Read from the profile on the SERVER, never from
+     * anything the encode page posts: the greyed-out inputs are a courtesy,
+     * the rule is here.
+     */
+    public function studentIsFemale(): bool
+    {
+        return $this->student?->studentProfile?->sex === 'F';
+    }
+
+    /**
      * The purpose the clearance record stores (D-62): the batch reason's
      * printed LABEL in `purpose`, the admin's specify text in
      * `purpose_other`. Both NULL for a visit with no batch. Shared by Save &
