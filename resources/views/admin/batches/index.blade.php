@@ -316,6 +316,12 @@
                                          the one state still moving, peach once done, slate
                                          for waiting or did-not-happen. --}}
                                     <x-hp.badge variant="pending" x-show="row.status === 'awaiting'">Not yet attended</x-hp.badge>
+                                    {{-- D-72: the kiosk captured a high reading and the
+                                         student is resting before re-taking it. Still
+                                         moving, so the same orange "pending" badge as
+                                         Not yet attended would be wrong — this one is
+                                         at the clinic, just not in the queue yet. --}}
+                                    <x-hp.badge variant="live" x-show="row.status === 'rechecking'">Re-check</x-hp.badge>
                                     <x-hp.badge variant="live" x-show="row.status === 'in_clinic'">At the clinic</x-hp.badge>
                                     <x-hp.badge variant="approved" x-show="row.status === 'completed'">Completed</x-hp.badge>
                                     <x-hp.badge variant="rejected" x-show="row.status === 'absent'">Absent</x-hp.badge>

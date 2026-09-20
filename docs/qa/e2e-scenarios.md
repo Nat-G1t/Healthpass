@@ -1456,6 +1456,123 @@ double-sided form; and the Medical Clearance still prints as one Letter page.
 front / Print back — print the **saved PDF** with "Two-sided" on. That is the
 whole reason there is no third button.
 
+## E2E-25 — Rest & re-check for a high reading (D-72)
+
+**Covers:** FR-KSK-11a, FR-KSK-13a, FR-KSK-03, FR-NRS-01, FR-NRS-03,
+FR-ADM-12, FR-ANL-07, BR-11.
+
+**Setup:** a student with a `scheduled` appointment today. The clinic's rest
+length is `healthpass.kiosk.recheck_rest_minutes` (**10 minutes** by default) —
+the steps below assume that value.
+
+### Part A — a high blood pressure sends the student to rest
+
+1. At the kiosk, scan the student's ID and work through consent, the four
+   vitals and the questionnaire, entering **BP 150/95** by hand on the blood
+   pressure step (the 3-tap logo gesture opens the manual pad). → **Expect:**
+   the BP panel's status badge reads **High**, neutrally — no diagnosis.
+2. Reach **Review**. → **Expect:** the blood pressure row is orange with ⚑, and
+   the primary button reads **Rest & re-check →**, *not* Submit to Clinic, above
+   the line *"One of your readings is a little high. Please rest and re-take it
+   before we send your results to the clinic."*
+3. Tap **Rest & re-check**. → **Expect:** the **Rest** screen — *"Your blood
+   pressure reading is a little high. Please sit and rest for 10 minutes"* — a
+   large **Come back at** time, and the same "Returning to start in Ns"
+   countdown Complete uses. **No Fit/Unfit and no value anywhere on it.**
+4. Note the **Come back at** time, then let the countdown run out (or tap
+   **Done**). → **Expect:** the kiosk returns to Welcome.
+
+### Part B — the clinic sees nothing at all
+
+5. Sign in as the **nurse or physician** and open the **Live Queue**. →
+   **Expect:** the student is **not** there, and there is **no Resting list
+   anywhere** on the Clinic Dashboard. The sidebar's Live Queue badge does not
+   count them.
+6. Sign in as the **Director** and open **Flagged Anomalies** and the
+   **Dashboard**. → **Expect:** the 150/95 appears in **neither** — not in the
+   table, not in the five stat cards, not in the dashboard preview, and not on
+   the sidebar badge. Open **Analytics**: the month's visit total is unchanged
+   by this student.
+7. Sign in as the **student** and open **My Records**. → **Expect:** nothing new
+   is listed — the visit does not exist as far as they can see.
+
+### Part C — coming back too early
+
+8. Back at the kiosk, scan the same ID **before** the come-back time. →
+   **Expect:** the Welcome screen shows, in peach and calm (not a red error),
+   *"Please keep resting. Come back at H:MM AM."* — the same time as step 3 —
+   and the kiosk stays on Welcome. Nothing is bound and no screen advances.
+
+### Part D — the re-check
+
+9. Wait out the rest (or, for a demo, move it into the past:
+   `php artisan tinker --execute="App\Models\ClinicVisit::where('reference_no','HP-...')->update(['resting_until'=>now()->subMinute()]);"`).
+   Scan the ID again. → **Expect:** **Identity Confirm**, then "That's me"
+   goes **straight to the vitals screen** — **no consent, no questionnaire, no
+   Personal / Social History**, and no "No Clinic Schedule Today".
+10. → **Expect:** **only the Blood Pressure step** is shown, the progress dots
+    read **Step 1 of 1**, and there is no "← Previous step". The **Start**
+    button and the Bluetooth waiting flow work exactly as on a first pass.
+11. Enter **BP 124/80, HR 74** and Continue. → **Expect:** **Review**, showing
+    the **kept** height, weight and temperature, the **new** blood pressure
+    (no longer orange), and the **kept** questionnaire answers with their
+    details. The button reads **Submit to Clinic →** — there is **no second
+    Rest & re-check**.
+12. Submit. → **Expect:** the **Complete** screen with the visit's
+    **HP-YYYY-####** reference.
+
+### Part E — the clinic now sees one ordinary visit
+
+13. As the nurse, open the **Live Queue**. → **Expect:** the student is there
+    **once**, at the **bottom** of the queue (their wait started when they
+    finished, not when they first walked up), with **no BP flag** — and no
+    trace of a second, duplicate visit.
+14. Open **Encode Result**. → **Expect:** the Vital Signs card is pre-filled
+    with **124/80** and shows, underneath, *"First reading 150/95 mmHg at
+    H:MM AM → re-checked at H:MM AM"*. Encode Fit and Save & Close, then print.
+    → **Expect:** the printed form carries the **encoded** vitals; the first
+    reading appears nowhere on the paper.
+
+### Part F — Batch Results, and the student who never comes back
+
+15. While a student is still resting (repeat Part A with a second student),
+    sign in as their **College Admin**, open **Batch Tracking → Batch Results →
+    View**. → **Expect:** their Status reads **Re-check**, and the batch's Time
+    of Completion still reads **In progress**.
+16. Have that student **never** come back, and check the same popup after
+    **8:00 PM** on the clinic date (`healthpass.absent_cutoff`; for a test,
+    reseed with the demo row HP-2026-9008, which rested yesterday). →
+    **Expect:** their Status reads **Absent** — their result never reached the
+    queue, so from the batch's point of view nothing happened. The visit is
+    still absent from the queue, the analytics and their My Records.
+17. Re-scan that student's ID the **next day**. → **Expect:** yesterday's
+    resting visit is **ignored** — they start a normal first pass against
+    today's appointment (if they have one), not a re-check.
+
+### Part G — what does *not* trigger a rest
+
+18. Run a pass with **BMI ≥ 30** (e.g. 160 cm / 106 kg) but a normal
+    temperature, blood pressure and heart rate. → **Expect:** the BMI row is
+    orange with ⚑, but the button still reads **Submit to Clinic →**. Resting
+    cannot change a height or a weight, so it is never offered for BMI.
+19. Run a pass with a **high temperature only** (38.1 °C). → **Expect:** Rest &
+    re-check is offered, the Rest screen names the **temperature**, and the
+    return pass shows **only the Temperature step**.
+20. Run a pass with a **high heart rate only** (e.g. 118 bpm). → **Expect:**
+    Rest & re-check is offered, and the return pass shows the **Blood Pressure
+    step** — BP and heart rate are re-taken together, because one cuff
+    measurement produces both.
+
+**Pass criteria:** a flagged temperature / BP / heart rate offers Rest &
+re-check and nothing else; the resting visit is invisible to the queue, the
+analytics, the badges and the student; an early re-scan is refused with the
+server's own time; the return pass asks only for the flagged reading(s) and
+nothing else; submitting it puts the student at the **back** of the queue with
+the first reading preserved for the clinic; Batch Results reads **Re-check**
+before the cutoff and **Absent** after it; and BMI never triggers any of it.
+
+---
+
 ---
 
 ## Recording results

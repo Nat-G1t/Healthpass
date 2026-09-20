@@ -38,12 +38,14 @@
             <div class="flex items-center gap-2">
                 {{-- transition-colors, not -all: the size difference between
                      dots snaps (animating width/height would re-layout — §7). --}}
-                <template x-for="n in 4" :key="n">
+                {{-- D-72: one dot per step THIS pass walks — four on a first
+                     pass, one or two on a re-check (activeSteps()). --}}
+                <template x-for="n in stepCount()" :key="n">
                     <span
                         class="rounded-full transition-colors duration-hp-fast ease-hp-out"
-                        :class="n === state.vitalStep
+                        :class="n === stepIndex()
                             ? 'h-3.5 w-3.5 bg-hp-orange ring-2 ring-hp-orange/30'
-                            : (n < state.vitalStep ? 'h-3 w-3 bg-hp-orange' : 'h-3 w-3 bg-hp-slate/20')"
+                            : (n < stepIndex() ? 'h-3 w-3 bg-hp-orange' : 'h-3 w-3 bg-hp-slate/20')"
                     ></span>
                 </template>
             </div>
@@ -53,7 +55,7 @@
         <div class="flex w-full max-w-md flex-col items-center gap-4">
             <h1 class="text-2xl font-semibold text-hp-slate">
                 <span x-text="vitalMeta(state.vitalStep).label"></span>
-                <span class="text-base font-normal text-hp-slate/50">· Step <span x-text="state.vitalStep"></span> of 4</span>
+                <span class="text-base font-normal text-hp-slate/50">· Step <span x-text="stepIndex()"></span> of <span x-text="stepCount()"></span></span>
             </h1>
 
             {{-- ── Phase: READY (instructions) ──────────────────────────────── --}}
@@ -303,14 +305,14 @@
                         type="button"
                         @click="nextVital()"
                         class="rounded-xl bg-hp-orange px-9 py-3 text-base font-semibold text-hp-white transition hover:brightness-95"
-                        x-text="state.vitalStep < 4 ? 'Next →' : 'Continue →'"
+                        x-text="isLastStep() ? 'Continue →' : 'Next →'"
                     ></button>
                 </div>
             </div>
 
             {{-- Back to the previous step (not on step 1). --}}
             <button
-                x-show="state.vitalStep > 1"
+                x-show="!isFirstStep()"
                 type="button"
                 @click="prevVital()"
                 class="rounded-lg px-5 py-2.5 text-base font-medium text-hp-slate/50 transition hover:text-hp-orange"

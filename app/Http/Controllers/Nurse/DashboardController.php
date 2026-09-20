@@ -72,6 +72,8 @@ class DashboardController extends Controller
             'encodedMonth' => ClearanceRecord::whereBetween('encoded_at', $month)->count(),
             // The Live Queue's own count (BR-11): visits captured at the kiosk
             // and still waiting for an assessment.
+            // D-72: 'captured' already excludes a resting visit by itself -
+            // it is neither captured nor encoded until the re-check releases it.
             'awaitingEncode' => ClinicVisit::where('status', 'captured')->count(),
             // Flags surface from CAPTURE (FR-ANL-07), so an un-encoded visit
             // counts here too — that is the point of the tile.

@@ -30,12 +30,24 @@ export const SCREENS = [
     'social-history',
     'review',
     'complete',
+    // D-72: the "sit and rest, come back at 9:27 AM" screen. Reached from
+    // Review instead of Complete when a reading is high; it resets like
+    // Complete does, and the student returns by scanning again.
+    'rest',
 ];
 
 export const VITAL_STEPS = 4;
 
 // The blood-pressure step — the one the Bluetooth monitor fills (D-58).
 const BP_STEP = 4;
+
+// D-72: which vital step each re-check key re-takes. 'bp' covers systolic,
+// diastolic AND heart rate, because one cuff measurement produces all three.
+// There is no key for height or weight: resting cannot change those.
+export const RECHECK_STEPS = { temp: 3, bp: BP_STEP };
+
+// Every step, in order — the steps a normal first pass walks.
+const ALL_STEPS = [1, 2, 3, 4];
 
 // Shown under Start when a BP wait runs out with no reading (D-59).
 const BP_WAIT_EXPIRED_NOTICE = 'No reading came from the blood pressure monitor. Tap Start to try again.';
@@ -197,8 +209,10 @@ function freshState() {
         screen: 'welcome',
         vitalStep: 1,
 
-        // QR keyboard-wedge feedback shown on the Welcome screen.
-        scan: { status: 'idle', error: '' }, // idle | sending | error
+        // QR keyboard-wedge feedback shown on the Welcome screen. `notice` is
+        // the neutral counterpart of `error` — D-72 uses it for "please keep
+        // resting, come back at 9:27 AM", which is not a failure.
+        scan: { status: 'idle', error: '', notice: '' }, // idle | sending | error
 
         // Email-login sub-state (FR-KSK-02). `field` is which input the
         // on-screen keyboard types into; reset wholesale with the session.
@@ -271,6 +285,16 @@ function freshState() {
         // `reference` holds the server-minted HP-YYYY-#### shown on Complete.
         submit: { status: 'idle', error: '', reference: null }, // idle | sending | error
 
+        // Rest & re-check (FR-KSK-11a, D-72).
+        //
+        // `active` is true only on a RETURN pass — the student rested and came
+        // back — and `steps` holds the server's re-check keys ('bp' / 'temp')
+        // for it. `until` is the SERVER's come-back time as a ready-made
+        // string; the kiosk never formats a time of its own, and never reads
+        // the browser clock for one. `status`/`error` mirror submit's, for the
+        // POST to /kiosk/rest.
+        recheck: { active: false, steps: [], until: null, status: 'idle', error: '' },
+
         // Discreet staff-exit modal (FR-KSK-16). Only `open`/`status`/`error`
         // live here — the prompt BORROWS the login fields + on-screen keyboard
         // (`state.login`) for the nurse's email/password, since the two are
@@ -339,7 +363,10 @@ export function kioskMachine() {
             // run the Complete countdown only while the Complete screen is up.
             this.$watch('state.screen', (screen) => {
                 this.bumpIdle();
-                if (screen === 'complete') this.startCompleteCountdown();
+                // D-72: the Rest screen auto-resets on the same countdown as
+                // Complete — both are end-of-session screens the next student
+                // must not walk up to.
+                if (screen === 'complete' || screen === 'rest') this.startCompleteCountdown();
                 else this.clearCompleteCountdown();
             });
             this.setupSerial();
@@ -536,7 +563,9 @@ export function kioskMachine() {
             this.state.screen = screen;
             // Keep the scanner hot whenever we are back on Welcome.
             if (screen === 'welcome') {
-                this.state.scan = { status: 'idle', error: '' };
+                // Keep any notice already on screen (D-72's "keep resting"),
+                // which is set immediately before returning here.
+                this.state.scan = { status: 'idle', error: '', notice: this.state.scan.notice };
                 this.focusWedge();
             }
         },
@@ -585,7 +614,7 @@ export function kioskMachine() {
         /** Restart the idle countdown on any interaction — but only mid-flow. */
         bumpIdle() {
             const screen = this.state.screen;
-            if (screen === 'welcome' || screen === 'complete') {
+            if (screen === 'welcome' || screen === 'complete' || screen === 'rest') {
                 this.clearIdle();
                 return;
             }
@@ -1010,11 +1039,103 @@ export function kioskMachine() {
         // ── Identity Confirm (FR-KSK-03) ─────────────────────────────────────
         /** Store the resolved student and show Identity Confirm. */
         arriveAtIdentity(identity) {
+            // D-72, still resting: the server says the rest is not over. Show
+            // the come-back time on Welcome and drop the session — the student
+            // walks away and scans again later.
+            if (identity?.recheckWaitUntil) {
+                this.reset();
+                this.state.scan.notice = `Please keep resting. Come back at ${identity.recheckWaitUntil}.`;
+                return;
+            }
+
             this.state.identity = identity;
             // D-68: the server decided which form today's batch named; we keep
             // it beside the identity so every later screen reads one value.
             this.state.formType = identity?.formType === 'assessment' ? 'assessment' : 'clearance';
+
+            // D-72, the rest is over: seed everything the resting visit already
+            // holds so Review can show the whole visit, and remember which
+            // steps must be re-taken. The server decides both.
+            if (Array.isArray(identity?.recheck?.steps) && identity.recheck.steps.length > 0) {
+                this.seedRecheck(identity.recheck);
+            }
+
             this.state.screen = 'identity';
+        },
+
+        /**
+         * D-72 — prepare a RE-CHECK pass from the server's payload.
+         *
+         * The kept vitals and answers are display data: they fill the Review
+         * screen so the student checks their whole visit, not two numbers out
+         * of six. The server re-reads every one of them from the saved rows at
+         * submit and accepts none of them from the browser, so nothing here is
+         * trusted — it is only shown.
+         */
+        seedRecheck(recheck) {
+            this.state.recheck.active = true;
+            this.state.recheck.steps = [...recheck.steps];
+
+            const kept = recheck.kept ?? {};
+            const v = kept.vitals ?? {};
+
+            // Every step starts as already-captured with its saved value; the
+            // ones being re-taken are then blanked back to 'ready' below.
+            const capture = (values) => ({ ...vitalStep(), phase: 'captured', values });
+            this.state.vitalSteps = {
+                1: capture({ height: v.height }),
+                2: capture({ weight: v.weight }),
+                3: capture({ temperature: v.temperature }),
+                4: capture({ systolic: v.systolic, diastolic: v.diastolic, heartRate: v.heartRate }),
+            };
+
+            for (const step of this.activeSteps()) {
+                this.state.vitalSteps[step] = vitalStep();
+            }
+
+            // The questionnaire and social history are NOT asked again — they
+            // are seeded only so the Review cards can show them.
+            this.state.questionnaire = {
+                systems: { ...(kept.screening ?? {}) },
+                details: { ...(kept.details ?? {}) },
+                isPregnant: kept.isPregnant ?? null,
+                lmp: kept.lastMenstrualPeriod ?? null,
+                calMonth: null,
+            };
+
+            if (kept.socialHistory) {
+                this.state.socialHistory = { ...kept.socialHistory };
+            }
+        },
+
+        /** D-72 — is this pass a re-check rather than a first pass? */
+        isRecheck() {
+            return this.state.recheck.active;
+        },
+
+        /**
+         * D-72 — which reading(s) the Rest screen names, in plain words:
+         * "blood pressure", "temperature", "heart rate", or a list of them.
+         *
+         * Read from the same display-time flag helpers the vitals badges use,
+         * on the pass that is still in front of us. It names the reading and
+         * nothing else — no value, no interpretation (FR-KSK-14).
+         */
+        restReadingLabel() {
+            const names = [];
+            if (this.bpFlagged(this.fieldValue('systolic'), this.fieldValue('diastolic'))) names.push('blood pressure');
+            if (this.tempFlagged(this.fieldValue('temperature'))) names.push('temperature');
+            if (this.hrFlagged(this.fieldValue('heartRate'))) names.push('heart rate');
+
+            if (names.length === 0) return 'blood pressure';
+            if (names.length === 1) return names[0];
+
+            return `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+        },
+
+        /** The configured rest length in minutes (D-72) — never a literal. */
+        restMinutes() {
+            return this.config.kiosk?.recheckRestMinutes ?? 10;
         },
 
         /**
@@ -1027,6 +1148,16 @@ export function kioskMachine() {
          * not the gate.
          */
         confirmIdentity() {
+            // D-72: a re-check pass goes straight to the vitals screen. The
+            // resting visit already holds the appointment link, the consent,
+            // the questionnaire and the social history, so asking again would
+            // be asking the same student the same questions twice.
+            if (this.isRecheck()) {
+                this.state.vitalStep = this.activeSteps()[0];
+                this.go('vitals');
+                return;
+            }
+
             this.go(this.state.identity?.hasAppointmentToday ? 'consent' : 'no-schedule');
         },
 
@@ -1265,19 +1396,67 @@ export function kioskMachine() {
         },
 
         // ── Step navigation + retake ─────────────────────────────────────────
+        /**
+         * The vital steps THIS pass walks, in order.
+         *
+         * A first pass walks all four. A D-72 re-check walks only the steps the
+         * server named — the student already gave their height and weight, and
+         * resting cannot change them. Everything below (the progress dots, the
+         * "Step 2 of 2" heading, Next/Continue, Previous) reads this one list,
+         * so nothing counts to four any more.
+         */
+        activeSteps() {
+            if (!this.isRecheck()) return ALL_STEPS;
+
+            return this.state.recheck.steps
+                .map((key) => RECHECK_STEPS[key])
+                .filter((step) => step != null)
+                .sort((a, b) => a - b);
+        },
+
+        /** 1-based position of the current step within activeSteps(). */
+        stepIndex() {
+            return this.activeSteps().indexOf(this.state.vitalStep) + 1;
+        },
+
+        /** How many steps this pass has — 4 normally, 1 or 2 on a re-check. */
+        stepCount() {
+            return this.activeSteps().length;
+        },
+
+        isFirstStep() {
+            return this.stepIndex() <= 1;
+        },
+
+        isLastStep() {
+            return this.stepIndex() >= this.stepCount();
+        },
+
         /** Discard the current step's reading and return it to "ready". */
         retryVital() {
             this.state.vitalSteps[this.state.vitalStep] = vitalStep();
         },
 
         nextVital() {
-            if (this.state.vitalStep < VITAL_STEPS) this.state.vitalStep += 1;
-            else this.go('questionnaire');
+            const steps = this.activeSteps();
+            const next = steps[steps.indexOf(this.state.vitalStep) + 1];
+
+            if (next !== undefined) {
+                this.state.vitalStep = next;
+                return;
+            }
+
+            // D-72: a re-check has nothing left to ask — the questionnaire and
+            // the social history were answered on the first pass — so it goes
+            // straight to Review.
+            this.go(this.isRecheck() ? 'review' : 'questionnaire');
         },
 
         prevVital() {
             if (this.isAwaitingBp()) this.endBpWait(); // leaving the BP step stops listening (D-59)
-            if (this.state.vitalStep > 1) this.state.vitalStep -= 1;
+            const steps = this.activeSteps();
+            const previous = steps[steps.indexOf(this.state.vitalStep) - 1];
+            if (previous !== undefined) this.state.vitalStep = previous;
         },
 
         // ── BMI (FR-KSK-09 — computed, never entered) ────────────────────────
@@ -1637,6 +1816,14 @@ export function kioskMachine() {
          * Clearance student, who never saw that screen, on the questionnaire.
          */
         backFromReview() {
+            // D-72: a re-check never saw the questionnaire, so Back returns to
+            // the last step it actually walked.
+            if (this.isRecheck()) {
+                this.state.vitalStep = this.activeSteps().at(-1);
+                this.go('vitals');
+                return;
+            }
+
             this.go(this.isAssessment() ? 'social-history' : 'questionnaire');
         },
 
@@ -1710,12 +1897,104 @@ export function kioskMachine() {
             return left > 0 ? new Promise((resolve) => setTimeout(resolve, left)) : Promise.resolve();
         },
 
+        /**
+         * D-72 — does the Review screen offer "Rest & re-check" instead of
+         * "Submit to Clinic"?
+         *
+         * True when the temperature, the blood pressure or the heart rate trips
+         * its threshold on a FIRST pass. BMI never counts — resting will not
+         * change a height or a weight — and a re-check pass never offers a
+         * second rest, which the server enforces too.
+         *
+         * These are the same display-time helpers the vitals badges use. The
+         * SERVER recomputes the flags at /kiosk/rest and refuses with a 422 if
+         * it disagrees, which sends the student back to Submit (see rest()).
+         */
+        needsRest() {
+            if (this.isRecheck()) return false;
+
+            return (
+                this.tempFlagged(this.fieldValue('temperature')) ||
+                this.bpFlagged(this.fieldValue('systolic'), this.fieldValue('diastolic')) ||
+                this.hrFlagged(this.fieldValue('heartRate'))
+            );
+        },
+
+        /**
+         * POST the first pass to /kiosk/rest (FR-KSK-11a). Same payload as a
+         * submit — everything the student answered is stored — but the visit is
+         * parked as `resting` and never reaches the clinic queue.
+         *
+         * On a 422 the server has recomputed the flags and found nothing worth
+         * re-taking; `steps` stays empty, so the Review screen falls back to
+         * showing Submit to Clinic and the student carries on normally.
+         */
+        async restAndRecheck() {
+            if (this.state.recheck.status === 'sending') return;
+            this.state.recheck.status = 'sending';
+            this.state.recheck.error = '';
+            const startedAt = Date.now();
+
+            try {
+                const { response, data } = await this.kioskPost(this.$refs.root.dataset.restUrl, this.buildSubmission());
+                await this.holdSubmitOverlay(startedAt);
+
+                if (response.ok && data.ok) {
+                    // The come-back time is the SERVER's, shown verbatim.
+                    this.state.recheck.until = data.restingUntil ?? null;
+                    this.state.recheck.status = 'idle';
+                    this.go('rest');
+                    return;
+                }
+
+                this.state.recheck.status = 'error';
+                this.state.recheck.error = data.message ?? 'Could not save that. Please try again.';
+            } catch {
+                await this.holdSubmitOverlay(startedAt);
+                this.state.recheck.status = 'error';
+                this.state.recheck.error = 'Network problem. Please try again.';
+            }
+        },
+
+        /**
+         * The re-check payload (D-72): ONLY the re-taken readings and how they
+         * were taken. Height, weight, consent, the questionnaire and the social
+         * history are all in the resting visit already, and the server reads
+         * them from there — sending them would change nothing.
+         */
+        buildRecheckSubmission() {
+            const steps = this.activeSteps();
+            const payload = {
+                vitalMethods: steps
+                    .map((step) => this.state.vitalSteps[step].method)
+                    .filter(Boolean),
+            };
+
+            if (this.state.recheck.steps.includes('temp')) {
+                payload.temperature = this.fieldValue('temperature');
+            }
+
+            if (this.state.recheck.steps.includes('bp')) {
+                payload.systolic = this.fieldValue('systolic');
+                payload.diastolic = this.fieldValue('diastolic');
+                payload.heartRate = this.fieldValue('heartRate');
+            }
+
+            return payload;
+        },
+
         async submitToClinic() {
             if (this.state.submit.status === 'sending') return;
             this.state.submit = { status: 'sending', error: '' };
             const startedAt = Date.now();
+            // D-72: a re-check goes to its own endpoint with its own (much
+            // smaller) payload; everything else about this method is the same.
+            const url = this.isRecheck()
+                ? this.$refs.root.dataset.recheckUrl
+                : this.$refs.root.dataset.submitUrl;
+            const payload = this.isRecheck() ? this.buildRecheckSubmission() : this.buildSubmission();
             try {
-                const { response, data } = await this.kioskPost(this.$refs.root.dataset.submitUrl, this.buildSubmission());
+                const { response, data } = await this.kioskPost(url, payload);
                 await this.holdSubmitOverlay(startedAt);
                 if (response.ok && data.ok) {
                     this.state.submit = { status: 'idle', error: '', reference: data.reference ?? null };

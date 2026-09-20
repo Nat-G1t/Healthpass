@@ -38,7 +38,7 @@ use Illuminate\Support\Facades\DB;
  * the rescoped Director analytics (FR-ANL-09..13, D-32/D-33):
  *
  *   • every visit linked to an APT-2026-9xxx appointment on an APPROVED
- *     college batch (BR-2026-707…) — since D-61 that is the only way a
+ *     college batch (BR-2026-709…) — since D-61 that is the only way a
  *     visit happens: no self-bookings, no walk-ins. A student holds one seat
  *     per batch, so a student's second visit in a month goes on their
  *     college's second batch of that month, and so on. The batches cycle
@@ -56,7 +56,8 @@ use Illuminate\Support\Facades\DB;
  * APT-2026-84xx / BR-2026-7xx are reserved for synthetic data and will not
  * collide with real sequences (the next real number is always one past the
  * highest seeded one). The six My-Records visits sit on their own one-student
- * CCS batches, BR-2026-701…706 with APT-2026-8401…8406 — deliberately OUTSIDE
+ * CCS batches, BR-2026-701…706 with APT-2026-8401…8406, and the two D-72
+ * resting visits (HP-2026-9007/9008) on BR-2026-707…708 — all deliberately OUTSIDE
  * APT-2026-9xxx, whose existence makes the analytics spread skip itself.
  *
  * DELETE this seeder (and its call in DatabaseSeeder) once the real kiosk
@@ -89,8 +90,11 @@ class DemoClinicVisitSeeder extends Seeder
         '2026-05' => 48, '2026-06' => 64, '2026-07' => 40,
     ];
 
-    /** BR-2026-701…706 are the My-Records batches; the analytics spread starts here. */
-    private const FIRST_SPREAD_BATCH = 707;
+    /**
+     * BR-2026-701…706 are the My-Records batches and BR-2026-707…708 the two
+     * D-72 resting ones; the analytics spread starts past both.
+     */
+    private const FIRST_SPREAD_BATCH = 709;
 
     /**
      * [form type, reason] pairs the demo batches cycle through — both D-62
@@ -120,7 +124,123 @@ class DemoClinicVisitSeeder extends Seeder
         $this->admins = User::where('role', 'college_admin')->orderByDesc('id')->get()->keyBy('managed_college_id');
 
         $this->seedRecordsPageVisits();
+        $this->seedRestingVisits();
         $this->seedAnalyticsSpread();
+    }
+
+    /**
+     * D-72 demo — two RESTING visits, so both halves of Rest & re-check can be
+     * shown without standing at the kiosk:
+     *
+     *   HP-2026-9007  Juan Santos, TODAY, BP 150/95, rest still running.
+     *                 Batch Results reads "Re-check"; the Live Queue, the
+     *                 analytics and My Records all show nothing.
+     *   HP-2026-9008  Maria Reyes, YESTERDAY, temperature 38.1 °C, never
+     *                 came back. Past the 8 PM cutoff she is simply Absent.
+     *
+     * Neither visit is counted anywhere — that is the point of them. Push
+     * HP-2026-9007's `resting_until` into the past with tinker to demo the
+     * return pass:
+     *   ClinicVisit::where('reference_no','HP-2026-9007')->update(['resting_until'=>now()->subMinute()]);
+     */
+    private function seedRestingVisits(): void
+    {
+        if (ClinicVisit::where('reference_no', 'HP-2026-9007')->exists()) {
+            return;
+        }
+
+        $juan = User::where('email', 'juan.santos@psu.edu.ph')->firstOrFail();
+        $maria = User::where('email', 'maria.reyes@psu.edu.ph')->firstOrFail();
+        $ccs = College::where('code', 'CCS')->firstOrFail();
+
+        // Today, mid-morning: still resting, so still "Re-check" on Batch Results.
+        $today = Carbon::today()->setTime(9, 5);
+        $this->restingVisit(
+            reference: 'HP-2026-9007',
+            seat: 7,
+            student: $juan,
+            college: $ccs,
+            checkedInAt: $today,
+            restingUntil: $today->copy()->addMinutes((int) config('healthpass.kiosk.recheck_rest_minutes')),
+            vitals: ['bp_systolic' => 150, 'bp_diastolic' => 95, 'temperature_c' => 36.9],
+        );
+
+        // Yesterday: never came back, so the cutoff has made her Absent.
+        $yesterday = Carbon::yesterday()->setTime(10, 20);
+        $this->restingVisit(
+            reference: 'HP-2026-9008',
+            seat: 8,
+            student: $maria,
+            college: $ccs,
+            checkedInAt: $yesterday,
+            restingUntil: $yesterday->copy()->addMinutes(10),
+            vitals: ['bp_systolic' => 116, 'bp_diastolic' => 74, 'temperature_c' => 38.1],
+        );
+    }
+
+    /**
+     * One resting visit + its vitals and screening rows — exactly what
+     * SubmitKioskVisit::rest() writes, flags and all.
+     *
+     * @param  array{bp_systolic: int, bp_diastolic: int, temperature_c: float}  $vitals
+     */
+    private function restingVisit(
+        string $reference,
+        int $seat,
+        User $student,
+        College $college,
+        Carbon $checkedInAt,
+        Carbon $restingUntil,
+        array $vitals,
+    ): void {
+        $visit = ClinicVisit::create([
+            'reference_no' => $reference,
+            'student_id' => $student->id,
+            'college_id' => $college->id,
+            'course' => $student->studentProfile->course,
+            'appointment_id' => $this->recordsPageSeat(
+                $seat,
+                $student,
+                $college,
+                $checkedInAt->toDateTimeString(),
+                'scheduled', // the nurse never encoded it — nothing reached them
+                ['clearance', 'employment'],
+            ),
+            'login_method' => 'qr',
+            'status' => 'resting',
+            'privacy_consent_at' => $checkedInAt->copy()->subMinutes(4),
+            'checked_in_at' => $checkedInAt,
+            'resting_until' => $restingUntil,
+        ]);
+
+        $thresholds = config('healthpass.thresholds');
+        $heartRate = 78;
+
+        VitalSigns::create([
+            'clinic_visit_id' => $visit->id,
+            'height_cm' => 168.0,
+            'weight_kg' => 61.0,
+            'bmi' => VitalSigns::computeBmi(168.0, 61.0),
+            'temperature_c' => $vitals['temperature_c'],
+            'heart_rate_bpm' => $heartRate,
+            'bp_systolic' => $vitals['bp_systolic'],
+            'bp_diastolic' => $vitals['bp_diastolic'],
+            'entry_method' => 'manual',
+            'is_temp_flagged' => $vitals['temperature_c'] > $thresholds['temperature_max'],
+            'is_bp_flagged' => $vitals['bp_systolic'] >= $thresholds['bp_systolic']
+                || $vitals['bp_diastolic'] >= $thresholds['bp_diastolic'],
+            'is_bmi_flagged' => false,
+            'is_hr_flagged' => VitalSigns::isHeartRateFlagged($heartRate),
+            // Null until the student comes back and re-takes the reading (D-72).
+            'first_reading' => null,
+        ]);
+
+        ScreeningResponse::create([
+            'clinic_visit_id' => $visit->id,
+            ...$this->screening(),
+            ...$this->socialHistory($visit->formType()),
+            'is_pregnant' => false,
+        ]);
     }
 
     /**
@@ -442,7 +562,7 @@ class DemoClinicVisitSeeder extends Seeder
 
     /**
      * The multi-month analytics spread (HP-2026-9101… / APT-2026-9001… /
-     * BR-2026-707…):
+     * BR-2026-709…):
      * six months of clinic visits feeding every card of the rescoped
      * analytics. Replaces the pre-D-32 single-month
      * spread and Apr–Jun bands — any of those stale rows are purged first

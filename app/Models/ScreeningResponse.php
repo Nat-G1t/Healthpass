@@ -177,6 +177,49 @@ class ScreeningResponse extends Model
         return $rows;
     }
 
+    // ── Kiosk re-check payload (D-72) ────────────────────────────────────────
+    // A re-check pass skips the questionnaire and the social history, so the
+    // kiosk is handed back what this visit already stored, in the shapes the
+    // Alpine state uses. Display only: the re-check submit re-reads these rows
+    // itself and accepts nothing of the sort from the browser.
+
+    /**
+     * The twelve Physical Signs answers keyed the way the kiosk keys them
+     * (D-63), each true (Yes) or false (No).
+     *
+     * @return array<string, bool>
+     */
+    public function kioskAnswers(): array
+    {
+        $answers = [];
+
+        foreach (array_keys(self::QUESTIONS) as $question) {
+            $answers[$question] = (bool) $this->{$question};
+        }
+
+        return $answers;
+    }
+
+    /**
+     * The Personal / Social History in the kiosk's own camelCase keys (D-68),
+     * or null on a Medical Clearance visit, which was never asked.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function kioskSocialHistory(): ?array
+    {
+        if ($this->smoking === null) {
+            return null;
+        }
+
+        return [
+            'smoking' => $this->smoking,
+            'alcohol' => $this->alcohol,
+            'illicitDrugs' => $this->illicit_drugs,
+            'sexuallyActive' => (bool) $this->sexually_active,
+        ];
+    }
+
     // ── Relationships ────────────────────────────────────────────────────────
 
     /** The kiosk visit this questionnaire belongs to. */

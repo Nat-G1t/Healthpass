@@ -102,6 +102,13 @@ final class ClinicAnalytics
     private function scopeToVisits(Builder $query): Builder
     {
         return $query
+            // D-72: a resting visit is a first pass the clinic never saw, so it
+            // is in no card, no chart and no report. Applied on the SHARED
+            // scope so every count below inherits it. Written as a plain
+            // whereIn rather than ClinicVisit's submitted() scope because this
+            // method is also handed a VitalSigns query that JOINS
+            // clinic_visits, and an Eloquent scope only exists on its own model.
+            ->whereIn('clinic_visits.status', ClinicVisit::SUBMITTED_STATUSES)
             ->whereBetween('clinic_visits.checked_in_at', $this->monthBounds())
             ->when($this->college, fn ($q) => $q->where('clinic_visits.college_id', $this->college->id))
             ->when($this->course, fn ($q) => $q->where('clinic_visits.course', $this->course));
@@ -309,6 +316,9 @@ final class ClinicAnalytics
     public function visitsTrend(bool $withinScope = false): array
     {
         $visitsByMonth = ClinicVisit::query()
+            // D-72. The trend bypasses scopeToVisits() (it spans every month),
+            // so it applies the same exclusion itself.
+            ->submitted()
             ->whereNotNull('checked_in_at')
             ->when($withinScope && $this->college, fn ($q) => $q->where('clinic_visits.college_id', $this->college->id))
             ->when($withinScope && $this->course, fn ($q) => $q->where('clinic_visits.course', $this->course))

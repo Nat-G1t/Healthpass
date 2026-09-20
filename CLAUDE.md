@@ -87,6 +87,12 @@ Do not silently reconcile conflicts.
   terminal. Therefore **NEVER trust client-supplied identity or derived
   values on kiosk endpoints**: student identity binds server-side in the
   session at scan/login, and BMI/flags are always recomputed server-side.
+- **Rest & re-check (D-72):** a first pass with high temp/BP/HR is saved as a
+  `resting` visit (never queued, never counted); the student re-scans after the
+  rest time and re-takes only those readings; the server keeps the first reading
+  in `vital_signs.first_reading`. The "Bypass the nurse queue flow" rule still
+  holds — a resting visit reaches the clinic only through the queue. Every count
+  of visits goes through `ClinicVisit::scopeSubmitted()`.
 - **One kiosk endpoint sits outside `kiosk.access`:** `POST /api/kiosk/bp-reading`
   (D-58, `routes/api.php`) is called by the Pi's Bluetooth BP daemon with no
   session and authenticates by `X-Kiosk-Key` against `HEALTHPASS_KIOSK_KEY`.

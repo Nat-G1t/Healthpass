@@ -136,10 +136,27 @@
             </div>
         </div>
 
+        {{-- D-72: one of temperature / blood pressure / heart rate is flagged,
+             so this pass offers a rest instead of a submit. Plain, unalarming
+             wording — it says what happens next, not what it might mean
+             (FR-KSK-14). The kiosk decides this line from its own display
+             flags; the SERVER recomputes them at /kiosk/rest and refuses if it
+             disagrees, which puts Submit to Clinic back. --}}
+        <p x-show="needsRest()" x-cloak
+           class="mt-2 rounded-xl bg-hp-peach/40 px-4 py-3 text-center text-base font-medium text-hp-slate/80">
+            One of your readings is a little high. Please rest and re-take it
+            before we send your results to the clinic.
+        </p>
+
         {{-- Submit error (network / server) — fades in with one shake (§7). --}}
         <p x-show="state.submit.status === 'error'" x-cloak
            class="hp-anim-shake mt-2 text-center text-base font-medium text-red-600"
            x-text="state.submit.error"></p>
+
+        {{-- Rest error (network / server, or the server's "nothing to re-take"). --}}
+        <p x-show="state.recheck.status === 'error'" x-cloak
+           class="hp-anim-shake mt-2 text-center text-base font-medium text-red-600"
+           x-text="state.recheck.error"></p>
 
         {{-- ── Footer: back to questionnaire + submit to clinic ─────────────── --}}
         <div class="mt-4 flex items-center justify-between">
@@ -150,9 +167,21 @@
                      for a Clearance one. --}}
                 @click="backFromReview()"
                 class="rounded-lg px-3 py-3 text-base font-medium text-hp-slate/60 transition hover:text-hp-orange"
-                x-text="isAssessment() ? '← Back' : '← Back to questionnaire'"
+                x-text="isRecheck() ? '← Back' : (isAssessment() ? '← Back' : '← Back to questionnaire')"
+            ></button>
+            {{-- D-72: ONE primary button, whose job depends on the flags. A
+                 re-check pass never offers a second rest (needsRest() is false
+                 for it), and the server refuses one anyway. --}}
+            <button
+                x-show="needsRest()" x-cloak
+                type="button"
+                @click="restAndRecheck()"
+                :disabled="state.recheck.status === 'sending'"
+                class="rounded-2xl bg-hp-orange px-9 py-4 text-lg font-semibold text-hp-white shadow-sm transition hover:brightness-95 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+                x-text="state.recheck.status === 'sending' ? 'Saving…' : 'Rest &amp; re-check →'"
             ></button>
             <button
+                x-show="!needsRest()"
                 type="button"
                 @click="submitToClinic()"
                 :disabled="state.submit.status === 'sending'"
@@ -164,7 +193,7 @@
         {{-- Submit pending overlay (§7): covers the screen while the visit is
              being written. submitToClinic() holds it ≥400 ms so a fast server
              never makes it strobe. Neutral wording — celebrates nothing. --}}
-        <div x-show="state.submit.status === 'sending'" x-cloak
+        <div x-show="state.submit.status === 'sending' || state.recheck.status === 'sending'" x-cloak
              x-transition:enter="transition ease-hp-out duration-hp-fast"
              x-transition:enter-start="opacity-0"
              x-transition:enter-end="opacity-100"

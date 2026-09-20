@@ -38,6 +38,9 @@ final class VisitMonths
     public static function available(?College $college = null): array
     {
         $visitMonths = ClinicVisit::query()
+            // D-72: a month in which only resting visits happened had no
+            // clinic activity, so it must not be offered.
+            ->submitted()
             ->whereNotNull('checked_in_at')
             // The capture-time college snapshot (FR-STU-09), same as every
             // analytics count.

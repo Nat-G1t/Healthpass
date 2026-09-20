@@ -224,6 +224,10 @@ class BatchRequest extends Model
      * clinic but not yet encoded keeps the batch open, even past the cutoff;
      * withdrawn students are ignored, since they no longer hold a seat.
      *
+     * D-72: `rechecking` is unfinished for the same reason `in_clinic` is —
+     * only completed and absent are listed here, so a resting student keeps
+     * the batch open until they come back (or the cutoff makes them absent).
+     *
      * Reads the SAME Appointment::clearanceProgress() the Batch Results popup
      * rows show, so the Time of Completion column and the popup can never
      * disagree. Callers eager-load

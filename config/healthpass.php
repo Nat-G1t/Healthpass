@@ -162,6 +162,13 @@ return [
         // waits (the cuff plus the Bluetooth transfer can take about that
         // long), so this limit is what still clears an abandoned kiosk.
         'bp_wait_seconds' => 120,
+
+        // D-72: how long a student rests before re-taking a flagged
+        // temperature, blood pressure or heart rate. The kiosk stores
+        // now() + this on clinic_visits.resting_until and shows that SERVER
+        // time on the Rest screen; the browser clock is never consulted.
+        // Whole minutes — the nurses asked for "a few minutes".
+        'recheck_rest_minutes' => env('HEALTHPASS_RECHECK_REST_MINUTES', 10),
     ],
 
 ];

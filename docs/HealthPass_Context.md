@@ -134,6 +134,22 @@ Student arrives at clinic (scheduled by their college)
                     └── Review & Submit → Clinic Visit created (status: captured)
                             │ (links to today's appointment; with none the server
                             │  refuses the submit and writes nothing — D-61)
+                            │
+                            └── D-72: if temp / BP / HR is flagged, the button
+                                │  reads "Rest & re-check" instead and the visit
+                                │  is created as status: resting — no queue, no
+                                │  count anywhere. Rest screen shows the SERVER's
+                                │  come-back time, then auto-resets.
+                                │
+                                └── Student re-scans after resting_until
+                                    │  → Identity Confirm → ONLY the flagged
+                                    │    vitals step(s); consent, questionnaire
+                                    │    and social history are already stored
+                                    │
+                                    └── Review → Submit → first numbers copied to
+                                       vital_signs.first_reading, all flags
+                                       recomputed, status: resting → captured,
+                                       checked_in_at = now() (back of the queue)
 
 Nurse sees visit in Live Queue
          │
@@ -359,7 +375,7 @@ Students are scheduled only through their college (a batch request the Clinic Di
 - Two buttons: "View Tracking" + "Dashboard".
 
 #### Batch Tracking (`admin-batch-tracking`)
-- **Batch Results card** (D-55, FR-ADM-12), **above** the requests table and rendered only when the college has at least one approved batch: every **approved** batch, newest clinic date first, as **Batch ID · Time of Completion · View** (blank header). Time of Completion reads **In progress** until every non-withdrawn student is Completed or Absent, then the date and time of the batch's **last encode** (e.g. "Sep 10, 2026 · 3:42 PM"), or **No one attended** when nobody was completed. **View** opens a teleported popup — reference, service, clinic date, hour span, and per student: name, student no., hour, **Status** (Not yet attended / At the clinic / Completed / Absent / Withdrawn) and **Result** (Fit / Unfit / "—"). A student with no clinic visit is **Absent from 8:00 PM on the clinic date** (`healthpass.absent_cutoff`, server clock). **Outcome only** — no vitals, screening answers, nurse notes, physician details or visit reference. Rebuilt on every page load (no polling).
+- **Batch Results card** (D-55, FR-ADM-12), **above** the requests table and rendered only when the college has at least one approved batch: every **approved** batch, newest clinic date first, as **Batch ID · Time of Completion · View** (blank header). Time of Completion reads **In progress** until every non-withdrawn student is Completed or Absent, then the date and time of the batch's **last encode** (e.g. "Sep 10, 2026 · 3:42 PM"), or **No one attended** when nobody was completed. **View** opens a teleported popup — reference, service, clinic date, hour span, and per student: name, student no., hour, **Status** (Not yet attended / **Re-check** / At the clinic / Completed / Absent / Withdrawn — **Re-check** is D-72: the student reached the kiosk, a reading was high, and they are resting before re-taking it; at the 8 PM cutoff a still-resting student becomes **Absent**, because their result never reached the queue) and **Result** (Fit / Unfit / "—"). A student with no clinic visit is **Absent from 8:00 PM on the clinic date** (`healthpass.absent_cutoff`, server clock). **Outcome only** — no vitals, screening answers, nurse notes, physician details or visit reference. Rebuilt on every page load (no polling).
 - Table: Batch ID, **Form Type (D-62)**, Reason (truncated with ellipsis), Students, Submitted, Status (Pending shows as "Pending Director Approval"; `cancelled` shows as "Cancelled" — D-52).
 - **Rejection Reason** column (D-36) appears only when the list holds at least one rejected row.
 - **Cancel column** (D-52, FR-ADM-11): a trailing column with a **blank header**, rendered only when at least one row is cancellable, holding a Cancel control on **pending rows only** (every other row gets an em dash). Clicking it opens a confirmation dialog naming the reference, the student count and the requested clinic date. Blank-headed because it holds an action rather than a value — the same shape as the Withdraw column on the batch roster.
@@ -376,6 +392,7 @@ Every page in this section is shared by the nurse and the University Physician. 
 - **Header**: blinking LIVE dot + "LIVE QUEUE" pill (peach bg, orange text) + "{n} students waiting · updated just now".
 - **Queue table** (full-width card, no outer padding): Student (avatar initials + name; first row tagged "NEXT" badge + highlighted peach-35 row — the longest-waiting student), College, **Vitals Summary** (all values inline, flagged values bold orange), **Flags** (flagged-variant badges for temp/bp/bmi **and HR since D-66**, or "—" — there is no RR badge here: that vital is only measured at encode), Time (waiting since), Action ("Encode Result" button — primary for row 1, ghost for others).
 - Queue = clinic visits with status `captured`, ordered by `checked_in_at` asc (oldest first = top row — **first come, first served**). The top row is the next student to serve; new kiosk submissions append at the bottom.
+- **A `resting` visit is never here (D-72)** — the `captured` filter excludes it on its own, and there is deliberately **no Resting list** for the clinic: a student re-taking a high reading has not submitted anything yet, so nobody is waiting on them. When their re-check releases the visit, `checked_in_at` is re-stamped, so they appear at the **bottom** of the queue rather than jumping it with their original arrival time.
 - Refresh by **polling** (every 3–5 seconds via `setInterval` + `fetch`) — meets SM-2 (queue reflects a submission within ≤ 5 s).
 - Sidebar "Enable Kiosk Mode" opens the nurse **Kiosk Devices** page (D-27): enroll the current browser/terminal as a trusted kiosk device, list enrolled devices, and revoke each. Reaching `/kiosk` requires a device-enrolled token **OR** an active nurse **OR** config-allowed loopback; everyone else sees a friendly branded restricted-access page (see the KioskAccess middleware).
 
@@ -735,9 +752,10 @@ college_id            bigint FK → colleges.id   -- SCHEMA ADD: snapshot of the
 course                varchar(120) NULL     -- SCHEMA ADD (D-43): snapshot of the student's PROGRAM at capture time, frozen beside college_id above. student_profiles.course stays live, so without this a program shift would restate every past per-program report. NULLABLE and NEVER BACKFILLED — a pre-D-43 visit has no honest answer and renders "—" (the pattern appointments.scheduled_time uses for pre-D-37 rows); a profile with no program also stores NULL rather than blocking the kiosk.
 appointment_id        bigint NULL FK → appointments.id   -- always set since D-61 (no walk-ins); NULL only on legacy walk-in rows
 login_method          enum('qr','email')
-status                enum('captured','encoded') DEFAULT 'captured'
+status                enum('resting','captured','encoded') DEFAULT 'captured'  -- SCHEMA ADD (D-72): 'resting' = a first pass whose temp/BP/HR was flagged, parked while the student rests. Not a submitted visit — ClinicVisit::scopeSubmitted() (captured|encoded) is the one definition every count uses. resting → captured → encoded, at most once, never in reverse.
 privacy_consent_at    timestamp NULL
-checked_in_at         timestamp NULL
+checked_in_at         timestamp NULL        -- re-stamped by the D-72 re-check, so a returning student joins the BACK of the FCFS queue
+resting_until         timestamp NULL        -- SCHEMA ADD (D-72): when a resting student may come back, now() + healthpass.kiosk.recheck_rest_minutes (10). Written once by POST /kiosk/rest, cleared by the re-check, NULL on every visit that never rested; never backfilled. The Rest screen shows THIS time — never a browser clock.
 created_at, updated_at
 ```
 
@@ -758,6 +776,7 @@ is_bp_flagged         boolean DEFAULT false
 is_bmi_flagged        boolean DEFAULT false
 is_hr_flagged         boolean DEFAULT false -- heart rate > thresholds.heart_rate_max (100 bpm); computed at kiosk capture (D-66)
 is_rr_flagged         boolean DEFAULT false -- respiratory rate outside 12-20; computed at ENCODE, with respiratory_rate (D-66)
+first_reading         json NULL             -- SCHEMA ADD (D-72): the PRE-REST reading + its flags — {temperature_c, bp_systolic, bp_diastolic, heart_rate_bpm, is_temp_flagged, is_bp_flagged, is_hr_flagged, taken_at}. Written once by POST /kiosk/recheck from the STORED row, never from the body. NULL on every visit that never rested. One JSON column because nothing queries inside it: the clinic only READS it, on the encode page, as "First reading 150/95 mmHg at 9:05 AM → re-checked at 9:17 AM". The columns above always hold the RE-CHECKED numbers, which is what the flags, analytics and print describe.
 bp_device_reading     json NULL             -- Bluetooth BP monitor's record of the reading (irregular_pulse flag, raw hex, device_model …); NULL if typed/serial, never backfilled (D-58)
 created_at, updated_at
 ```

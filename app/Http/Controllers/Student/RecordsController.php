@@ -24,6 +24,9 @@ class RecordsController extends Controller
         // Ownership is implicit: scoped through the authenticated user's relation,
         // so no cross-student leakage is possible.
         $visits = $request->user()->clinicVisits()
+            // D-72: a resting visit has not been submitted to the clinic yet,
+            // so the student sees nothing for it - not even that it exists.
+            ->submitted()
             ->with([
                 // D-68: batchRequest carries the form type, which decides
                 // whether the modal shows a Personal / Social History card.

@@ -4,6 +4,66 @@
 
 ### Added
 
+* **The kiosk asks a student with a high temperature, blood pressure or heart
+  rate to rest and re-take it — before the visit ever reaches the clinic**
+  (D-72). Requested by the clinic (nurses) on 2026-09-18; kiosk-side design by
+  Nat 2026-09-19; **pending adviser sign-off**. **Flagged schema change:**
+  `clinic_visits.status` gains **`resting`**, new `clinic_visits.resting_until`
+  TIMESTAMP NULL, new `vital_signs.first_reading` JSON NULL. New config
+  `healthpass.kiosk.recheck_rest_minutes` (**10**). No new table, no new
+  package; dev DB reseeded.
+  * **Review** — on a first pass whose temperature, blood pressure or heart
+    rate is flagged, **Submit to Clinic** is replaced by **Rest & re-check**,
+    above the line "One of your readings is a little high. Please rest and
+    re-take it before we send your results to the clinic." **BMI never triggers
+    it**: ten minutes in a chair changes no height or weight.
+  * **`POST /kiosk/rest`** takes the same payload and the same
+    `KioskSubmitRequest` validation as submit, **recomputes the flags
+    server-side**, and returns a 422 when none of the three is flagged — the
+    kiosk then shows Submit again. Otherwise it writes the visit exactly as
+    submit would (appointment link, snapshots, consent, vitals, screening,
+    social history) with **`status = resting`** and
+    `resting_until = now() + 10 min`.
+  * **Rest screen** names which reading is being re-taken and the **server's**
+    come-back time — never a browser clock — and auto-resets to Welcome on
+    the same countdown as Complete. No Fit/Unfit, no value, no interpretation.
+  * **Coming back** — at scan or email login the server finds **today's**
+    resting visit (an earlier day's is ignored) and binds it to the **session**;
+    the client never names a visit. Too early → "Please keep resting. Come back
+    at 9:27 AM." and a reset. Ready → Identity Confirm straight to **the
+    flagged vitals step(s) only**, skipping the schedule check, consent, the
+    questionnaire and the social history, which that row already holds. **Blood
+    pressure and heart rate are one step**, because one cuff measurement
+    produces both; the D-58/D-59 Start / waiting flow is unchanged.
+  * **`POST /kiosk/recheck`** accepts **only** the re-taken fields (FR-KSK-08
+    ranges); every other value comes from the saved rows. It copies the first
+    numbers and their flags into `vital_signs.first_reading`, overwrites the
+    re-taken ones, **recomputes every flag**, rolls `entry_method` up to
+    `mixed` when the sources differ, keeps `bp_device_reading` consistent, and
+    sets **`status: resting → captured`** with `checked_in_at = now()` — so
+    the student joins the **back** of the FCFS Live Queue, not the front. A
+    visit rests **once**.
+  * **A resting visit counts nowhere** — not the Live Queue, any analytics
+    card, the monthly report, `VisitMonths`, Flagged Anomalies, the Director
+    dashboard, the Clinic Dashboard tiles, the D-57 badges or the student's My
+    Records. New **`ClinicVisit::scopeSubmitted()`** (status in
+    captured/encoded) is applied at every count site **and inside
+    `scopeFlagged()`**, so the three flag surfaces inherit it. There is **no
+    Resting list for the clinic**.
+  * **Batch Results (FR-ADM-12)** gains **"Re-check"** while the linked visit is
+    resting; at the 8 PM absent cutoff (D-55) a still-resting student becomes
+    **Absent** — their result never reached the queue.
+  * **Encode** shows "First reading 150/95 mmHg at 9:05 AM → re-checked at
+    9:17 AM" under the Vital Signs card when `first_reading` is set; the
+    editable card pre-fills with the **re-checked** values and print is
+    unchanged.
+  * An **abandoned** re-check (idle reset) leaves the visit `resting`, and the
+    student may scan again the same day.
+  * Seeders add one resting visit today (HP-2026-9007) and one that became
+    absent yesterday (HP-2026-9008). Covered by
+    `tests/Feature/Kiosk/KioskRestAndRecheckTest.php` and
+    `tests/js/kiosk-rest-recheck.test.js`.
+
 * **The Medical Assessment Form prints: two US Legal pages, front and back,
   plus a PDF** (D-71). Requested by the clinic on 2026-09-18 (form
   **PSU-QSP-OSS-004-FO010-R00**; the print front/back design was agreed with

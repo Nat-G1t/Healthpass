@@ -270,6 +270,19 @@
                 @endif
             </div>
 
+            {{-- D-72: this student's first reading was high, they rested, and
+                 the numbers above are the RE-TAKE. The clinic sees what the
+                 first pass said, and when each was taken, so a borderline
+                 re-check is read in context. Nothing here is Fit/Unfit — it is
+                 just the earlier reading. --}}
+            @if ($vs?->firstReadingSummary())
+                <p class="mt-2 rounded-lg bg-hp-peach/30 px-3 py-2 text-xs text-hp-slate/70">
+                    First reading {{ $vs->firstReadingSummary() }}
+                    @if ($vs->firstReadingTakenAtLabel()) at {{ $vs->firstReadingTakenAtLabel() }} @endif
+                    &rarr; re-checked at {{ $visit->checked_in_at?->format('g:i A') }}
+                </p>
+            @endif
+
             @if ($readOnly)
                 <p class="mt-0.5 text-xs text-hp-slate/50">As confirmed by the clinic when this visit was encoded.</p>
                 <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">

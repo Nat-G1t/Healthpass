@@ -324,6 +324,21 @@ Route::prefix('kiosk')->name('kiosk.')->middleware('kiosk.access')->group(functi
         ->middleware('throttle:20,1,kiosk-submit')
         ->block()
         ->name('submit');
+    // Rest & re-check (FR-KSK-11a, D-72). `rest` saves the first pass as a
+    // `resting` visit — same payload, same KioskSubmitRequest validation as
+    // submit, but it never enters the queue; `recheck` folds the re-taken
+    // reading back in and releases it. Both get their OWN throttle prefix (see
+    // the note above) and both ->block() for the same reason submit does: one
+    // kiosk session must not be able to rest twice or release a visit twice
+    // by double-tapping.
+    Route::post('/rest', [KioskController::class, 'rest'])
+        ->middleware('throttle:20,1,kiosk-rest')
+        ->block()
+        ->name('rest');
+    Route::post('/recheck', [KioskController::class, 'recheck'])
+        ->middleware('throttle:20,1,kiosk-recheck')
+        ->block()
+        ->name('recheck');
     // Forget the server-side kiosk identity (kiosk.* session keys). The Alpine
     // reset() calls this on every abandon/finish path so a bound student never
     // lingers into the next session. Same throttle as scan — it is unauthenticated.

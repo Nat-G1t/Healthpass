@@ -26,12 +26,22 @@ class AnomaliesController extends Controller
         // so counting rows counts visits. A visit tripping two flags counts
         // in both cards — the cards answer "how many of each anomaly", not
         // "how many flagged visits" (that is the table's row count).
+        //
+        // D-72: the rows of a RESTING visit are excluded. Those flags are
+        // exactly why the student is sitting down to re-take the reading, and
+        // the clinic has not been told about that visit at all — counting them
+        // here would report an anomaly that may not survive the re-check. The
+        // table below inherits the same exclusion from scopeFlagged().
+        $submitted = fn (string $flag): int => VitalSigns::where($flag, true)
+            ->whereHas('clinicVisit', fn ($visit) => $visit->submitted())
+            ->count();
+
         $stats = [
-            'bp' => VitalSigns::where('is_bp_flagged', true)->count(),
-            'temp' => VitalSigns::where('is_temp_flagged', true)->count(),
-            'bmi' => VitalSigns::where('is_bmi_flagged', true)->count(),
-            'hr' => VitalSigns::where('is_hr_flagged', true)->count(),
-            'rr' => VitalSigns::where('is_rr_flagged', true)->count(),
+            'bp' => $submitted('is_bp_flagged'),
+            'temp' => $submitted('is_temp_flagged'),
+            'bmi' => $submitted('is_bmi_flagged'),
+            'hr' => $submitted('is_hr_flagged'),
+            'rr' => $submitted('is_rr_flagged'),
         ];
 
         // Newest first — same ordering as the dashboard preview this page

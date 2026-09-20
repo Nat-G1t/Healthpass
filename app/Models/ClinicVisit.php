@@ -27,6 +27,9 @@ class ClinicVisit extends Model
         'status',
         'privacy_consent_at',
         'checked_in_at',
+        // D-72: when a resting student may come back and re-take the flagged
+        // reading. Server clock only; NULL on every visit that never rested.
+        'resting_until',
     ];
 
     protected function casts(): array
@@ -34,10 +37,36 @@ class ClinicVisit extends Model
         return [
             'privacy_consent_at' => 'datetime',
             'checked_in_at' => 'datetime',
+            'resting_until' => 'datetime',
         ];
     }
 
     // ── Queries ──────────────────────────────────────────────────────────────
+
+    /**
+     * D-72 — the statuses that make a visit a REAL, submitted visit.
+     *
+     * A `resting` visit is a first pass the kiosk saved so the student could
+     * sit down and re-take a high temperature, blood pressure or heart rate.
+     * It holds real answers, but the clinic has never been told about it: it is
+     * not in the queue, not in any analytics count, not on the student's
+     * records. Only these two statuses are.
+     */
+    public const SUBMITTED_STATUSES = ['captured', 'encoded'];
+
+    /**
+     * D-72 — every count of "visits" runs through this scope.
+     *
+     * A "scope" is a reusable query fragment on the model: `ClinicVisit::submitted()`
+     * (or `->submitted()` on an existing query) adds the WHERE below. Having ONE
+     * definition means a resting visit cannot be counted on one screen and
+     * skipped on another. The column is qualified because several callers apply
+     * it to a JOIN that also has a `status` column.
+     */
+    public function scopeSubmitted(Builder $query): Builder
+    {
+        return $query->whereIn('clinic_visits.status', self::SUBMITTED_STATUSES);
+    }
 
     /**
      * FR-NRS-01/02 — the Live Queue query, shared by the page (initial render)
@@ -74,7 +103,12 @@ class ClinicVisit extends Model
      */
     public function scopeFlagged(Builder $query): Builder
     {
-        return $query->whereHas('vitalSigns', function (Builder $vitals): void {
+        // D-72: a resting visit's flags are exactly WHY it is resting — they
+        // must not appear as clinic anomalies before the student has even
+        // re-taken the reading. submitted() sits here, on the shared scope, so
+        // every flag consumer (Anomalies, the Director dashboard, the nav
+        // badge) gets the exclusion without repeating it.
+        return $query->submitted()->whereHas('vitalSigns', function (Builder $vitals): void {
             $vitals->where('is_bp_flagged', true)
                 ->orWhere('is_temp_flagged', true)
                 ->orWhere('is_bmi_flagged', true)
@@ -84,6 +118,40 @@ class ClinicVisit extends Model
                 ->orWhere('is_hr_flagged', true)
                 ->orWhere('is_rr_flagged', true);
         });
+    }
+
+    /**
+     * D-72 — TODAY's resting visit for this student, or null.
+     *
+     * The one definition the kiosk uses at scan, at login and again at
+     * re-check submit, so the screens a returning student sees and the row the
+     * server updates can never be about different visits (the same rule
+     * Appointment::todayFor follows for appointments).
+     *
+     * Scoped to today on purpose: a student who never came back yesterday is
+     * already Absent (D-55/D-72), and that stale row must not hijack today's
+     * fresh appointment. Such rows simply stay `resting` forever — they are a
+     * record of a pass that never completed, not work waiting to be done.
+     *
+     * `vitalSigns` and `screeningResponse` are eager-loaded because every
+     * caller then asks which steps need re-taking and what the first pass
+     * already answered.
+     */
+    public static function restingTodayFor(int $studentId): ?self
+    {
+        return self::query()
+            ->where('student_id', $studentId)
+            ->where('status', 'resting')
+            ->whereDate('checked_in_at', today())
+            ->with(['vitalSigns', 'screeningResponse'])
+            ->latest('id')
+            ->first();
+    }
+
+    /** D-72 — is the rest over, so the student may re-take the reading now? */
+    public function restIsOver(): bool
+    {
+        return $this->resting_until !== null && now()->gte($this->resting_until);
     }
 
     // ── D-62 form type ───────────────────────────────────────────────────────

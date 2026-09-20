@@ -207,6 +207,10 @@ class Appointment extends Model
      *                `healthpass.absent_cutoff` (8:00 PM) on the clinic date,
      *                or any later day (D-55 — was `missed`, flipped at midnight)
      *   awaiting   — no visit yet, and it is still before that cutoff
+     *   rechecking — D-72: the kiosk captured a high temperature, blood
+     *                pressure or heart rate and the student is resting before
+     *                re-taking it. Their result has not reached the clinic, so
+     *                past the cutoff this becomes `absent` like a no-show.
      *   in_clinic  — vitals captured at the kiosk, waiting on the nurse
      *   completed  — the nurse has encoded it; clearanceResult() has a value
      *
@@ -226,13 +230,21 @@ class Appointment extends Model
 
         $visit = $this->clinicVisit;
 
-        if ($visit === null) {
-            // D-55: a no-show may still turn up all clinic day, so they only
-            // become absent from the cutoff. Server clock only (like BR-23).
-            $absentFrom = $this->scheduled_date->copy()
-                ->setTimeFromTimeString((string) config('healthpass.absent_cutoff'));
+        // D-55: a no-show may still turn up all clinic day, so they only become
+        // absent from the cutoff. Server clock only (like BR-23). D-72 puts a
+        // still-resting student on the same clock: they are at the clinic, but
+        // their result never reached the queue, so by the cutoff they are as
+        // absent as someone who never came.
+        $pastCutoff = now()->gte(
+            $this->scheduled_date->copy()->setTimeFromTimeString((string) config('healthpass.absent_cutoff'))
+        );
 
-            return now()->gte($absentFrom) ? 'absent' : 'awaiting';
+        if ($visit === null) {
+            return $pastCutoff ? 'absent' : 'awaiting';
+        }
+
+        if ($visit->status === 'resting') {
+            return $pastCutoff ? 'absent' : 'rechecking';
         }
 
         return $visit->clearanceRecord === null ? 'in_clinic' : 'completed';

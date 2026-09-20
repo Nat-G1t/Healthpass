@@ -34,6 +34,14 @@
             </p>
             {{-- hp-anim-shake replays each time the error re-appears (§7). --}}
             <p x-show="state.scan.status === 'error'" x-cloak class="hp-anim-shake text-base font-medium text-red-600" x-text="state.scan.error"></p>
+
+            {{-- D-72: "Please keep resting. Come back at 9:27 AM." Not an error
+                 — the student did nothing wrong, they are just early — so it is
+                 peach and calm rather than red and shaking. The time is the
+                 SERVER's; the kiosk never computes one. --}}
+            <p x-show="state.scan.notice" x-cloak
+               class="hp-anim-fade-up rounded-2xl bg-hp-peach/40 px-6 py-3 text-base font-semibold text-hp-orange"
+               x-text="state.scan.notice"></p>
         </div>
 
         {{-- ── Divider ──────────────────────────────────────────────────────── --}}

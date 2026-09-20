@@ -139,6 +139,9 @@
         data-scan-url="{{ route('kiosk.scan') }}"
         data-login-url="{{ route('kiosk.login') }}"
         data-submit-url="{{ route('kiosk.submit') }}"
+        {{-- D-72: rest parks the first pass; recheck folds the re-take back in. --}}
+        data-rest-url="{{ route('kiosk.rest') }}"
+        data-recheck-url="{{ route('kiosk.recheck') }}"
         data-reset-url="{{ route('kiosk.reset') }}"
         data-exit-url="{{ route('kiosk.exit') }}"
         data-token-url="{{ route('kiosk.token') }}"
@@ -167,6 +170,8 @@
                 'serialBaud' => config('healthpass.kiosk.serial_baud'),
                 'serialTimeoutMs' => config('healthpass.kiosk.serial_timeout_ms'),
                 'bpWaitSeconds' => config('healthpass.kiosk.bp_wait_seconds'),
+                // D-72: how long the Rest screen tells the student to sit for.
+                'recheckRestMinutes' => config('healthpass.kiosk.recheck_rest_minutes'),
             ],
         ]) }}"
         {{-- Any touch/keypress mid-flow restarts the 90s idle countdown (FR-KSK-15). --}}
@@ -198,6 +203,8 @@
                 @include('kiosk.screens.social-history')
                 @include('kiosk.screens.review')
                 @include('kiosk.screens.complete')
+                {{-- D-72: shown instead of Complete when a reading is high. --}}
+                @include('kiosk.screens.rest')
 
                 {{-- Discreet staff-exit hotspot (FR-KSK-16): an invisible corner
                      target present on EVERY screen. Five taps within ~3 s open the

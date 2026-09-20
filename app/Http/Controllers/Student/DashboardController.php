@@ -17,6 +17,7 @@ class DashboardController extends Controller
 
         // Latest clearance: student → clinic_visits → clearance_records
         $latestClearance = $user->clinicVisits()
+            ->submitted() // D-72
             ->whereHas('clearanceRecord')
             ->with('clearanceRecord')
             ->latest()
@@ -34,6 +35,7 @@ class DashboardController extends Controller
 
         // Count of visits that have an encoded clearance
         $pastClearancesCount = $user->clinicVisits()
+            ->submitted() // D-72
             ->whereHas('clearanceRecord')
             ->count();
 
@@ -47,6 +49,8 @@ class DashboardController extends Controller
         // Fetch more than 8 per source so the merged sort picks the true 8 newest overall
         $recentAppointments = $user->appointments()->latest()->take(16)->get();
         $recentVisits = $user->clinicVisits()
+            // D-72: Recent Activity lists submitted visits only, like My Records.
+            ->submitted()
             ->with('clearanceRecord')
             ->latest()
             ->take(16)

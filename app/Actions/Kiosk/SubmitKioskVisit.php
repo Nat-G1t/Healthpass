@@ -39,6 +39,12 @@ use Illuminate\Validation\ValidationException;
  */
 final class SubmitKioskVisit
 {
+    /**
+     * The refusal /kiosk/rest gets when the recomputed flags say nothing needs
+     * re-taking (D-72). The kiosk falls back to showing Submit to Clinic.
+     */
+    public const NOTHING_TO_RECHECK_MESSAGE = 'Nothing needs re-taking — please submit your visit.';
+
     /** The refusal a student with no appointment today gets (D-61). */
     public const NO_SCHEDULE_MESSAGE = "You don't have a clinic schedule today. Clearances are scheduled "
         .'through your college, so please ask your college office to include you in a batch request.';
@@ -52,15 +58,49 @@ final class SubmitKioskVisit
      */
     public function handle(array $data): ClinicVisit
     {
+        return $this->write($data, resting: false);
+    }
+
+    /**
+     * D-72 — the same write, parked as a `resting` visit instead of submitted.
+     *
+     * The student's temperature, blood pressure or heart rate came out high, so
+     * they sit down for a few minutes and re-take it before the clinic ever
+     * hears about them. Everything they already answered (consent, the twelve
+     * Physical Signs rows, the social history) is stored NOW so the re-check
+     * pass only has to ask for the flagged reading again — but the visit is
+     * `resting`, which keeps it out of the queue and out of every count
+     * (ClinicVisit::scopeSubmitted).
+     *
+     * Refused with a 422 when the SERVER's own recomputed flags say nothing
+     * needs re-taking: the kiosk decides the button from its display flags, but
+     * this is the decision that counts.
+     */
+    public function rest(array $data): ClinicVisit
+    {
+        return $this->write($data, resting: true);
+    }
+
+    private function write(array $data, bool $resting): ClinicVisit
+    {
         $vitals = $data['vitals'];
         $screening = $data['screening'];
         $thresholds = config('healthpass.thresholds');
 
         $bmi = VitalSigns::computeBmi((float) $vitals['height'], (float) $vitals['weight']);
 
+        // §7.4 flag rules, computed HERE from the posted numbers — the browser's
+        // own orange ⚑ are display hints and are never read (BR-14). The rest
+        // decision below uses this same one computation.
+        $flags = self::flagsFor($vitals, $thresholds, $bmi);
+
+        if ($resting && VitalSigns::recheckStepsFor($flags) === []) {
+            throw ValidationException::withMessages(['vitals' => self::NOTHING_TO_RECHECK_MESSAGE]);
+        }
+
         // generateVisitRef() locks its sequence row for the life of this
         // transaction, so the reference number and the INSERT are atomic.
-        return DB::transaction(function () use ($data, $vitals, $screening, $thresholds, $bmi) {
+        return DB::transaction(function () use ($data, $vitals, $screening, $bmi, $flags, $resting) {
             // D-61: no walk-ins. Resolved before anything is written, so a
             // refusal leaves no row behind. A ValidationException is Laravel's
             // "the input is not acceptable" error: for the kiosk's JSON request
@@ -85,7 +125,9 @@ final class SubmitKioskVisit
                 'course' => $snapshot['course'],
                 'appointment_id' => $appointment->id, // always set since D-61 (BR-10)
                 'login_method' => $data['loginMethod'],
-                'status' => 'captured', // until the nurse encodes (BR-11)
+                // BR-11: resting → captured → encoded (D-72). A rest pass parks
+                // here until the student comes back and re-takes the reading.
+                'status' => $resting ? 'resting' : 'captured',
                 // Consent is captured seconds earlier in the same session; the
                 // client asserts it by sending privacyConsentAt (KioskSubmitRequest
                 // requires its presence), but the STORED timestamp is stamped
@@ -94,6 +136,11 @@ final class SubmitKioskVisit
                 // from the browser (FR-KSK-04). Same trust rule as identity + flags.
                 'privacy_consent_at' => now(),
                 'checked_in_at' => now(),
+                // D-72: the SERVER's "come back at" moment — the only clock the
+                // Rest screen shows. Null on a normal submit.
+                'resting_until' => $resting
+                    ? now()->addMinutes((int) config('healthpass.kiosk.recheck_rest_minutes'))
+                    : null,
             ]);
 
             $visit->vitalSigns()->create([
@@ -108,16 +155,9 @@ final class SubmitKioskVisit
                 // D-58: the Bluetooth monitor's own record of the BP reading
                 // (irregular pulse, raw bytes, …), or null.
                 'bp_device_reading' => $this->bpDeviceReading($data['bpReading'] ?? null, $vitals),
-                // §7.4 flag rules — computed here, stored as queryable booleans (BR-14).
-                'is_temp_flagged' => (float) $vitals['temperature'] > $thresholds['temperature_max'],
-                'is_bp_flagged' => (int) $vitals['systolic'] >= $thresholds['bp_systolic']
-                    || (int) $vitals['diastolic'] >= $thresholds['bp_diastolic'],
-                'is_bmi_flagged' => $bmi >= $thresholds['bmi_obese'],
-                // D-66. Same trust rule: a posted is_hr_flagged is ignored —
-                // the boolean is derived here from the heart rate itself.
-                // There is no is_rr_flagged yet; the kiosk cannot measure a
-                // respiratory rate, so encode computes that one (D-65).
-                'is_hr_flagged' => VitalSigns::isHeartRateFlagged((int) $vitals['heartRate']),
+                // §7.4 flag rules — computed above by flagsFor(), stored as
+                // queryable booleans (BR-14).
+                ...$flags,
             ]);
 
             $visit->screeningResponse()->create([
@@ -137,6 +177,28 @@ final class SubmitKioskVisit
 
             return $visit;
         });
+    }
+
+    /**
+     * The §7.4 flag booleans for one posted reading (BR-13/14) — the ONE place
+     * the kiosk derives them, shared by submit and by the D-72 rest decision so
+     * the button the student saw and the row the server writes agree.
+     *
+     * There is no is_rr_flagged: the kiosk cannot measure a respiratory rate,
+     * so encode computes that one (D-65/D-66). A posted flag of any kind is
+     * ignored — these come from the numbers themselves.
+     *
+     * @return array{is_temp_flagged: bool, is_bp_flagged: bool, is_bmi_flagged: bool, is_hr_flagged: bool}
+     */
+    public static function flagsFor(array $vitals, array $thresholds, float $bmi): array
+    {
+        return [
+            'is_temp_flagged' => (float) $vitals['temperature'] > $thresholds['temperature_max'],
+            'is_bp_flagged' => (int) $vitals['systolic'] >= $thresholds['bp_systolic']
+                || (int) $vitals['diastolic'] >= $thresholds['bp_diastolic'],
+            'is_bmi_flagged' => $bmi >= $thresholds['bmi_obese'],
+            'is_hr_flagged' => VitalSigns::isHeartRateFlagged((int) $vitals['heartRate']),
+        ];
     }
 
     /**

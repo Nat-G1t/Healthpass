@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Kiosk;
 
+use App\Actions\Kiosk\RecheckKioskVisit;
 use App\Actions\Kiosk\SubmitKioskVisit;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Kiosk\KioskRecheckRequest;
 use App\Http\Requests\Kiosk\KioskSubmitRequest;
 use App\Models\Appointment;
+use App\Models\ClinicVisit;
 use App\Models\StudentProfile;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -33,7 +36,14 @@ final class KioskController extends Controller
      * identity from scan/login, and a Bluetooth BP reading the kiosk claimed
      * (D-58). Always forgotten together.
      */
-    private const SESSION_KEYS = ['kiosk.student_id', 'kiosk.login_method', BpReadingController::SESSION_KEY];
+    private const SESSION_KEYS = [
+        'kiosk.student_id',
+        'kiosk.login_method',
+        // D-72: the resting visit this session is re-checking. Bound by
+        // scan/login, read by /kiosk/recheck — the client never names a visit.
+        'kiosk.resting_visit_id',
+        BpReadingController::SESSION_KEY,
+    ];
 
     /**
      * Render the kiosk shell (responsive-fill panel + Alpine state machine).
@@ -103,7 +113,7 @@ final class KioskController extends Controller
 
         return response()->json([
             'ok' => true,
-            'identity' => $this->identityPayload($profile, 'qr'),
+            'identity' => $this->identityPayload($profile, 'qr', $this->bindRestingVisit($request, $profile->user_id)),
         ]);
     }
 
@@ -188,7 +198,11 @@ final class KioskController extends Controller
 
         return response()->json([
             'ok' => true,
-            'identity' => $this->identityPayload($user->studentProfile, 'email'),
+            'identity' => $this->identityPayload(
+                $user->studentProfile,
+                'email',
+                $this->bindRestingVisit($request, $user->studentProfile->user_id),
+            ),
         ]);
     }
 
@@ -209,29 +223,18 @@ final class KioskController extends Controller
      */
     public function submit(KioskSubmitRequest $request, SubmitKioskVisit $action): JsonResponse
     {
-        $studentId = $request->session()->get('kiosk.student_id');
-        $loginMethod = $request->session()->get('kiosk.login_method');
-
         // No established kiosk identity (never scanned/logged in, or the session
         // expired), or the bound id no longer resolves to an active student
-        // (e.g. deactivated mid-session). Re-check against the SESSION value.
-        $hasIdentity = $studentId !== null && $loginMethod !== null
-            && User::where('id', $studentId)
-                ->where('role', 'student')
-                ->where('status', 'active')
-                ->exists();
+        // (e.g. deactivated mid-session). Re-checked against the SESSION value.
+        $identity = $this->boundIdentity($request);
 
-        if (! $hasIdentity) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'Session expired — please start again.',
-            ], 422);
+        if ($identity === null) {
+            return $this->expiredSession();
         }
 
         $visit = $action->handle([
             ...$request->validated(),
-            'studentUserId' => (int) $studentId,
-            'loginMethod' => $loginMethod,
+            ...$identity,
             // D-58: the Bluetooth BP reading claimed in THIS session (or null) —
             // from the session, never the body, like the identity above.
             'bpReading' => $request->session()->get(BpReadingController::SESSION_KEY),
@@ -339,7 +342,7 @@ final class KioskController extends Controller
      * pick which screens to show. Submit re-resolves the appointment — and
      * with it the form type — itself, and refuses the visit without one (D-61).
      */
-    private function identityPayload(StudentProfile $profile, string $loginMethod): array
+    private function identityPayload(StudentProfile $profile, string $loginMethod, array $recheck = []): array
     {
         $first = trim($profile->first_name);
         $last = trim($profile->last_name);
@@ -364,6 +367,226 @@ final class KioskController extends Controller
             // D-62/D-68: which official form today's batch named. The kiosk
             // uses it ONLY to choose screens — never to decide what is stored.
             'formType' => $appointment?->formType() ?? 'clearance',
+            // D-72: either nothing, `recheckWaitUntil` (still resting) or
+            // `recheck: {steps: [...]}` (the rest is over). See bindRestingVisit().
+            ...$recheck,
         ];
+    }
+
+    // -- Rest & re-check (FR-KSK-11a, D-72) ----------------------------------
+
+    /**
+     * Bind TODAY's resting visit for this student to the session, and say what
+     * the kiosk should do about it.
+     *
+     * Called from scan() and login() only, i.e. exactly where identity is
+     * established. Three outcomes:
+     *   - no resting visit today  -> [], the normal first pass;
+     *   - resting, rest not over  -> ['recheckWaitUntil' => ...], the kiosk shows
+     *                                "keep resting, come back at ..." and resets;
+     *   - resting, rest over      -> ['recheck' => ['steps' => [...]]], the kiosk
+     *                                goes Identity Confirm -> the named vitals
+     *                                steps only.
+     *
+     * The visit id goes into the SESSION, never into the payload: the client
+     * never names a visit, exactly as it never names a student (CLAUDE.md).
+     * The time is the SERVER's `resting_until`, formatted here, so no browser
+     * clock is ever involved (the same rule as BR-23).
+     *
+     * @return array<string, mixed>
+     */
+    private function bindRestingVisit(Request $request, int $studentId): array
+    {
+        $visit = ClinicVisit::restingTodayFor($studentId);
+
+        if ($visit === null) {
+            return [];
+        }
+
+        $request->session()->put('kiosk.resting_visit_id', $visit->id);
+
+        if (! $visit->restIsOver()) {
+            return ['recheckWaitUntil' => $visit->resting_until->format('g:i A')];
+        }
+
+        // Which readings were flagged, from the STORED first-pass flags - not
+        // from anything the browser remembers about the pass it walked away from.
+        return ['recheck' => [
+            'steps' => $visit->vitalSigns?->recheckSteps() ?? [],
+            'kept' => $this->keptAnswers($visit),
+        ]];
+    }
+
+    /**
+     * What the resting visit already holds, for the re-check pass to SHOW
+     * (FR-KSK-11a): the vitals that are not being re-taken and every answer
+     * the student gave the first time.
+     *
+     * DISPLAY ONLY. The re-check submit re-reads all of this from the same
+     * rows, and KioskRecheckRequest accepts nothing but the re-taken numbers,
+     * so a tampered copy changes the Review screen and nothing else. It is
+     * sent so the student can check their whole visit before submitting rather
+     * than being asked to trust a screen showing two readings out of six.
+     *
+     * @return array<string, mixed>
+     */
+    private function keptAnswers(ClinicVisit $visit): array
+    {
+        $vitals = $visit->vitalSigns;
+        $screening = $visit->screeningResponse;
+
+        return [
+            'vitals' => [
+                'height' => (float) $vitals->height_cm,
+                'weight' => (float) $vitals->weight_kg,
+                'temperature' => (float) $vitals->temperature_c,
+                'systolic' => (int) $vitals->bp_systolic,
+                'diastolic' => (int) $vitals->bp_diastolic,
+                'heartRate' => (int) $vitals->heart_rate_bpm,
+            ],
+            // The twelve Physical Signs rows (D-63) as the kiosk names them,
+            // plus the optional YES details and the pregnancy pair.
+            'screening' => $screening?->kioskAnswers() ?? [],
+            'details' => $screening?->details ?? [],
+            'isPregnant' => (bool) $screening?->is_pregnant,
+            'lastMenstrualPeriod' => $screening?->last_menstrual_period?->toDateString(),
+            // D-68: present only on a Medical Assessment Form visit.
+            'socialHistory' => $screening?->kioskSocialHistory(),
+        ];
+    }
+
+    /**
+     * Rest & re-check (FR-KSK-11a, D-72): save the first pass as a `resting`
+     * visit instead of submitting it.
+     *
+     * Same payload and same validation as submit() - the student has answered
+     * everything, so everything is stored; only the STATUS differs. Identity
+     * still comes from the session, and the action recomputes the flags and
+     * refuses (422) when none of temperature, blood pressure or heart rate is
+     * actually flagged, which sends the kiosk back to showing Submit to Clinic.
+     *
+     * The session identity is forgotten on success just as submit() forgets it:
+     * the student walks away to rest and must scan again to come back, which is
+     * what re-binds the resting visit (see bindRestingVisit()).
+     */
+    public function rest(KioskSubmitRequest $request, SubmitKioskVisit $action): JsonResponse
+    {
+        $identity = $this->boundIdentity($request);
+
+        if ($identity === null) {
+            return $this->expiredSession();
+        }
+
+        // A visit may rest ONCE. A student already holding a resting visit today
+        // is coming BACK, not starting over - refused so the first pass, with
+        // its consent and its answers, is never orphaned by a second one.
+        if (ClinicVisit::restingTodayFor($identity['studentUserId']) !== null) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'You have already rested once today. Please see the clinic staff.',
+            ], 422);
+        }
+
+        $visit = $action->rest([
+            ...$request->validated(),
+            ...$identity,
+            'bpReading' => $request->session()->get(BpReadingController::SESSION_KEY),
+        ]);
+
+        $request->session()->forget(self::SESSION_KEYS);
+
+        return response()->json([
+            'ok' => true,
+            // The SERVER's come-back time - the Rest screen shows this string
+            // and never computes one of its own.
+            'restingUntil' => $visit->resting_until->format('g:i A'),
+            'steps' => $visit->vitalSigns?->recheckSteps() ?? [],
+        ]);
+    }
+
+    /**
+     * Re-check submit (FR-KSK-11a, D-72): fold the re-taken readings into the
+     * resting visit and release it into the clinic queue.
+     *
+     * Its own endpoint rather than a mode of submit(), because the payload is a
+     * different shape entirely - see KioskRecheckRequest. Everything the body
+     * does not carry (height, weight, consent, the questionnaire, the social
+     * history) is read from the saved rows and can never be re-posted.
+     *
+     * The visit is taken from the SESSION key bound at scan/login, so another
+     * terminal's session cannot touch it; it must still be `resting`, still be
+     * THIS student's, and its rest must be over.
+     */
+    public function recheck(KioskRecheckRequest $request, RecheckKioskVisit $action): JsonResponse
+    {
+        $identity = $this->boundIdentity($request);
+
+        if ($identity === null) {
+            return $this->expiredSession();
+        }
+
+        $visit = ClinicVisit::with('vitalSigns')->find($request->session()->get('kiosk.resting_visit_id'));
+
+        // Every one of these is re-checked HERE, on the server, at submit time -
+        // the scan payload that sent the student to the vitals screens is a
+        // courtesy, not the gate (the same rule D-61 follows for appointments).
+        $usable = $visit !== null
+            && $visit->status === 'resting'
+            && $visit->student_id === $identity['studentUserId']
+            && $visit->restIsOver();
+
+        if (! $usable) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'That re-check is no longer available — please start again.',
+            ], 422);
+        }
+
+        $visit = $action->handle(
+            $visit,
+            $request->validated(),
+            $request->session()->get(BpReadingController::SESSION_KEY),
+        );
+
+        // Single-use, like submit(): the identity and the bound visit go together.
+        $request->session()->forget(self::SESSION_KEYS);
+
+        return response()->json([
+            'ok' => true,
+            'reference' => $visit->reference_no,
+        ]);
+    }
+
+    /**
+     * The SERVER-bound identity for this kiosk session, or null when there is
+     * none (never scanned/logged in, the session expired, or the bound id no
+     * longer resolves to an active student). Shared by submit, rest and
+     * recheck so all three apply the same gate.
+     *
+     * @return array{studentUserId: int, loginMethod: string}|null
+     */
+    private function boundIdentity(Request $request): ?array
+    {
+        $studentId = $request->session()->get('kiosk.student_id');
+        $loginMethod = $request->session()->get('kiosk.login_method');
+
+        $ok = $studentId !== null && $loginMethod !== null
+            && User::where('id', $studentId)
+                ->where('role', 'student')
+                ->where('status', 'active')
+                ->exists();
+
+        return $ok
+            ? ['studentUserId' => (int) $studentId, 'loginMethod' => $loginMethod]
+            : null;
+    }
+
+    /** The one "your session is gone, start again" refusal. */
+    private function expiredSession(): JsonResponse
+    {
+        return response()->json([
+            'ok' => false,
+            'message' => 'Session expired — please start again.',
+        ], 422);
     }
 }
