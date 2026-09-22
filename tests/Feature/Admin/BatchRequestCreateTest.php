@@ -77,8 +77,9 @@ class BatchRequestCreateTest extends TestCase
             ->assertSee('Choose the form the clinic will use')
             // Assessment tile first (left), clearance second (right) — the mock-up.
             ->assertSeeInOrder(['data-form-tile="assessment"', 'data-form-tile="clearance"'], false)
-            ->assertSee('images/forms/medical-assessment-preview.png', false)
-            ->assertSee('images/forms/medical-clearance-preview.png', false)
+            // Each tile embeds the real form's live preview, not a photo.
+            ->assertSee(route('admin.batches.form-preview', 'assessment'), false)
+            ->assertSee(route('admin.batches.form-preview', 'clearance'), false)
             ->assertSee('Medical Assessment Form')
             ->assertSee('Medical Clearance');
 

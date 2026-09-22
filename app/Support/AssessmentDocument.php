@@ -95,6 +95,38 @@ final class AssessmentDocument
     }
 
     /**
+     * The same keys as for(), blank — the College Admin's New Batch Request
+     * tile renders the real form with this. Every helper below already treats
+     * a missing screening or sections row as "nothing answered", so the blank
+     * paper goes down the same code as a real one.
+     *
+     * @param  ?string  $side  'front' | 'back' | null (both pages)
+     * @return array<string, mixed>
+     */
+    public static function blank(?string $side = null): array
+    {
+        return [
+            ...ClearanceDocument::blank('assessment'),
+            'formCode' => self::FORM_CODE,
+            'side' => in_array($side, self::SIDES, true) ? $side : null,
+
+            'selfSignColumns' => self::selfSignColumns(null),
+            'conditions' => self::conditions(null),
+
+            'socialRows' => self::blankSocialRows(),
+            'immunizationGroups' => self::immunizationGroups(null),
+            'immunizationOthers' => '',
+            'familyPlanningAccess' => null,
+            'exam' => self::exam([]),
+            'menstrual' => self::menstrual(null),
+            'ob' => self::ob(null),
+            'surgical' => ['procedures' => '', 'dateDone' => ''],
+            'examColumns' => self::examColumns(null),
+            'encoderName' => '',
+        ];
+    }
+
+    /**
      * The twelve "Physical Signs Disorder of: (Self Assessment)" rows as the
      * form's three column groups of four, read DOWN each group. An unanswered
      * row leaves BOTH boxes blank.

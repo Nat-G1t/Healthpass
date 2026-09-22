@@ -362,13 +362,20 @@ function batchForm() {
          the Reason list below and, later, the kiosk questions, the encode
          fields and the printed document. --}}
     @php
+        // Each tile shows the REAL form's front page, blank, in an iframe
+        // (admin.batches.form-preview). The iframe is laid out at the paper's
+        // natural width — both papers are 8.5in = 816px at 96dpi — and scaled
+        // down to the tile, so the fixed table layout keeps its shape and its
+        // type stays crisp instead of reflowing. pageHeight is the paper's
+        // length at 96dpi: Legal 14in, Letter 11in.
+        $paperWidthPx = 816;
         $formTiles = [
             'assessment' => [
-                'image' => 'images/forms/medical-assessment-preview.png',
+                'pageHeight' => 1344,
                 'copy' => "A full health assessment: medical and family history, immunizations and a physician's physical examination. Two pages, printed back-to-back on long bond paper. Best for On-the-job Training, Related Learning Experience, Sports Activities and Off-campus Procedures.",
             ],
             'clearance' => [
-                'image' => 'images/forms/medical-clearance-preview.png',
+                'pageHeight' => 1056,
                 'copy' => "A one-page fitness clearance from the student's vital signs and a short health check. Best for Field Trips / Educational Tours, Outbound Activities and other short events.",
             ],
         ];
@@ -387,15 +394,34 @@ function batchForm() {
                                     hover:border-hp-orange/50
                                     peer-checked:border-hp-orange peer-checked:bg-hp-peach/20
                                     peer-focus-visible:ring-2 peer-focus-visible:ring-hp-orange peer-focus-visible:ring-offset-2">
+                            {{-- The chosen tile's tick sits ON the tile's corner,
+                                 clear of the paper, so it never covers the form. --}}
                             <span x-show="formType === @js($value)" x-cloak
-                                  class="absolute right-3 top-3 inline-flex h-6 w-6 items-center justify-center rounded-full bg-hp-orange text-white">
+                                  class="absolute -right-2.5 -top-2.5 z-10 inline-flex ring-2 ring-white h-6 w-6 items-center justify-center rounded-full bg-hp-orange text-white">
                                 <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
                                 </svg>
                             </span>
-                            <div class="flex h-56 items-center justify-center rounded-lg bg-hp-bg p-2">
-                                <img src="{{ asset($tile['image']) }}" alt="Preview of the {{ \App\Models\BatchRequest::FORM_TYPES[$value] }}"
-                                     class="max-h-full max-w-full object-contain shadow-sm" loading="lazy">
+                            {{-- The paper: the top of the form, cropped to the frame.
+                                 `fit` is the iframe's scale-to-tile, measured
+                                 by Alpine whenever the tile resizes. --}}
+                            <div class="h-80 rounded-lg bg-hp-bg p-3 sm:h-[26rem]">
+                                <div x-data="{ fit: 0.4 }"
+                                     x-init="new ResizeObserver(() => fit = $el.clientWidth / {{ $paperWidthPx }}).observe($el)"
+                                     class="relative h-full w-full overflow-hidden bg-white shadow-sm">
+                                    <span class="sr-only">Preview of the blank {{ \App\Models\BatchRequest::FORM_TYPES[$value] }}, the official form the clinic prints.</span>
+                                    {{-- pointer-events: none — a click on the paper
+                                         must fall through to the <label> and pick
+                                         the radio. Not focusable, hidden from
+                                         screen readers: it is a picture. --}}
+                                    <iframe src="{{ route('admin.batches.form-preview', $value) }}"
+                                            title="{{ \App\Models\BatchRequest::FORM_TYPES[$value] }} preview"
+                                            loading="lazy" tabindex="-1" aria-hidden="true" scrolling="no"
+                                            class="absolute left-1/2 top-0 max-w-none border-0"
+                                            style="pointer-events: none; width: {{ $paperWidthPx }}px; height: {{ $tile['pageHeight'] }}px;
+                                                   margin-left: -{{ $paperWidthPx / 2 }}px; transform-origin: top center;"
+                                            :style="{ transform: `scale(${fit})` }"></iframe>
+                                </div>
                             </div>
                             <p class="mt-3 text-sm font-semibold text-hp-slate">{{ \App\Models\BatchRequest::FORM_TYPES[$value] }}</p>
                             <p class="mt-1 text-xs leading-relaxed text-hp-slate/60">{{ $tile['copy'] }}</p>

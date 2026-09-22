@@ -660,4 +660,23 @@ class AssessmentPrintTest extends TestCase
         $this->assertStringNotContainsString(MedicalAssessment::class, $html);
         $this->assertStringNotContainsString(AssessmentDocument::FORM_CODE, $html);
     }
+
+    // ── Blank paper (New Batch Request card 1) ──────────────────────────────
+
+    public function test_the_blank_documents_carry_exactly_the_keys_a_real_one_does(): void
+    {
+        // The form templates cannot tell a blank from a real visit — so the
+        // New Batch tile's preview needs no preview-only branch in them.
+        $nurse = $this->nurse();
+
+        $clearance = $this->makeVisit('clearance');
+        $this->encode($clearance, $nurse, ['purpose' => 'Field Trip/Educational Tour']);
+        $assessment = $this->makeVisit('assessment');
+        $this->encode($assessment, $nurse);
+
+        $keys = fn (array $document): array => collect($document)->keys()->sort()->values()->all();
+
+        $this->assertSame($keys(ClearanceDocument::for($clearance)), $keys(ClearanceDocument::blank()));
+        $this->assertSame($keys(AssessmentDocument::for($assessment, side: 'front')), $keys(AssessmentDocument::blank('front')));
+    }
 }

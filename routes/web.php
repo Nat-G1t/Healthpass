@@ -24,6 +24,7 @@ use App\Http\Controllers\Student\ProfileController as StudentProfileController;
 use App\Http\Controllers\Student\RecordsController as StudentRecordsController;
 use App\Http\Controllers\Student\TutorialCompletionController;
 use App\Http\Middleware\EnsureRole;
+use App\Models\BatchRequest;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
@@ -136,6 +137,10 @@ Route::middleware(['auth', 'role:college_admin', 'college.scope'])
         // share one counter with batch-store.
         Route::get('/batches/availability', [AdminBatchRequestController::class, 'availability'])
             ->middleware('throttle:60,1,batch-availability')->name('batches.availability');
+        // Card 1's live form tiles: the official form's front page, blank.
+        // Only the two form types match; anything else is a 404.
+        Route::get('/batches/form-preview/{formType}', [AdminBatchRequestController::class, 'formPreview'])
+            ->whereIn('formType', array_keys(BatchRequest::FORM_TYPES))->name('batches.form-preview');
         Route::post('/batches', [AdminBatchRequestController::class, 'store'])
             ->middleware('throttle:15,1,batch-store')->name('batches.store');
         // Batch Tracking + post-submit confirmation (FR-ADM-04/05). Both fetch

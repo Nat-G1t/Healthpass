@@ -15,6 +15,8 @@ use App\Models\StudentProfile;
 use App\Services\ClinicScheduleService;
 use App\Services\ReferenceNumberService;
 use App\Services\ScheduleClashService;
+use App\Support\AssessmentDocument;
+use App\Support\ClearanceDocument;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -186,6 +188,23 @@ class BatchRequestController extends Controller
             'full_days' => $this->schedule->fullDaysForMonth($year, $month),
             'cutoff_days' => $this->schedule->cutoffDaysForMonth($year, $month),
         ]);
+    }
+
+    /**
+     * Card 1's form tiles (D-62): the official form's front page, blank, as a
+     * full HTML document for the tile's <iframe>. It renders the SAME template
+     * the clinic prints, so the preview can never drift from the real paper.
+     *
+     * The route only matches the two form types; the default arm is a second
+     * guard so an unknown type is a 404, never a fallback form.
+     */
+    public function formPreview(string $formType): View
+    {
+        return match ($formType) {
+            'clearance' => view('forms.medical-clearance', ClearanceDocument::blank()),
+            'assessment' => view('forms.medical-assessment', AssessmentDocument::blank('front')),
+            default => abort(404),
+        };
     }
 
     /**

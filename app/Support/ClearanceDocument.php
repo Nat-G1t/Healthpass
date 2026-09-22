@@ -138,7 +138,7 @@ final class ClearanceDocument
 
             // ── Fitness + purpose (D-62: the visit's form type's purposes)
             'result' => $record->result,
-            ...self::purposes($visit, $record),
+            ...self::purposes($visit->formType(), $record),
 
             // ── Physician block (FR-PRT-04 / D-64) — name and licence print
             // only on a record a physician encoded.
@@ -146,6 +146,71 @@ final class ClearanceDocument
             'physicianLicense' => $record->physician_license_no,
 
             'issuedOn' => $issuedOn->format('F j, Y'),
+        ];
+    }
+
+    /**
+     * The same keys as for(), with nothing a visit supplies — the paper as it
+     * comes off the shelf. Used by the College Admin's New Batch Request tiles
+     * to show the real form rather than a photograph of it.
+     *
+     * Everything printed ON the paper stays (letterhead, logos, form code, the
+     * twelve sign rows, the purposes list); every name, vital, tick, signature
+     * and date is empty. $formType picks whose purposes print, because the
+     * Medical Assessment Form reuses this shared half (AssessmentDocument).
+     *
+     * @return array<string, mixed>
+     */
+    public static function blank(string $formType = 'clearance'): array
+    {
+        // An unsaved, empty record: every ps_* column and the purpose are
+        // NULL, so the same helpers for() uses leave every box unticked.
+        $record = new ClearanceRecord;
+
+        return [
+            // Unsaved and empty — the template only reads its reference_no.
+            'visit' => new ClinicVisit,
+            'formCode' => self::FORM_CODE,
+            'logos' => [
+                'seal' => self::logo('pamsu-seal'),
+                'bagong' => self::logo('bagong-pilipinas'),
+                'oswf' => self::logo('oswf'),
+            ],
+
+            'surname' => '',
+            'firstName' => '',
+            'middleName' => '',
+            'courseYearSection' => '',
+            'address' => '',
+            'age' => null,
+            'sex' => null,
+            'isSingle' => false,
+            'isMarried' => false,
+            'dateOfBirth' => '',
+            'placeOfBirth' => '',
+
+            'vitals' => [
+                'height' => '',
+                'weight' => '',
+                'heartRate' => '',
+                'bloodPressure' => '',
+                'temperature' => '',
+                'respiratoryRate' => '',
+            ],
+
+            'signColumns' => self::signColumns($record),
+            'remarks' => self::remarks(null),
+
+            'isPregnant' => null,
+            'lastMenstrualPeriod' => '',
+
+            'result' => null,
+            ...self::purposes($formType, $record),
+
+            'physicianName' => null,
+            'physicianLicense' => null,
+
+            'issuedOn' => '',
         ];
     }
 
@@ -239,9 +304,9 @@ final class ClearanceDocument
      *
      * @return array{purposes: list<array{label: string, checked: bool}>, othersLabel: string, othersChecked: bool, othersText: string}
      */
-    private static function purposes(ClinicVisit $visit, ClearanceRecord $record): array
+    private static function purposes(string $formType, ClearanceRecord $record): array
     {
-        $labels = BatchRequest::REASONS_BY_FORM[$visit->formType()];
+        $labels = BatchRequest::REASONS_BY_FORM[$formType];
         $othersLabel = $labels[BatchRequest::REASON_OTHERS];
         $isOthers = $record->purpose === $othersLabel;
 
