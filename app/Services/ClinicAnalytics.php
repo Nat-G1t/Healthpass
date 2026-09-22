@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\DB;
  *
  * A "service" is just a plain PHP class holding logic that would otherwise
  * bloat a controller. This one exists for one reason: the Director page
- * (FR-ANL-09..13) and the College Admin page (FR-ADM-08) draw the SAME six
+ * (FR-ANL-09..13) and the College Admin page (FR-ADM-08) draw the SAME
  * cards from the SAME data, and two copies of these queries would drift apart
  * the first time a rule changed. The controllers now only resolve their
  * filters and hand them here.
@@ -34,6 +34,7 @@ use Illuminate\Support\Facades\DB;
  *  - Visits per Month trend (FR-ANL-11): whole-year, ignores the month.
  *  - BMI Distribution (FR-ANL-12): four rule-based buckets.
  *  - Students Screened by Sex (FR-ANL-04 as amended).
+ *  - Flagged Vitals by Sex (FR-ANL-14): each flag split male / female.
  *
  * All counts compute from CAPTURED data (FR-ANL-07 as rewritten): a visit
  * counts at kiosk check-in, with no encoded-only guard. Since D-60 the clinic
@@ -430,6 +431,66 @@ final class ClinicAnalytics
                 ['label' => 'Female', 'count' => $femaleCount, 'percent' => $femalePercent, 'color' => self::SEX_COLORS[1]],
             ],
             'totalScreened' => $totalScreened,
+        ];
+    }
+
+    /**
+     * Flagged Vitals by Sex (FR-ANL-14): each FR-ANL-10 flag column counted
+     * separately for male and female students — one stacked bar per flag.
+     * Built on screeningsInScope(), so it obeys every filter (FR-ANL-13) and
+     * never counts a D-72 resting visit.
+     *
+     * One grouped query: GROUP BY sex with one conditional sum per flag.
+     * Written as SUM(CASE WHEN … THEN 1 ELSE 0 END) — MySQL's IF() would
+     * fail on the SQLite test DB.
+     *
+     * @return array{flagsBySex: array, flagsBySexRows: list<array{label: string, short: string, male: int, female: int, total: int}>}
+     */
+    public function flagsBySex(): array
+    {
+        // Column => [short axis label, full name]. Same five flags and full
+        // names as the vitalSignFlags() tiles.
+        $flags = [
+            'is_bmi_flagged' => ['BMI', 'Abnormal BMI'],
+            'is_temp_flagged' => ['Temp', 'Fever'],
+            'is_bp_flagged' => ['BP', 'High Blood Pressure'],
+            'is_hr_flagged' => ['PR', 'High Heart Rate'],
+            'is_rr_flagged' => ['RR', 'Abnormal Respiratory Rate'],
+        ];
+
+        // The column names are the fixed keys above, never request input.
+        $sums = collect(array_keys($flags))
+            ->map(fn (string $column): string => "SUM(CASE WHEN vital_signs.{$column} = 1 THEN 1 ELSE 0 END) as {$column}")
+            ->implode(', ');
+
+        $bySex = $this->screeningsInScope()
+            ->join('student_profiles', 'student_profiles.user_id', '=', 'clinic_visits.student_id')
+            ->groupBy('student_profiles.sex')
+            ->selectRaw("student_profiles.sex, {$sums}")
+            ->toBase()
+            ->get()
+            ->keyBy('sex');
+
+        $rows = [];
+        foreach ($flags as $column => [$short, $label]) {
+            $male = (int) ($bySex['M']->{$column} ?? 0);
+            $female = (int) ($bySex['F']->{$column} ?? 0);
+            $rows[] = ['label' => $label, 'short' => $short, 'male' => $male, 'female' => $female, 'total' => $male + $female];
+        }
+
+        return [
+            // Chart.js payload, shipped on a data attribute. `fullLabels`
+            // feeds the tooltip title so the abbreviations never need guessing.
+            'flagsBySex' => [
+                'labels' => array_column($rows, 'short'),
+                'fullLabels' => array_column($rows, 'label'),
+                'datasets' => [
+                    ['label' => 'Male', 'data' => array_column($rows, 'male'), 'backgroundColor' => self::SEX_COLORS[0]],
+                    ['label' => 'Female', 'data' => array_column($rows, 'female'), 'backgroundColor' => self::SEX_COLORS[1]],
+                ],
+            ],
+            // For the Blade empty-state check and the printed table.
+            'flagsBySexRows' => $rows,
         ];
     }
 

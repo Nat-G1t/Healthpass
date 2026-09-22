@@ -63,6 +63,7 @@ class AnalyticsController extends Controller
             ...$analytics->visitsTrend(withinScope: true),
             ...$analytics->bmiDistribution(),
             ...$analytics->bySexDonut(),
+            ...$analytics->flagsBySex(),
         ]);
     }
 

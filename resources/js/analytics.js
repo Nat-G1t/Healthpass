@@ -1,12 +1,13 @@
 /**
  * Analytics charts, shared by the Director page (FR-ANL-09/11 + amended 04)
- * and the College Admin page (FR-ADM-08, D-45) — the same three charts on
+ * and the College Admin page (FR-ADM-08, D-45) — the same four charts on
  * both, because both are drawn from the same App\Services\ClinicAnalytics:
  *  - Clinic Visits by College / by Program — horizontal bar. One selector
  *    serves both: the two cards differ only in what a row IS, which is
  *    settled server-side.
  *  - Visits per Month — line, direct label on the latest point
  *  - Students Screened by Sex — doughnut
+ *  - Flagged Vitals by Sex — 100% stacked bar (male / female share), total above each bar
  *
  * Dedicated Vite entry (same pattern as nurse/live-queue.js) so Chart.js is
  * only downloaded on these pages, never in the app-wide bundle. Chart.js v4 is
@@ -237,5 +238,87 @@ if (donutHost) {
                 legend: { display: false },
             },
         },
+    });
+}
+
+// ── Flagged Vitals by Sex — 100% stacked bar (FR-ANL-14) ─────────────────
+const flagsHost = document.querySelector('[data-flags-by-sex]');
+
+if (flagsHost) {
+    const flagsData = chartData(flagsHost);
+
+    // Every bar is drawn full height and split by SHARE, so the male/female
+    // balance of each flag reads at a glance (7 male of 10 = 70% orange).
+    // The server ships raw counts; they are kept on `counts` for the total
+    // label and the tooltip, and turned into percentages for the bar itself.
+    const totals = flagsData.labels.map((_, i) =>
+        flagsData.datasets.reduce((sum, ds) => sum + ds.data[i], 0));
+    const share = (count, i) => (totals[i] > 0 ? (count / totals[i]) * 100 : 0);
+
+    // Sibling of latestPointLabels: the flag's total count, above its bar.
+    const stackTotals = {
+        id: 'stackTotals',
+        afterDatasetsDraw(chart) {
+            const { ctx } = chart;
+            const top = chart.scales.y.getPixelForValue(100);
+            ctx.save();
+            ctx.font = "700 11px 'Poppins', sans-serif";
+            ctx.fillStyle = C.ink;
+            ctx.textAlign = 'center';
+
+            chart.getDatasetMeta(0).data.forEach((bar, i) => {
+                ctx.fillText(String(totals[i]), bar.x, top - 6);
+            });
+            ctx.restore();
+        },
+    };
+
+    new Chart(flagsHost.querySelector('canvas'), {
+        type: 'bar',
+        data: {
+            labels: flagsData.labels,
+            datasets: flagsData.datasets.map((dataset) => ({
+                ...dataset,
+                counts: dataset.data,
+                data: dataset.data.map(share),
+                // Chart.js stacks the lowest `order` at the bottom — this puts
+                // Male on top of Female, as in Nat's sketch.
+                order: dataset.label === 'Male' ? 1 : 0,
+                borderColor: C.surface,
+                borderWidth: 1,
+                maxBarThickness: 36,
+            })),
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            layout: { padding: { top: 18 } }, // room for the totals
+            scales: {
+                x: {
+                    stacked: true,
+                    grid: { display: false },
+                    border: { display: false },
+                    ticks: { color: C.tick, font: { size: 11, weight: 600 } },
+                },
+                // Shares, not counts — no side axis; the totals sit above the
+                // bars and the counts are in the tooltip.
+                y: { stacked: true, min: 0, max: 100, display: false },
+            },
+            plugins: {
+                legend: { display: false }, // server-rendered beside the chart
+                // The hover shows the segment's head-count (and its share),
+                // under the flag's full name so "PR" never needs guessing.
+                tooltip: {
+                    callbacks: {
+                        title: (items) => flagsData.fullLabels[items[0].dataIndex],
+                        label: (item) => {
+                            const n = item.dataset.counts[item.dataIndex];
+                            return `${item.dataset.label} — ${n} ${n === 1 ? 'student' : 'students'} (${Math.round(item.raw)}%)`;
+                        },
+                    },
+                },
+            },
+        },
+        plugins: [stackTotals],
     });
 }

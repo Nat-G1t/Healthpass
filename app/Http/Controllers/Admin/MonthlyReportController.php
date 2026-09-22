@@ -58,6 +58,7 @@ class MonthlyReportController extends Controller
             ...$analytics->vitalSignFlags(),
             ...$analytics->bmiDistribution(),
             ...$analytics->bySexDonut(),
+            ...$analytics->flagsBySex(),
         ]);
     }
 }

@@ -58,6 +58,7 @@ class AnalyticsController extends Controller
             ...$analytics->visitsTrend(),
             ...$analytics->bmiDistribution(),
             ...$analytics->bySexDonut(),
+            ...$analytics->flagsBySex(),
         ]);
     }
 

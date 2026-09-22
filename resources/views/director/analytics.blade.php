@@ -183,11 +183,10 @@
         </p>
     </x-hp.card>
 
-    {{-- ── Trend + donut, side by side (stacking on narrow) ─────────────── --}}
-    <div class="mb-5 grid gap-5 lg:grid-cols-5">
+    {{-- ── Trend: its own row, so the two by-sex cards below sit as a pair ── --}}
 
         {{-- Visits per Month (FR-ANL-11) — ignores both filters by design. --}}
-        <x-hp.card class="lg:col-span-3">
+        <x-hp.card class="mb-5">
             <h3 class="text-sm font-semibold text-hp-slate">Visits per Month</h3>
             <p class="mt-1 text-xs text-hp-slate/50">
                 Clinic visits across all months with data — the whole-year,
@@ -209,8 +208,11 @@
             @endif
         </x-hp.card>
 
+    {{-- ── The two by-sex cards, side by side (stacking on narrow) ──────── --}}
+    <div class="mb-5 grid gap-5 lg:grid-cols-2">
+
         {{-- Students Screened by Sex (FR-ANL-04 as amended by D-32). --}}
-        <x-hp.card class="lg:col-span-2">
+        <x-hp.card>
             <h3 class="text-sm font-semibold text-hp-slate">Students Screened by Sex</h3>
             <p class="mt-1 text-xs text-hp-slate/50">
                 Captured kiosk visits, counted once per visit. Follows both filters.
@@ -251,6 +253,8 @@
                 </div>
             @endif
         </x-hp.card>
+
+        @include('partials.analytics-flags-by-sex')
     </div>
 
     {{-- ── BMI Distribution (FR-ANL-12) — last card, per the mockup ─────── --}}

@@ -288,6 +288,32 @@
     </table>
 </div>
 
+{{-- ── Flagged Vitals by Sex (FR-ANL-14 as printed) ──────────────────────── --}}
+<div class="block">
+    <h2>Flagged Vitals by Sex</h2>
+    <p class="note">Flagged readings, split by the student's profile sex.</p>
+    <table>
+        <thead>
+            <tr>
+                <th>Flag</th>
+                <th class="num">Male</th>
+                <th class="num">Female</th>
+                <th class="num">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach ($flagsBySexRows as $row)
+                <tr>
+                    <td>{{ $row['label'] }}</td>
+                    <td class="num">{{ $row['male'] }}</td>
+                    <td class="num">{{ $row['female'] }}</td>
+                    <td class="num">{{ $row['total'] }}</td>
+                </tr>
+            @endforeach
+        </tbody>
+    </table>
+</div>
+
 {{-- ── Footer: the honesty line D-32 was decided on ──────────────────────── --}}
 <p class="foot">
     This report covers data captured by HealthPass only — appointments booked in the
