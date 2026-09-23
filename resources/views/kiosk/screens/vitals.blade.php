@@ -171,7 +171,10 @@
             </div>
 
             {{-- ── Phase: SCANNING (animation) ──────────────────────────────── --}}
-            <div x-show="stepPhase() === 'scanning'" x-cloak
+            {{-- Also shown while height/weight/temperature collect their seven
+                 samples (D-74, 'sampling') — deliberately no "3 of 7" counter,
+                 which would only invite the student to move. --}}
+            <div x-show="stepPhase() === 'sampling' || stepPhase() === 'scanning'" x-cloak
                  x-transition:enter="transition ease-hp-out duration-hp-base"
                  x-transition:enter-start="opacity-0"
                  x-transition:enter-end="opacity-100"
@@ -187,6 +190,15 @@
                 </div>
                 <p class="text-lg font-semibold text-hp-slate">Measuring <span x-text="vitalMeta(state.vitalStep).label.toLowerCase()"></span>…</p>
                 <p class="text-sm text-hp-slate/50">Hold still.</p>
+
+                {{-- A sensor that goes quiet mid-sampling still gets its nudge;
+                     the corner triple-tap pad still works from here. --}}
+                <p
+                    x-show="serial.notice"
+                    x-cloak
+                    class="max-w-sm rounded-lg bg-hp-peach/40 px-4 py-2 text-sm font-medium text-hp-orange"
+                    x-text="serial.notice"
+                ></p>
             </div>
 
             {{-- ── Phase: CAPTURED (value + badge) ──────────────────────────── --}}
@@ -202,6 +214,11 @@
                     <div class="flex items-baseline gap-2">
                         <span class="text-5xl font-bold text-hp-slate" x-text="formatField(primaryField(), fieldValue(primaryField().key))"></span>
                         <span class="text-xl font-medium text-hp-slate/50" x-text="primaryField().unit"></span>
+                        {{-- Height also in feet and inches (FR-KSK-17) — a
+                             courtesy reading only; cm is stored and printed. --}}
+                        <template x-if="vitalMeta(state.vitalStep).showsFeetInches">
+                            <span class="text-xl font-medium text-hp-slate/50">· <span x-text="formatFeetInches(fieldValue(primaryField().key))"></span></span>
+                        </template>
                     </div>
                 </template>
                 <template x-if="state.vitalStep === 4">

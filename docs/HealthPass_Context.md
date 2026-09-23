@@ -605,10 +605,11 @@ Each vital screen has:
 - Left panel: icon in peach rounded square + vital name.
 - Right panel: instruction text → scanning animation (spinner + blinking dots) → captured result (large value + unit + status badge + sub-note).
 - Footer: when captured, "↺ Retry" (ghost lg) + "Next →" (primary lg).
+- **Seven-sample capture (D-74)** — height, weight and temperature do not take the first sensor reading. The step shows its "Measuring…" scan card (no sample counter) while it collects **7** readings — or, once **6 s** have passed since the first, at least **3** (fewer keeps waiting; the "sensor is quiet" nudge and the 90 s idle reset cover a sensor that stopped) — then records the average of the **steadiest cluster**: the longest run of readings within the field's tolerance (height ±2 cm, weight ±1 kg, temperature ±0.3 °C, on the `VITALS` field metadata), ties to the tighter run, then the more recent. E.g. weight 48.7 · 49.3 · 50.4 · 52.9 · 52.2 · 52.8 · 52.9 → **52.7 kg**. The average goes through the ordinary sensor capture (range check, `entry_method = sensor`); the server still recomputes BMI and every flag. The manual pad still opens mid-sampling and discards the buffer; Retry, Previous and a D-72 re-check all start a fresh one. Blood pressure is not sampled — it arrives as one finished reading (D-58).
 
 | Step | Vital | Icon | Key detail |
 |---|---|---|---|
-| 1/4 | Height | 📏 | Ultrasonic sensor. Captured: e.g. 163 cm, "Normal" badge. |
+| 1/4 | Height | 📏 | Ultrasonic sensor. Captured: e.g. 163 cm, "Normal" badge. **D-74 / FR-KSK-17:** the result also shows feet and inches as secondary text (175 cm · 5 ft 8.9 in) — display only; cm is stored and printed. |
 | 2/4 | Weight | ⚖️ | Load cell scale. Captured: e.g. 64 kg + computed BMI panel (peach bg, shows BMI + status badge + "from Xcm + Ykg"). |
 | 3/4 | Temperature | 🌡️ | IR forehead thermometer. Captured: e.g. 37.9°C, "Slightly Elevated" (flagged badge), normal range note. |
 | — | *(BP step, heart-rate panel)* | ❤️ | **D-66:** the heart-rate sub-panel carries a status badge reading **"Normal" or "High"** (> 100 bpm, from the injected `thresholds.hrMax`) — a status, never an interpretation, and never Fit/Unfit. |

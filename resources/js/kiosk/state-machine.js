@@ -2,6 +2,7 @@
 // (`npm run test:js`), which — unlike Vite — does not guess extensions.
 import { createSerialReader } from './serial.js';
 import { BP_POLL_MS, fetchLatestBpReading } from './bp-poll.js';
+import { pickSteadiest, roundTo } from './sample-cluster.js';
 import { prefersReducedMotion } from '../shared/motion.js';
 
 /**
@@ -129,6 +130,20 @@ const GESTURE_WINDOW_MS = 1500;
 const EXIT_TAPS = 5;
 const EXIT_GESTURE_WINDOW_MS = 3000;
 
+// Seven-sample capture (D-74) for height, weight and temperature. A step
+// collects SAMPLE_COUNT readings and records the average of the steadiest
+// group. If SAMPLE_WINDOW_MS passes (counted from the FIRST reading) with at
+// least MIN_SAMPLES, it decides on those; with fewer it keeps waiting rather
+// than guessing — the idle reset and the "sensor is quiet" nudge cover a
+// sensor that has really stopped.
+const SAMPLE_COUNT = 7;
+const MIN_SAMPLES = 3;
+const SAMPLE_WINDOW_MS = 6000;
+
+// Height is shown in feet and inches too (FR-KSK-17) — display only.
+const CM_PER_INCH = 2.54;
+const INCHES_PER_FOOT = 12;
+
 /**
  * Per-step metadata for the vitals sequence (FR-KSK-05). Each step is pure
  * DATA — the Blade renders ANY step from this config, so the four steps are not
@@ -140,8 +155,13 @@ const EXIT_GESTURE_WINDOW_MS = 3000;
  * single source of truth); `sensorKey` is the letter the Web Serial handoff
  * uses (§11.2 → H / W / T / S / D / R); `sample` feeds the dev-only "Simulate
  * reading" button; `decimals` fixes display precision (temperature shows 1).
+ * A field with `clusterTolerance` is captured from seven sensor samples (D-74):
+ * readings within that many units of each other count as one steady group,
+ * and the group's average is rounded to `averageDecimals` (the column stores
+ * one decimal; height is kept to whole cm, as it is displayed).
  *
- * Step extras: `showsBmi` renders the computed BMI panel (FR-KSK-09); `badge`
+ * Step extras: `showsBmi` renders the computed BMI panel (FR-KSK-09);
+ * `showsFeetInches` adds the height in feet and inches (FR-KSK-17); `badge`
  * selects the neutral status badge ('temperature' | 'bp') — never a diagnosis
  * or Fit/Unfit (FR-KSK-14).
  */
@@ -150,14 +170,15 @@ export const VITALS = {
         label: 'Height',
         instruction: 'Stand straight under the stadiometer, heels together, looking forward.',
         fields: [
-            { key: 'height', unit: 'cm', range: 'height_cm', sensorKey: 'H', sample: 163 },
+            { key: 'height', unit: 'cm', range: 'height_cm', sensorKey: 'H', sample: 163, clusterTolerance: 2, averageDecimals: 0 },
         ],
+        showsFeetInches: true,
     },
     2: {
         label: 'Weight',
         instruction: 'Step onto the scale and stand still, arms relaxed at your sides.',
         fields: [
-            { key: 'weight', unit: 'kg', range: 'weight_kg', sensorKey: 'W', sample: 58 },
+            { key: 'weight', unit: 'kg', range: 'weight_kg', sensorKey: 'W', sample: 58, clusterTolerance: 1, averageDecimals: 1 },
         ],
         showsBmi: true,
     },
@@ -166,7 +187,7 @@ export const VITALS = {
         instruction: 'Hold your forehead a few centimetres from the infrared thermometer and stay still.',
         badge: 'temperature',
         fields: [
-            { key: 'temperature', unit: '°C', range: 'temperature_c', sensorKey: 'T', sample: 36.8, decimals: 1 },
+            { key: 'temperature', unit: '°C', range: 'temperature_c', sensorKey: 'T', sample: 36.8, decimals: 1, clusterTolerance: 0.3, averageDecimals: 1 },
         ],
     },
     4: {
@@ -184,7 +205,12 @@ export const VITALS = {
 /**
  * A fresh, uncaptured step. phase: ready → scanning → captured; the blood-
  * pressure step also has 'waiting', from tapping Start until the Bluetooth
- * monitor's reading arrives (D-59). `values` holds
+ * monitor's reading arrives (D-59), and the height/weight/temperature steps
+ * have 'sampling' (D-74), from their first sensor reading until the seven
+ * samples are decided — it shows the same "Measuring…" card as scanning.
+ * `samples` buffers those readings; `windowOver` is set once SAMPLE_WINDOW_MS
+ * has passed since the first one. Both live here so a fresh step (Retry, a
+ * D-72 re-check, reset-to-Welcome) always starts an empty buffer. `values` holds
  * each field's reading by key (one key for most steps, three for BP); `method`
  * is the step's provenance for vital_signs.entry_method (FR-KSK-06).
  */
@@ -195,6 +221,8 @@ function vitalStep() {
         notice: '', // non-blocking nudge (e.g. sensor degraded to manual)
         values: {}, // field key → number, filled on capture
         suspect: false, // D-58: the BP monitor itself flagged the captured reading
+        samples: [], // D-74: sensor readings buffered while 'sampling'
+        windowOver: false, // D-74: SAMPLE_WINDOW_MS has passed since the first sample
     };
 }
 
@@ -354,6 +382,8 @@ export function kioskMachine() {
         // `state`) so a wholesale state reset never strands a running timer.
         _idleTimer: null,
         _completeInterval: null,
+        // The SAMPLE_WINDOW_MS timer of the step being sampled (D-74).
+        _sampleTimer: null,
         // Seconds left on the Complete auto-reset pill; reactive so Blade tracks it.
         completeCountdown: 0,
 
@@ -414,6 +444,15 @@ export function kioskMachine() {
             // the guard above — so an abandoned session still resets even if
             // the hub keeps streaming.
             this.bumpIdle();
+            // D-74: height, weight and temperature collect seven samples
+            // before deciding, so their readings keep flowing in while the
+            // step is 'sampling'. bumpIdle above already ran for every one.
+            const sampled = this.sampledField();
+            if (sampled) {
+                const value = Number(reading[sampled.sensorKey]);
+                if (reading[sampled.sensorKey] != null && Number.isFinite(value)) this.addSample(value);
+                return;
+            }
             if (this.stepPhase() !== 'ready') return;
             const meta = this.vitalMeta(this.state.vitalStep);
             if (!meta) return;
@@ -575,6 +614,7 @@ export function kioskMachine() {
             this.clearIdle();
             this.clearCompleteCountdown();
             this.clearBpWaitTimer();
+            this.clearSampleTimer();
             // Drop the server-side kiosk identity too. This is the single choke
             // point for every abandon/finish path ("Not you?", consent Decline,
             // the 90s idle reset, Complete's Done + auto-reset), so clearing it
@@ -1185,7 +1225,7 @@ export function kioskMachine() {
             return this.state.vitalSteps[this.state.vitalStep];
         },
 
-        /** Convenience: the current step's phase ('ready' | 'waiting' | 'scanning' | 'captured'). */
+        /** Convenience: the current step's phase ('ready' | 'waiting' | 'sampling' | 'scanning' | 'captured'). */
         stepPhase() {
             return this.currentStep().phase;
         },
@@ -1207,6 +1247,23 @@ export function kioskMachine() {
         formatField(field, value) {
             if (value == null) return '';
             return field.decimals != null ? value.toFixed(field.decimals) : String(value);
+        },
+
+        /**
+         * Height in feet and inches, e.g. 175 → "5 ft 8.9 in" (FR-KSK-17).
+         * Display only — cm is what is stored and printed. Inches are rounded
+         * to one decimal, and a round-up to 12.0 carries into the next foot.
+         */
+        formatFeetInches(cm) {
+            if (cm == null) return '';
+            const totalInches = cm / CM_PER_INCH;
+            let feet = Math.floor(totalInches / INCHES_PER_FOOT);
+            let inches = roundTo(totalInches - feet * INCHES_PER_FOOT, 1);
+            if (inches >= INCHES_PER_FOOT) {
+                feet += 1;
+                inches -= INCHES_PER_FOOT;
+            }
+            return `${feet} ft ${inches.toFixed(1)} in`;
         },
 
         /** {min,max} bounds for a field, from injected config (FR-KSK-08). */
@@ -1278,10 +1335,97 @@ export function kioskMachine() {
             }, SCAN_MS);
         },
 
-        /** Dev-only: inject a plausible reading for every field of the current step. */
+        // ── Seven-sample capture (D-74 — height, weight, temperature) ─────────
+        /** The current step's field when it is captured by sampling, else null (BP never is). */
+        sampledField(step = this.state.vitalStep) {
+            const field = this.primaryField(step);
+            return field?.clusterTolerance != null ? field : null;
+        },
+
+        /**
+         * Buffer one sensor reading for the current step. The first reading
+         * turns the step to 'sampling' (the "Measuring…" card) and starts the
+         * SAMPLE_WINDOW_MS window; every reading then checks whether the
+         * buffer can be decided.
+         */
+        addSample(value) {
+            const step = this.state.vitalStep;
+            const s = this.state.vitalSteps[step];
+            if (s.phase !== 'ready' && s.phase !== 'sampling') return;
+            // While the manual pad is open the typed value wins: the sensor
+            // keeps streaming, but none of it is collected underneath the pad.
+            if (this.state.pad.open) return;
+
+            if (s.phase === 'ready') {
+                s.phase = 'sampling';
+                s.notice = '';
+                this.clearSampleTimer();
+                this._sampleTimer = setTimeout(() => {
+                    this._sampleTimer = null;
+                    // Only if this SAME step record is still sampling — a
+                    // Retry, the pad or a reset replaces or empties it.
+                    if (this.state.vitalSteps[step] !== s || s.phase !== 'sampling') return;
+                    s.windowOver = true;
+                    this.decideSamples(step);
+                }, SAMPLE_WINDOW_MS);
+            }
+
+            s.samples = [...s.samples, value];
+            this.decideSamples(step);
+        },
+
+        /**
+         * Decide once the buffer holds SAMPLE_COUNT readings, or the window has
+         * passed with at least MIN_SAMPLES. With fewer, keep waiting — never
+         * invent a number from one or two readings. The steadiest group's
+         * average then goes through the ordinary sensor path
+         * (receiveReading), so range checks, entry_method and the captured
+         * phase behave exactly as for any other sensor reading.
+         */
+        decideSamples(step) {
+            const s = this.state.vitalSteps[step];
+            const enough = s.samples.length >= SAMPLE_COUNT
+                || (s.windowOver && s.samples.length >= MIN_SAMPLES);
+            if (s.phase !== 'sampling' || !enough) return;
+
+            const field = this.sampledField(step);
+            const average = roundTo(pickSteadiest(s.samples, field.clusterTolerance), field.averageDecimals);
+            this.discardSamples(step);
+            this.receiveReading({ [field.sensorKey]: average });
+        },
+
+        /** Drop a step's sample buffer and put it back to 'ready' (the pad, Previous step). */
+        discardSamples(step) {
+            this.clearSampleTimer();
+            const s = this.state.vitalSteps[step];
+            s.samples = [];
+            s.windowOver = false;
+            if (s.phase === 'sampling') s.phase = 'ready';
+        },
+
+        clearSampleTimer() {
+            if (this._sampleTimer) clearTimeout(this._sampleTimer);
+            this._sampleTimer = null;
+        },
+
+        /**
+         * Dev-only: inject a plausible reading for every field of the current
+         * step. A sampled step (D-74) gets seven readings through the serial
+         * path instead — two unsettled ones first, then a steady group — so
+         * the result shown is the group's average, not the first number.
+         */
         simulateReading() {
             const meta = this.vitalMeta(this.state.vitalStep);
             if (!meta) return;
+            const sampled = this.sampledField();
+            if (sampled) {
+                const offsets = [-3, -2, 0.3, -0.3, 0.2, 0, -0.2]; // × tolerance
+                for (const offset of offsets) {
+                    const value = roundTo(sampled.sample + offset * sampled.clusterTolerance, 1);
+                    this.onSerialReading({ [sampled.sensorKey]: value });
+                }
+                return;
+            }
             const reading = {};
             for (const f of meta.fields) reading[f.sensorKey] = f.sample;
             this.receiveReading(reading);
@@ -1312,6 +1456,9 @@ export function kioskMachine() {
             // D-59: the pad stays first-class while the BP step waits for the
             // monitor — opening it stops the wait.
             if (this.isAwaitingBp()) this.endBpWait();
+            // D-74: likewise mid-sampling — the buffer is thrown away and the
+            // typed value wins; the sensor readings are never mixed into it.
+            if (this.stepPhase() === 'sampling') this.discardSamples(this.state.vitalStep);
             // Manual entry is a first-class path only BEFORE a reading is taken
             // (the 'ready' phase) — "just about to read each vital". Once the
             // step is captured (or mid-scan), the disguised gesture does nothing,
@@ -1434,6 +1581,7 @@ export function kioskMachine() {
 
         /** Discard the current step's reading and return it to "ready". */
         retryVital() {
+            this.clearSampleTimer();
             this.state.vitalSteps[this.state.vitalStep] = vitalStep();
         },
 
@@ -1454,6 +1602,7 @@ export function kioskMachine() {
 
         prevVital() {
             if (this.isAwaitingBp()) this.endBpWait(); // leaving the BP step stops listening (D-59)
+            if (this.stepPhase() === 'sampling') this.discardSamples(this.state.vitalStep); // half a buffer is not kept (D-74)
             const steps = this.activeSteps();
             const previous = steps[steps.indexOf(this.state.vitalStep) - 1];
             if (previous !== undefined) this.state.vitalStep = previous;

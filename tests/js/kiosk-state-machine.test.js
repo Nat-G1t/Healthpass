@@ -42,6 +42,11 @@ function machineAtVitals(step = 1) {
     return m;
 }
 
+/** Stream one sensor key's readings through the serial handler (D-74 takes seven). */
+function feed(m, sensorKey, values) {
+    for (const v of values) m.onSerialReading({ [sensorKey]: v });
+}
+
 // ── Absurd-but-parseable sensor values (FR-KSK-08) ───────────────────────────
 // The parser hands T:99 / H:999 through (see serial-parser.test.js); the state
 // machine must FAIL them against the config ranges and fall back to 'ready'
@@ -51,7 +56,7 @@ test('T:99 from the sensor fails range validation and prompts retry/manual', (t)
     t.mock.timers.enable({ apis: ['setTimeout'] });
     const m = machineAtVitals(3); // temperature step
 
-    m.onSerialReading({ T: 99 });
+    feed(m, 'T', Array(7).fill(99));
     assert.equal(m.stepPhase(), 'scanning');
 
     t.mock.timers.tick(SCAN_SETTLE_MS);
@@ -64,7 +69,7 @@ test('H:999 from the sensor fails range validation and prompts retry/manual', (t
     t.mock.timers.enable({ apis: ['setTimeout'] });
     const m = machineAtVitals(1); // height step
 
-    m.onSerialReading({ H: 999 });
+    feed(m, 'H', Array(7).fill(999));
     t.mock.timers.tick(SCAN_SETTLE_MS);
 
     assert.equal(m.stepPhase(), 'ready');
@@ -86,7 +91,7 @@ test('a plausible sensor reading captures with sensor provenance', (t) => {
     t.mock.timers.enable({ apis: ['setTimeout'] });
     const m = machineAtVitals(3);
 
-    m.onSerialReading({ T: 36.8 });
+    feed(m, 'T', Array(7).fill(36.8));
     t.mock.timers.tick(SCAN_SETTLE_MS);
 
     assert.equal(m.stepPhase(), 'captured');
@@ -103,7 +108,7 @@ test('a session mixing sensor and manual steps reports both provenances', (t) =>
     t.mock.timers.enable({ apis: ['setTimeout'] });
     const m = machineAtVitals(1);
 
-    m.onSerialReading({ H: 163 }); // height via sensor
+    feed(m, 'H', Array(7).fill(163)); // height via sensor
     t.mock.timers.tick(SCAN_SETTLE_MS);
     assert.equal(m.currentStep().method, 'sensor');
 
@@ -183,7 +188,7 @@ test('serial lines after the step is captured do NOT hold the session open', (t)
     t.mock.timers.enable({ apis: ['setTimeout'] });
     const m = machineAtVitals(3);
 
-    m.onSerialReading({ T: 36.8 });
+    feed(m, 'T', Array(7).fill(36.8));
     t.mock.timers.tick(SCAN_SETTLE_MS);
     assert.equal(m.stepPhase(), 'captured');
 
