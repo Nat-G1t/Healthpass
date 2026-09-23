@@ -310,7 +310,7 @@ Progress steps: Consent → Account Info → Email Verify → Link ID
 
 **Step 3 — Email Verify**
 - 6 OTP boxes (auto-focus hidden input, visual boxes highlight as digits are entered).
-- Resend link. Verify & Continue disabled until 6 digits entered.
+- Resend link. Each box holds exactly one character; a paste or autofill of the whole code fills all six; Verify & Continue is enabled once all six boxes are filled, and a code containing a non-digit is refused with "Letters aren't allowed — the code is 6 numbers." before any attempt is counted (2026-09-23). The same boxes (`<x-otp.boxes>`) serve every OTP screen.
 - In production: fire a `Mail` job on step-2 submit.
 
 **Step 4 — Link Student ID**

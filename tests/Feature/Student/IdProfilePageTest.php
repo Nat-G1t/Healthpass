@@ -451,4 +451,27 @@ class IdProfilePageTest extends TestCase
             'qr_token' => $token,
         ]);
     }
+
+    public function test_email_otp_with_a_letter_is_refused_without_using_an_attempt(): void
+    {
+        Mail::fake();
+        $student = $this->studentWithProfile('2023-12345');
+
+        $this->actingAs($student)->patch(
+            route('student.id-profile.update'),
+            $this->validPayload(['email' => 'new@example.com'])
+        );
+        $otp = $this->startEmailChange($student, 'new@example.com');
+
+        // More letter-codes than the 5-attempt budget…
+        for ($i = 0; $i < 6; $i++) {
+            $this->actingAs($student)->post(route('student.id-profile.verify-email.submit'), ['otp' => '12a456'])
+                ->assertSessionHasErrors(['otp' => "Letters aren't allowed — the code is 6 numbers."]);
+        }
+
+        // …and the real code still changes the email.
+        $this->actingAs($student)->post(route('student.id-profile.verify-email.submit'), ['otp' => $otp])
+            ->assertRedirect(route('student.id-profile'));
+        $this->assertDatabaseHas('users', ['id' => $student->id, 'email' => 'new@example.com']);
+    }
 }

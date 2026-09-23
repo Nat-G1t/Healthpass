@@ -295,4 +295,23 @@ class PasswordChangeTest extends TestCase
 
         $this->assertDatabaseMissing('sessions', ['id' => 'stolen-session-id']);
     }
+
+    public function test_a_code_with_a_letter_is_refused_without_using_an_attempt(): void
+    {
+        Mail::fake();
+        $user = User::factory()->create();
+
+        $this->startChange($user);
+        [$otp] = $this->otpsSentTo($user->email);
+
+        // More letter-codes than the 5-attempt budget…
+        for ($i = 0; $i < 6; $i++) {
+            $this->actingAs($user)->post(route('password.change.verify.submit'), ['otp' => '12a456'])
+                ->assertSessionHasErrors(['otp' => "Letters aren't allowed — the code is 6 numbers."]);
+        }
+
+        // …and the real code still applies the new password.
+        $this->actingAs($user)->post(route('password.change.verify.submit'), ['otp' => $otp]);
+        $this->assertTrue(Hash::check('NewPassword123!', $user->fresh()->password));
+    }
 }

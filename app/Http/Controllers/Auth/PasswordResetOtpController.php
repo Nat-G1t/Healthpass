@@ -102,7 +102,7 @@ class PasswordResetOtpController extends Controller
         ], [
             'otp.required' => 'Please enter the 6-digit code.',
             'otp.size' => 'The code must be exactly 6 digits.',
-            'otp.regex' => 'The code must contain digits only.',
+            'otp.regex' => "Letters aren't allowed — the code is 6 numbers.",
         ]);
 
         $cacheKey = $this->otpKey($email);

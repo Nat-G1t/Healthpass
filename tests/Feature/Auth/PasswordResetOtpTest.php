@@ -282,4 +282,23 @@ class PasswordResetOtpTest extends TestCase
 
         $this->assertDatabaseMissing('sessions', ['id' => 'stolen-session-id']);
     }
+
+    public function test_a_code_with_a_letter_is_refused_without_using_an_attempt(): void
+    {
+        Mail::fake();
+        $user = $this->user();
+
+        $this->post(route('password.email'), ['email' => $user->email]);
+        [$otp] = $this->otpsSentTo($user->email);
+
+        // More letter-codes than the 5-attempt budget…
+        for ($i = 0; $i < 6; $i++) {
+            $this->post(route('password.reset.verify.submit'), ['otp' => '12a456'])
+                ->assertSessionHasErrors(['otp' => "Letters aren't allowed — the code is 6 numbers."]);
+        }
+
+        // …and the real code still verifies.
+        $this->post(route('password.reset.verify.submit'), ['otp' => $otp])
+            ->assertRedirect(route('password.reset.new'));
+    }
 }

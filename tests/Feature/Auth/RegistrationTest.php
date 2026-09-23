@@ -165,4 +165,35 @@ class RegistrationTest extends TestCase
             ->assertSessionHas('status');
         $this->assertCount(2, Mail::sent(OtpVerificationMail::class));
     }
+
+    // ── A code with a letter is refused before any attempt is counted ─────────
+
+    /** Same database-session trick as the cooldown test: the OTP key is the session id. */
+    public function test_a_code_with_a_letter_is_refused_without_using_an_attempt(): void
+    {
+        config(['session.driver' => 'database']);
+        $this->withoutMiddleware(EncryptCookies::class);
+        $this->disableCookieEncryption();
+        Mail::fake();
+
+        $response = $this->post(route('register.consent'), ['consent' => '1']);
+        $sessionId = $response->getCookie(config('session.cookie'), decrypt: false)->getValue();
+        $this->withCookie(config('session.cookie'), $sessionId);
+
+        $this->post(route('register.info.store'), $this->infoPayload())
+            ->assertRedirect(route('register.verify'));
+        $this->get(route('register.verify'))->assertOk();
+        $otp = Mail::sent(OtpVerificationMail::class)->first()->otp;
+
+        // More letter-codes than the 5-attempt budget…
+        for ($i = 0; $i < 6; $i++) {
+            $this->post(route('register.verify.submit'), ['otp' => '12a456'])
+                ->assertSessionHasErrors(['otp' => "Letters aren't allowed — the code is 6 numbers."]);
+        }
+
+        // …and the real code still creates the account.
+        $this->post(route('register.verify.submit'), ['otp' => $otp])
+            ->assertRedirect(route('register.link-id'));
+        $this->assertDatabaseHas('users', ['email' => 'juan@example.com']);
+    }
 }

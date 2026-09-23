@@ -1072,6 +1072,34 @@
 
 ### Fixed
 
+* **OTP boxes take one character each, and a letter is refused out loud**
+  (FR-REG-04 amended, 2026-09-23). No new decision, no schema change. Every box
+  had `maxlength="6"`: a second digit typed into a filled box spilled across the
+  next boxes, and a typed letter stayed visible while the model thought the box
+  was empty — and Verify stayed disabled, so the student got no message at all.
+  * **One component.** Registration Step 3 and the student change-email verify
+    page dropped their inline copies and use `<x-otp.boxes>` like Forgot
+    Password and Change Password, so the logic exists once. Step 3's boxes are
+    now the component's size (58×46 / 24px, were 60×50 / 26px) and gain its
+    shake-on-error and pop-on-character animations.
+  * **One character per box.** Typing into a filled box replaces its
+    character (each box selects its content on focus); boxes 1–5 are
+    `maxlength="1"`. Box 0 keeps `maxlength="6"` because phone one-time-code
+    autofill respects maxlength and drops the whole code there; a single
+    keypress (`e.data` of one character) is told apart from a paste/autofill,
+    which still spreads the digits across all six. The model is written back
+    into the boxes after every input, so what shows is what submits.
+  * **Letters are refused with a message.** A letter stays in its box, Verify
+    enables once all six are filled, and submit shows *"Letters aren't allowed
+    — the code is 6 numbers."* in the page's red error style and shakes the row,
+    without sending the form. `pattern="\d*"` is gone so the browser's own
+    "match the requested format" bubble can't pre-empt it; `inputmode="numeric"`
+    stays for the phone number pad.
+  * **The server says the same words.** The `otp.regex` message in all four
+    OTP controllers is now that sentence. The rule is unchanged and still runs
+    before the attempt counter, so a letter never uses one of the 5 attempts —
+    covered by a new test on each of the four endpoints.
+
 * **Deactivating an account now ends the session it is already using**
   (FR-AUTH-07, amended by D-47). `users.status` was read in exactly one place —
   `LoginRequest::authenticate()` — so deactivation blocked the *next login* and
