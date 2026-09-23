@@ -90,7 +90,7 @@
                 name="student_number"
                 type="text"
                 :value="old('student_number')"
-                placeholder="e.g. 2024-00001"
+                placeholder="e.g. 2022300123"
                 required
                 autocomplete="off"
                 :error="$errors->first('student_number')"

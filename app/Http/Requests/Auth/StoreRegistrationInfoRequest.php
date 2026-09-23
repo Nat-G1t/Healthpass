@@ -57,7 +57,7 @@ class StoreRegistrationInfoRequest extends FormRequest
 
         return [
             'student_number.unique' => 'This student number is already registered.',
-            'student_number.regex' => 'Student number may only contain digits and dashes (e.g. 2024-00001).',
+            'student_number.regex' => 'Student number may only contain digits and dashes (e.g. 2022300123).',
             'email.unique' => 'This email address is already registered.',
             'sex.in' => 'Please select a sex.',
             'course.required' => $collegeChosen ? 'Please choose your program.' : $collegeFirst,

@@ -32,7 +32,7 @@
                    class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Date Done</label>
             <input type="text" id="surgical-date-done" name="surgical_history[date_done]"
                    value="{{ $surgical('date_done') }}"
-                   placeholder="e.g. 2019, or Grade 5"
+                   placeholder="e.g. September, 23, 2019"
                    maxlength="{{ \App\Models\MedicalAssessment::DATE_DONE_MAX_LENGTH }}"
                    @disabled($readOnly)
                    class="mt-1 w-full max-w-xs rounded-lg border-[1.5px] border-hp-slate/25 px-3 py-2 text-sm
