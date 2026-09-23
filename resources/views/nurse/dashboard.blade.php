@@ -190,7 +190,9 @@
                                     {{-- The encode screen already renders read-only for an
                                          encoded visit (its $readOnly flag), so there is no
                                          separate detail page to build. --}}
-                                    <a href="{{ route('nurse.visits.encode', $visit) }}"
+                                    {{-- from=dashboard + the table's filters/page make the
+                                         visit page's back link return here (FR-NRS-09). --}}
+                                    <a href="{{ route('nurse.visits.encode', ['visit' => $visit, 'from' => 'dashboard'] + $tableState) }}"
                                        class="text-xs font-semibold text-hp-orange hover:underline">View</a>
 
                                     {{-- Reprint re-stamps printed_at and returns the official

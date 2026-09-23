@@ -398,7 +398,7 @@ Students are scheduled only through their college (a batch request the Clinic Di
 
 ### NURSE + PHYSICIAN — the Clinic Dashboard (D-64)
 
-Every page in this section is shared by the nurse and the University Physician. The sidebar's first item is **Clinic Dashboard** (the stat tiles + the clinic-wide encode history, D-44), and the sidebar role label reads "Nurse" or "Physician". The history's **Encoded by** column shows the encoder's name plus a **Nurse / Physician** badge; both roles see the same rows. (A separate clinic logs page was considered and dropped — this history is the log.)
+Every page in this section is shared by the nurse and the University Physician. The sidebar's first item is **Clinic Dashboard** (the stat tiles + the clinic-wide encode history, D-44), and the sidebar role label reads "Nurse" or "Physician". The history's **Encoded by** column shows the encoder's name plus a **Nurse / Physician** badge; both roles see the same rows. (A separate clinic logs page was considered and dropped — this history is the log.) Opening a record with View shows '← Back to Clinic Dashboard', returning to the dashboard with the same month / result / search filters and page; opened from the Live Queue, the page links back to the Live Queue (2026-09-23).
 
 #### Live Queue (`nurse-dashboard`)
 - **Header**: blinking LIVE dot + "LIVE QUEUE" pill (peach bg, orange text) + "{n} students waiting · updated just now".

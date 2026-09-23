@@ -1153,6 +1153,17 @@
 
 ### Fixed
 
+* **The visit page links back to the Clinic Dashboard when opened from it**
+  (FR-NRS-09 amended). No schema change, no new package, no new route.
+  * The dashboard's **View** link carries `from=dashboard` plus the table's
+    non-empty `month` / `result` / `q` / `page`; the visit page then reads
+    **"← Back to Clinic Dashboard"** and returns to the same filters and page.
+    Opened from the Live Queue, it reads "← Back to Live Queue" as before.
+  * `EncodeController::backLink()` builds the URL only from
+    `route('nurse.dashboard')` and `DashboardController::TABLE_STATE_KEYS` —
+    never a queried URL or `url()->previous()` — so it cannot redirect off-site.
+    Same for nurses and physicians.
+
 * **The kiosk refuses a second visit on a used appointment, and says so**
   (FR-KSK-03b, 2026-09-23). No new decision, no schema change, no new package.
   Kiosk submit never touched the appointment, so between submit and encode a

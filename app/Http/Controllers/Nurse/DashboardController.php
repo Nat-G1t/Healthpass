@@ -38,6 +38,23 @@ class DashboardController extends Controller
      */
     private const PER_PAGE = 15;
 
+    /** The GET keys that describe the history table's state (filters + page). */
+    public const TABLE_STATE_KEYS = ['month', 'result', 'q', 'page'];
+
+    /**
+     * The table's current filters and page, for links that leave the dashboard
+     * and must bring the nurse back to the same view (FR-NRS-09: View → the
+     * visit page's back link). Only the four whitelisted keys, and only
+     * non-empty strings — so the URL stays clean and nothing else rides along.
+     */
+    public static function tableState(Request $request): array
+    {
+        return array_filter(
+            $request->only(self::TABLE_STATE_KEYS),
+            fn ($value) => is_string($value) && $value !== '',
+        );
+    }
+
     public function __invoke(Request $request): View
     {
         $availableMonths = VisitMonths::available();
@@ -52,6 +69,7 @@ class DashboardController extends Controller
             'selectedMonth' => $selectedMonth,
             'selectedResult' => $selectedResult,
             'search' => $search,
+            'tableState' => self::tableState($request),
         ]);
     }
 

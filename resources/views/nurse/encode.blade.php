@@ -160,9 +160,11 @@
 
 {{-- ── Page header: back link, title, lifecycle badge ─────────────────────────── --}}
 <div class="mb-7">
-    <a href="{{ route('nurse.queue') }}"
+    {{-- FR-NRS-09: the Clinic Dashboard (filters kept) when opened with View,
+         otherwise the Live Queue — EncodeController::backLink(). --}}
+    <a href="{{ $back['url'] }}"
        class="text-sm font-medium text-hp-slate/60 transition-colors hover:text-hp-orange">
-        ← Back to Live Queue
+        ← {{ $back['label'] }}
     </a>
     <div class="mt-2 flex flex-wrap items-center gap-2.5">
         <h2 class="text-xl font-semibold text-hp-slate">Doctor's Assessment</h2>

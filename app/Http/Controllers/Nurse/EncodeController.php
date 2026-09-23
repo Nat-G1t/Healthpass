@@ -11,6 +11,7 @@ use App\Models\ClinicVisit;
 use App\Models\VitalSigns;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
@@ -35,7 +36,7 @@ use Illuminate\View\View;
  */
 class EncodeController extends Controller
 {
-    public function show(ClinicVisit $visit): View
+    public function show(Request $request, ClinicVisit $visit): View
     {
         // Only the two lifecycle states BR-11 defines can be opened here;
         // anything else means a hand-edited URL or bad data — 404, not a crash.
@@ -66,7 +67,30 @@ class EncodeController extends Controller
             'visit' => $visit,
             'readOnly' => $visit->status === 'encoded',
             'studentRemarks' => $studentRemarks,
+            'back' => $this->backLink($request),
         ]);
+    }
+
+    /**
+     * FR-NRS-09 — back to where the page was opened from: the Clinic
+     * Dashboard (View, with its filters and page kept) or the Live Queue.
+     *
+     * Built only from route('nurse.dashboard') and its four whitelisted keys —
+     * never from a posted/queried URL or url()->previous() — so it cannot be
+     * turned into an open redirect; the dashboard re-cleans the values itself.
+     *
+     * @return array{url: string, label: string}
+     */
+    private function backLink(Request $request): array
+    {
+        if ($request->query('from') === 'dashboard') {
+            return [
+                'url' => route('nurse.dashboard', DashboardController::tableState($request)),
+                'label' => 'Back to Clinic Dashboard',
+            ];
+        }
+
+        return ['url' => route('nurse.queue'), 'label' => 'Back to Live Queue'];
     }
 
     /**
