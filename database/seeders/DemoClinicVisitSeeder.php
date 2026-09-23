@@ -883,8 +883,8 @@ class DemoClinicVisitSeeder extends Seeder
     /**
      * Vitals covering every analytics bucket, still rule-consistent with
      * the capture thresholds (§7.4, D-10): the BMI cycle spans all four
-     * FR-ANL-12 buckets but only the deliberate flag case reaches ≥ 30
-     * (the is_bmi_flagged rule); temperature, BP and heart rate stay unflagged
+     * FR-ANL-12 buckets, and every value outside Normal is flagged (D-78) —
+     * plus a deliberate obese case; temperature, BP and heart rate stay unflagged
      * except for their own deliberate flag cases (D-66 added the heart rate).
      * Every flag is derived through the VitalSigns helpers, never asserted.
      * Plus an all-clear questionnaire and, on an `assessment` batch only, a
@@ -895,12 +895,12 @@ class DemoClinicVisitSeeder extends Seeder
         // Deterministic flag sprinkle (~3–4% each, non-overlapping mostly).
         $bpFlagged = $seq % 29 === 3;
         $tempFlagged = $seq % 31 === 8;
-        $bmiFlagged = $seq % 23 === 11;
+        $isObeseCase = $seq % 23 === 11;
         $hrFlagged = $seq % 37 === 5;   // D-66
 
         // All four BMI buckets: underweight, normal ×3, overweight ×2 …
         $bmiCycle = [17.9, 19.5, 21.2, 22.8, 24.1, 26.4, 28.3, 20.6];
-        $bmi = $bmiFlagged ? 31.5 : $bmiCycle[$seq % count($bmiCycle)];
+        $bmi = $isObeseCase ? 31.5 : $bmiCycle[$seq % count($bmiCycle)];
 
         $heightCm = 158 + ($seq % 18);
         $weightKg = round($bmi * ($heightCm / 100) ** 2, 1);
@@ -915,7 +915,7 @@ class DemoClinicVisitSeeder extends Seeder
             'bp_systolic' => $bpFlagged ? 150 : 105 + ($seq % 20),           // ≤ 124 unless flagged
             'bp_diastolic' => $bpFlagged ? 95 : 65 + ($seq % 15),
             'entry_method' => $seq % 2 === 0 ? 'manual' : 'sensor',
-            'is_bmi_flagged' => $bmiFlagged,
+            'is_bmi_flagged' => VitalSigns::isBmiFlagged($bmi), // D-78
             'is_temp_flagged' => $tempFlagged,
             'is_bp_flagged' => $bpFlagged,
             'is_hr_flagged' => VitalSigns::isHeartRateFlagged($hrFlagged ? 108 : 66 + ($seq % 24)),

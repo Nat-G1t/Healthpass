@@ -22,7 +22,8 @@ const CONFIG = {
         heart_rate: { min: 30, max: 220 },
     },
     thresholds: { tempMax: 37.2, bpSystolic: 140, bpDiastolic: 90, hrMax: 100 },
-    bmiObese: 30,
+    bmiNormalMin: 18.5,
+    bmiNormalMax: 25,
     kiosk: { idleTimeoutSeconds: 90, completeResetSeconds: 12, recheckRestMinutes: 10 },
 };
 

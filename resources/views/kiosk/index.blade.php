@@ -153,7 +153,8 @@
              from config/healthpass.php, so client badges/checks match the server. --}}
         data-config="{{ json_encode([
             'validation' => config('healthpass.validation'),
-            'bmiObese' => config('healthpass.thresholds.bmi_obese'),
+            'bmiNormalMin' => config('healthpass.thresholds.bmi_normal_min'), // D-78
+            'bmiNormalMax' => config('healthpass.thresholds.bmi_normal_max'),
             'thresholds' => [
                 'tempMax' => config('healthpass.thresholds.temperature_max'),
                 'bpSystolic' => config('healthpass.thresholds.bp_systolic'),

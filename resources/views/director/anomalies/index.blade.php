@@ -31,7 +31,7 @@
             </p>
             <p class="mt-3 text-3xl font-bold leading-none text-hp-slate" data-hp-countup>{{ $stats['bmi'] }}</p>
             <p class="mt-2 text-xs text-hp-slate/50">
-                BMI of {{ config('healthpass.thresholds.bmi_obese') }} or higher
+                BMI under {{ config('healthpass.thresholds.bmi_normal_min') }} or {{ config('healthpass.thresholds.bmi_normal_max') }} and above
             </p>
         </x-hp.card>
 

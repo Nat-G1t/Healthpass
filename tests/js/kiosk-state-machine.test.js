@@ -24,7 +24,8 @@ const CONFIG = {
         heart_rate: { min: 30, max: 220 },
     },
     thresholds: { tempMax: 37.2, bpSystolic: 140, bpDiastolic: 90, hrMax: 100 },
-    bmiObese: 30,
+    bmiNormalMin: 18.5,
+    bmiNormalMax: 25,
     kiosk: { idleTimeoutSeconds: 90, completeResetSeconds: 12 },
 };
 
@@ -485,4 +486,24 @@ test('the idle reset wipes the social history from an abandoned screen', (t) => 
     assert.equal(m.state.screen, 'welcome');
     assert.equal(m.state.socialHistory.smoking, null);
     assert.equal(m.state.identity, null);
+});
+
+// ── BMI flag (D-78) ──────────────────────────────────────────────────────────
+// ⚑ whenever BMI is not Normal (18.5–24.9); the badge keeps its four colours.
+
+test('the BMI flag fires outside Normal, on the exclusive 25.0 bound', () => {
+    const m = machineAtVitals(1);
+    assert.equal(m.bmiFlagged(18.4), true);
+    assert.equal(m.bmiFlagged(18.5), false);
+    assert.equal(m.bmiFlagged(24.9), false);
+    assert.equal(m.bmiFlagged(25.0), true);
+    assert.equal(m.bmiFlagged(32.0), true);
+    assert.equal(m.bmiFlagged(null), false);
+});
+
+test('an overweight BMI is flagged but its badge stays orange "Overweight"', () => {
+    const m = machineAtVitals(1);
+    assert.equal(m.bmiFlagged(26.0), true);
+    assert.equal(m.bmiStatus(26.0), 'Overweight');
+    assert.match(m.bmiBadgeClass(26.0), /text-hp-orange/);
 });

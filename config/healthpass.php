@@ -89,7 +89,11 @@ return [
         'temperature_max' => 37.2,   // > 37.2 °C  → is_temp_flagged ("Fever")
         'bp_systolic' => 140,    // systolic ≥ 140  → is_bp_flagged ("High Blood Pressure"); D-10 canonical
         'bp_diastolic' => 90,     // OR diastolic ≥ 90 → is_bp_flagged
-        'bmi_obese' => 30.0,   // ≥ 30.0 → is_bmi_flagged ("Abnormal BMI / Obese")
+        // D-78. BMI is flagged whenever it is outside Normal (18.5–24.9). The
+        // upper bound is EXCLUSIVE: stored BMI has one decimal, so 24.9 is the
+        // last Normal value and 25.0 is the first flagged one.
+        'bmi_normal_min' => 18.5,  // < 18.5 → is_bmi_flagged ("Abnormal BMI", underweight)
+        'bmi_normal_max' => 25.0,  // ≥ 25.0 → is_bmi_flagged ("Abnormal BMI", overweight/obese)
 
         // D-66. Heart rate: > 100 bpm → is_hr_flagged ("High Heart Rate"). There
         // is deliberately NO low-heart-rate flag — a resting rate under 60 is

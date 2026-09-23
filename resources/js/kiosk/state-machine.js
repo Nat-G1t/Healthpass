@@ -1639,15 +1639,20 @@ export function kioskMachine() {
             return 'Obese';
         },
 
-        /** ≥ 30.0 → is_bmi_flagged, from config (BR-13, single source of truth). */
+        /**
+         * D-78: outside Normal → is_bmi_flagged — below bmiNormalMin or at/above
+         * bmiNormalMax (exclusive: 24.9 Normal, 25.0 flagged). From config
+         * (BR-13, single source of truth); the server recomputes it anyway.
+         */
         bmiFlagged(bmi) {
-            return bmi !== null && bmi >= (this.config.bmiObese ?? 30);
+            if (bmi === null) return false;
+            return bmi < (this.config.bmiNormalMin ?? 18.5) || bmi >= (this.config.bmiNormalMax ?? 25);
         },
 
         /**
          * Colour-coded BMI status badge (UI only): Underweight + Obese = red,
-         * Normal = green, Overweight = orange. The ⚑/is_bmi_flagged semantics
-         * stay obese-only (BR-13) — this is purely the visual cue.
+         * Normal = green, Overweight = orange. This is purely the visual cue;
+         * the ⚑/is_bmi_flagged rule is bmiFlagged() — anything not Normal (D-78).
          */
         bmiBadgeClass(bmi) {
             switch (this.bmiStatus(bmi)) {

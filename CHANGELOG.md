@@ -4,6 +4,22 @@
 
 ### Added
 
+* **BMI is flagged whenever it is not Normal, and past visits are recomputed**
+  (D-78). No schema change, no new package.
+  * `is_bmi_flagged` is now set when BMI **< 18.5 or ≥ 25.0** (Normal is
+    18.5–24.9; 24.9 is Normal, 25.0 is flagged), replacing ≥ 30.0. Config
+    `thresholds.bmi_obese` → `bmi_normal_min` / `bmi_normal_max`; the rule is
+    the new `VitalSigns::isBmiFlagged()`, used by the kiosk submit, the re-check
+    and the demo seeder.
+  * **Data migration** `2026_09_23_000001_recompute_bmi_flags_d78` rewrites
+    `is_bmi_flagged` on every existing row (a deliberate one-time exception to
+    BR-14), so the Abnormal BMI tile, Flagged Vitals by Sex, anomalies and the
+    nurse queue now count under- and overweight visits in past months too.
+    `down()` restores the ≥ 30.0 rule.
+  * The kiosk's ⚑ follows the same rule; its four-colour BMI badge is
+    unchanged. BMI still never triggers rest & re-check (D-72). The analytics
+    tile reads "BMI < 18.5 or ≥ 25 · flagged at capture".
+
 * **Students open their full clinic record as a page, and save the official
   document as a PDF** (D-73). Requested by the clinic on 2026-09-18; settled
   with Nat 2026-09-18/19; **pending adviser sign-off**. No schema change, no

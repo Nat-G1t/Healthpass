@@ -199,13 +199,13 @@ Director analytics and flagged anomalies update from encoded records
 |---|---|---|
 | Temperature | 36.1–37.2 °C | > 37.2 °C |
 | Blood pressure | < 120/80 mmHg | Systolic ≥ 140 OR diastolic ≥ 90 mmHg |
-| BMI | 18.5–24.9 | ≥ 30.0 (obese) |
+| BMI | 18.5–24.9 | < 18.5 **or** ≥ 25.0 — anything not Normal **(D-78)** |
 | Heart rate **(D-66)** | 60–100 bpm | > 100 bpm — **no low-HR flag**, a resting rate under 60 is common in healthy young students |
 | Respiratory rate **(D-66)** | 12–20 breaths/min | < 12 **or** > 20 breaths/min |
 
 Flags appear in the nurse queue's "Flags" column and the Director's Flagged Anomalies screen. BMI = weight(kg) ÷ height(m)².
 
-**When each flag is computed (D-66).** Four of the five are computed at **kiosk capture**, in `SubmitKioskVisit`, and stored as booleans. `is_rr_flagged` is the exception: the kiosk has **no sensor** for a respiratory rate (D-65), so that flag is computed at **encode**, in the same transaction that writes `vital_signs.respiratory_rate`. Until then it is `false`, meaning "not measured yet" — not "normal". Both rules live as static helpers on `App\Models\VitalSigns` (`isHeartRateFlagged()`, `isRespiratoryRateFlagged()`), shared by the kiosk submit, the encode controller and the seeders, and every threshold comes from `config('healthpass.thresholds')` (BR-13). Nothing is ever derived in the browser or read from a request body.
+**When each flag is computed (D-66).** Four of the five are computed at **kiosk capture**, in `SubmitKioskVisit`, and stored as booleans. `is_rr_flagged` is the exception: the kiosk has **no sensor** for a respiratory rate (D-65), so that flag is computed at **encode**, in the same transaction that writes `vital_signs.respiratory_rate`. Until then it is `false`, meaning "not measured yet" — not "normal". The rules live as static helpers on `App\Models\VitalSigns` (`isBmiFlagged()` — D-78, `isHeartRateFlagged()`, `isRespiratoryRateFlagged()`), shared by the kiosk submit, the encode controller and the seeders, and every threshold comes from `config('healthpass.thresholds')` (BR-13). Nothing is ever derived in the browser or read from a request body.
 
 ### Clearance encoding
 - ~~Only the **Nurse** encodes (4 roles total — no Doctor login).~~ **D-64:** a **nurse or the University Physician** encodes (5 roles total); `encoded_by` records who.

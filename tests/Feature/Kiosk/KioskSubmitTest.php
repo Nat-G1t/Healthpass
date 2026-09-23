@@ -459,18 +459,41 @@ class KioskSubmitTest extends TestCase
         $this->assertTrue(VitalSigns::latest('id')->first()->is_bp_flagged);
     }
 
-    /** BMI flag is ">= 30.0". height 100cm makes BMI == weight, so boundaries are exact. */
+    /**
+     * D-78: BMI is flagged whenever it is outside Normal (18.5–24.9) — "< 18.5
+     * OR >= 25.0". height 100cm makes BMI == weight, so boundaries are exact.
+     */
     public function test_bmi_flag_boundary(): void
     {
-        $this->submit($this->student()->id, ['vitals' => ['height' => 100, 'weight' => 29.9]]);
-        $row = VitalSigns::latest('id')->first();
-        $this->assertEquals(29.9, (float) $row->bmi);
-        $this->assertFalse($row->is_bmi_flagged);
+        foreach ([[18.4, true], [18.5, false], [24.9, false], [25.0, true], [32.0, true]] as [$bmi, $flagged]) {
+            $this->submit($this->student()->id, ['vitals' => ['height' => 100, 'weight' => $bmi]]);
+            $row = VitalSigns::latest('id')->first();
+            $this->assertEquals($bmi, (float) $row->bmi);
+            $this->assertSame($flagged, $row->is_bmi_flagged, "BMI {$bmi}");
+        }
+    }
 
-        $this->submit($this->student()->id, ['vitals' => ['height' => 100, 'weight' => 30.0]]);
-        $row = VitalSigns::latest('id')->first();
-        $this->assertEquals(30.0, (float) $row->bmi);
-        $this->assertTrue($row->is_bmi_flagged);
+    /** D-78: the ONE rule, straight through flagsFor(), at each boundary. */
+    public function test_flags_for_bmi_boundaries(): void
+    {
+        $normal = ['temperature' => 36.5, 'systolic' => 110, 'diastolic' => 70, 'heartRate' => 75];
+
+        foreach ([[18.4, true], [18.5, false], [24.9, false], [25.0, true], [32.0, true]] as [$bmi, $flagged]) {
+            $flags = SubmitKioskVisit::flagsFor($normal, config('healthpass.thresholds'), $bmi);
+            $this->assertSame($flagged, $flags['is_bmi_flagged'], "BMI {$bmi}");
+        }
+    }
+
+    /** D-78 + D-72: an overweight BMI is flagged, yet the visit is queued, not resting. */
+    public function test_an_overweight_bmi_is_flagged_and_still_captured(): void
+    {
+        // 75 kg at 170 cm = BMI 26.0.
+        $this->submit($this->student()->id, ['vitals' => ['height' => 170, 'weight' => 75]])->assertOk();
+
+        $visit = ClinicVisit::firstOrFail();
+        $this->assertSame('captured', $visit->status);
+        $this->assertEquals(26.0, (float) $visit->vitalSigns->bmi);
+        $this->assertTrue($visit->vitalSigns->is_bmi_flagged);
     }
 
     /** D-66: heart-rate flag is "> 100": 100 is NOT flagged, 101 IS. */

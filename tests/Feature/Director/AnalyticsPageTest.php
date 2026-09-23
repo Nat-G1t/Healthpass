@@ -301,6 +301,29 @@ class AnalyticsPageTest extends TestCase
         );
     }
 
+    /**
+     * D-78 — an underweight BMI is flagged, so it counts in the Abnormal BMI
+     * tile and in Flagged Vitals by Sex (FR-ANL-14); the caption quotes both
+     * config bounds. The flag is derived through the ONE rule, never asserted.
+     */
+    public function test_an_underweight_bmi_counts_as_abnormal(): void
+    {
+        $female = $this->makeStudent($this->ccs, 'F');
+        $this->makeVisit($female, $this->ccs, '2026-06-02', vitals: [
+            'bmi' => 17.0, 'is_bmi_flagged' => VitalSigns::isBmiFlagged(17.0),
+        ]);
+        $this->makeVisit($female, $this->ccs, '2026-06-03');
+
+        $response = $this->page('?month=2026-06')->assertOk();
+
+        $bmiTile = $response->viewData('flagTiles')[2];
+        $this->assertSame(['Abnormal BMI', 1], [$bmiTile['label'], $bmiTile['count']]);
+        $this->assertSame('BMI < 18.5 or ≥ 25 · flagged at capture', $bmiTile['sub']);
+
+        $bmiRow = $response->viewData('flagsBySexRows')[0];
+        $this->assertSame(['Abnormal BMI', 0, 1], [$bmiRow['label'], $bmiRow['male'], $bmiRow['female']]);
+    }
+
     public function test_flag_rates_round_to_one_decimal(): void
     {
         $student = $this->makeStudent($this->ccs);

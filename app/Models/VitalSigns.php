@@ -78,6 +78,22 @@ class VitalSigns extends Model
     // clinic's encode and the demo seeders all call them, so a threshold change
     // can never leave one screen disagreeing with another.
 
+    /**
+     * D-78: outside Normal → "Abnormal BMI" — below bmi_normal_min or at/above
+     * bmi_normal_max (exclusive, so 24.9 is Normal and 25.0 is flagged).
+     */
+    public static function isBmiFlagged(?float $bmi): bool
+    {
+        if ($bmi === null) {
+            return false;
+        }
+
+        $thresholds = config('healthpass.thresholds');
+
+        return $bmi < (float) $thresholds['bmi_normal_min']
+            || $bmi >= (float) $thresholds['bmi_normal_max'];
+    }
+
     /** D-66: > heart_rate_max bpm → "High Heart Rate". No low-HR flag. */
     public static function isHeartRateFlagged(?int $bpm): bool
     {

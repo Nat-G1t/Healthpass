@@ -275,7 +275,7 @@
                         <div class="mt-1.5 flex items-center justify-center gap-3">
                             <span class="text-3xl font-bold text-hp-slate" x-text="bmiValue().toFixed(1)"></span>
                             {{-- Colour-coded status (underweight/obese red · normal green ·
-                                 overweight orange); ⚑ only at the locked flag threshold (≥30, BR-13). --}}
+                                 overweight orange); ⚑ whenever it is not Normal (D-78, BR-13). --}}
                             <span
                                 class="rounded-full px-3 py-1 text-sm font-semibold"
                                 :class="bmiBadgeClass(bmiValue())"

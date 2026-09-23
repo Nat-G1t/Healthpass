@@ -221,7 +221,7 @@ final class SubmitKioskVisit
             'is_temp_flagged' => (float) $vitals['temperature'] > $thresholds['temperature_max'],
             'is_bp_flagged' => (int) $vitals['systolic'] >= $thresholds['bp_systolic']
                 || (int) $vitals['diastolic'] >= $thresholds['bp_diastolic'],
-            'is_bmi_flagged' => $bmi >= $thresholds['bmi_obese'],
+            'is_bmi_flagged' => VitalSigns::isBmiFlagged($bmi), // D-78
             'is_hr_flagged' => VitalSigns::isHeartRateFlagged((int) $vitals['heartRate']),
         ];
     }
