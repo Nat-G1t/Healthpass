@@ -1039,6 +1039,18 @@
 
 ### Changed
 
+* **The New Batch Request student picker filters by program** (FR-ADM-03
+  amended, 2026-09-23). No new decision, no schema change, no new package, no
+  new route. Select Students gains a **Program** dropdown left of the search
+  box, styled like the Clinic Dashboard's Encode History filters: "All
+  programs" plus every program `config/programs.php` lists for the admin's
+  college (`Programs::forCollege()`, the registration catalog), even one with
+  no registered student yet. The roster keeps a student only when it matches
+  both the program and the search; **Select All** acts on that filtered list,
+  the selection survives switching programs, and "(N of M selected)" keeps M =
+  the whole roster. An empty program reads "No students registered in
+  <program> yet." The filter is Alpine-only — not posted, not in `old()`.
+
 * **Back to the OTP step after verifying says the step is done** (FR-REG-04
   amended, 2026-09-23). No new decision, no schema change, no new package. A
   correct code logs the student in, and a real request for `register/verify`

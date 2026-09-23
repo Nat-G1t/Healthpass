@@ -373,8 +373,9 @@ Students are scheduled only through their college (a batch request the Clinic Di
 - **Requested clinic date** (D-29) — a compact **month calendar** since **D-54**, with the (D-61-removed) student booking calendar's look and rules: month header with prev/next, weekday row, past days disabled, FULL days greyed and unselectable, today unavailable after closing (BR-20) or once no hour is left (BR-23), non-booking weekdays disabled, same legend. "Today" is the server's date. It still submits `requested_date` through a hidden input; its month data comes from `GET /admin/batches/availability` (`full_days`, `cutoff_days`), built by `ClinicScheduleService` (the student calendar that shared them went with D-61).
 - **Clash popup** (D-54, BR-25): if any selected student is already scheduled during the batch's span — on another pending/approved batch overlapping it (D-61 retired the self-booking case) — the submit comes back with a teleported popup, **"Some students are already scheduled at this time"**, listing every clashing student (name, student no., and what they clash with, e.g. "on batch BR-2026-004, 9:00 AM – 11:00 AM"). **Remove these students from the batch** deselects exactly those students and closes; **Close** keeps the selection so the date or start hour can be changed instead. Reason, service, date, start hour and selection are all restored.
 - **Student multi-select** (scoped to admin's college):
-  - Search bar (by name or student number).
-  - Select All / Clear links.
+  - **Program dropdown** left of the search bar (2026-09-23, FR-ADM-03): All programs + the college's catalog programs from `config/programs.php`, even ones with no students yet; styled like the Clinic Dashboard's filters. Browser-only — never posted. A program with no students reads "No students registered in <program> yet."
+  - Search bar (by name or student number) — the list shows students matching **both** the program and the search.
+  - Select All / Clear links. Select All acts on the filtered list; the selection is kept across filter changes, and M in the counter stays the whole roster.
   - Scrollable checkbox list (max-height 260px): each row = name (600) + student number + course/year (muted). Selected rows = peach background.
   - Counter: "(N of M selected)".
 - "Submit Request (N)" — disabled until form + reason + ≥ 1 student selected.

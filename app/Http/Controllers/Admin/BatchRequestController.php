@@ -17,6 +17,7 @@ use App\Services\ReferenceNumberService;
 use App\Services\ScheduleClashService;
 use App\Support\AssessmentDocument;
 use App\Support\ClearanceDocument;
+use App\Support\Programs;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -156,6 +157,10 @@ class BatchRequestController extends Controller
         return view('admin.batches.create', [
             'college' => $college,
             'students' => $students,
+            // FR-ADM-03: the Program filter lists the college's WHOLE catalog
+            // (the same list registration uses), not just programs that
+            // already have students — so an empty program can be chosen too.
+            'programs' => Programs::forCollege($college->id),
             // D-37: the start-hour options and the numbers the live span
             // preview needs — all derived from config, never typed in the view.
             'slots' => array_map(fn (string $slot): array => [

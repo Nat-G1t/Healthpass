@@ -9,6 +9,7 @@ use App\Models\BatchRequest;
 use App\Models\College;
 use App\Models\StudentProfile;
 use App\Models\User;
+use App\Support\Programs;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
@@ -192,6 +193,31 @@ class BatchRequestCreateTest extends TestCase
             ->assertOk()
             ->assertSee($own->student_number)
             ->assertDontSee($foreign->student_number);
+    }
+
+    // ── FR-ADM-03: the Program filter lists the college's whole catalog ─────
+
+    public function test_create_page_offers_every_catalog_program_of_own_college_only(): void
+    {
+        // The filter bar sits above the roster, so the college needs a student.
+        StudentProfile::factory()->forCollege($this->ccs)->create();
+
+        $response = $this->actingAs($this->admin)
+            ->get('/admin/batches/create')
+            ->assertOk()
+            ->assertSee('<option value="">All programs</option>', false);
+
+        // Every CCS program, in catalog order, even with no student registered.
+        $ccsPrograms = Programs::forCollege($this->ccs->id);
+        $this->assertNotEmpty($ccsPrograms);
+        $response->assertSeeInOrder(
+            array_map(fn (string $p): string => '<option value="'.e($p).'">', $ccsPrograms),
+            false,
+        );
+
+        foreach (Programs::forCollege($this->cea->id) as $program) {
+            $response->assertDontSee('<option value="'.e($program).'">', false);
+        }
     }
 
     public function test_create_page_is_refused_for_other_roles_and_guests(): void

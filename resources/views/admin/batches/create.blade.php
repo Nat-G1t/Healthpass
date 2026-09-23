@@ -99,6 +99,9 @@ function batchForm() {
         students: @js($students),
         selected: @js(array_values(array_map('intval', old('students', [])))),
         query:    '',
+        // FR-ADM-03: browser-only Program filter ('' = All programs). Never
+        // posted — it only narrows what is shown, never what is selected.
+        program:  '',
         maxRenderRows: MAX_RENDER_ROWS,
 
         /**
@@ -129,10 +132,12 @@ function batchForm() {
             }
         },
 
+        /** Students matching BOTH the chosen program (if any) and the search. */
         get filtered() {
             const q = this.query.trim().toLowerCase();
-            if (!q) return this.students;
-            return this.students.filter(s => s.search.includes(q));
+            return this.students.filter(s =>
+                (this.program === '' || s.course === this.program)
+                && (q === '' || s.search.includes(q)));
         },
 
         /** The rows actually put in the DOM — capped so the table stays smooth. */
@@ -154,7 +159,7 @@ function batchForm() {
                 : [...this.selected, id];
         },
 
-        /** Selects every student matching the current search (all M when blank). */
+        /** Selects every student matching the current program + search (all M when both blank). */
         selectAllFiltered() {
             this.selected = [...new Set([...this.selected, ...this.filtered.map(s => s.id)])];
         },
@@ -683,18 +688,36 @@ function batchForm() {
                         </p>
                     </div>
                 @else
-                    {{-- Live search by name or student number --}}
-                    <div class="relative mb-3">
-                        <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-hp-slate/40"
-                             fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round"
-                                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                        </svg>
-                        <input type="search" x-model="query"
-                               placeholder="Search by name or student number…"
-                               class="w-full rounded-lg border border-hp-slate/25 py-2 pl-9 pr-3 text-sm text-hp-slate
-                                      placeholder-hp-slate/40 transition-colors duration-hp-fast
-                                      focus:border-hp-orange focus:ring-1 focus:ring-hp-orange focus:outline-none">
+                    {{-- Filter bar, styled like the Clinic Dashboard's (FR-ADM-03):
+                         Program on the left, live search taking the rest. Both
+                         filter in the browser only — no name, so nothing posts. --}}
+                    <div class="mb-3 flex flex-wrap items-end gap-3">
+                        <div class="flex min-w-0 max-w-full flex-col gap-1">
+                            <label for="batch-program" class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Program</label>
+                            <select id="batch-program" x-model="program"
+                                    class="max-w-full truncate rounded-lg border-hp-slate/20 bg-hp-white py-1.5 pl-3 pr-8 text-xs font-medium text-hp-slate focus:border-hp-orange focus:ring-hp-orange">
+                                <option value="">All programs</option>
+                                @foreach ($programs as $program)
+                                    <option value="{{ $program }}">{{ $program }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+
+                        <div class="flex min-w-[200px] flex-1 flex-col gap-1">
+                            <label for="batch-search" class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Search</label>
+                            <div class="relative">
+                                <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-hp-slate/40"
+                                     fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                                </svg>
+                                <input id="batch-search" type="search" x-model="query"
+                                       placeholder="Search by name or student number…"
+                                       class="w-full rounded-lg border border-hp-slate/25 py-2 pl-9 pr-3 text-sm text-hp-slate
+                                              placeholder-hp-slate/40 transition-colors duration-hp-fast
+                                              focus:border-hp-orange focus:ring-1 focus:ring-hp-orange focus:outline-none">
+                            </div>
+                        </div>
                     </div>
 
                     <div class="max-h-[30rem] overflow-y-auto rounded-lg border border-hp-slate/10">
@@ -730,8 +753,14 @@ function batchForm() {
                             </tbody>
                         </table>
 
+                        {{-- A catalog program can have no students yet; a search that
+                             finds nobody (with or without a program) keeps the old line. --}}
                         <p class="px-4 py-3 text-center text-xs text-hp-slate/50"
-                           x-show="filtered.length === 0" x-cloak>
+                           x-show="filtered.length === 0 && program !== '' && query.trim() === ''" x-cloak>
+                            No students registered in <span x-text="program"></span> yet.
+                        </p>
+                        <p class="px-4 py-3 text-center text-xs text-hp-slate/50"
+                           x-show="filtered.length === 0 && query.trim() !== ''" x-cloak>
                             No students match "<span x-text="query"></span>".
                         </p>
                         {{-- Render cap note — Select All still covers ALL matches --}}
