@@ -32,7 +32,10 @@ use Illuminate\View\View;
  */
 class DashboardController extends Controller
 {
-    /** History rows per page (kept in step with DashboardPageTest). */
+    /**
+     * History rows per page (kept in step with DashboardPageTest). Deliberately
+     * NOT healthpass.ui.rows_per_page (FR-UI-06): the live queue shows more on purpose.
+     */
     private const PER_PAGE = 15;
 
     public function __invoke(Request $request): View

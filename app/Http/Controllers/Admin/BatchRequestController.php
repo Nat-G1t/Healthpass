@@ -60,11 +60,15 @@ class BatchRequestController extends Controller
     {
         $college = $this->managedCollege();
 
+        // FR-UI-06: ten per page. `id` breaks ties between batches submitted
+        // in the same second, so no row can land on two pages or on none.
         $batchRequests = $college->batchRequests()
             ->with('reviewer:id,name')
             ->withCount('batchRequestStudents')
             ->latest()
-            ->get();
+            ->orderByDesc('id')
+            ->paginate(config('healthpass.ui.rows_per_page'))
+            ->withQueryString();
 
         $approvedBatches = $college->batchRequests()
             ->where('status', 'approved')
@@ -81,9 +85,14 @@ class BatchRequestController extends Controller
             ])
             ->orderByDesc('scheduled_date')
             ->orderByDesc('id')
-            ->get();
+            // FR-UI-06: ten per page. Its own page name, because the requests
+            // list below pages on this same URL — paging one card must not
+            // move the other.
+            ->paginate(config('healthpass.ui.rows_per_page'), pageName: 'results_page')
+            ->withQueryString();
 
         // Keyed by batch id, so each row's View button picks its own payload.
+        // Built for the current page only — the rows on screen.
         $resultPopups = $approvedBatches
             ->mapWithKeys(fn (BatchRequest $batch): array => [$batch->id => $this->resultsPopup($batch)])
             ->all();
@@ -329,17 +338,37 @@ class BatchRequestController extends Controller
                 'reviewer:id,name',
                 // D-52: who cancelled it, for the cancelled-batch notice.
                 'canceller:id,name',
-                // The roster in a stable order, with each student's generated
-                // appointment. Eager-loaded, so a 60-student batch is 3 queries
-                // rather than 121.
-                'batchRequestStudents' => fn ($query) => $query->orderBy('id'),
-                'batchRequestStudents.student:id,name',
-                'batchRequestStudents.student.studentProfile:id,user_id,student_number,course,year_level',
-                'batchRequestStudents.appointment',
             ])
             ->findOrFail($batchId);
 
-        return view('admin.batches.show', ['batch' => $batch]);
+        // FR-UI-06: the roster pages at ten, in a stable order (id is unique),
+        // with each student's generated appointment eager-loaded — a page is
+        // 4 queries whatever the batch size.
+        $rows = $batch->batchRequestStudents()
+            ->with([
+                'student:id,name',
+                'student.studentProfile:id,user_id,student_number,course,year_level',
+                'appointment',
+            ])
+            ->orderBy('id')
+            ->paginate(config('healthpass.ui.rows_per_page'))
+            ->withQueryString();
+
+        // The page header and summary describe the WHOLE roster, never just
+        // the page on screen, so they are counted by their own queries.
+        // "Booked" = an appointment still holding its seat; "withdrawn" = one
+        // the admin cancelled (FR-ADM-07).
+        return view('admin.batches.show', [
+            'batch' => $batch,
+            'rows' => $rows,
+            'totalCount' => $batch->batchRequestStudents()->count(),
+            'activeCount' => $batch->batchRequestStudents()
+                ->whereHas('appointment', fn ($query) => $query->where('status', '!=', 'cancelled'))
+                ->count(),
+            'withdrawnCount' => $batch->batchRequestStudents()
+                ->whereHas('appointment', fn ($query) => $query->where('status', 'cancelled'))
+                ->count(),
+        ]);
     }
 
     /**

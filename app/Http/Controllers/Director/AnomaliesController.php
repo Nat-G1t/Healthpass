@@ -56,7 +56,9 @@ class AnomaliesController extends Controller
             ])
             ->latest('checked_in_at')
             ->latest('id')
-            ->get();
+            // FR-UI-06: ten per page.
+            ->paginate(config('healthpass.ui.rows_per_page'))
+            ->withQueryString();
 
         return view('director.anomalies.index', compact('stats', 'visits'));
     }

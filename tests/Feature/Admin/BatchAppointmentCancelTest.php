@@ -187,6 +187,34 @@ class BatchAppointmentCancelTest extends TestCase
 
     // ── Withdrawing ──────────────────────────────────────────────────────────
 
+    public function test_the_roster_pages_at_ten_but_its_totals_count_the_whole_batch(): void
+    {
+        [$batch, $appointments] = $this->makeApprovedBatch(13);
+        $appointments->first()->update(['status' => 'cancelled']);
+
+        $page1 = $this->actingAs($this->admin)->get("/admin/batches/{$batch->id}");
+
+        $page1->assertOk()
+            ->assertSee('Showing 1&ndash;10 of 13', false)
+            // FR-UI-06: the header and summary are the WHOLE roster, not the page.
+            ->assertSee('for 13 students')
+            ->assertSee('(12 booked, 1 withdrawn)');
+        $this->assertCount(10, $page1->viewData('rows')->items());
+
+        $page2 = $this->actingAs($this->admin)->get("/admin/batches/{$batch->id}?page=2");
+
+        $page2->assertOk()->assertSee('for 13 students');
+        $this->assertCount(3, $page2->viewData('rows')->items());
+
+        // Every student on exactly one page.
+        $seen = collect($page1->viewData('rows')->items())
+            ->merge($page2->viewData('rows')->items())
+            ->pluck('appointment_id')
+            ->sort()->values()->all();
+
+        $this->assertSame($appointments->pluck('id')->sort()->values()->all(), $seen);
+    }
+
     public function test_admin_can_withdraw_one_students_appointment(): void
     {
         [$batch, $appointments] = $this->makeApprovedBatch(3);

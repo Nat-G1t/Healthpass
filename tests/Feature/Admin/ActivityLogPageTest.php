@@ -273,8 +273,8 @@ class ActivityLogPageTest extends TestCase
 
     public function test_the_log_paginates(): void
     {
-        // 20 pending batches = 20 entries, so page one holds the first 15.
-        for ($i = 0; $i < 20; $i++) {
+        // 13 pending batches = 13 entries: ten on page one (FR-UI-06), three on two.
+        for ($i = 0; $i < 13; $i++) {
             $this->batch($this->admin, $this->ccs, [], students: 1);
         }
 
@@ -283,14 +283,14 @@ class ActivityLogPageTest extends TestCase
             ->assertOk()
             ->viewData('entries');
 
-        $this->assertCount(15, $entries->items());
-        $this->assertSame(20, $entries->total());
+        $this->assertCount(10, $entries->items());
+        $this->assertSame(13, $entries->total());
 
         $page2 = $this->actingAs($this->admin)
             ->get(route('admin.activity').'?page=2')
             ->assertOk()
             ->viewData('entries');
 
-        $this->assertCount(5, $page2->items());
+        $this->assertCount(3, $page2->items());
     }
 }

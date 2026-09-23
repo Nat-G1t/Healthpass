@@ -100,6 +100,22 @@ class AnomaliesPageTest extends TestCase
         ]);
     }
 
+
+    public function test_the_flagged_table_pages_at_ten_but_its_badge_counts_every_flagged_visit(): void
+    {
+        foreach (range(1, 12) as $i) {
+            $this->makeVisit($this->ccs, ['is_bp_flagged' => true, 'bp_systolic' => 150]);
+        }
+
+        $page1 = $this->actingAs($this->director)->get('/director/anomalies')->assertOk();
+        // FR-UI-06: ten rows on screen, but the badge is the whole list.
+        $page1->assertSee('12 flagged')->assertSee('Showing 1&ndash;10 of 12', false);
+        $this->assertCount(10, $page1->viewData('visits')->items());
+
+        $page2 = $this->actingAs($this->director)->get('/director/anomalies?page=2')->assertOk();
+        $this->assertCount(2, $page2->viewData('visits')->items());
+    }
+
     public function test_guests_and_other_roles_cannot_open_anomalies(): void
     {
         $visit = $this->makeVisit($this->ccs, ['is_bp_flagged' => true, 'bp_systolic' => 145, 'bp_diastolic' => 93]);

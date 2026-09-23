@@ -15,6 +15,7 @@ use App\Models\User;
 use App\Support\TransferNotice;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
@@ -65,11 +66,14 @@ class StaffAccountController extends Controller
     public const MANAGEABLE_ROLES = ['college_admin', 'nurse', 'physician'];
 
     /** The staff roster, plus the one-time credential if one was just issued. */
-    public function index(): View
+    public function index(Request $request): View
     {
         $accounts = User::with('managedCollege')
             ->whereIn('role', self::MANAGEABLE_ROLES)
             ->orderBy('name')
+            // Two staff can share a name; id keeps their order (and so the
+            // page each lands on) fixed from one request to the next.
+            ->orderBy('id')
             ->get()
             // Then group by role. Sorted in PHP, not with orderBy('role'):
             // role is a MySQL ENUM, which MySQL sorts by DECLARATION order while
@@ -79,8 +83,21 @@ class StaffAccountController extends Controller
             ->sortBy(fn (User $account): int => (int) array_search($account->role, self::MANAGEABLE_ROLES, true))
             ->values();
 
+        // FR-UI-06: ten per page. The role grouping above happens in PHP, so
+        // the finished collection is paged here rather than with ->paginate()
+        // (the same approach as the Activity Log). A few dozen staff rows is
+        // nothing to hold in memory.
+        $page = LengthAwarePaginator::resolveCurrentPage();
+        $perPage = config('healthpass.ui.rows_per_page');
+
         return view('director.staff', [
-            'accounts' => $accounts,
+            'accounts' => new LengthAwarePaginator(
+                $accounts->forPage($page, $perPage)->values(),
+                $accounts->count(),
+                $perPage,
+                $page,
+                ['path' => $request->url(), 'query' => $request->query()],
+            ),
             'colleges' => College::orderBy('code')->get(),
         ]);
     }

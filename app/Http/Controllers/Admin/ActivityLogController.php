@@ -53,9 +53,6 @@ class ActivityLogController extends Controller
 {
     use ScopedToManagedCollege;
 
-    /** Entries per page — matches the Nurse Dashboard's history. */
-    private const PER_PAGE = 15;
-
     public function __invoke(Request $request): View
     {
         $college = $this->managedCollege();
@@ -65,6 +62,9 @@ class ActivityLogController extends Controller
             ->with(['requester:id,name', 'reviewer:id,name', 'canceller:id,name'])
             ->withCount('batchRequestStudents')
             ->latest('created_at')
+            // Tie-break so batches submitted in the same second always come
+            // back in the same order and page the same way (FR-UI-06).
+            ->orderByDesc('id')
             ->get();
 
         $entries = $this->toEntries($batches)
@@ -153,7 +153,8 @@ class ActivityLogController extends Controller
      *
      * The entries are built in PHP, so there is no query to paginate — this
      * wraps the finished collection in the same paginator the Blade views
-     * already know how to render, and keeps the page in the URL.
+     * already know how to render, and keeps the page in the URL. Ten per page,
+     * like every long table (FR-UI-06).
      *
      * @param  Collection<int, array<string, mixed>>  $entries
      * @return LengthAwarePaginator<int, array<string, mixed>>
@@ -161,11 +162,12 @@ class ActivityLogController extends Controller
     private function paginate(Collection $entries, Request $request): LengthAwarePaginator
     {
         $page = LengthAwarePaginator::resolveCurrentPage();
+        $perPage = config('healthpass.ui.rows_per_page');
 
         return new LengthAwarePaginator(
-            $entries->forPage($page, self::PER_PAGE)->values(),
+            $entries->forPage($page, $perPage)->values(),
             $entries->count(),
-            self::PER_PAGE,
+            $perPage,
             $page,
             ['path' => $request->url(), 'query' => $request->query()],
         );

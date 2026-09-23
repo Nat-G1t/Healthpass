@@ -206,6 +206,8 @@
                     </tbody>
                 </table>
             </div>
+
+            <x-hp.pager :paginator="$batchRequests" />
         @endif
     </x-hp.card>
 

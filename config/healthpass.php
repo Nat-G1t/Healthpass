@@ -16,6 +16,14 @@ return [
     // pre-D-37 appointments (scheduled_time NULL), which belong to no slot.
     'daily_capacity' => env('HEALTHPASS_DAILY_CAPACITY', 120),
 
+    // FR-UI-06: rows per page on every table that can run past ten (Batch
+    // Tracking, the batch roster, the activity log, the Director's staff list),
+    // rendered by <x-hp.pager>. The Nurse Dashboard's clinic queue is the
+    // documented exception — it keeps its own 15 in Nurse\DashboardController.
+    'ui' => [
+        'rows_per_page' => 10,
+    ],
+
     // D-34, hosted internet deploy: the IP address(es) of the reverse proxy /
     // load balancer sitting in front of the app, comma-separated. Laravel only
     // honours X-Forwarded-For / X-Forwarded-Proto from these addresses, which is

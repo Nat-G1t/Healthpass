@@ -158,6 +158,8 @@
                     </x-hp.table-row>
                 @endforeach
             </x-hp.table>
+
+            <x-hp.pager :paginator="$batchRequests" />
         @endif
     </x-hp.card>
 

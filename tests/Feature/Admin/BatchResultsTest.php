@@ -14,8 +14,8 @@ use App\Models\StudentProfile;
 use App\Models\User;
 use App\Models\VitalSigns;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
@@ -209,6 +209,28 @@ class BatchResultsTest extends TestCase
 
     // ── Which batches the card lists ─────────────────────────────────────────
 
+    public function test_the_card_pages_at_ten_independently_of_the_requests_list(): void
+    {
+        // 12 approved + 1 pending: the card has two pages, the list below too.
+        foreach (range(1, 12) as $i) {
+            $this->makeBatch();
+        }
+        $this->makeBatch('pending');
+
+        $page1 = $this->tracking()->assertOk();
+        $this->assertCount(10, $page1->viewData('approvedBatches')->items());
+        $this->assertCount(10, $page1->viewData('resultPopups'));
+        $this->assertSame(12, $page1->viewData('approvedBatches')->total());
+
+        // FR-UI-06: the card has its own page parameter, so paging it leaves
+        // the requests list on its first page (and vice versa).
+        $page2 = $this->actingAs($this->admin)->get('/admin/batches?results_page=2')->assertOk();
+        $this->assertCount(2, $page2->viewData('approvedBatches')->items());
+        $this->assertSame(1, $page2->viewData('batchRequests')->currentPage());
+        $this->assertStringContainsString('results_page=2', $page2->viewData('batchRequests')->nextPageUrl());
+        $page2->assertSee('Batch Results');
+    }
+
     public function test_the_card_lists_every_approved_batch_newest_clinic_date_first(): void
     {
         $earlier = $this->makeBatch(date: self::CLINIC_DAY);
@@ -224,7 +246,7 @@ class BatchResultsTest extends TestCase
         $response->assertSee('Time of Completion');
         $response->assertViewHas(
             'approvedBatches',
-            fn (Collection $batches): bool => $batches->pluck('reference_no')->all()
+            fn (LengthAwarePaginator $batches): bool => $batches->getCollection()->pluck('reference_no')->all()
                 === [$later->reference_no, $earlier->reference_no],
         );
 

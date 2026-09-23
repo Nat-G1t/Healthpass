@@ -36,10 +36,13 @@ class DashboardController extends Controller
             'approved' => (int) $batchesByStatus->get('approved', 0),
         ];
 
+        // FR-UI-06: ten per page; id breaks created_at ties.
         $batchRequests = $college->batchRequests()
             ->withCount('batchRequestStudents')
             ->latest()
-            ->get();
+            ->orderByDesc('id')
+            ->paginate(config('healthpass.ui.rows_per_page'))
+            ->withQueryString();
 
         // D-50: if the Director moved this admin to another college, say so once,
         // here, on the page they land on after signing in. pull() returns the

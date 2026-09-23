@@ -164,7 +164,7 @@
     <x-hp.card class="lg:col-span-2">
         <h3 class="mb-4 text-sm font-semibold text-hp-slate">
             College Admins, Nurses &amp; Physicians
-            <span class="ml-1 font-normal text-hp-slate/50">({{ $accounts->count() }})</span>
+            <span class="ml-1 font-normal text-hp-slate/50">({{ $accounts->total() }})</span>
         </h3>
 
         @if ($accounts->isEmpty())
@@ -266,6 +266,8 @@
                     </x-hp.table-row>
                 @endforeach
             </x-hp.table>
+
+            <x-hp.pager :paginator="$accounts" />
         @endif
     </x-hp.card>
 </div>

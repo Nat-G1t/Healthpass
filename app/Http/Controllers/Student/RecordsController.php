@@ -44,7 +44,10 @@ class RecordsController extends Controller
                 'clearanceRecord',
             ])
             ->latest()
-            ->get();
+            // FR-UI-06: ten per page; id breaks created_at ties.
+            ->orderByDesc('id')
+            ->paginate(config('healthpass.ui.rows_per_page'))
+            ->withQueryString();
 
         return view('student.records', compact('visits'));
     }

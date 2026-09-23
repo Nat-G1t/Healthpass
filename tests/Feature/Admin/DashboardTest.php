@@ -60,6 +60,23 @@ class DashboardTest extends TestCase
 
     // ── FR-ADM-01: page content ──────────────────────────────────────────────
 
+
+    public function test_the_batch_requests_card_pages_at_ten_but_the_stats_count_every_batch(): void
+    {
+        foreach (range(1, 12) as $i) {
+            $this->makeBatch($this->ccs);
+        }
+
+        $page1 = $this->actingAs($this->admin)->get('/admin/dashboard')->assertOk();
+        $page1->assertSee('Showing 1&ndash;10 of 12', false);
+        $this->assertCount(10, $page1->viewData('batchRequests')->items());
+        // FR-UI-06: the stat tiles come from their own query, never the page.
+        $this->assertSame(12, $page1->viewData('stats')['batches']);
+
+        $page2 = $this->actingAs($this->admin)->get('/admin/dashboard?page=2')->assertOk();
+        $this->assertCount(2, $page2->viewData('batchRequests')->items());
+    }
+
     public function test_dashboard_shows_college_scope_banner(): void
     {
         $this->actingAs($this->admin)

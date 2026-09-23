@@ -212,36 +212,9 @@
                 </x-hp.table>
             </div>
 
-            {{-- Pager. Written out by hand rather than $records->links() so it
-                 uses the hp-* tokens (and therefore dark mode) like the rest of
-                 the app; the paginator carries the active filters in its URLs. --}}
-            @if ($records->hasPages())
-                <div class="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-hp-slate/10 pt-4">
-                    <p class="text-xs text-hp-slate/50">
-                        Showing {{ $records->firstItem() }}&ndash;{{ $records->lastItem() }} of {{ $records->total() }}
-                    </p>
-
-                    <div class="flex items-center gap-2">
-                        @if ($records->onFirstPage())
-                            <span class="rounded-lg border border-hp-slate/15 px-3 py-1.5 text-xs font-medium text-hp-slate/30">Previous</span>
-                        @else
-                            <a href="{{ $records->previousPageUrl() }}"
-                               class="rounded-lg border border-hp-slate/25 px-3 py-1.5 text-xs font-medium text-hp-slate hover:bg-hp-slate/8">Previous</a>
-                        @endif
-
-                        <span class="px-1 text-xs text-hp-slate/50">
-                            Page {{ $records->currentPage() }} of {{ $records->lastPage() }}
-                        </span>
-
-                        @if ($records->hasMorePages())
-                            <a href="{{ $records->nextPageUrl() }}"
-                               class="rounded-lg border border-hp-slate/25 px-3 py-1.5 text-xs font-medium text-hp-slate hover:bg-hp-slate/8">Next</a>
-                        @else
-                            <span class="rounded-lg border border-hp-slate/15 px-3 py-1.5 text-xs font-medium text-hp-slate/30">Next</span>
-                        @endif
-                    </div>
-                </div>
-            @endif
+            {{-- Pager (FR-UI-06) — the shared <x-hp.pager>; the paginator carries
+                 the active filters in its URLs. --}}
+            <x-hp.pager :paginator="$records" />
         @endif
 
     </x-hp.card>

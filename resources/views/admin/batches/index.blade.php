@@ -75,9 +75,10 @@
 {{-- ── Batch Results (FR-ADM-12, D-55) ────────────────────────────────────── --}}
 {{-- Every APPROVED batch of this college, newest clinic date first — a batch
      appears here the moment the Director approves it. The card only renders
-     when there is at least one, and it is rebuilt on every page load (nothing
+     when there is at least one (total(), not the current page, so a stale
+     page link can't hide the card), and it is rebuilt on every page load (nothing
      polls), so a reload after the nurse encodes shows the new result. --}}
-@if ($approvedBatches->isNotEmpty())
+@if ($approvedBatches->total() > 0)
     <x-hp.card class="mb-6">
         <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
             Batch Results
@@ -129,6 +130,8 @@
                 </x-hp.table-row>
             @endforeach
         </x-hp.table>
+
+        <x-hp.pager :paginator="$approvedBatches" />
     </x-hp.card>
 @endif
 
@@ -236,6 +239,8 @@
                 </x-hp.table-row>
             @endforeach
         </x-hp.table>
+
+        <x-hp.pager :paginator="$batchRequests" />
     @endif
 </x-hp.card>
 
@@ -250,7 +255,7 @@
      so a name is never parsed as markup. The status WORDING lives here — one
      badge per key, shown with x-show. The panel scrolls for a long roster, and
      below `md` the table re-flows into stacked cards like everywhere else. --}}
-@if ($approvedBatches->isNotEmpty())
+@if ($approvedBatches->total() > 0)
     <template x-teleport="body">
         <div
             x-show="results !== null"

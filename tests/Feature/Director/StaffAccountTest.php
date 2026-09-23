@@ -138,6 +138,27 @@ class StaffAccountTest extends TestCase
 
     // ── 1. Access control — every endpoint, every wrong role ─────────────────
 
+
+    public function test_the_staff_list_pages_at_ten_and_its_heading_counts_everyone(): void
+    {
+        // 12 nurses → ten on page one (FR-UI-06), two on page two.
+        User::factory()->count(12)->create(['role' => 'nurse']);
+
+        $page1 = $this->actingAs($this->director)->get(route('director.staff.index'));
+        $page1->assertOk()
+            ->assertSee('(12)')
+            ->assertSee('Showing 1&ndash;10 of 12', false);
+        $this->assertCount(10, $page1->viewData('accounts')->items());
+
+        $page2 = $this->actingAs($this->director)->get(route('director.staff.index').'?page=2');
+        $this->assertCount(2, $page2->viewData('accounts')->items());
+
+        $ids = collect($page1->viewData('accounts')->items())
+            ->merge($page2->viewData('accounts')->items())
+            ->pluck('id');
+        $this->assertCount(12, $ids->unique());
+    }
+
     public function test_guest_is_redirected_to_login_on_every_endpoint(): void
     {
         $target = $this->admin();

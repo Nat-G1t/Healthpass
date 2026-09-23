@@ -16,17 +16,10 @@
         ? ['Student', 'Student No.', 'Appointment', 'Time', '']
         : ['Student', 'Student No.', 'Course & Year'];
 
-    $rows = $batch->batchRequestStudents;
-
-    // How many seats this batch is still holding — the number that matters
-    // when the admin is deciding whether to withdraw someone.
-    $activeCount = $rows->filter(
-        fn ($row) => $row->appointment !== null && $row->appointment->status !== 'cancelled'
-    )->count();
-
-    $withdrawnCount = $rows->filter(
-        fn ($row) => $row->appointment !== null && $row->appointment->status === 'cancelled'
-    )->count();
+    // $rows is ONE PAGE of the roster (FR-UI-06). $totalCount, $activeCount
+    // (seats still held — what matters when deciding whether to withdraw
+    // someone) and $withdrawnCount come from the controller and count the
+    // WHOLE roster, so the header never shrinks to the page size.
 @endphp
 
 {{-- ── Flash messages ───────────────────────────────────────────────────────── --}}
@@ -60,7 +53,7 @@
             </h2>
             <p class="mt-0.5 text-sm text-hp-slate/50">
                 Medical Clearance
-                for {{ $rows->count() }} {{ Str::plural('student', $rows->count()) }}
+                for {{ $totalCount }} {{ Str::plural('student', $totalCount) }}
             </p>
         </div>
         <x-hp.badge :variant="$batch->status">{{ $batch->statusLabel() }}</x-hp.badge>
@@ -105,7 +98,7 @@
                 Students
             </dt>
             <dd class="mt-1 text-sm font-semibold text-hp-slate">
-                {{ $rows->count() }}
+                {{ $totalCount }}
                 @if ($isApproved && $withdrawnCount > 0)
                     <span class="font-normal text-hp-slate/60">
                         ({{ $activeCount }} booked, {{ $withdrawnCount }} withdrawn)
@@ -236,6 +229,8 @@
                 </x-hp.table-row>
             @endforeach
         </x-hp.table>
+
+        <x-hp.pager :paginator="$rows" />
     @endif
 </x-hp.card>
 

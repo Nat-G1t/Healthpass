@@ -115,6 +115,22 @@ class RecordsPageTest extends TestCase
 
     // ── 1. Access control ─────────────────────────────────────────────────────
 
+
+    public function test_clearance_history_pages_at_ten(): void
+    {
+        $student = $this->student();
+        foreach (range(1, 12) as $i) {
+            $this->makeCapturedVisit($student, sprintf('HP-2026-P%03d', $i));
+        }
+
+        $page1 = $this->actingAs($student)->get(route('student.records'))->assertOk();
+        $page1->assertSee('Showing 1&ndash;10 of 12', false);
+        $this->assertCount(10, $page1->viewData('visits')->items());
+
+        $page2 = $this->actingAs($student)->get(route('student.records').'?page=2')->assertOk();
+        $this->assertCount(2, $page2->viewData('visits')->items());
+    }
+
     public function test_guest_is_redirected_to_login(): void
     {
         $this->get(route('student.records'))->assertRedirect(route('login'));

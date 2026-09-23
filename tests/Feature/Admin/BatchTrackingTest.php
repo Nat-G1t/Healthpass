@@ -224,6 +224,58 @@ class BatchTrackingTest extends TestCase
             ->assertDontSee('Rejection Reason');
     }
 
+    // ── Pagination (FR-UI-06) ────────────────────────────────────────────────
+
+    public function test_tracking_pages_at_ten_rows_with_every_row_on_exactly_one_page(): void
+    {
+        // All 13 are created in the same second, so created_at ties across the
+        // board — only the id tie-break keeps the two pages disjoint.
+        $refs = collect(range(1, 13))->map(fn (): string => $this->makeBatch($this->ccs)->reference_no);
+
+        $page1 = $this->actingAs($this->admin)->get('/admin/batches');
+        $page1->assertOk()->assertSee('Showing 1&ndash;10 of 13', false)->assertSee('Page 1 of 2');
+        $this->assertCount(10, $page1->viewData('batchRequests')->items());
+
+        $page2 = $this->actingAs($this->admin)->get('/admin/batches?page=2');
+        $page2->assertOk()->assertSee('Showing 11&ndash;13 of 13', false);
+        $this->assertCount(3, $page2->viewData('batchRequests')->items());
+
+        $seen = collect($page1->viewData('batchRequests')->items())
+            ->merge($page2->viewData('batchRequests')->items())
+            ->pluck('reference_no');
+
+        $this->assertSame($refs->sort()->values()->all(), $seen->sort()->values()->all());
+    }
+
+    public function test_the_pager_links_keep_the_query_string(): void
+    {
+        // Batch Tracking has no filters today; this pins withQueryString() so
+        // one added later survives paging without anyone remembering to.
+        foreach (range(1, 11) as $i) {
+            $this->makeBatch($this->ccs);
+        }
+
+        $paginator = $this->actingAs($this->admin)
+            ->get('/admin/batches?status=pending')
+            ->assertOk()
+            ->viewData('batchRequests');
+
+        $this->assertStringContainsString('status=pending', $paginator->nextPageUrl());
+    }
+
+    public function test_a_list_of_ten_or_fewer_shows_no_pager(): void
+    {
+        foreach (range(1, 10) as $i) {
+            $this->makeBatch($this->ccs);
+        }
+
+        $this->actingAs($this->admin)
+            ->get('/admin/batches')
+            ->assertOk()
+            ->assertDontSee('Showing 1&ndash;', false)
+            ->assertDontSee('Page 1 of');
+    }
+
     public function test_tracking_is_refused_for_other_roles_and_guests(): void
     {
         $this->get('/admin/batches')->assertRedirect('/login');

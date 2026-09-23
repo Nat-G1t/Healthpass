@@ -140,6 +140,9 @@
             </table>
         </div>
 
+        {{-- One pager for both layouts above — they render the same page. --}}
+        <x-hp.pager :paginator="$visits" />
+
     @endif
 
 </x-hp.card>

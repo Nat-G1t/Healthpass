@@ -75,11 +75,7 @@
             @endforeach
         </x-hp.table>
 
-        @if ($entries->hasPages())
-            <div class="mt-5">
-                {{ $entries->links() }}
-            </div>
-        @endif
+        <x-hp.pager :paginator="$entries" />
     @endif
 </x-hp.card>
 

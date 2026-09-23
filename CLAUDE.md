@@ -163,6 +163,8 @@ npm run dev                       # terminal 2
   Never run `migrate:fresh` or other destructive DB commands without
   asking first — seeded data may be in use.
 - **Validation:** Form Request classes for non-trivial forms
+- **Tables page at ten** (FR-UI-06) via `<x-hp.pager>` and
+  `healthpass.ui.rows_per_page`; the nurse dashboard is the exception at fifteen.
 - **New packages:** propose and justify before installing anything
 
 ## Design system

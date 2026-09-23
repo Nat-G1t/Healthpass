@@ -71,7 +71,7 @@
             </div>
             <div class="flex items-center gap-3">
                 <x-hp.badge :variant="$visits->isNotEmpty() ? 'flagged' : 'neutral'">
-                    {{ $visits->count() }} flagged
+                    {{ $visits->total() }} flagged
                 </x-hp.badge>
             </div>
         </div>
@@ -135,6 +135,8 @@
                     </tbody>
                 </table>
             </div>
+
+            <x-hp.pager :paginator="$visits" />
         @endif
     </x-hp.card>
 

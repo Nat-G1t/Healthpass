@@ -63,6 +63,21 @@ class BatchApprovalsPageTest extends TestCase
         ], $overrides));
     }
 
+
+    public function test_the_approvals_list_pages_at_ten(): void
+    {
+        foreach (range(1, 12) as $i) {
+            $this->makeBatch($i % 2 ? $this->ccs : $this->cea);
+        }
+
+        $page1 = $this->actingAs($this->director)->get('/director/batches')->assertOk();
+        $page1->assertSee('Showing 1&ndash;10 of 12', false);
+        $this->assertCount(10, $page1->viewData('batchRequests')->items());
+
+        $page2 = $this->actingAs($this->director)->get('/director/batches?page=2')->assertOk();
+        $this->assertCount(2, $page2->viewData('batchRequests')->items());
+    }
+
     public function test_director_sees_batches_from_all_colleges(): void
     {
         $ccsBatch = $this->makeBatch($this->ccs);

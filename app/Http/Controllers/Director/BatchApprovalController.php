@@ -49,10 +49,13 @@ class BatchApprovalController extends Controller
     /** All colleges' batch requests, newest first (FR-DIRA-01). */
     public function index(): View
     {
+        // FR-UI-06: ten per page; id breaks created_at ties.
         $batchRequests = BatchRequest::with('college')
             ->withCount('batchRequestStudents')
             ->latest()
-            ->get();
+            ->orderByDesc('id')
+            ->paginate(config('healthpass.ui.rows_per_page'))
+            ->withQueryString();
 
         return view('director.batches.index', compact('batchRequests'));
     }
