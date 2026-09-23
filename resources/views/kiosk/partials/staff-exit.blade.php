@@ -4,13 +4,16 @@
      (state.login) for the staff credentials. A valid nurse or physician (D-64) is authenticated
      server-side and the page navigates to the queue; Cancel just dismisses it.
      This is the ONLY way out of /kiosk — students have no nav otherwise. --}}
+{{-- Flat scrim, deliberately NOT backdrop-blur: a full-viewport
+     backdrop-filter re-blurs the whole 1080×1920 panel every frame and
+     drops the Pi 4 to ~10 fps for as long as the overlay is open. --}}
 <div
     x-show="state.exit.open"
     x-cloak
     x-transition:enter="transition ease-hp-out duration-hp-fast"
     x-transition:enter-start="opacity-0"
     x-transition:enter-end="opacity-100"
-    class="absolute inset-0 z-40 flex items-center justify-center bg-hp-slate/40 backdrop-blur-sm"
+    class="absolute inset-0 z-40 flex items-center justify-center bg-hp-slate/55"
     @click.self="closeExit()"
 >
     {{-- Panel rises like a sheet each time the prompt opens (§7). --}}

@@ -322,13 +322,16 @@
         {{-- ════════════════ Manual-entry numeric pad (FR-KSK-06/08) ════════════════ --}}
         {{-- One pad walks the step's fields in turn — a single prompt for most
              steps, three for Blood Pressure (systolic → diastolic → heart rate). --}}
+        {{-- Flat scrim, deliberately NOT backdrop-blur: a full-viewport
+             backdrop-filter re-blurs the whole 1080×1920 panel every frame and
+             drops the Pi 4 to ~10 fps for as long as the overlay is open. --}}
         <div
             x-show="state.pad.open"
             x-cloak
-            class="absolute inset-0 z-20 flex items-center justify-center bg-hp-slate/40 backdrop-blur-sm"
+            class="absolute inset-0 z-20 flex items-center justify-center bg-hp-slate/55"
             @click.self="padCancel()"
         >
-            <div class="hp-anim-sheet-up w-full max-w-[18rem] rounded-2xl bg-hp-white p-4 shadow-xl">
+            <div class="hp-anim-sheet-up w-full max-w-[18rem] rounded-2xl bg-hp-white p-4 shadow-md">
                 <p class="text-center text-base font-semibold text-hp-slate">
                     Enter <span x-text="(padField()?.label ?? vitalMeta(state.pad.step)?.label)?.toLowerCase()"></span>
                     <span class="text-hp-slate/50">(<span x-text="padField()?.unit"></span>)</span>
@@ -360,7 +363,7 @@
                             @pointerdown="pressKey($event.currentTarget)"
                             @animationend="$event.currentTarget.classList.remove('k-key-press')"
                             @click="padKey(d)"
-                            class="h-12 rounded-lg bg-hp-bg text-xl font-semibold text-hp-slate shadow-sm transition"
+                            class="h-12 rounded-lg bg-hp-bg text-xl font-semibold text-hp-slate shadow-sm transition-colors"
                         >
                             <span x-show="d !== 'backspace'" x-text="d"></span>
                             <span x-show="d === 'backspace'" x-cloak>⌫</span>
@@ -370,8 +373,8 @@
 
                 {{-- Cancel / Confirm (Confirm reads "Next →" until the last field) --}}
                 <div class="mt-3 flex gap-2.5">
-                    <button type="button" @click="padCancel()" class="flex-1 rounded-lg border border-hp-slate/20 py-3.5 text-base font-medium text-hp-slate transition hover:bg-hp-slate/5">Cancel</button>
-                    <button type="button" @click="padConfirm()" class="flex-1 rounded-lg bg-hp-orange py-3.5 text-base font-semibold text-hp-white transition hover:brightness-95" x-text="padIsLastField() ? 'Confirm' : 'Next →'"></button>
+                    <button type="button" @click="padCancel()" class="flex-1 rounded-lg border border-hp-slate/20 py-3.5 text-base font-medium text-hp-slate transition-colors hover:bg-hp-slate/5">Cancel</button>
+                    <button type="button" @click="padConfirm()" class="flex-1 rounded-lg bg-hp-orange py-3.5 text-base font-semibold text-hp-white transition-colors hover:brightness-95" x-text="padIsLastField() ? 'Confirm' : 'Next →'"></button>
                 </div>
             </div>
         </div>
