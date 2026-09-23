@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Http\Middleware\EnsureRole;
 use App\Http\Requests\Auth\StoreRegistrationInfoRequest;
 use App\Mail\OtpVerificationMail;
 use App\Models\College;
@@ -105,6 +106,17 @@ class RegistrationWizardController extends Controller
 
     public function step3(Request $request): View|RedirectResponse
     {
+        // A logged-in user has already passed this step (a correct code logs the
+        // student in and clears reg.info), e.g. they pressed Back from Link ID.
+        // This check must come before the reg.info check below.
+        if ($user = $request->user()) {
+            if ($user->role !== 'student') {
+                return redirect(EnsureRole::dashboardFor($user));
+            }
+
+            return view('auth.register.step3', ['alreadyVerified' => true]);
+        }
+
         if (! $request->session()->has('reg.info')) {
             return redirect()->route('register.info');
         }
@@ -118,6 +130,7 @@ class RegistrationWizardController extends Controller
         }
 
         return view('auth.register.step3', [
+            'alreadyVerified' => false,
             'email' => $info['email'],
             // Server-computed so a page refresh never resets the countdown.
             'resendRemaining' => Otp::resendRemainingSeconds(Cache::get($this->otpCacheKey($request))),

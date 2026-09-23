@@ -9,6 +9,18 @@ use App\Http\Controllers\Auth\RegistrationWizardController;
 use App\Http\Controllers\Auth\VerifyEmailController;
 use Illuminate\Support\Facades\Route;
 
+// The four registration wizard pages are sent with Cache-Control: no-store so
+// the browser's Back button always asks the server again instead of showing a
+// frozen back/forward-cache copy (FR-REG-04). `cache.headers` is Laravel's
+// built-in middleware that sets that header on the response.
+Route::middleware('cache.headers:no_store;private')->group(function () {
+    // Step 3 sits OUTSIDE `guest` on purpose: a student who already verified
+    // (and is now logged in) must reach step3(), which shows "already verified"
+    // instead of bouncing them to their dashboard.
+    Route::get('register/verify', [RegistrationWizardController::class, 'step3'])
+        ->name('register.verify');
+});
+
 Route::middleware('guest')->group(function () {
     // NOTE on throttle prefixes: for a guest the rate-limit key is sha1(domain|ip)
     // with NO path component, so several `throttle:x,y` routes on one IP would share
@@ -19,6 +31,7 @@ Route::middleware('guest')->group(function () {
     // ── Registration wizard (FR-REG-01..08) ─────────────────────────────────
     // Step 1: Consent
     Route::get('register', [RegistrationWizardController::class, 'step1'])
+        ->middleware('cache.headers:no_store;private')
         ->name('register');
     Route::post('register/consent', [RegistrationWizardController::class, 'storeConsent'])
         ->middleware('throttle:15,1,reg-consent')
@@ -26,14 +39,14 @@ Route::middleware('guest')->group(function () {
 
     // Step 2: Personal Information
     Route::get('register/info', [RegistrationWizardController::class, 'step2'])
+        ->middleware('cache.headers:no_store;private')
         ->name('register.info');
     Route::post('register/info', [RegistrationWizardController::class, 'storeInfo'])
         ->middleware('throttle:15,1,reg-info')
         ->name('register.info.store');
 
     // Step 3: Email Verify (FR-REG-04 / FR-REG-05 / Decision D-8)
-    Route::get('register/verify', [RegistrationWizardController::class, 'step3'])
-        ->name('register.verify');
+    // (the GET page is registered above, outside `guest`)
     // throttle:10,1 caps guesses across codes (the per-code 5-attempt cap still
     // applies inside verifyOtp); resend is throttle:3,5 — it sends real email, so
     // this is the mail-bomb chokepoint (3 per 5 minutes).
@@ -81,6 +94,7 @@ Route::middleware('guest')->group(function () {
 Route::middleware('auth')->group(function () {
     // Step 4: Link ID — accessible after step3 creates + logs in the student (FR-REG-06)
     Route::get('register/link-id', [RegistrationWizardController::class, 'step4'])
+        ->middleware('cache.headers:no_store;private')
         ->name('register.link-id');
     Route::post('register/link-id', [RegistrationWizardController::class, 'linkId'])
         ->name('register.link-id.store');

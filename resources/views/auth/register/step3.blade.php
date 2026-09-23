@@ -1,6 +1,23 @@
 ﻿<x-register.wizard-shell :step="3">
 
     <h2 class="mb-[6px] text-center text-[15px] font-bold text-hp-slate">Step 3 — Verify Your Email</h2>
+
+    @if ($alreadyVerified)
+    {{-- Revisited after a successful verification (e.g. browser Back from
+         Link ID): the account exists, so no code boxes and no Start over. --}}
+    <div class="mt-[14px] mb-6 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+        <strong>Your email is already verified.</strong> You've completed this step.
+    </div>
+
+    <div class="flex justify-center">
+        <a href="{{ route('register.link-id') }}"
+           class="inline-flex items-center justify-center gap-2 rounded-full bg-hp-orange
+                  px-6 py-2.5 text-sm font-semibold text-white transition-colors
+                  duration-hp-fast hover:bg-orange-500">
+            Continue →
+        </a>
+    </div>
+    @else
     <p class="mb-[20px] text-center text-[13px] leading-[1.6] text-hp-slate/60">
         A 6-digit verification code was sent to<br>
         <strong class="text-hp-orange">{{ $email }}</strong>
@@ -50,5 +67,6 @@
             ← Start over
         </a>
     </div>
+    @endif
 
 </x-register.wizard-shell>

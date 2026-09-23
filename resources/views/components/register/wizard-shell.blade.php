@@ -25,6 +25,17 @@
 
     <x-hp.splash />
 
+    {{-- The wizard pages are sent no-store so Back re-asks the server
+         (FR-REG-04), but Safari can still restore one from its back/forward
+         cache. `persisted` is true only for such a restore: reload so the
+         server decides what this step should show. (The splash also listens
+         to pageshow, only to hide itself — the two don't interfere.) --}}
+    <script>
+        window.addEventListener('pageshow', function (event) {
+            if (event.persisted) location.reload();
+        });
+    </script>
+
     {{-- Logo (md size, no subtitle — matches prototype) --}}
     <div class="mb-[22px]">
         <x-hp.logo size="md" />

@@ -1039,6 +1039,24 @@
 
 ### Changed
 
+* **Back to the OTP step after verifying says the step is done** (FR-REG-04
+  amended, 2026-09-23). No new decision, no schema change, no new package. A
+  correct code logs the student in, and a real request for `register/verify`
+  then redirected them away — so the code form they saw after pressing Back on
+  Link ID was the browser's back/forward-cache copy, and Verify on it posted a
+  stale CSRF token.
+  * **The four wizard pages are sent `Cache-Control: no-store, private`**
+    (Laravel's built-in `cache.headers` middleware), so Chrome and Firefox
+    re-ask the server on Back. The wizard shell also reloads on a `pageshow`
+    whose `persisted` is true, for Safari, which can still restore a `no-store`
+    page.
+  * **`GET register/verify` moved out of the `guest` group** (POST verify and
+    resend stay in it). `step3()` now shows a logged-in student the same page
+    in an *already verified* state — a green "Your email is already verified.
+    You've completed this step." notice and a **Continue →** link to Link ID, no
+    code boxes, no resend, no Start over — and sends logged-in staff to their
+    dashboard. Guests behave as before.
+
 * **The Director can no longer reset a staff account's password** (D-47a). The
   button, the `POST /director/staff/{user}/password` route and the controller
   method are gone, and `StaffAccountController` now generates a password in

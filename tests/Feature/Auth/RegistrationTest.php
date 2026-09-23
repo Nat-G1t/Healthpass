@@ -4,6 +4,7 @@ namespace Tests\Feature\Auth;
 
 use App\Mail\OtpVerificationMail;
 use App\Models\College;
+use App\Models\StudentProfile;
 use App\Models\User;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -195,5 +196,68 @@ class RegistrationTest extends TestCase
         $this->post(route('register.verify.submit'), ['otp' => $otp])
             ->assertRedirect(route('register.link-id'));
         $this->assertDatabaseHas('users', ['email' => 'juan@example.com']);
+    }
+
+    // ── Step 3 revisited after verifying (FR-REG-04, 2026-09-23) ──────────────
+
+    public function test_a_logged_in_student_sees_step_three_as_already_verified(): void
+    {
+        $student = StudentProfile::factory()->forCollege($this->college())->create()->user;
+
+        $this->actingAs($student)
+            ->get(route('register.verify'))
+            ->assertOk()
+            ->assertSee('Your email is already verified.')
+            ->assertSee(route('register.link-id'), false)
+            ->assertDontSee(route('register.verify.submit'), false)
+            ->assertDontSee('Start over');
+    }
+
+    public function test_logged_in_staff_on_step_three_go_to_their_dashboard(): void
+    {
+        $nurse = User::factory()->create(['role' => 'nurse']);
+
+        $this->actingAs($nurse)
+            ->get(route('register.verify'))
+            ->assertRedirect('/nurse/dashboard');
+    }
+
+    public function test_a_guest_without_staged_info_is_sent_back_to_step_two(): void
+    {
+        $this->get(route('register.verify'))
+            ->assertRedirect(route('register.info'));
+    }
+
+    public function test_a_guest_with_staged_info_gets_the_otp_form(): void
+    {
+        Mail::fake();
+
+        $this->withSession(['reg.info' => $this->infoPayload()])
+            ->get(route('register.verify'))
+            ->assertOk()
+            ->assertSee(route('register.verify.submit'), false)
+            ->assertDontSee('Your email is already verified.');
+    }
+
+    /** no-store keeps the pages out of the back/forward cache, so Back asks the server. */
+    public function test_every_wizard_page_is_sent_no_store(): void
+    {
+        Mail::fake();
+
+        $this->get(route('register'))->assertHeader('Cache-Control', 'no-store, private');
+
+        $this->withSession(['reg.consent_at' => now()->toIso8601String()])
+            ->get(route('register.info'))
+            ->assertHeader('Cache-Control', 'no-store, private');
+
+        $this->withSession(['reg.info' => $this->infoPayload()])
+            ->get(route('register.verify'))
+            ->assertHeader('Cache-Control', 'no-store, private');
+
+        $student = StudentProfile::factory()->forCollege($this->college())->create()->user;
+        $this->actingAs($student)
+            ->get(route('register.link-id'))
+            ->assertOk()
+            ->assertHeader('Cache-Control', 'no-store, private');
     }
 }
