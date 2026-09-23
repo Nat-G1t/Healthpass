@@ -1039,6 +1039,21 @@
 
 ### Changed
 
+* **One clinic schedule per student per day** (D-77, amends D-54 / BR-25,
+  FR-ADM-04, FR-DIRA-02, 2026-09-23). No schema change, no new package, no new
+  route. A batch now clashes with any other `pending`/`approved` batch the
+  student is on for the **same date**, whatever its hours and whatever its form;
+  D-54 refused only an overlapping hour, so a 7 AM and a 2 PM batch on one day
+  both went through. `ScheduleClashService::clashesForBatch()` drops its `$span`
+  parameter (all three callers updated) and each clash now reads "Already
+  scheduled for a Medical Clearance that day, on BR-2026-004 (9:00 AM –
+  11:00 AM)". The New Batch popup is retitled "Some students already have a
+  clinic schedule that day"; **Close** becomes **Choose students again**, which
+  keeps the selection, scrolls to the picker and badges the clashing rows
+  "Already scheduled". The Director's refusal reads "…already scheduled that
+  day…". Two pending same-day batches sharing a student refuse each other at
+  approval until one is rejected (the holding rules are unchanged).
+
 * **Back on a dashboard asks to log out; guest pages are never stale** (new
   FR-UI-07, 2026-09-23). No new decision, no schema change, no new package.
   Pressing Back after registering or logging in used to show the browser's

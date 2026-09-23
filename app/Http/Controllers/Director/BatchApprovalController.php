@@ -207,8 +207,8 @@ class BatchApprovalController extends Controller
                 return ['span_full', $this->schedule->label($fullSlots[0])];
             }
 
-            // D-54 / BR-25: no student on this batch may already be scheduled
-            // during its hours. Submission refuses such a batch, so this only
+            // D-54 / D-77 / BR-25: no student on this batch may already have a
+            // clinic schedule that day. Submission refuses such a batch, so this only
             // catches one submitted before D-54 or one that raced a booking —
             // read under the same lock, refused on the same reject-and-resubmit
             // terms. The batch itself is left out, or it would clash with its
@@ -216,7 +216,6 @@ class BatchApprovalController extends Controller
             $clashes = $this->clashes->clashesForBatch(
                 $locked->batchRequestStudents()->pluck('student_id')->all(),
                 $scheduledDate,
-                $span,
                 exceptBatchId: $locked->id,
                 lock: true,
             );
@@ -378,7 +377,7 @@ class BatchApprovalController extends Controller
 
     /**
      * "BR-2026-004 cannot be approved — 4 student(s) are already scheduled
-     * during its hours: A, B, C and 1 more. Reject it …" (D-54).
+     * that day: A, B, C and 1 more. Reject it …" (D-54, D-77).
      *
      * At most three names, so a 60-student clash still reads as one line; the
      * Director only needs enough to explain the rejection, and the College
@@ -392,7 +391,7 @@ class BatchApprovalController extends Controller
         $more = $names->count() - 3;
 
         return "{$batch->reference_no} cannot be approved — ".count($studentUserIds)
-            .' student(s) are already scheduled during its hours: '
+            .' student(s) are already scheduled that day: '
             .$names->take(3)->implode(', ')
             .($more > 0 ? " and {$more} more" : '')
             .'. Reject it with a reason so the college can resubmit.';

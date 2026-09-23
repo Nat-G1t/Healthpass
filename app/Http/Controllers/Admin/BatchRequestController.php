@@ -266,12 +266,12 @@ class BatchRequestController extends Controller
                 ]);
             }
 
-            // D-54 / BR-25: the same race for the clash rule — another batch
+            // D-54 / D-77 / BR-25: the same race for the clash rule — another batch
             // holding one of these students may be submitted between the Form
             // Request's read and this insert. Re-read under the lock, and
             // report it with the same `clashes.*` keys, so the New Batch popup
             // opens either way.
-            $clashes = $this->clashes->clashesForBatch($studentUserIds->all(), $requestedDate, $span, lock: true);
+            $clashes = $this->clashes->clashesForBatch($studentUserIds->all(), $requestedDate, lock: true);
 
             if ($clashes !== []) {
                 throw ValidationException::withMessages(

@@ -521,12 +521,12 @@ class BatchApprovalDecisionTest extends TestCase
         $this->assertDatabaseCount('appointments', 0);
     }
 
-    // ── D-54 / BR-25: students already scheduled during the span ────────────
-    // Submission refuses a clashing batch, so these can only arise for a batch
-    // submitted before D-54, or one that raced a booking. Built directly in the
-    // database for exactly that reason.
+    // ── D-54 / D-77 / BR-25: students already scheduled that day ────────────
+    // Submission refuses a clashing batch, so these mostly arise for a batch
+    // submitted before the rule, or one that raced a booking. Built directly in
+    // the database for exactly that reason.
 
-    public function test_approval_is_refused_when_students_are_already_scheduled_during_its_hours(): void
+    public function test_approval_is_refused_when_students_are_already_scheduled_that_day(): void
     {
         $date = now()->addDays(7)->toDateString();
         $batch = $this->makeBatchWithStudents(5, ['requested_date' => $date, 'requested_time' => '07:00:00']);
@@ -546,7 +546,7 @@ class BatchApprovalDecisionTest extends TestCase
             ->assertRedirect('/director/batches')
             ->assertSessionHas(
                 'error',
-                "{$batch->reference_no} cannot be approved — 4 student(s) are already scheduled during its hours: "
+                "{$batch->reference_no} cannot be approved — 4 student(s) are already scheduled that day: "
                 ."{$names[0]}, {$names[1]}, {$names[2]} and 1 more. Reject it with a reason so the college can resubmit.",
             );
 
@@ -604,11 +604,41 @@ class BatchApprovalDecisionTest extends TestCase
             ->assertRedirect('/director/batches')
             ->assertSessionHas('error', fn (string $error) => str_contains(
                 $error,
-                "1 student(s) are already scheduled during its hours: {$name}. Reject it with a reason",
+                "1 student(s) are already scheduled that day: {$name}. Reject it with a reason",
             ));
 
         $this->assertSame('pending', $batch->fresh()->status);
         $this->assertSame(0, Appointment::where('batch_request_id', $batch->id)->count());
+    }
+
+    public function test_two_pending_same_day_batches_sharing_a_student_block_each_other_until_one_is_rejected(): void
+    {
+        // D-77: hours and form don't matter — a 7 AM Clearance and a 2 PM
+        // Assessment on the same date both hold the shared student. A pending
+        // batch holds its date (rule 2), so each refuses the other; the
+        // Director rejects one, and the other then goes through.
+        $date = now()->addDays(7)->toDateString();
+        $first = $this->makeBatchWithStudents(1, ['requested_date' => $date, 'requested_time' => '07:00:00', 'form_type' => 'clearance']);
+        $second = $this->makeBatchWithStudents(0, ['requested_date' => $date, 'requested_time' => '14:00:00', 'requested_blocks' => 1, 'form_type' => 'assessment']);
+        $studentId = $first->batchRequestStudents()->value('student_id');
+        BatchRequestStudent::create(['batch_request_id' => $second->id, 'student_id' => $studentId]);
+
+        $name = User::findOrFail($studentId)->name;
+
+        foreach ([$first, $second] as $batch) {
+            $this->approve($batch)
+                ->assertRedirect('/director/batches')
+                ->assertSessionHas('error', fn (string $error) => str_contains(
+                    $error,
+                    "1 student(s) are already scheduled that day: {$name}.",
+                ));
+        }
+
+        $second->update(['status' => 'rejected']);
+
+        $this->approve($first)->assertRedirect('/director/batches')->assertSessionMissing('error');
+        $this->assertSame('approved', $first->fresh()->status);
+        $this->assertSame(0, Appointment::where('batch_request_id', $second->id)->count());
     }
 
     public function test_non_directors_cannot_approve(): void

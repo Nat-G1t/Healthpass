@@ -28,7 +28,8 @@
     on the DATA (all filtered matches), not on the rendered rows.
 --}}
 @php
-    // D-54: a batch that would double-book students comes back with ONE
+    // D-54 / D-77: a batch that would give students a second clinic schedule
+    // that day comes back with ONE
     // validation error per clashing student, keyed `clashes.<student_profile_id>`.
     // $errors is the bag Laravel shares with every view after a failed
     // validation; pick those keys out and pair each with its roster row.
@@ -88,10 +89,11 @@ function batchForm() {
         calLoading:      false,
         availabilityUrl: @js(route('admin.batches.availability')),
 
-        // ── D-54 clash popup ────────────────────────────────────────────────
-        // Students the server refused because they are already scheduled
-        // during this span. Non-empty only straight after that refusal, which
-        // is exactly when the popup should open.
+        // ── D-54 / D-77 clash popup ─────────────────────────────────────────
+        // Students the server refused because they already have a clinic
+        // schedule that day. Non-empty only straight after that refusal, which
+        // is exactly when the popup should open — and the picker marks these
+        // rows "Already scheduled" until the page is next submitted.
         clashes:    @js($clashes),
         clashModal: @js($clashes->isNotEmpty()),
 
@@ -305,12 +307,28 @@ function batchForm() {
             }
         },
 
-        // ── D-54 clash popup ────────────────────────────────────────────────
+        // ── D-54 / D-77 clash popup ─────────────────────────────────────────
         /** "Remove these students from the batch": deselect exactly them, then close. */
         removeClashingStudents() {
             const clashing = this.clashes.map(c => c.id);
             this.selected = this.selected.filter(id => !clashing.includes(id));
             this.clashModal = false;
+        },
+
+        /**
+         * "Choose students again": close, keep the whole selection, and bring
+         * the picker into view — the clashing rows carry an "Already
+         * scheduled" badge so the admin can untick them one by one.
+         * $nextTick waits for the popup to start closing before scrolling.
+         */
+        chooseStudentsAgain() {
+            this.clashModal = false;
+            this.$nextTick(() => this.$refs.studentPicker.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+        },
+
+        /** Is this row one the server refused (D-77)? Drives the row badge. */
+        isClashing(id) {
+            return this.clashes.some(c => c.id === id);
         },
 
         /** How many contiguous hours this cohort needs. */
@@ -654,7 +672,7 @@ function batchForm() {
         </div>
 
         {{-- ── Right column: student multi-select (FR-ADM-03 / BR-07) ───── --}}
-        <div class="xl:col-span-2">
+        <div class="xl:col-span-2 scroll-mt-6" x-ref="studentPicker">
             <x-hp.card>
                 <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
                     <h3 class="text-sm font-semibold text-hp-slate">
@@ -745,7 +763,11 @@ function batchForm() {
                                                    :checked="isSelected(s.id)">
                                         </td>
                                         <td class="py-2.5 pr-4 font-medium" x-text="s.number"></td>
-                                        <td class="py-2.5 pr-4" x-text="s.name"></td>
+                                        <td class="py-2.5 pr-4">
+                                            <span x-text="s.name"></span>
+                                            {{-- D-77: refused on the last submit — already has a clinic schedule that day --}}
+                                            <x-hp.badge variant="flagged" class="ml-1.5" x-show="isClashing(s.id)">Already scheduled</x-hp.badge>
+                                        </td>
                                         <td class="py-2.5 pr-4 text-hp-slate/70" x-text="s.course"></td>
                                         <td class="py-2.5 pr-4 text-hp-slate/70" x-text="s.year"></td>
                                     </tr>
@@ -782,13 +804,14 @@ function batchForm() {
 
     </div>
 
-    {{-- ── Clash popup (FR-ADM-04, D-54) ────────────────────────────────────
+    {{-- ── Clash popup (FR-ADM-04, D-54 / D-77) ─────────────────────────────
          Opens on page load when the server refused this batch because some
-         students are already scheduled during its span. Same dialog shape as
+         students already have a clinic schedule that day. Same dialog shape as
          the modals on Batch Tracking: teleported to <body> so no ancestor's
          overflow or transform clips it, and dismissable with Esc, a backdrop
-         click or Close — all of which KEEP the selection, so the admin can
-         change the date or start hour instead. The list is rendered by Blade
+         click or "Choose students again" — all of which KEEP the selection
+         (the last one also scrolls to the picker), so the admin can untick
+         the marked students or change the date instead. The list is rendered by Blade
          from the validation errors, escaped like any other output. --}}
     <template x-teleport="body">
         <div
@@ -826,12 +849,12 @@ function batchForm() {
                 class="relative w-full max-w-lg rounded-2xl bg-hp-white p-6 shadow-xl"
             >
                 <h2 id="batch-clash-title" class="text-lg font-semibold text-hp-slate">
-                    Some students are already scheduled at this time
+                    Some students already have a clinic schedule that day
                 </h2>
 
                 <p class="mt-1.5 text-sm text-hp-slate/70">
-                    A student can't be booked twice in the same hour. Remove them from
-                    this batch, or close this and choose a different date or start hour.
+                    A student can have only one clinic schedule per day. Remove them from
+                    this batch, or choose students again.
                 </p>
 
                 <ul class="mt-4 max-h-72 divide-y divide-hp-slate/10 overflow-y-auto rounded-lg border border-hp-slate/10">
@@ -847,7 +870,7 @@ function batchForm() {
                 </ul>
 
                 <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-                    <x-hp.button variant="muted" @click="clashModal = false">Close</x-hp.button>
+                    <x-hp.button variant="muted" @click="chooseStudentsAgain()">Choose students again</x-hp.button>
                     <x-hp.button @click="removeClashingStudents()">Remove these students from the batch</x-hp.button>
                 </div>
             </div>

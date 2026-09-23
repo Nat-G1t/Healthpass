@@ -286,7 +286,7 @@ class BatchRequestSubmitTest extends TestCase
         $this->assertSame(3, (int) BatchRequest::sole()->requested_blocks);
     }
 
-    // ── D-54 / BR-25: students already scheduled at this time ───────────────
+    // ── D-54 / D-77 / BR-25: students already scheduled that day ────────────
     // Every case runs on Nat's reported date, Thu Sep 10, from Sep 1.
 
     /** @param  list<StudentProfile>  $profiles */
@@ -314,17 +314,17 @@ class BatchRequestSubmitTest extends TestCase
     }
 
     /** @param  list<StudentProfile>  $profiles */
-    private function existingBatch(string $reference, array $profiles, string $status, string $start, int $blocks): BatchRequest
+    private function existingBatch(string $reference, array $profiles, string $status, string $start, int $blocks, string $formType = 'assessment', string $date = '2026-09-10'): BatchRequest
     {
         $batch = BatchRequest::create([
             'reference_no' => $reference,
             'college_id' => $this->ccs->id,
             'requested_by' => $this->admin->id,
-            'form_type' => 'assessment',
+            'form_type' => $formType,
             'reason' => 'ojt',
             'service_type' => 'medical',
-            'requested_date' => '2026-09-10',
-            'scheduled_date' => $status === 'approved' ? '2026-09-10' : null,
+            'requested_date' => $date,
+            'scheduled_date' => $status === 'approved' ? $date : null,
             'requested_time' => $start,
             'requested_blocks' => $blocks,
             'status' => $status,
@@ -337,7 +337,7 @@ class BatchRequestSubmitTest extends TestCase
         return $batch;
     }
 
-    public function test_a_student_on_an_overlapping_batch_is_refused_with_one_error_per_clashing_student(): void
+    public function test_a_student_on_another_batch_that_day_is_refused_with_one_error_per_clashing_student(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-09-01 08:00', 'Asia/Manila'));
 
@@ -346,7 +346,7 @@ class BatchRequestSubmitTest extends TestCase
 
         $this->postBatch([$held, $free])
             ->assertRedirect('/admin/batches/create')
-            ->assertSessionHasErrors(["clashes.{$held->id}" => 'on batch BR-2026-003, 9:00 AM – 10:00 AM'])
+            ->assertSessionHasErrors(["clashes.{$held->id}" => 'Already scheduled for a Medical Assessment Form that day, on BR-2026-003 (9:00 AM – 10:00 AM)'])
             ->assertSessionDoesntHaveErrors("clashes.{$free->id}");
 
         // Only the batch that was there first.
@@ -362,7 +362,7 @@ class BatchRequestSubmitTest extends TestCase
         $this->existingBatch('BR-2026-004', [$profile], 'pending', '09:00:00', 2);
 
         $this->postBatch([$profile], ['requested_time' => '10:00:00'])
-            ->assertSessionHasErrors(["clashes.{$profile->id}" => 'on batch BR-2026-004, 9:00 AM – 11:00 AM']);
+            ->assertSessionHasErrors(["clashes.{$profile->id}" => 'Already scheduled for a Medical Assessment Form that day, on BR-2026-004 (9:00 AM – 11:00 AM)']);
 
         // Only the batch that was there first.
         $this->assertDatabaseCount('batch_requests', 1);
@@ -381,18 +381,31 @@ class BatchRequestSubmitTest extends TestCase
         $this->assertDatabaseCount('batch_requests', 1);
     }
 
-    public function test_a_span_that_misses_every_clash_is_created(): void
+    public function test_a_different_hour_the_same_day_is_refused_whatever_the_form(): void
+    {
+        // D-77: one clinic schedule per student per day. A 2 PM Assessment
+        // batch clashes with the 7 AM Clearance batch the student is already on.
+        Carbon::setTestNow(Carbon::parse('2026-09-01 08:00', 'Asia/Manila'));
+
+        $profile = StudentProfile::factory()->forCollege($this->ccs)->create();
+        $this->existingBatch('BR-2026-003', [$profile], 'pending', '07:00:00', 1, 'clearance');
+
+        $this->postBatch([$profile], ['requested_time' => '14:00:00'])
+            ->assertSessionHasErrors(["clashes.{$profile->id}" => 'Already scheduled for a Medical Clearance that day, on BR-2026-003 (7:00 AM – 8:00 AM)']);
+
+        $this->assertDatabaseCount('batch_requests', 1);
+    }
+
+    public function test_a_batch_on_another_date_is_created(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-09-01 08:00', 'Asia/Manila'));
 
         $profile = StudentProfile::factory()->forCollege($this->ccs)->create();
-        $this->existingBatch('BR-2026-003', [$profile], 'pending', '09:00:00', 1);
-        $this->existingBatch('BR-2026-004', [$profile], 'pending', '11:00:00', 2);
+        $this->existingBatch('BR-2026-003', [$profile], 'pending', '09:00:00', 1, 'assessment', '2026-09-11');
 
-        // One student → 10–11 AM: after the one batch, before the other.
-        $this->postBatch([$profile], ['requested_time' => '10:00:00'])->assertSessionHasNoErrors();
+        $this->postBatch([$profile])->assertSessionHasNoErrors();
 
-        $this->assertDatabaseCount('batch_requests', 3);
+        $this->assertDatabaseCount('batch_requests', 2);
     }
 
     public function test_removing_the_clashing_student_lets_the_batch_submit(): void
@@ -448,10 +461,11 @@ class BatchRequestSubmitTest extends TestCase
         $this->actingAs($this->admin)
             ->get('/admin/batches/create')
             ->assertOk()
-            ->assertSee('Some students are already scheduled at this time')
-            ->assertSee('on batch BR-2026-003, 9:00 AM – 10:00 AM')
-            ->assertSee('on batch BR-2026-004, 9:00 AM – 11:00 AM')
+            ->assertSee('Some students already have a clinic schedule that day')
+            ->assertSee('Already scheduled for a Medical Assessment Form that day, on BR-2026-003 (9:00 AM – 10:00 AM)')
+            ->assertSee('Already scheduled for a Medical Assessment Form that day, on BR-2026-004 (9:00 AM – 11:00 AM)')
             ->assertSee('Remove these students from the batch')
+            ->assertSee('Choose students again')
             ->assertViewHas('students', fn ($students) => $students->contains('id', $free->id));
     }
 

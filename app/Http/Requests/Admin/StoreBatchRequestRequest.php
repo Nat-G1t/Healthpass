@@ -186,9 +186,10 @@ class StoreBatchRequestRequest extends FormRequest
                 return;
             }
 
-            // (5) D-54 / BR-25: no student may already be scheduled during the
-            // span on another pending/approved batch (D-61 removed the
-            // self-booking half). First come wins, so THIS batch is refused. One
+            // (5) D-54 / D-77 / BR-25: no student may already have a clinic
+            // schedule that DAY on another pending/approved batch, whatever its
+            // hours or form (D-61 removed the self-booking half). First come
+            // wins, so THIS batch is refused. One
             // error per clashing student, keyed
             // `clashes.<student_profile_id>`: the New Batch page collects those
             // keys into its popup and its "Remove these students" button.
@@ -197,7 +198,7 @@ class StoreBatchRequestRequest extends FormRequest
                 ->all();
 
             $clashes = app(ScheduleClashService::class)
-                ->clashesForBatch(array_keys($profileIdsByUserId), $date, $span);
+                ->clashesForBatch(array_keys($profileIdsByUserId), $date);
 
             foreach (self::clashErrors($clashes, $profileIdsByUserId) as $key => $message) {
                 $validator->errors()->add($key, $message);

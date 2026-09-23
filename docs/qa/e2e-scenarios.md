@@ -500,15 +500,17 @@ and `?college=` cannot move the scope.
 
 ---
 
-## E2E-9 — A student can't be double-booked by two batches (D-54, D-61)
+## E2E-9 — One clinic schedule per student per day (D-54, D-61, D-77)
 
-**Goal:** confirm a College Admin cannot put a student into a batch during an
-hour another batch already holds for them, and that the New Batch page's clash
-popup, its **Remove** button and the mini calendar all work. (Before D-61 this
-scenario also covered a student's own self-booking; self-booking is gone.)
+**Goal:** confirm a College Admin cannot put a student into a batch on a date
+another batch already holds for them, **whatever the hours or form** (D-77),
+and that the New Batch page's clash popup, its **Remove** and **Choose
+students again** buttons and the mini calendar all work. (Before D-61 this
+scenario also covered a student's own self-booking; self-booking is gone.
+Before D-77 only an overlapping hour clashed.)
 
-**Accounts:** students `juan.santos@psu.edu.ph` and `maria.reyes@psu.edu.ph`
-(both CCS), and the CCS Admin `admin.ccs@healthpass.test`.
+**Accounts:** students `juan.santos@psu.edu.ph`, `maria.reyes@psu.edu.ph` and
+`carlo.cruz@psu.edu.ph` (all CCS), and the CCS Admin `admin.ccs@healthpass.test`.
 
 **Steps:**
 
@@ -518,36 +520,40 @@ scenario also covered a student's own self-booking; self-booking is gone.)
    current month, the right arrow moves forward and back again, and any FULL
    day is greyed with a "Full" label.
 2. Click a date **at least two days ahead**. → **Expect:** "Selected: <that
-   date>" appears under it. Choose a **Reason**, **Start time 9:00 AM –
-   10:00 AM**, tick **Juan Santos only**, and submit. → **Expect:** the
-   confirmation screen with a `BR-` number (call it batch A). Write down the
-   date.
-3. Start another **New Batch Request** for the **same date**, **Start time
-   9:00 AM – 10:00 AM**, and tick **Juan Santos** and **Maria Reyes**. Submit.
-4. → **Expect:** the page comes back with a popup titled **"Some students are
-   already scheduled at this time"**. It lists **Juan Santos**, his student
-   number and "on batch <batch A's BR- number>, 9:00 AM – 10:00 AM". **Maria is
-   not listed.** Behind the popup the reason, date, start hour and both ticks
-   are still filled in. Batch Tracking shows **no** new batch.
-5. Click **Close**. → **Expect:** the popup closes and **both** students are
-   still ticked.
-6. Change **Start time** to **10:00 AM – 11:00 AM** (the batch no longer covers
-   9 AM) and submit. → **Expect:** the confirmation screen with a new `BR-`
-   number. Two students need one hour, so this batch holds 10–11 AM.
-7. Start another **New Batch Request** for the **same date**, **Start time
-   10:00 AM – 11:00 AM**, ticking Juan and **Carlo Cruz**. Submit. →
-   **Expect:** the popup lists **Juan only** (step 6's batch holds him at
-   10–11). Click **Remove these students from the batch**. → **Expect:** the
-   popup closes, **Juan is unticked**, Carlo is still ticked, and the "(N of M
-   selected)" counter drops by one. Submit again. → **Expect:** the
+   date>" appears under it. Choose **Form: Medical Clearance**, a **Reason**,
+   **Start time 9:00 AM – 10:00 AM**, tick **Juan Santos only**, and submit.
+   → **Expect:** the confirmation screen with a `BR-` number (call it batch A).
+   Write down the date.
+3. Start another **New Batch Request** for the **same date**, **Form: Medical
+   Assessment Form**, **Start time 2:00 PM – 3:00 PM** (no hour in common with
+   batch A), and tick **Juan Santos** and **Maria Reyes**. Submit.
+4. → **Expect:** the page comes back with a popup titled **"Some students
+   already have a clinic schedule that day"**. It lists **Juan Santos**, his
+   student number and "Already scheduled for a Medical Clearance that day, on
+   <batch A's BR- number> (9:00 AM – 10:00 AM)". **Maria is not listed.**
+   Behind the popup the form, reason, date, start hour and both ticks are still
+   filled in. Batch Tracking shows **no** new batch.
+5. Click **Choose students again**. → **Expect:** the popup closes, the page
+   scrolls to the **Select Students** card, **both** students are still ticked,
+   and Juan's row shows an orange **Already scheduled** badge (Maria's does not).
+6. Untick **Juan** and submit. → **Expect:** the confirmation screen with a new
+   `BR-` number (Maria only).
+7. Start another **New Batch Request** for the **same date**, any start time,
+   ticking **Juan** and **Carlo Cruz**. Submit. → **Expect:** the popup lists
+   **Juan only**. Click **Remove these students from the batch**. → **Expect:**
+   the popup closes, **Juan is unticked**, Carlo is still ticked, and the "(N of
+   M selected)" counter drops by one. Submit again. → **Expect:** the
    confirmation screen.
+8. Start one more **New Batch Request** for the **day after** that date,
+   ticking **Juan**. Submit. → **Expect:** no popup; the confirmation screen.
 
 **Pass criteria:** a batch is refused while any ticked student is already held
-by another pending or approved batch during its span; the popup lists exactly
-those students and the batch they clash with; **Close** keeps the selection
-and **Remove** deselects only the listed students; a span that misses the held
-hour submits; the mini calendar disables past and FULL days and its month
-arrows work.
+by another pending or approved batch **on the same date**, even at different
+hours and on the other form; the popup lists exactly those students and names
+the other batch's form and number; **Choose students again** keeps the
+selection, scrolls to the picker and badges the listed rows; **Remove**
+deselects only the listed students; a different date submits; the mini
+calendar disables past and FULL days and its month arrows work.
 
 ---
 
