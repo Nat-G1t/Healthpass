@@ -203,7 +203,7 @@ class EncodePageTest extends TestCase
             ->assertSee('Fit')
             ->assertSee('Unfit')
             ->assertSee('Purpose')
-            ->assertSee('Clinic Notes')
+            ->assertSee('Student remarks')
             ->assertSee('Preview & Print')
             ->assertSee('Save & Close')
             ->assertDontSee('Reprint');
@@ -352,8 +352,8 @@ class EncodePageTest extends TestCase
             $this->assertDoesNotMatchRegularExpression('~name="'.$column.'" value="1"[^>]*checked~', $html, $column);
         }
 
-        // No details typed → nothing to pre-fill into Nurse Notes.
-        $this->assertMatchesRegularExpression('~<textarea[^>]*name="nurse_notes"[^>]*>\s*</textarea>~', $html);
+        // No details typed → the D-76 default.
+        $this->assertMatchesRegularExpression('~<textarea[^>]*name="nurse_notes"[^>]*>No student remarks</textarea>~', $html);
     }
 
     public function test_each_kiosk_answer_prefills_its_own_physical_sign_row(): void
@@ -462,6 +462,75 @@ class EncodePageTest extends TestCase
 
         $this->assertStringNotContainsString('SKIN: Itchy rash on left arm', $html);
         $this->assertMatchesRegularExpression('~<textarea[^>]*name="nurse_notes"[^>]*>\s*</textarea>~', $html);
+    }
+
+    // ── 2b. Student remarks (D-76) ─────────────────────────────────────────────
+
+    public function test_student_remarks_replace_clinic_notes_with_no_placeholder(): void
+    {
+        $visit = $this->makeVisit('Remarks Label');
+
+        $this->actingAs($this->nurse())
+            ->get(route('nurse.visits.encode', $visit))
+            ->assertOk()
+            ->assertSee('Student remarks')
+            ->assertSee('prints as Remarks on the Medical Clearance')
+            ->assertDontSee('Clinic Notes')
+            ->assertDontSee('Observations, advice given');
+    }
+
+    public function test_student_remarks_default_when_there_are_no_yes_details(): void
+    {
+        // A Yes with no detail (a pre-D-75 visit) still has nothing to quote.
+        $visit = $this->makeVisit('No Details', [], ['skin' => true]);
+
+        $html = $this->actingAs($this->nurse())
+            ->get(route('nurse.visits.encode', $visit))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertMatchesRegularExpression(
+            '~<textarea[^>]*name="nurse_notes"[^>]*>'.ClinicVisit::NO_STUDENT_REMARKS.'</textarea>~',
+            $html
+        );
+    }
+
+    public function test_a_saved_value_wins_over_the_regenerated_default(): void
+    {
+        $nurse = $this->nurse();
+        $visit = $this->makeVisit('Edited Remarks', [], [
+            'skin' => true,
+            'details' => ['skin' => 'Itchy rash on left arm'],
+        ]);
+        $this->encode($visit, $nurse, ['nurse_notes' => 'SKIN: rash on left arm, advised ointment']);
+
+        $html = $this->actingAs($nurse)
+            ->get(route('nurse.visits.encode', $visit))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertMatchesRegularExpression(
+            '~<textarea[^>]*name="nurse_notes"[^>]*>SKIN: rash on left arm, advised ointment</textarea>~',
+            $html
+        );
+        $this->assertStringNotContainsString('SKIN: Itchy rash on left arm', $html);
+        $this->assertStringNotContainsString(ClinicVisit::NO_STUDENT_REMARKS, $html);
+    }
+
+    public function test_an_assessment_visit_has_no_student_remarks_box(): void
+    {
+        $visit = $this->makeVisit('Assessment Remarks', [], [
+            'skin' => true,
+            'details' => ['skin' => 'Itchy rash on left arm'],
+        ]);
+        $this->attachBatch($visit, 'assessment', 'ojt');
+
+        $this->actingAs($this->nurse())
+            ->get(route('nurse.visits.encode', $visit))
+            ->assertOk()
+            ->assertDontSee('name="nurse_notes"', false)
+            ->assertDontSee('Student remarks')
+            ->assertDontSee('Clinic Notes');
     }
 
     public function test_physical_signs_fieldset_shows_all_twelve_exam_rows(): void

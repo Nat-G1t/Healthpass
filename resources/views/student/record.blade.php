@@ -119,16 +119,20 @@
     @include('student.record.vitals')
     @include('student.record.physical-signs')
 
-    {{-- ── Clinic notes ────────────────────────────────────────────────────── --}}
+    {{-- ── Student remarks (D-76; the column stays nurse_notes) ────────────
+         Medical Clearance only — the Medical Assessment Form has no REMARKS
+         line, so an Assessment record has no such card. --}}
+    @unless ($isAssessment)
     <x-hp.card>
-        <h3 class="text-sm font-semibold text-hp-slate">Clinic Notes</h3>
-        <p class="mt-0.5 text-xs text-hp-slate/50">What the clinic wrote under REMARKS on your document.</p>
+        <h3 class="text-sm font-semibold text-hp-slate">Student remarks</h3>
+        <p class="mt-0.5 text-xs text-hp-slate/50">What prints under REMARKS on your Medical Clearance.</p>
         @if (filled($record->nurse_notes))
             <p class="mt-3 whitespace-pre-line text-sm text-hp-slate/70">{{ $record->nurse_notes }}</p>
         @else
-            <p class="mt-3 text-sm text-hp-slate/40">No notes were recorded for this visit.</p>
+            <p class="mt-3 text-sm text-hp-slate/40">No remarks were recorded for this visit.</p>
         @endif
     </x-hp.card>
+    @endunless
 
     {{-- ── The Medical Assessment Form's own sections (D-69/D-70) ───────────
          In the paper's order, Assessment visits only — a Medical Clearance

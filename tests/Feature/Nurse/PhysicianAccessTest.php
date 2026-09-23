@@ -123,7 +123,7 @@ class PhysicianAccessTest extends TestCase
             ->assertSee('Physician');
         $this->get(route('nurse.queue'))->assertOk();
         $this->getJson(route('nurse.queue.feed'))->assertOk();
-        $this->get(route('nurse.visits.encode', $captured))->assertOk()->assertSee('Clinic Notes');
+        $this->get(route('nurse.visits.encode', $captured))->assertOk()->assertSee('Student remarks');
         $this->get(route('nurse.visits.print', $encoded))->assertOk();
         $this->get(route('nurse.kiosk-devices'))->assertOk();
     }

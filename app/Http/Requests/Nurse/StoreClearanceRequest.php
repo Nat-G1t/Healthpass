@@ -43,8 +43,6 @@ class StoreClearanceRequest extends FormRequest
 
         $rules = [
             'result' => ['required', Rule::in(ClearanceRecord::RESULTS)],
-            // max keeps runaway notes from breaking the one-page print (FR-PRT).
-            'nurse_notes' => ['nullable', 'string', 'max:2000'],
             // Set to 1 by the encode screen once Preview & Print has fired, so
             // Save & Close can stamp printed_at (FR-NRS-05) — the record row
             // doesn't exist yet at pre-save print time.
@@ -80,6 +78,13 @@ class StoreClearanceRequest extends FormRequest
         foreach (array_keys(ClearanceRecord::PHYSICAL_SIGNS) as $column) {
             $rules[$column] = ['nullable', 'boolean'];
         }
+
+        // Student remarks (D-76; the column stays nurse_notes) print under the
+        // clearance's REMARKS. Clearance only, like ps_* above: the Medical
+        // Assessment Form has no such line, so there a posted one is dropped
+        // and the column stays NULL. ClearanceDocument::remarks() fits
+        // whatever is typed to the one-page print (FR-PRT-05).
+        $rules['nurse_notes'] = ['nullable', 'string', 'max:2000'];
 
         return $rules;
     }

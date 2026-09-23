@@ -52,9 +52,20 @@ class EncodeController extends Controller
             'clearanceRecord.medicalAssessment',
         ]);
 
+        // D-76: what the Student remarks box opens with — a saved record's own
+        // value (even an empty one) always wins over the regenerated default,
+        // or a nurse's edit would be thrown away on the next load. The view
+        // puts old() ahead of both. An Assessment visit has no such box.
+        $studentRemarks = match (true) {
+            $visit->formType() === 'assessment' => null,
+            $visit->clearanceRecord !== null => $visit->clearanceRecord->nurse_notes,
+            default => $visit->studentRemarks(),
+        };
+
         return view('nurse.encode', [
             'visit' => $visit,
             'readOnly' => $visit->status === 'encoded',
+            'studentRemarks' => $studentRemarks,
         ]);
     }
 

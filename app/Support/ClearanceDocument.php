@@ -127,7 +127,7 @@ final class ClearanceDocument
             // three column groups of four, read DOWN each group like the form.
             'signColumns' => self::signColumns($record),
 
-            // ── REMARKS — Clinic Notes, pre-fitted to the two ruled lines.
+            // ── REMARKS — Student remarks (D-76), pre-fitted to the two ruled lines.
             'remarks' => self::remarks($record->nurse_notes),
 
             // ── Pregnancy / LMP, straight from the kiosk questionnaire (D-22)
@@ -253,7 +253,7 @@ final class ClearanceDocument
     }
 
     /**
-     * The Clinic Notes fitted to the form's two ruled lines: the exact lines
+     * The Student remarks (D-76) fitted to the form's two ruled lines: the exact lines
      * to print and the point size to print them at. See REMARKS_MAX_PT.
      *
      * @return array{lines: list<string>, fontSize: float}

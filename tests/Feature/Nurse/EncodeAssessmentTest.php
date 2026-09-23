@@ -226,6 +226,30 @@ class EncodeAssessmentTest extends TestCase
         $this->assertNull($record->ps_heart);
     }
 
+    public function test_an_assessment_encode_without_nurse_notes_saves_it_null(): void
+    {
+        // D-76: the box is not rendered on this form, so the key is absent
+        // (the payload helper never sends it).
+        $visit = $this->makeVisit('assessment');
+
+        $this->save($visit, $this->assessmentPayload())
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('nurse.queue'));
+
+        $this->assertNull(ClearanceRecord::firstOrFail()->nurse_notes);
+    }
+
+    public function test_a_posted_nurse_notes_is_dropped_on_an_assessment(): void
+    {
+        // FO010-R00 has no Remarks line — a hand-built POST cannot fill it.
+        $visit = $this->makeVisit('assessment');
+
+        $this->save($visit, $this->assessmentPayload(['nurse_notes' => 'Forged remark']))
+            ->assertRedirect(route('nurse.queue'));
+
+        $this->assertNull(ClearanceRecord::firstOrFail()->nurse_notes);
+    }
+
     public function test_a_clearance_encode_still_saves_the_physical_signs_rows(): void
     {
         $visit = $this->makeVisit('clearance');

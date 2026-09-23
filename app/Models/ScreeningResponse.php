@@ -137,7 +137,7 @@ class ScreeningResponse extends Model
     }
 
     /**
-     * The Nurse Notes pre-fill (D-56): one "LABEL: detail" line per typed
+     * The Student remarks pre-fill (D-56, D-76): one "LABEL: detail" line per typed
      * detail, in the form's order — e.g. "SKIN: itchy rash on left arm".
      * An empty string when the student typed none.
      */

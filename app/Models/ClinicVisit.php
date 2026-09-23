@@ -54,6 +54,9 @@ class ClinicVisit extends Model
      */
     public const SUBMITTED_STATUSES = ['captured', 'encoded'];
 
+    /** What Student remarks read when the student typed no YES details (D-76). */
+    public const NO_STUDENT_REMARKS = 'No student remarks';
+
     /**
      * D-72 — every count of "visits" runs through this scope.
      *
@@ -200,6 +203,18 @@ class ClinicVisit extends Model
             'purpose' => $batch?->reasonLabel(),
             'purpose_other' => $batch?->reason === BatchRequest::REASON_OTHERS ? $batch->reason_detail : null,
         ];
+    }
+
+    /**
+     * D-76 — the default Student remarks on a Medical Clearance encode: the
+     * student's own kiosk YES details, one "LABEL: detail" line each in the
+     * form's row order (ScreeningResponse::detailsAsNotes), or
+     * NO_STUDENT_REMARKS when they typed none. Only a DEFAULT — the encode
+     * page puts old() input and a saved record's value ahead of it.
+     */
+    public function studentRemarks(): string
+    {
+        return $this->screeningResponse?->detailsAsNotes() ?: self::NO_STUDENT_REMARKS;
     }
 
     // ── Relationships ────────────────────────────────────────────────────────

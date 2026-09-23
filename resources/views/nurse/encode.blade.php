@@ -607,17 +607,23 @@
             </div>
             @endunless
 
-            {{-- Clinic Notes (D-64 label; the column stays nurse_notes) print
-                 under REMARKS (FR-PRT-02). A visit not yet
-                 encoded opens them pre-filled with the student's YES details,
-                 one "SKIN: …" line each in the form's order — the form says "If
-                 YES, give details under Remarks" (D-56). old() input wins and
-                 the nurse edits freely; a read-only record shows its saved notes only. --}}
-            @php
-                $notes = $readOnly ? $record?->nurse_notes : ($sr?->detailsAsNotes() ?: null);
-            @endphp
-            <x-hp.textarea label="Clinic Notes" name="nurse_notes" rows="4" :disabled="$readOnly"
-                           placeholder="Observations, advice given, follow-ups…">{{ old('nurse_notes', $notes) }}</x-hp.textarea>
+            {{-- Student remarks (D-76; "Clinic Notes" under D-64 — the column
+                 stays nurse_notes) print under the clearance's REMARKS
+                 (FR-PRT-02). The form says "If YES, give details under
+                 Remarks", so the box opens with the student's own kiosk YES
+                 details — built server-side by EncodeController: saved value
+                 first, else ClinicVisit::studentRemarks(). old() wins over
+                 both, and the nurse may still correct or add to it. The
+                 Medical Assessment Form has no such line, so no box there. --}}
+            @unless ($isAssessment)
+            <div>
+                <x-hp.textarea label="Student remarks" name="nurse_notes" rows="4"
+                               :disabled="$readOnly">{{ old('nurse_notes', $studentRemarks) }}</x-hp.textarea>
+                <p class="mt-1 text-xs text-hp-slate/50">
+                    Filled in from what the student typed at the kiosk — prints as Remarks on the Medical Clearance.
+                </p>
+            </div>
+            @endunless
 
             {{-- The Medical Assessment Form is TWO Legal pages printed
                  back-to-back on one sheet (D-71), and clinic printers rarely

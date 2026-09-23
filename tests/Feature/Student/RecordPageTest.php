@@ -123,6 +123,26 @@ class RecordPageTest extends TestCase
             ->assertSee('Advised rest and hydration.');
     }
 
+    /** D-76 — the clearance's REMARKS are the Student remarks; the Assessment has none. */
+    public function test_student_remarks_show_on_a_clearance_only(): void
+    {
+        $student = $this->makeStudent();
+        $clearance = $this->encodedVisit($student);
+        $assessment = $this->encodedVisit($student, 'assessment');
+
+        $this->actingAs($student)
+            ->get(route('student.records.show', $clearance))
+            ->assertOk()
+            ->assertSee('Student remarks')
+            ->assertDontSee('Clinic Notes');
+
+        $this->actingAs($student)
+            ->get(route('student.records.show', $assessment))
+            ->assertOk()
+            ->assertDontSee('Student remarks')
+            ->assertDontSee('Clinic Notes');
+    }
+
     /** D-63 — the twelve rows, with the detail the student typed under a Yes. */
     public function test_the_page_shows_the_twelve_physical_signs_rows(): void
     {

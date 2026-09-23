@@ -515,6 +515,31 @@ class PrintViewTest extends TestCase
         $this->assertGreaterThanOrEqual(7.0, (float) $matches[1][0]);
     }
 
+    /**
+     * D-76 worst case: six YES rows, each with a full 120-character detail,
+     * pre-filled as Student remarks. Still exactly two lines at the 7pt floor
+     * — the overflow is clipped, the page never grows (FR-PRT-05).
+     */
+    public function test_six_full_yes_details_still_print_on_two_lines(): void
+    {
+        $nurse = $this->nurse();
+        $visit = $this->makeVisit();
+        $details = [];
+        foreach (array_slice(array_keys(ScreeningResponse::QUESTIONS), 0, 6) as $key) {
+            $details[$key] = str_repeat('x', ScreeningResponse::DETAIL_MAX_LENGTH);
+        }
+        $visit->screeningResponse->update([...array_fill_keys(array_keys($details), true), 'details' => $details]);
+        $this->encode($visit, $nurse, ['nurse_notes' => $visit->refresh()->studentRemarks()]);
+
+        $html = $this->actingAs($nurse)
+            ->get(route('nurse.visits.print', $visit))
+            ->assertOk()
+            ->getContent();
+
+        preg_match_all('~class="rline[^"]*" style="font-size: ([0-9.]+)pt;"~', $html, $matches);
+        $this->assertSame(['7', '7'], $matches[1]);
+    }
+
     /** The two ruled lines are the whole budget — the rest is clipped. */
     public function test_a_note_longer_than_the_two_lines_is_clipped_not_wrapped(): void
     {
