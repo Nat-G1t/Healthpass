@@ -1,4 +1,4 @@
-@props(['step' => 1, 'maxWidth' => 'max-w-[480px]'])
+@props(['step' => 1, 'maxWidth' => 'max-w-3xl'])
 
 @php
     $steps = [

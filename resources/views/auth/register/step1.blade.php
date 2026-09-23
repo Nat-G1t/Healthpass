@@ -26,7 +26,7 @@
         <p class="mb-2 font-semibold text-hp-slate">Why we collect it</p>
         <p class="mb-3">
             To process your medical clearance requests, generate official clearance documents
-            (PamSU form DHVSU-QSP-OSS-004-FO002-R03), and maintain clinic records required by the
+            (Pampanga State University form DHVSU-QSP-OSS-004-FO002-R03), and maintain clinic records required by the
             university for accreditation and institutional reporting.
         </p>
 
@@ -72,7 +72,7 @@
                        text-hp-orange focus:ring-hp-orange"
             >
             <span class="text-[12px] leading-[1.6] text-hp-slate">
-                I consent to the collection and processing of my personal health data by PamSU Campus
+                I consent to the collection and processing of my personal health data by Pampanga State University Campus
                 Clinic for medical clearance purposes, in accordance with RA 10173.
             </span>
         </label>

@@ -1,4 +1,4 @@
-﻿<x-register.wizard-shell :step="2" maxWidth="max-w-[560px]">
+﻿<x-register.wizard-shell :step="2">
 
     <h2 class="mb-[18px] text-[15px] font-bold text-hp-slate">Step 2 — Personal Information</h2>
 
@@ -82,8 +82,8 @@
             />
         </div>
 
-        {{-- Student Number --}}
-        <div class="mb-4">
+        {{-- Student Number / College --}}
+        <div class="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <x-hp.input
                 label="Student Number"
                 id="student_number"
@@ -95,10 +95,6 @@
                 autocomplete="off"
                 :error="$errors->first('student_number')"
             />
-        </div>
-
-        {{-- College --}}
-        <div class="mb-4">
             <x-hp.select
                 label="College"
                 id="college_id"
@@ -106,6 +102,9 @@
                 required
                 x-model="collegeId"
                 :error="$errors->first('college_id')"
+                {{-- Half width beside Student Number: ellipsis, not a hard clip,
+                     on long names (same fix as Program below). --}}
+                class="truncate"
             >
                 <option value="">— Select your college —</option>
                 @foreach ($colleges as $college)
@@ -240,8 +239,8 @@
             @enderror
         </div>
 
-        {{-- Place of Birth --}}
-        <div class="mb-4">
+        {{-- Place of Birth / Civil Status --}}
+        <div class="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <x-hp.input
                 label="Place of Birth"
                 id="place_of_birth"
@@ -252,10 +251,6 @@
                 required
                 :error="$errors->first('place_of_birth')"
             />
-        </div>
-
-        {{-- Civil Status --}}
-        <div class="mb-4">
             <x-hp.select
                 label="Civil Status"
                 id="civil_status"

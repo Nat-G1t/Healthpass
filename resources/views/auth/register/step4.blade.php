@@ -85,7 +85,9 @@
         >
 
         {{-- ── Camera scanning — html5-qrcode renders into #qr-reader ──────── --}}
-        <div x-show="mode === 'scanning'" class="mb-4">
+        {{-- max-w-md caps the video feed: it fills its container's width, and
+             in the wide registration card an uncapped feed was oversized. --}}
+        <div x-show="mode === 'scanning'" class="mx-auto mb-4 max-w-md">
             {{-- html5-qrcode injects its own UI (video feed, start/stop, etc.) here --}}
             <div id="qr-reader" class="mb-3 overflow-hidden rounded-xl"></div>
             <button
