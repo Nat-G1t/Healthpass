@@ -150,7 +150,12 @@ class KioskSubmitTest extends TestCase
     {
         $this->assertCount(12, ScreeningResponse::QUESTIONS);
 
-        $this->submit($this->student()->id, ['screening' => ['kidney_bladder' => true, 'mental_disorder' => true]])->assertOk();
+        // A Medical Clearance YES carries its details (D-75).
+        $this->submit($this->student()->id, ['screening' => [
+            'kidney_bladder' => true,
+            'mental_disorder' => true,
+            'details' => ['kidney_bladder' => 'Frequent urination', 'mental_disorder' => 'Anxiety'],
+        ]])->assertOk();
 
         $row = ScreeningResponse::first();
         foreach (array_keys(ScreeningResponse::QUESTIONS) as $question) {
@@ -292,13 +297,18 @@ class KioskSubmitTest extends TestCase
 
     public function test_control_characters_are_stripped_from_a_detail(): void
     {
-        $this->submit($this->student()->id, ['screening' => [
-            'skin' => true,
+        $student = $this->student();
+
+        // Nothing but control characters is no detail at all — on a Medical
+        // Clearance that YES is then refused (D-75).
+        $this->submit($student->id, ['screening' => [
             'throat' => true,
-            'details' => [
-                'skin' => "Rash\u{0000} on\t arm\u{0085}\n",
-                'throat' => "\u{0007}\u{001B}", // nothing but control characters
-            ],
+            'details' => ['throat' => "\u{0007}\u{001B}"],
+        ]])->assertStatus(422)->assertJsonValidationErrors('screening.details.throat');
+
+        $this->submit($student->id, ['screening' => [
+            'skin' => true,
+            'details' => ['skin' => "Rash\u{0000} on\t arm\u{0085}\n"],
         ]])->assertOk();
 
         $this->assertSame(['skin' => 'Rash on arm'], ScreeningResponse::first()->details);
@@ -311,9 +321,13 @@ class KioskSubmitTest extends TestCase
         $this->submit($student->id)->assertOk();
         $this->assertNull(ScreeningResponse::latest('id')->first()->details);
 
-        // A YES whose detail is only blank space stores nothing either.
-        $this->submit($student->id, ['screening' => ['skin' => true, 'details' => ['skin' => '   ']]])->assertOk();
-        $this->assertNull(ScreeningResponse::latest('id')->first()->details);
+        // A YES whose detail is only blank space has no detail — on a Medical
+        // Clearance that is refused (D-75; the optional Medical Assessment case
+        // is in KioskRequiredYesDetailsTest).
+        $this->submit($student->id, ['screening' => ['skin' => true, 'details' => ['skin' => '   ']]])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('screening.details.skin');
+        $this->assertSame(1, ScreeningResponse::count());
     }
 
     public function test_a_detail_that_is_not_text_is_refused(): void

@@ -167,13 +167,32 @@ final class KioskSubmitRequest extends FormRequest
             // LMP required only when pregnant, never in the future (FR-KSK-10).
             'screening.lastMenstrualPeriod' => ['nullable', 'required_if:screening.isPregnant,true', 'date', 'before_or_equal:today'],
 
-            // Optional YES details (D-56), already cleaned by prepareForValidation().
+            // YES details (D-56), already cleaned by prepareForValidation().
+            // Optional here; required on a Medical Clearance just below (D-75).
             'screening.details' => ['nullable', 'array'],
             'screening.details.*' => ['string', 'max:'.ScreeningResponse::DETAIL_MAX_LENGTH],
         ];
 
         foreach (array_keys(ScreeningResponse::QUESTIONS) as $question) {
             $rules["screening.{$question}"] = ['required', 'boolean'];
+        }
+
+        // D-75: on a Medical Clearance, a YES must carry details — the paper
+        // says "If YES, give details under Remarks". `required_if_accepted`
+        // makes the detail required only when its question was answered YES.
+        // The text was already trimmed above, so whitespace-only counts as
+        // empty. A Medical Assessment keeps the details optional (D-56).
+        // A rule on an exact key REPLACES the `screening.details.*` rule for
+        // that key, so string + max are repeated here, not inherited.
+        if ($this->formType() === 'clearance') {
+            foreach (array_keys(ScreeningResponse::QUESTIONS) as $question) {
+                $rules["screening.details.{$question}"] = [
+                    "required_if_accepted:screening.{$question}",
+                    'string',
+                    'min:'.ScreeningResponse::DETAIL_MIN_LENGTH,
+                    'max:'.ScreeningResponse::DETAIL_MAX_LENGTH,
+                ];
+            }
         }
 
         // Personal / Social History — Medical Assessment Form only (D-68).
@@ -192,14 +211,25 @@ final class KioskSubmitRequest extends FormRequest
         return $rules;
     }
 
-    /** Plain wording for the four Personal / Social History rows (D-68). */
+    /**
+     * Plain wording for the four Personal / Social History rows (D-68), and
+     * for a Medical Clearance YES left without details (D-75), naming the
+     * question so the student knows which card to go back to.
+     */
     public function messages(): array
     {
-        return [
+        $messages = [
             'socialHistory.required' => 'Please answer the Personal / Social History questions.',
             'socialHistory.*.required' => 'Please answer all four Personal / Social History questions.',
             'socialHistory.*.in' => 'Please answer Yes, No or Quit.',
         ];
+
+        foreach (ScreeningResponse::QUESTIONS as $question => ['label' => $label]) {
+            $messages["screening.details.{$question}.required_if_accepted"] = "You answered Yes to {$label}. Please add details.";
+            $messages["screening.details.{$question}.min"] = "Please add a little more detail for {$label} (at least :min characters).";
+        }
+
+        return $messages;
     }
 
     /**

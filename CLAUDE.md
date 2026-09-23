@@ -194,7 +194,9 @@ npm run dev                       # terminal 2
 - **Kiosk never shows Fit/Unfit to the student.** It captures vitals +
   the official form's twelve Physical Signs rows (D-63) and, for Medical
   Assessment Form batches, the form's Personal / Social History (D-68), and
-  routes to the clinic queue (nurse or physician).
+  routes to the clinic queue (nurse or physician). On a Medical Clearance a
+  "Yes" requires details (≥ 3 characters, checked in the kiosk AND in
+  `KioskSubmitRequest` — D-75); on a Medical Assessment they stay optional.
 - **Students never self-schedule and never walk in (D-61)** — only
   Director-approved college batches create appointments; the kiosk refuses
   a student with no appointment today.

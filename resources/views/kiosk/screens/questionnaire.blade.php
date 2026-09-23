@@ -10,10 +10,12 @@
      & Submit stays disabled until all 13 are in.
 
      YES details (the form: "If YES, give details under Remarks"): a Yes card
-     offers "Add details (optional)", which opens a FULL-WIDTH panel docked at the
+     offers "Add details", which opens a FULL-WIDTH panel docked at the
      bottom of this screen with the on-screen keyboard — a card in the 2-column
-     grid is too narrow to type in on the 1080×1920 portrait panel. Optional,
-     ≤ 120 characters, never blocks Review; switching to No clears it.
+     grid is too narrow to type in on the 1080×1920 portrait panel. ≤ 120
+     characters; switching to No clears it. Optional on a Medical Assessment
+     (D-56); REQUIRED on a Medical Clearance (D-75) — at least 3 characters
+     after trimming, and Review stays locked, naming the question, until then.
 
      Two columns (was three on the old landscape panel) so each card and its
      Yes/No targets stay big on the portrait screen; the middle area scrolls if
@@ -67,16 +69,22 @@
                             >No</button>
                         </div>
 
-                        {{-- Yes → optional detail (D-56). Once something is typed the
-                             card shows it (truncated) and tapping edits it. --}}
+                        {{-- Yes → detail (D-56). Once something is typed the card
+                             shows it (truncated) and tapping edits it. On a Medical
+                             Clearance it is required (D-75): until it is long enough
+                             the trigger wears the solid orange border the kiosk uses
+                             for the field that needs input, not the dashed "extra". --}}
                         <button
                             type="button"
                             x-show="systemAnswer(sys.key) === true"
                             x-cloak
                             @click="openDetail(sys.key)"
-                            class="flex min-w-0 items-center gap-2 rounded-lg border border-dashed border-hp-orange/50 px-3 py-2.5 text-left text-sm font-medium text-hp-orange transition hover:bg-hp-peach/20"
+                            class="flex min-w-0 items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-hp-orange transition hover:bg-hp-peach/20"
+                            :class="detailMissing(sys.key)
+                                ? 'border-2 border-hp-orange bg-hp-peach/20'
+                                : 'border border-dashed border-hp-orange/50'"
                         >
-                            <span x-show="detailText(sys.key) === ''">+ Add details (optional)</span>
+                            <span x-show="detailText(sys.key) === ''" x-text="detailsRequired() ? '+ Add details (required)' : '+ Add details (optional)'"></span>
                             <span x-show="detailText(sys.key) !== ''" class="min-w-0 flex-1 truncate text-hp-slate/80" x-text="detailText(sys.key)"></span>
                             <span x-show="detailText(sys.key) !== ''" class="shrink-0">Edit</span>
                         </button>
@@ -175,6 +183,13 @@
             </div>
         </div>
 
+        {{-- D-75: say WHICH Yes still needs its details — a disabled button with
+             no reason is a dead end at a kiosk. Same inline red line the email
+             login and the number pad use for a field that needs fixing. --}}
+        <p x-show="firstMissingDetail() !== null" x-cloak
+           class="mt-3 text-center text-base font-medium text-red-600"
+           x-text="'You answered Yes to ' + (firstMissingDetail()?.label ?? '') + '. Tap “Add details” to say more.'"></p>
+
         {{-- ── Footer: progress + gated Review & Submit (FR-KSK-10) ─────────── --}}
         <div class="mt-4 flex items-center justify-between">
             <p class="text-base font-medium text-hp-slate/60">
@@ -203,7 +218,7 @@
              class="absolute inset-x-0 bottom-0 z-20 flex flex-col items-center gap-4 rounded-t-3xl bg-hp-bg px-8 pb-8 pt-6 shadow-2xl">
             <div class="flex w-full max-w-2xl items-center justify-between gap-4">
                 <div class="min-w-0">
-                    <p class="text-xs font-semibold uppercase tracking-widest text-hp-orange">Add details (optional)</p>
+                    <p class="text-xs font-semibold uppercase tracking-widest text-hp-orange" x-text="detailsRequired() ? 'Add details (required)' : 'Add details (optional)'"></p>
                     <p class="truncate text-xl font-semibold text-hp-slate" x-text="detailLabel()"></p>
                 </div>
                 <button
@@ -219,9 +234,11 @@
                 <p class="min-h-[3rem] break-words text-base"
                    :class="detailText(state.detailPanel.question) === '' ? 'text-hp-slate/40' : 'text-hp-slate'"
                    x-text="detailText(state.detailPanel.question) || 'Type a few words for the nurse…'"></p>
-                <p class="mt-1 text-right text-xs font-medium text-hp-slate/50">
-                    <span x-text="detailText(state.detailPanel.question).length"></span> / <span x-text="detailMax"></span>
-                </p>
+                <div class="mt-1 flex items-center justify-between gap-4 text-xs font-medium text-hp-slate/50">
+                    {{-- D-75: the minimum, shown only while it isn't met yet. --}}
+                    <span x-text="detailMissing(state.detailPanel.question) ? ('At least ' + detailMin + ' characters') : ''"></span>
+                    <span><span x-text="detailText(state.detailPanel.question).length"></span> / <span x-text="detailMax"></span></span>
+                </div>
             </div>
 
             @include('kiosk.partials.credential-keyboard', ['target' => 'detail'])

@@ -118,6 +118,10 @@ const QUESTIONNAIRE_HEADINGS = {
 // (ScreeningResponse::DETAIL_MAX_LENGTH, D-56).
 export const DETAIL_MAX = 120;
 
+// Shortest detail a Medical Clearance YES accepts, after trimming (D-75) — the
+// same minimum the server enforces (ScreeningResponse::DETAIL_MIN_LENGTH).
+export const DETAIL_MIN = 3;
+
 // How long the "scanning" animation runs before a sensor reading settles to
 // "captured". Long enough to read the animation, short enough to feel snappy.
 const SCAN_MS = 1200;
@@ -347,6 +351,7 @@ export function kioskMachine() {
         socialHistoryList: SOCIAL_HISTORY,
         socialHistoryLabels: SOCIAL_HISTORY_LABELS,
         detailMax: DETAIL_MAX, // shown as the details panel's "N / 120" counter
+        detailMin: DETAIL_MIN, // the panel's "at least 3 characters" hint (D-75)
 
         // Web Serial UI status (FR-KSK-07). Lives on the COMPONENT, not in
         // `state`, because the physical sensor connection outlives one student:
@@ -1741,7 +1746,9 @@ export function kioskMachine() {
         },
 
         // ── YES details (D-56 — the form: "If YES, give details under Remarks")
-        // Optional, ≤ DETAIL_MAX characters, never blocks Review. Typed in a
+        // ≤ DETAIL_MAX characters. Optional on a Medical Assessment; REQUIRED
+        // (≥ DETAIL_MIN after trimming) on a Medical Clearance, where a YES
+        // without one blocks Review (D-75). Typed in a
         // full-width panel docked at the bottom of the questionnaire, because a
         // card in the 2-column grid is too narrow to type in on the portrait
         // panel. The text lives in state.questionnaire.details, so a reset to
@@ -1750,6 +1757,25 @@ export function kioskMachine() {
         /** The detail typed for a question, exactly as typed ('' if none). */
         detailText(key) {
             return this.state.questionnaire.details[key] ?? '';
+        },
+
+        /** True when this form requires a detail under every YES (D-75). */
+        detailsRequired() {
+            return !this.isAssessment();
+        },
+
+        /** A Medical Clearance YES still waiting for its detail (D-75). */
+        detailMissing(key) {
+            return (
+                this.detailsRequired() &&
+                this.systemAnswer(key) === true &&
+                this.detailText(key).trim().length < DETAIL_MIN
+            );
+        },
+
+        /** The first question still missing its detail, or null (D-75). */
+        firstMissingDetail() {
+            return SYSTEMS.find((s) => this.detailMissing(s.key)) ?? null;
         },
 
         /** The form label of the question whose panel is open ('' when closed). */
@@ -1896,9 +1922,12 @@ export function kioskMachine() {
             return answered + (this.pregnancyAnswered() ? 1 : 0);
         },
 
-        /** All 13 answered → Review & Submit unlocks (FR-KSK-10). */
+        /**
+         * All 13 answered → Review & Submit unlocks (FR-KSK-10) — and, on a
+         * Medical Clearance, every YES carries its detail (D-75).
+         */
         questionnaireComplete() {
-            return this.answeredCount() === QUESTION_COUNT;
+            return this.answeredCount() === QUESTION_COUNT && this.firstMissingDetail() === null;
         },
 
         /**

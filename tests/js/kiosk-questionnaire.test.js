@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { kioskMachine, SYSTEMS, DETAIL_MAX, QUESTION_COUNT } from '../../resources/js/kiosk/state-machine.js';
+import { kioskMachine, SYSTEMS, DETAIL_MAX, DETAIL_MIN, QUESTION_COUNT } from '../../resources/js/kiosk/state-machine.js';
 
 /**
  * Kiosk questionnaire — the new forms' twelve rows (D-63) + optional YES
@@ -230,4 +230,69 @@ test('reset to Welcome wipes the details and closes the panel (FR-KSK-13)', () =
     assert.equal(m.state.screen, 'welcome');
     assert.deepEqual(m.state.questionnaire.details, {});
     assert.equal(m.state.detailPanel.question, null);
+});
+
+// ── D-75: on a Medical Clearance, a YES must carry details ──────────────────
+
+/** Every row answered NO, pregnancy answered, then SKIN flipped to YES. */
+function allAnsweredWithSkinYes(formType) {
+    const m = machineAtQuestionnaire();
+    m.state.formType = formType; // set from the SERVER's identity at scan/login
+    for (const s of SYSTEMS) m.setSystem(s.key, false);
+    m.setPregnant(false);
+    m.setSystem('skin', true);
+    return m;
+}
+
+test('a Medical Clearance YES without details keeps Review locked and names the question', () => {
+    const m = allAnsweredWithSkinYes('clearance');
+
+    assert.equal(DETAIL_MIN, 3);
+    assert.equal(m.detailsRequired(), true);
+    assert.equal(m.answeredCount(), 13);
+    assert.equal(m.detailMissing('skin'), true);
+    assert.equal(m.firstMissingDetail()?.label, 'SKIN');
+    assert.equal(m.questionnaireComplete(), false);
+
+    m.goReview(); // the gate holds even if the disabled button were bypassed
+    assert.equal(m.state.screen, 'questionnaire');
+});
+
+test('spaces or fewer than DETAIL_MIN characters still block; a real detail unlocks', () => {
+    const m = allAnsweredWithSkinYes('clearance');
+
+    m.openDetail('skin');
+    type(m, '  ', 'detail');
+    m.closeDetail();
+    assert.equal(m.questionnaireComplete(), false);
+
+    m.openDetail('skin');
+    type(m, 'x', 'detail');
+    m.closeDetail();
+    assert.equal(m.detailText('skin'), 'x');
+    assert.equal(m.questionnaireComplete(), false);
+
+    m.openDetail('skin');
+    m.keyPress('backspace', 'detail');
+    type(m, 'blurry vision', 'detail');
+    m.closeDetail();
+    assert.equal(m.firstMissingDetail(), null);
+    assert.equal(m.questionnaireComplete(), true);
+});
+
+test('flipping a Medical Clearance YES back to NO lifts the requirement', () => {
+    const m = allAnsweredWithSkinYes('clearance');
+    assert.equal(m.questionnaireComplete(), false);
+
+    m.setSystem('skin', false);
+    assert.equal(m.firstMissingDetail(), null);
+    assert.equal(m.questionnaireComplete(), true);
+});
+
+test('a Medical Assessment YES keeps its details optional (D-56)', () => {
+    const m = allAnsweredWithSkinYes('assessment');
+
+    assert.equal(m.detailsRequired(), false);
+    assert.equal(m.detailMissing('skin'), false);
+    assert.equal(m.questionnaireComplete(), true);
 });

@@ -47,6 +47,13 @@ class ScreeningResponse extends Model
     public const DETAIL_MAX_LENGTH = 120;
 
     /**
+     * Shortest detail a Medical Clearance "Yes" accepts, counted after trimming
+     * (D-75). Enough to refuse a lone "." without asking for an essay.
+     * Mirrored by DETAIL_MIN in resources/js/kiosk/state-machine.js.
+     */
+    public const DETAIL_MIN_LENGTH = 3;
+
+    /**
      * Personal / Social History — section I of the Medical Assessment Form's
      * back page (D-68), column => the form's label VERBATIM. Asked ONLY on an
      * `assessment` visit; every one of these is NULL on a `clearance` visit,
