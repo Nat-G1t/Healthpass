@@ -33,6 +33,8 @@ use Illuminate\Validation\ValidationException;
  *   • Whether the student may submit at all (D-61): only a student holding a
  *     `scheduled` appointment today. There are no walk-ins, and the kiosk's
  *     "No Clinic Schedule Today" screen is only a courtesy — this is the gate.
+ *     Nor one whose appointment already has a submitted visit (FR-KSK-03b):
+ *     one visit per appointment, checked again under a row lock.
  *   • Which official form this visit follows (D-68). It is re-resolved here
  *     from that same appointment, so a payload claiming the other form cannot
  *     make a Medical Clearance visit store a Personal / Social History.
@@ -48,6 +50,13 @@ final class SubmitKioskVisit
     /** The refusal a student with no appointment today gets (D-61). */
     public const NO_SCHEDULE_MESSAGE = "You don't have a clinic schedule today. Clearances are scheduled "
         .'through your college, so please ask your college office to include you in a batch request.';
+
+    /**
+     * The refusal a student gets for an appointment they have already used —
+     * it holds a submitted visit (FR-KSK-03b).
+     */
+    public const ALREADY_SCREENED_MESSAGE = "You've already completed today's clinic screening. "
+        .'Please proceed to the clinic.';
 
     public function __construct(private ReferenceNumberService $references) {}
 
@@ -106,17 +115,33 @@ final class SubmitKioskVisit
             // "the input is not acceptable" error: for the kiosk's JSON request
             // it becomes a 422 whose `message` the Review screen shows — the
             // same shape a failed Form Request produces.
-            $appointment = Appointment::todayFor((int) $data['studentUserId']);
+            $studentId = (int) $data['studentUserId'];
+            $appointment = Appointment::todayFor($studentId);
 
+            // FR-KSK-03b: no open appointment is one of two things — the
+            // student never had one (D-61), or already used it.
             if ($appointment === null) {
-                throw ValidationException::withMessages(['appointment' => self::NO_SCHEDULE_MESSAGE]);
+                throw ValidationException::withMessages(['appointment' => ClinicVisit::submittedTodayFor($studentId) === null
+                    ? self::NO_SCHEDULE_MESSAGE
+                    : self::ALREADY_SCREENED_MESSAGE]);
+            }
+
+            // FR-KSK-03b race: two terminals (or a double-tap) can both pass
+            // todayFor() before either inserts. lockForUpdate() holds this
+            // appointment row until the transaction ends, so the second waits
+            // here, then sees the first one's visit and is refused — the same
+            // lock-then-recheck pattern the capacity checks use.
+            Appointment::whereKey($appointment->id)->lockForUpdate()->first();
+
+            if ($appointment->clinicVisit()->submitted()->exists()) {
+                throw ValidationException::withMessages(['appointment' => self::ALREADY_SCREENED_MESSAGE]);
             }
 
             // Freeze the student's college AND program NOW (FR-STU-09 snapshot —
             // D-17 for the college, D-43 for the program): a later transfer or
             // program shift must not re-attribute this visit's flags, cases, or
             // per-program report row.
-            $snapshot = $this->studentSnapshot((int) $data['studentUserId']);
+            $snapshot = $this->studentSnapshot($studentId);
 
             $visit = ClinicVisit::create([
                 'reference_no' => $this->references->generateVisitRef(),

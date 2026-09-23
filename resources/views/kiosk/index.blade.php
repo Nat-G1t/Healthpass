@@ -196,6 +196,8 @@
                 @include('kiosk.screens.email-login')
                 @include('kiosk.screens.identity')
                 @include('kiosk.screens.no-schedule')
+                {{-- FR-KSK-03b: today's appointment already has a submitted visit. --}}
+                @include('kiosk.screens.already-screened')
                 @include('kiosk.screens.consent')
                 @include('kiosk.screens.vitals')
                 @include('kiosk.screens.questionnaire')

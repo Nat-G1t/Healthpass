@@ -563,7 +563,7 @@ Welcome
   ├── QR scan (USB scanner as keyboard input; multi-line payload normalized to IDNo) → Identity
   └── "Lost ID?" → Email Login (virtual keyboard) → Identity
 
-Identity → schedule check (no appointment today → No Clinic Schedule Today → Back to start, D-61) → Privacy Consent → vital-height → vital-weight → vital-temp → vital-bp → Questionnaire
+Identity → already screened? (today's appointment already has a submitted visit → You're all done for today, with the HP reference, never Fit/Unfit → Back to start, FR-KSK-03b) → schedule check (no appointment today → No Clinic Schedule Today → Back to start, D-61) → Privacy Consent → vital-height → vital-weight → vital-temp → vital-bp → Questionnaire
                                                                               │
                           the batch's FORM decides what follows (D-68, resolved on the SERVER at scan/login AND again at submit)
                               ├── clearance  → Review
@@ -595,6 +595,9 @@ Review → Complete (12s auto-reset → Welcome)
 - Calendar icon; **"No Clinic Schedule Today"**; body: *"You don't have a clinic schedule today. Clearances are scheduled through your college, so please ask your college office to include you in a batch request."*
 - **One** button: **"Back to start"** (lg) → resets to Welcome. **No way forward** — there are no walk-ins ("Proceed as Walk-in" is gone).
 - An appointment at **any hour** today skips this screen and goes straight to Privacy Consent. The screen is a courtesy, not the gate: submit refuses a student with no `scheduled` appointment today on the server (422, nothing written).
+
+#### Screen 3a′ — You're all done for today (FR-KSK-03b)
+- Shown instead of Screen 3a when today's appointment already has a **submitted** visit (`captured` or `encoded`) — server-decided `alreadyScreenedToday`; a `resting` visit (D-72) does not count and the re-check branch still comes first. Key `already-screened`; partial `kiosk/screens/already-screened.blade.php`, same layout as 3a. Shows the visit reference (`screenedReference`) and one line by `screenedStatus` — captured: *"Please proceed to the clinic and wait to be called."*, encoded: *"The clinic has already seen you today."* **Never Fit/Unfit.** One **Back to start** button. Submit refuses a second visit on that appointment on the server, under a row lock.
 
 #### Screen 3b — Privacy Consent
 - Shield icon (orange stroke on peach bg).

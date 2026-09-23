@@ -151,6 +151,28 @@ class ClinicVisit extends Model
             ->first();
     }
 
+    /**
+     * FR-KSK-03b — the student's latest SUBMITTED visit (`captured` or
+     * `encoded`) on an appointment dated today, or null.
+     *
+     * Anchored on the APPOINTMENT's date, not the visit's timestamp, because
+     * "used today's slot" is a fact about the appointment: it is what
+     * Appointment::todayFor() just skipped, so the two definitions line up
+     * exactly — a visit timestamp is a second clock that could only disagree.
+     *
+     * Used at scan/login for the "You're all done for today" screen and at
+     * submit to tell that refusal apart from "No Clinic Schedule Today".
+     */
+    public static function submittedTodayFor(int $studentId): ?self
+    {
+        return self::query()
+            ->submitted()
+            ->where('student_id', $studentId)
+            ->whereHas('appointment', fn (Builder $appointment) => $appointment->whereDate('scheduled_date', today()))
+            ->latest('id')
+            ->first();
+    }
+
     /** D-72 — is the rest over, so the student may re-take the reading now? */
     public function restIsOver(): bool
     {

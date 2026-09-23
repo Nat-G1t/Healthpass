@@ -1137,6 +1137,28 @@
 
 ### Fixed
 
+* **The kiosk refuses a second visit on a used appointment, and says so**
+  (FR-KSK-03b, 2026-09-23). No new decision, no schema change, no new package.
+  Kiosk submit never touched the appointment, so between submit and encode a
+  second scan/login walked the whole flow again and a second submit wrote a
+  **second `captured` visit** — the student sat in the Live Queue twice. After
+  encode the same student was told "No Clinic Schedule Today".
+  * `Appointment::todayFor()` skips an appointment that already has a submitted
+    visit (`captured` or `encoded`); new `ClinicVisit::submittedTodayFor()`
+    finds that visit. A `resting` visit (D-72) is not submitted, so the re-check
+    path is unchanged.
+  * New screen **"You're all done for today"** (`already-screened`) after
+    Identity Confirm: the visit's `HP-YYYY-####` reference, "Please proceed to
+    the clinic and wait to be called." or "The clinic has already seen you
+    today.", and **Back to start**. Never Fit/Unfit.
+  * `SubmitKioskVisit` refuses a second submit — and `/kiosk/rest` on a used
+    appointment — with *"You've already completed today's clinic screening.
+    Please proceed to the clinic."*, re-checked after locking the appointment
+    row so two terminals or a double-tap cannot both write.
+  * `KioskSubmitRequest` validates a second submit against the form the used
+    visit followed, so an Assessment student gets that message rather than
+    "please add details".
+
 * **OTP boxes take one character each, and a letter is refused out loud**
   (FR-REG-04 amended, 2026-09-23). No new decision, no schema change. Every box
   had `maxlength="6"`: a second digit typed into a filled box spilled across the

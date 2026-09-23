@@ -728,7 +728,9 @@ class KioskSubmitTest extends TestCase
         // The student transfers to CEA (their LIVE college changes)…
         $profile->update(['college_id' => $cea->id]);
 
-        // …Visit 2 snapshots the NEW college.
+        // …Visit 2 snapshots the NEW college. It needs an appointment of its
+        // own: a used one refuses a second visit (FR-KSK-03b).
+        $this->scheduleToday($student);
         $this->submit($student->id)->assertOk();
         $secondVisit = ClinicVisit::latest('id')->first();
         $this->assertSame($cea->id, $secondVisit->college_id);
@@ -789,7 +791,9 @@ class KioskSubmitTest extends TestCase
         // …the captured visit keeps what was true at capture…
         $this->assertSame('Bachelor of Science in Information Technology', $visit->fresh()->course);
 
-        // …and the NEXT visit snapshots the new program.
+        // …and the NEXT visit (on its own appointment — FR-KSK-03b) snapshots
+        // the new program.
+        $this->scheduleToday($profile->user);
         $this->submit($profile->user->id)->assertOk();
         $this->assertSame(
             'Bachelor of Science in Computer Science',

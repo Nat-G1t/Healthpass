@@ -336,8 +336,8 @@ final class KioskController extends Controller
      * own display/state; they are NOT trusted at submit, which reads identity
      * from the server session instead (see submit()).
      *
-     * `hasAppointmentToday` and `formType` are computed HERE, server-side, so
-     * neither the schedule check (FR-KSK-03a) nor the choice of screens
+     * `hasAppointmentToday`, `alreadyScreenedToday` and `formType` are computed
+     * HERE, server-side, so neither the schedule check (FR-KSK-03a/03b) nor the choice of screens
      * (D-68) can be spoofed by client state: the front-end only uses them to
      * pick which screens to show. Submit re-resolves the appointment — and
      * with it the form type — itself, and refuses the visit without one (D-61).
@@ -353,6 +353,11 @@ final class KioskController extends Controller
         // different appointments and therefore different forms.
         $appointment = Appointment::todayFor($profile->user_id);
 
+        // FR-KSK-03b: no open appointment, but a submitted visit on today's —
+        // the student already used their slot. Only the reference and whether
+        // the clinic has seen them yet leave the server; never an outcome.
+        $screened = $appointment === null ? ClinicVisit::submittedTodayFor($profile->user_id) : null;
+
         return [
             'studentUserId' => $profile->user_id,
             'loginMethod' => $loginMethod,
@@ -367,6 +372,12 @@ final class KioskController extends Controller
             // D-62/D-68: which official form today's batch named. The kiosk
             // uses it ONLY to choose screens — never to decide what is stored.
             'formType' => $appointment?->formType() ?? 'clearance',
+            'alreadyScreenedToday' => $screened !== null,
+            // 'captured' or 'encoded' — it picks one sentence on the screen.
+            ...($screened === null ? [] : [
+                'screenedReference' => $screened->reference_no,
+                'screenedStatus' => $screened->status,
+            ]),
             // D-72: either nothing, `recheckWaitUntil` (still resting) or
             // `recheck: {steps: [...]}` (the rest is over). See bindRestingVisit().
             ...$recheck,

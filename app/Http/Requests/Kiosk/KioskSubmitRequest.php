@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests\Kiosk;
 
 use App\Models\Appointment;
+use App\Models\ClinicVisit;
 use App\Models\ScreeningResponse;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Arr;
@@ -89,6 +90,12 @@ final class KioskSubmitRequest extends FormRequest
      * about to be refused by the action anyway (D-61), and this way the
      * refusal is the schedule message rather than four confusing 422s about
      * questions they were never shown.
+     *
+     * FR-KSK-03b: a student who already USED today's appointment (a second
+     * submit) is validated against the form that visit followed, for the same
+     * reason — an Assessment visit may leave a YES without details, so judging
+     * it as a Clearance would answer "please add details" instead of the
+     * action's "already completed" refusal.
      */
     private function formType(): string
     {
@@ -98,9 +105,13 @@ final class KioskSubmitRequest extends FormRequest
 
         $studentId = $this->session()->get('kiosk.student_id');
 
-        return $this->formType = $studentId === null
-            ? 'clearance'
-            : (Appointment::todayFor((int) $studentId)?->formType() ?? 'clearance');
+        if ($studentId === null) {
+            return $this->formType = 'clearance';
+        }
+
+        return $this->formType = Appointment::todayFor((int) $studentId)?->formType()
+            ?? ClinicVisit::submittedTodayFor((int) $studentId)?->formType()
+            ?? 'clearance';
     }
 
     /** The D-56 YES-detail cleaning described above. */

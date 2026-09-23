@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Services\ClinicScheduleService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -81,6 +82,13 @@ class Appointment extends Model
      * encoded their morning visit would re-link that finished appointment; a
      * second visit with no open appointment is refused instead (D-61).
      *
+     * FR-KSK-03b: nor does an appointment that already has a SUBMITTED visit
+     * (`captured` or `encoded`) — the student has used it, even though the
+     * clinic hasn't encoded it yet, so it still reads `scheduled`. A `resting`
+     * visit (D-72) is not submitted, so a resting student still resolves here
+     * and the re-check path is untouched. whereDoesntHave() is the opposite of
+     * whereHas(): a NOT EXISTS subquery on clinic_visits.
+     *
      * D-54: a student may legitimately hold two appointments on one day (seats
      * on two batches whose hours don't overlap — BR-25), so the winner is the
      * one whose hour STARTS closest to now(); a tie goes to the earlier hour.
@@ -95,6 +103,7 @@ class Appointment extends Model
             ->where('student_id', $studentId)
             ->whereDate('scheduled_date', Carbon::today())
             ->where('status', 'scheduled')
+            ->whereDoesntHave('clinicVisit', fn (Builder $visit) => $visit->submitted())
             ->with('batchRequest:id,form_type')
             ->orderBy('id')
             ->get();

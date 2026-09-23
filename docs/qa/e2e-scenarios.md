@@ -126,6 +126,12 @@ students never book for themselves and never walk in.
 20. → **Expect:** Juan's visit appears in the queue within ~5 seconds, tagged
     **NEXT**, with his vitals summarised and **no flags** (Flags column shows
     "—").
+20a. **Second kiosk login the same day (FR-KSK-03b).** Back on the kiosk tab,
+    log in as Juan again. → **Expect:** after **That's me**, the screen **You're
+    all done for today** with the same `HP-…` reference and "Please proceed to
+    the clinic and wait to be called." — no Consent, no vitals, **no
+    Fit/Unfit**. **Back to start** returns to Welcome. The Live Queue still
+    lists Juan **once**.
 21. Click **Encode Result**. → **Expect:** the "Doctor's Assessment" screen
     with Juan's vitals and all twelve questionnaire answers; every one of the
     twelve **Physical Signs Disorder of** rows is pre-checked **No** (his kiosk
@@ -137,6 +143,9 @@ students never book for themselves and never walk in.
     dialog if you have no printer — the layout check is SM-3.)
 23. Click **Save & Close**. → **Expect:** Juan's row disappears from the Live
     Queue.
+23a. Log in as Juan on the kiosk once more. → **Expect:** the same **You're all
+    done for today** screen, now reading "The clinic has already seen you
+    today." — still no Fit/Unfit.
 24. Log out, log back in as `juan.santos@psu.edu.ph`, open **My Records**
     (`/student/records`). → **Expect:** a record with a **Fit** result badge
     and the visit's vitals in the detail modal.

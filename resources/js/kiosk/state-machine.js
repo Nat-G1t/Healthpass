@@ -23,6 +23,8 @@ export const SCREENS = [
     'email_login',
     'identity',
     'no-schedule',
+    // FR-KSK-03b: "You're all done for today" — the appointment is used.
+    'already-screened',
     'consent',
     'vitals',
     'questionnaire',
@@ -1200,6 +1202,13 @@ export function kioskMachine() {
             if (this.isRecheck()) {
                 this.state.vitalStep = this.activeSteps()[0];
                 this.go('vitals');
+                return;
+            }
+
+            // FR-KSK-03b: already submitted a visit on today's appointment —
+            // say so (reference only, never an outcome) rather than "no schedule".
+            if (this.state.identity?.alreadyScreenedToday) {
+                this.go('already-screened');
                 return;
             }
 
