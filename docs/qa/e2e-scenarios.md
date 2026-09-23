@@ -1645,6 +1645,33 @@ and My Records carries no record data of its own.
 
 ---
 
+## E2E-27 — Back from a dashboard asks to log out (FR-UI-07)
+
+Use a **real Chrome window** (not a private one). Run this once per role:
+a newly registered **Student**, `admin.ccs@healthpass.test`,
+`nurse@healthpass.test`, `physician@healthpass.test` and
+`director@healthpass.test`.
+
+1. Log in (for the student: register a new account through to the
+   dashboard). On the dashboard, click anywhere once, then press the
+   browser's **Back** button. → **Expect:** the **Log out?** dialog opens and
+   the dashboard stays behind it.
+2. Click **Cancel**. Press **Back** again. → **Expect:** the dialog opens
+   again.
+3. Press **Esc**, then press **Back** several times quickly. → **Expect:** you
+   never see the login page, a registration step, or a **Page Expired**
+   error.
+4. Open another page from the sidebar (e.g. Profile), then press **Back**. →
+   **Expect:** you return to the dashboard normally, with no dialog.
+5. Nurse or physician only: apply a **Month** filter on the dashboard, then
+   press **Back**. → **Expect:** **Log out?** opens (the filter is not undone
+   — this is intended).
+6. In the dialog click **Log out**. → **Expect:** you land on the login page.
+
+**Pass criteria:** on every role's dashboard Back opens Log out? instead of
+leaving; Cancel keeps you there; no guest page or 419 is ever shown; other
+pages keep normal Back.
+
 ---
 
 ## Recording results

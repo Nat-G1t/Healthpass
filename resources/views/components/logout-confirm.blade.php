@@ -14,6 +14,8 @@
         </x-logout-confirm>
 
     The trigger's @click flips `open` (Alpine's reactive state on the wrapper).
+    It also opens on the window event `open-logout-confirm`, which the
+    dashboards' <x-back-guard> sends when Back is pressed (FR-UI-07).
     Dismissable with Esc or a click outside; the "Log out" button submits the
     existing POST /logout form. NOTE: the kiosk staff-exit flow is separate and
     intentionally does NOT use this component.
@@ -25,7 +27,7 @@
     $titleId = 'logout-confirm-title-' . Str::random(6);
 @endphp
 
-<div x-data="{ open: false }">
+<div x-data="{ open: false }" @open-logout-confirm.window="open = true">
     {{ $trigger }}
 
     {{-- Teleported to <body> so a parent's stacking context / overflow never

@@ -1,4 +1,6 @@
 <x-layout.sidebar title="Dashboard">
+    <x-back-guard />
+
 
 @php
     $hour = (int) now()->format('G');

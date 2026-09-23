@@ -264,6 +264,7 @@ Home, Calendar, FileText, QrCode, Plus, List, Activity, Edit, BarChart, Alert, C
 - 220px white left sidebar: HPLogo top → role nav → user footer (circular initials, name, role, logout).
 - Active nav item: peach background, orange text, weight 600.
 - Right: 56px white top header (current screen title) + scrollable `<main>` (28px padding) on `#F6F2ED`.
+- **Back guard (FR-UI-07):** each role's dashboard renders `<x-back-guard>`, which adds one history entry for the same URL; the browser's Back pops it and opens the footer's Log out dialog (window event `open-logout-confirm`) instead of leaving the page.
 
 **Role nav items:**
 

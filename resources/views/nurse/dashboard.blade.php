@@ -1,4 +1,6 @@
 <x-layout.sidebar title="Clinic Dashboard">
+    <x-back-guard />
+
 
     {{-- FR-NRS-09 (D-44) — stat tiles on top, the clinic-wide encode history
          directly below. This is the landing page for nurses and physicians

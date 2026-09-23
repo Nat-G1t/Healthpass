@@ -60,7 +60,11 @@ Route::middleware('guest')->group(function () {
     // Legacy Breeze route — removed; RegistrationWizardController handles registration.
     // Route::post('register', [RegisteredUserController::class, 'store']);
 
+    // Login and the forgot-password pages are no-store too (FR-UI-07): Back
+    // from a dashboard re-asks the server, and `guest` redirects a signed-in
+    // user home instead of showing a form whose CSRF token has expired.
     Route::get('login', [AuthenticatedSessionController::class, 'create'])
+        ->middleware('cache.headers:no_store;private')
         ->name('login');
 
     Route::post('login', [AuthenticatedSessionController::class, 'store']);
@@ -68,6 +72,7 @@ Route::middleware('guest')->group(function () {
     // ── Forgot password — OTP flow (replaces Breeze's emailed reset link) ───
     // Route name password.request is kept so the login page link keeps working.
     Route::get('forgot-password', [PasswordResetOtpController::class, 'showEmailForm'])
+        ->middleware('cache.headers:no_store;private')
         ->name('password.request');
     // Sends real email — mail-bomb chokepoint, plus the 60s resend cooldown
     // enforced inside the controller.
@@ -75,6 +80,7 @@ Route::middleware('guest')->group(function () {
         ->middleware('throttle:5,1,forgot-pw')
         ->name('password.email');
     Route::get('forgot-password/verify', [PasswordResetOtpController::class, 'showVerify'])
+        ->middleware('cache.headers:no_store;private')
         ->name('password.reset.verify');
     // throttle:10,1 caps guesses across codes (the per-code 5-attempt cap still
     // applies inside verifyOtp).
@@ -85,6 +91,7 @@ Route::middleware('guest')->group(function () {
         ->middleware('throttle:3,5,fp-resend')
         ->name('password.reset.verify.resend');
     Route::get('forgot-password/new', [PasswordResetOtpController::class, 'showNewPassword'])
+        ->middleware('cache.headers:no_store;private')
         ->name('password.reset.new');
     Route::post('forgot-password/new', [PasswordResetOtpController::class, 'updatePassword'])
         ->middleware('throttle:10,1,fp-new')

@@ -1039,6 +1039,26 @@
 
 ### Changed
 
+* **Back on a dashboard asks to log out; guest pages are never stale** (new
+  FR-UI-07, 2026-09-23). No new decision, no schema change, no new package.
+  Pressing Back after registering or logging in used to show the browser's
+  cached registration or login page, whose CSRF token had been rotated at
+  login, so submitting it gave "Page Expired" (419).
+  * **New `<x-back-guard>` component** on the Student, College Admin, Clinic
+    (nurse and physician) and Director dashboards. It pushes one history entry
+    for the same URL (on load, and again on the first click or key press,
+    because Chrome skips entries added without a user gesture); Back pops it,
+    the guard puts it back and opens the sidebar's Log out dialog.
+    `<x-logout-confirm>` now also opens on the window event
+    `open-logout-confirm`. Cancel stays on the dashboard; the next Back asks
+    again. Accepted side effect: after a dashboard filter or arriving from
+    another page, Back asks to log out rather than going back.
+  * **Login and the three forgot-password pages are sent
+    `Cache-Control: no-store, private`**, like the registration wizard since
+    FR-REG-04's amendment, so Back re-asks the server and the `guest`
+    middleware redirects a signed-in user to their dashboard.
+  * 11 cases in `tests/Feature/DashboardBackGuardTest.php`.
+
 * **The New Batch Request student picker filters by program** (FR-ADM-03
   amended, 2026-09-23). No new decision, no schema change, no new package, no
   new route. Select Students gains a **Program** dropdown left of the search
