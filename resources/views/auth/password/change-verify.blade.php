@@ -36,7 +36,7 @@
 
         <x-otp.boxes
             :action="route('password.change.verify.submit')"
-            button-label="Verify &amp; Update Password"
+            button-label="Verify & Update Password"
         />
 
         <x-otp.resend-button

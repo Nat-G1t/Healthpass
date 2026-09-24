@@ -130,7 +130,10 @@ class PasswordChangeTest extends TestCase
         // The OTP screen renders while the change is pending.
         $this->actingAs($user)->get(route('password.change.verify'))
             ->assertOk()
-            ->assertSee($user->email);
+            ->assertSee($user->email)
+            // The button label is escaped once — never a visible "&amp;".
+            ->assertSee('Verify & Update Password')
+            ->assertDontSee('&amp;amp;', false);
 
         $response = $this->actingAs($user)->post(route('password.change.verify.submit'), ['otp' => $otp]);
 
