@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { kioskMachine } from '../../resources/js/kiosk/state-machine.js';
+import { kioskMachine, SAMPLE_COUNT } from '../../resources/js/kiosk/state-machine.js';
 
 /**
- * D-74 — the kiosk takes seven readings per vital (height, weight,
+ * D-74, D-80 — the kiosk takes five readings per vital (height, weight,
  * temperature) and records the steadiest group's average; FR-KSK-17 shows
  * height in feet and inches too.
  *
@@ -44,17 +44,19 @@ function feed(m, sensorKey, values) {
     for (const v of values) m.onSerialReading({ [sensorKey]: v });
 }
 
-// ── Seven samples, steadiest group (D-74) ────────────────────────────────────
+// ── Five samples, steadiest group (D-74, D-80) ───────────────────────────────
 
 test("Nat's weight stream is recorded as 52.7 kg from the sensor", (t) => {
     t.mock.timers.enable({ apis: ['setTimeout'] });
     const m = machineAtVitals(2);
 
-    feed(m, 'W', [48.7, 49.3, 50.4, 52.9, 52.2, 52.8, 52.9]);
+    // The last five of Nat's D-74 stream (48.7, 49.3, 50.4, 52.9, 52.2, 52.8,
+    // 52.9) — the kiosk now decides at five (D-80).
+    feed(m, 'W', [50.4, 52.9, 52.2, 52.8, 52.9]);
     t.mock.timers.tick(SCAN_SETTLE_MS);
 
     assert.equal(m.stepPhase(), 'captured');
-    assert.equal(m.currentStep().values.weight, 52.7); // not the first reading, 48.7
+    assert.equal(m.currentStep().values.weight, 52.7); // not the first reading, 50.4
     assert.equal(m.currentStep().method, 'sensor');
 });
 
@@ -62,7 +64,7 @@ test('the step shows Measuring while it collects, and does not decide early', (t
     t.mock.timers.enable({ apis: ['setTimeout'] });
     const m = machineAtVitals(1);
 
-    feed(m, 'H', [170, 171, 170, 171, 170, 171]);
+    feed(m, 'H', Array(SAMPLE_COUNT - 1).fill(170));
 
     assert.equal(m.stepPhase(), 'sampling'); // rendered by the scanning card
     assert.deepEqual(m.currentStep().values, {});
@@ -72,7 +74,7 @@ test('height is averaged to whole centimetres', (t) => {
     t.mock.timers.enable({ apis: ['setTimeout'] });
     const m = machineAtVitals(1);
 
-    feed(m, 'H', [150, 174, 175, 175, 176, 175, 174]); // steady group averages 174.83
+    feed(m, 'H', [150, 175, 174, 175, 175]); // steady group averages 174.75
     t.mock.timers.tick(SCAN_SETTLE_MS);
 
     assert.equal(m.currentStep().values.height, 175);
@@ -132,7 +134,7 @@ test('an out-of-range steady group still fails the range check', (t) => {
     t.mock.timers.enable({ apis: ['setTimeout'] });
     const m = machineAtVitals(3);
 
-    feed(m, 'T', Array(7).fill(99));
+    feed(m, 'T', Array(SAMPLE_COUNT).fill(99));
     t.mock.timers.tick(SCAN_SETTLE_MS);
 
     assert.equal(m.stepPhase(), 'ready');
@@ -163,7 +165,7 @@ test('opening the pad mid-sampling drops the buffer and the typed value wins', (
     assert.deepEqual(m.currentStep().samples, []);
 
     // The scale keeps streaming while the nurse types; none of it is collected.
-    feed(m, 'W', Array(7).fill(70));
+    feed(m, 'W', Array(SAMPLE_COUNT).fill(70));
     assert.equal(m.stepPhase(), 'ready');
     assert.deepEqual(m.currentStep().samples, []);
 
@@ -177,16 +179,16 @@ test('opening the pad mid-sampling drops the buffer and the typed value wins', (
     assert.equal(m.currentStep().method, 'manual');
 });
 
-test('Retry after a capture samples seven fresh readings', (t) => {
+test('Retry after a capture samples a fresh full set of readings', (t) => {
     t.mock.timers.enable({ apis: ['setTimeout'] });
     const m = machineAtVitals(1);
 
-    feed(m, 'H', Array(7).fill(160));
+    feed(m, 'H', Array(SAMPLE_COUNT).fill(160));
     t.mock.timers.tick(SCAN_SETTLE_MS);
     m.retryVital();
 
-    feed(m, 'H', Array(6).fill(170));
-    assert.equal(m.stepPhase(), 'sampling'); // six new ones are not yet seven
+    feed(m, 'H', Array(SAMPLE_COUNT - 1).fill(170));
+    assert.equal(m.stepPhase(), 'sampling'); // four new ones are not yet five
     feed(m, 'H', [170]);
     t.mock.timers.tick(SCAN_SETTLE_MS);
     assert.equal(m.currentStep().values.height, 170);
@@ -224,7 +226,7 @@ test('a D-72 re-check samples the temperature afresh', (t) => {
     m.confirmIdentity();
     assert.deepEqual(m.currentStep().samples, []);
 
-    feed(m, 'T', Array(7).fill(36.9));
+    feed(m, 'T', Array(SAMPLE_COUNT).fill(36.9));
     t.mock.timers.tick(WINDOW_MS + SCAN_SETTLE_MS);
     assert.equal(m.currentStep().values.temperature, 36.9); // no 38.x leaked in
 });

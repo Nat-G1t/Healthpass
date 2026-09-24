@@ -93,7 +93,7 @@ Do not silently reconcile conflicts.
   in `vital_signs.first_reading`. The "Bypass the nurse queue flow" rule still
   holds — a resting visit reaches the clinic only through the queue. Every count
   of visits goes through `ClinicVisit::scopeSubmitted()`.
-- **Seven-sample capture (D-74):** height, weight and temperature buffer 7
+- **Five-sample capture (D-74, D-80):** height, weight and temperature buffer 5
   sensor readings (≥ 3 after a 6 s window) and record the steadiest cluster's
   average (`resources/js/kiosk/sample-cluster.js`) through the normal sensor
   path; the tolerances live on the `VITALS` field metadata

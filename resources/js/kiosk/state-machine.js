@@ -134,13 +134,13 @@ const GESTURE_WINDOW_MS = 1500;
 const EXIT_TAPS = 5;
 const EXIT_GESTURE_WINDOW_MS = 3000;
 
-// Seven-sample capture (D-74) for height, weight and temperature. A step
-// collects SAMPLE_COUNT readings and records the average of the steadiest
-// group. If SAMPLE_WINDOW_MS passes (counted from the FIRST reading) with at
+// Five-sample capture (D-74, count by D-80) for height, weight and
+// temperature. A step collects SAMPLE_COUNT readings and records the average
+// of the steadiest group. If SAMPLE_WINDOW_MS passes (counted from the FIRST reading) with at
 // least MIN_SAMPLES, it decides on those; with fewer it keeps waiting rather
 // than guessing — the idle reset and the "sensor is quiet" nudge cover a
 // sensor that has really stopped.
-const SAMPLE_COUNT = 7;
+export const SAMPLE_COUNT = 5;
 const MIN_SAMPLES = 3;
 const SAMPLE_WINDOW_MS = 6000;
 
@@ -159,7 +159,7 @@ const INCHES_PER_FOOT = 12;
  * single source of truth); `sensorKey` is the letter the Web Serial handoff
  * uses (§11.2 → H / W / T / S / D / R); `sample` feeds the dev-only "Simulate
  * reading" button; `decimals` fixes display precision (temperature shows 1).
- * A field with `clusterTolerance` is captured from seven sensor samples (D-74):
+ * A field with `clusterTolerance` is captured from five sensor samples (D-74, D-80):
  * readings within that many units of each other count as one steady group,
  * and the group's average is rounded to `averageDecimals` (the column stores
  * one decimal; height is kept to whole cm, as it is displayed).
@@ -210,7 +210,7 @@ export const VITALS = {
  * A fresh, uncaptured step. phase: ready → scanning → captured; the blood-
  * pressure step also has 'waiting', from tapping Start until the Bluetooth
  * monitor's reading arrives (D-59), and the height/weight/temperature steps
- * have 'sampling' (D-74), from their first sensor reading until the seven
+ * have 'sampling' (D-74), from their first sensor reading until the five
  * samples are decided — it shows the same "Measuring…" card as scanning.
  * `samples` buffers those readings; `windowOver` is set once SAMPLE_WINDOW_MS
  * has passed since the first one. Both live here so a fresh step (Retry, a
@@ -449,7 +449,7 @@ export function kioskMachine() {
             // the guard above — so an abandoned session still resets even if
             // the hub keeps streaming.
             this.bumpIdle();
-            // D-74: height, weight and temperature collect seven samples
+            // D-74/D-80: height, weight and temperature collect five samples
             // before deciding, so their readings keep flowing in while the
             // step is 'sampling'. bumpIdle above already ran for every one.
             const sampled = this.sampledField();
@@ -1347,7 +1347,7 @@ export function kioskMachine() {
             }, SCAN_MS);
         },
 
-        // ── Seven-sample capture (D-74 — height, weight, temperature) ─────────
+        // ── Five-sample capture (D-74, D-80 — height, weight, temperature) ────
         /** The current step's field when it is captured by sampling, else null (BP never is). */
         sampledField(step = this.state.vitalStep) {
             const field = this.primaryField(step);
@@ -1422,16 +1422,17 @@ export function kioskMachine() {
 
         /**
          * Dev-only: inject a plausible reading for every field of the current
-         * step. A sampled step (D-74) gets seven readings through the serial
-         * path instead — two unsettled ones first, then a steady group — so
-         * the result shown is the group's average, not the first number.
+         * step. A sampled step (D-74, D-80) gets five readings through the
+         * serial path instead — two unsettled ones first, then a steady group
+         * of three — so the result shown is the group's average, not the
+         * first number.
          */
         simulateReading() {
             const meta = this.vitalMeta(this.state.vitalStep);
             if (!meta) return;
             const sampled = this.sampledField();
             if (sampled) {
-                const offsets = [-3, -2, 0.3, -0.3, 0.2, 0, -0.2]; // × tolerance
+                const offsets = [-3, -2, 0.3, -0.3, 0]; // × tolerance
                 for (const offset of offsets) {
                     const value = roundTo(sampled.sample + offset * sampled.clusterTolerance, 1);
                     this.onSerialReading({ [sampled.sensorKey]: value });

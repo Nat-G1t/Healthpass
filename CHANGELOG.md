@@ -4,6 +4,16 @@
 
 ### Added
 
+* **The kiosk takes five readings per vital instead of seven** (D-80, amends
+  D-74; FR-KSK-05, FR-KSK-07 amended, 2026-09-24). No schema change, no new
+  package, no firmware change.
+  * `SAMPLE_COUNT` 7 → 5 for height, weight and temperature (now exported so
+    the JS tests stream a full set from it). The 6 s / at-least-3 fallback,
+    `pickSteadiest`, the per-field `clusterTolerance`, the manual pad, the
+    D-72 fresh re-check and blood pressure are unchanged.
+  * The dev Simulate button streams five readings (two unsettled, three
+    steady).
+
 * **The kiosk asks "Are you Pregnant?" only to female students** (D-79,
   FR-KSK-10 amended, 2026-09-24). No schema change, no new package.
   * On both forms a male student no longer sees the pregnancy card or its LMP

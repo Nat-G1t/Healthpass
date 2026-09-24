@@ -171,8 +171,8 @@
             </div>
 
             {{-- ── Phase: SCANNING (animation) ──────────────────────────────── --}}
-            {{-- Also shown while height/weight/temperature collect their seven
-                 samples (D-74, 'sampling') — deliberately no "3 of 7" counter,
+            {{-- Also shown while height/weight/temperature collect their five
+                 samples (D-74, D-80, 'sampling') — deliberately no "3 of 5" counter,
                  which would only invite the student to move. --}}
             <div x-show="stepPhase() === 'sampling' || stepPhase() === 'scanning'" x-cloak
                  x-transition:enter="transition ease-hp-out duration-hp-base"

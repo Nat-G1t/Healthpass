@@ -17,6 +17,14 @@ test("Nat's weight example averages the steady four to 52.7 kg", () => {
     assert.equal(roundTo(pickSteadiest(samples, 1.0), 1), 52.7);
 });
 
+test('five readings with one outlier average the steady four (D-80)', () => {
+    // The kiosk's own count: averaging all five would give 168.6, a height
+    // the student is not.
+    const samples = [163, 163, 164, 190, 163];
+
+    assert.equal(roundTo(pickSteadiest(samples, 2), 0), 163);
+});
+
 test('seven identical readings return that reading', () => {
     assert.equal(pickSteadiest(Array(7).fill(163), 2), 163);
 });
