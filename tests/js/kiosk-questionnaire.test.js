@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { kioskMachine, SYSTEMS, DETAIL_MAX, DETAIL_MIN, QUESTION_COUNT } from '../../resources/js/kiosk/state-machine.js';
+import { kioskMachine, SYSTEMS, DETAIL_MAX, DETAIL_MIN } from '../../resources/js/kiosk/state-machine.js';
 
 /**
  * Kiosk questionnaire — the new forms' twelve rows (D-63) + optional YES
@@ -38,7 +38,7 @@ test('the questionnaire asks the new forms\' twelve rows, verbatim, down each co
         ],
     );
     assert.ok(SYSTEMS.every((s) => s.helper.length > 0));
-    assert.equal(QUESTION_COUNT, 13); // twelve rows + pregnancy
+    assert.equal(kioskMachine().questionCount(), 13); // twelve rows + pregnancy (female / no identity yet)
     assert.equal(DETAIL_MAX, 120);
 });
 

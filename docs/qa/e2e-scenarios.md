@@ -114,9 +114,9 @@ students never book for themselves and never walk in.
     the form's three columns — SKIN, HEAD, EYES, EARS, NOSE, THROAT,
     CHEST/LUNGS, HEART, ABDOMEN, KIDNEY/BLADDER, BRAIN, MENTAL DISORDER — each
     with a short helper line (D-63). The grid may scroll, but **Review &
-    Submit** stays on screen. Answer **No** to all twelve and to **Are you
-    Pregnant?** → **Expect:** footer reads "13 of 13 answered" and **Review &
-    Submit** becomes enabled. Click it.
+    Submit** stays on screen. Juan is male, so there is **no "Are you
+    Pregnant?" card** (D-79). Answer **No** to all twelve → **Expect:** footer
+    reads "12 of 12 answered" and **Review & Submit** becomes enabled. Click it.
 18. **Review screen:** confirm vitals and answers look right (nothing flagged
     orange). Click **Submit to Clinic →**. → **Expect:** the Complete screen
     ("Submitted! … proceed to the nurse's station") with a 12-second countdown.
@@ -1187,7 +1187,7 @@ cannot be talked out of it.
 4. Enter the four vitals manually (e.g. `165`, `60`, `36.8`, `118`/`76`/`72`).
 5. **Questionnaire.** → **Expect:** the heading reads exactly **"Physical Signs
    Disorder of:"** — **no "(Self Assessment)"**. Answer **No** to all twelve
-   and to **Are you Pregnant?**, then click **Review & Submit →**.
+   (Juan is male: no pregnancy question, D-79), then click **Review & Submit →**.
 6. → **Expect:** you land **straight on Review**. There is **no** Personal /
    Social History screen and **no** Personal / Social History card — only
    **Vital Signs** and **Questionnaire**. The Back button reads **"← Back to
@@ -1208,9 +1208,9 @@ cannot be talked out of it.
 10. Open the kiosk again and take Juan through email login → **That's me** →
     **I Agree** → the four vitals, exactly as before.
 11. **Questionnaire.** → **Expect:** the heading now reads **"Physical Signs
-    Disorder of: (Self Assessment)"**. The twelve cards, their helper lines and
-    the pregnancy question are **unchanged**. Answer all thirteen and click
-    **Review & Submit →**.
+    Disorder of: (Self Assessment)"**. The twelve cards and their helper lines
+    are **unchanged** (Juan is male, so there is no pregnancy question, D-79).
+    Answer all twelve and click **Review & Submit →**.
 12. → **Expect:** a **new screen**, headed **"Personal / Social History"**,
     with the line **"Your answers are confidential and are seen only by the
     clinic staff."** and four rows:
@@ -1686,6 +1686,51 @@ a newly registered **Student**, `admin.ccs@healthpass.test`,
 **Pass criteria:** on every role's dashboard Back opens Log out? instead of
 leaving; Cancel keeps you there; no guest page or 419 is ever shown; other
 pages keep normal Back.
+
+---
+
+## E2E-28 — The pregnancy question is asked of female students only (D-79)
+
+As `admin.ccs@healthpass.test`, request two batches for **today** and approve
+both as the Director: a **Medical Clearance** batch with **Juan Santos** (male)
+and **Maria Reyes** (female), and a **Medical Assessment Form** batch with
+**Carlo Cruz** (male) and **Angel Garcia** (female) — one schedule per student
+per day (D-77). Run Parts A and B for both pairs; the result must be the same
+on both forms.
+
+### Part A — a male student
+
+1. At the kiosk, log in as `juan.santos@psu.edu.ph` (then, on the second run,
+   `carlo.cruz@psu.edu.ph`), **That's me**, **I Agree**, and enter the four
+   vitals by hand.
+2. **Questionnaire.** → **Expect:** the twelve cards and **no "Are you
+   Pregnant?" card**; the footer reads **"0 of 12 answered"**.
+3. Answer **No** to all twelve. → **Expect:** "12 of 12 answered" and **Review &
+   Submit** is enabled without touching anything else. (On an Assessment
+   batch, answer the Personal / Social History next.)
+4. **Review.** → **Expect:** the Questionnaire card lists the twelve rows and
+   **no Pregnant row**. Submit.
+5. As the nurse, open the visit and print the form. → **Expect:** the
+   pregnancy line ticks **NO**.
+
+### Part B — a female student
+
+6. Do the same as `maria.reyes@psu.edu.ph` (second run:
+   `angel.garcia@psu.edu.ph`). → **Expect:** the **Are you
+   Pregnant?** card is there and the footer reads **"0 of 13 answered"**.
+7. Answer the twelve rows. → **Expect:** "12 of 13 answered" and Review &
+   Submit is **still disabled**. Tap **Yes** on pregnancy → the LMP calendar
+   opens; pick a past day. → **Expect:** "13 of 13", Review & Submit enabled.
+8. **Review.** → **Expect:** a **Pregnant — Yes** row with the LMP date. Submit.
+
+### Part C — a male re-check
+
+9. On Carlo's run, enter **BP 150/95** at step 1 instead, so Review offers
+   **Rest & re-check**. Rest, come back after the rest time and re-take the BP.
+   → **Expect:** the re-check Review still has **no Pregnant row**.
+
+**Pass criteria:** a male student is never asked about pregnancy and his visit
+prints NO; a female student is asked exactly as before on both forms.
 
 ---
 

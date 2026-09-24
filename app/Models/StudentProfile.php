@@ -55,6 +55,16 @@ class StudentProfile extends Model
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     /**
+     * The one "is this student female" rule (D-70, D-79). It opens the Medical
+     * Assessment Form's sections V/VI at encode and decides whether the kiosk
+     * asks the pregnancy question. `sex` is enum('M','F') NOT NULL.
+     */
+    public function isFemale(): bool
+    {
+        return $this->sex === 'F';
+    }
+
+    /**
      * Whether a physical student ID has been bound to this profile.
      *
      * The schema has no boolean flag for this (PRD 10-table limit). At

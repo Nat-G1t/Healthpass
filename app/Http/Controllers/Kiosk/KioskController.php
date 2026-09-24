@@ -336,7 +336,7 @@ final class KioskController extends Controller
      * own display/state; they are NOT trusted at submit, which reads identity
      * from the server session instead (see submit()).
      *
-     * `hasAppointmentToday`, `alreadyScreenedToday` and `formType` are computed
+     * `hasAppointmentToday`, `alreadyScreenedToday`, `formType` and `isFemale` are computed
      * HERE, server-side, so neither the schedule check (FR-KSK-03a/03b) nor the choice of screens
      * (D-68) can be spoofed by client state: the front-end only uses them to
      * pick which screens to show. Submit re-resolves the appointment — and
@@ -372,6 +372,9 @@ final class KioskController extends Controller
             // D-62/D-68: which official form today's batch named. The kiosk
             // uses it ONLY to choose screens — never to decide what is stored.
             'formType' => $appointment?->formType() ?? 'clearance',
+            // D-79: whether to show the pregnancy question. Used ONLY to choose
+            // screens — submit re-reads sex from the session student's profile.
+            'isFemale' => $profile->isFemale(),
             'alreadyScreenedToday' => $screened !== null,
             // 'captured' or 'encoded' — it picks one sentence on the screen.
             ...($screened === null ? [] : [

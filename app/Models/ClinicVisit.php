@@ -206,7 +206,7 @@ class ClinicVisit extends Model
      */
     public function studentIsFemale(): bool
     {
-        return $this->student?->studentProfile?->sex === 'F';
+        return $this->student?->studentProfile?->isFemale() ?? false;
     }
 
     /**

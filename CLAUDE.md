@@ -194,7 +194,8 @@ npm run dev                       # terminal 2
   physician encoded. (Case categories were dropped by D-32.) Check clinic
   access with `User::isClinicStaff()`, never `role === 'nurse'`.
 - **Kiosk never shows Fit/Unfit to the student.** It captures vitals +
-  the official form's twelve Physical Signs rows (D-63) and, for Medical
+  the official form's twelve Physical Signs rows (D-63) (pregnancy asked of
+  female students only, D-79) and, for Medical
   Assessment Form batches, the form's Personal / Social History (D-68), and
   routes to the clinic queue (nurse or physician). On a Medical Clearance a
   "Yes" requires details (≥ 3 characters, checked in the kiosk AND in

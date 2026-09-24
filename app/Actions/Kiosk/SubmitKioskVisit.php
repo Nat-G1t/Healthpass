@@ -196,8 +196,11 @@ final class SubmitKioskVisit
                 // RE-RESOLVED here from the appointment this action just
                 // picked — the browser's copy is never consulted.
                 ...$this->socialHistory($appointment->formType(), $data['socialHistory'] ?? null),
-                'is_pregnant' => $screening['isPregnant'],
-                'last_menstrual_period' => $screening['lastMenstrualPeriod'] ?? null,
+                // D-79: asked of female students only. A male student is
+                // stored as not pregnant with no LMP, whatever was posted —
+                // sex is read from his profile here, never from the body.
+                'is_pregnant' => $snapshot['is_female'] ? $screening['isPregnant'] : false,
+                'last_menstrual_period' => $snapshot['is_female'] ? ($screening['lastMenstrualPeriod'] ?? null) : null,
             ]);
 
             return $visit;
@@ -228,18 +231,20 @@ final class SubmitKioskVisit
 
     /**
      * The student's current college and program, read in ONE query and frozen on
-     * the visit as its snapshot (FR-STU-09; D-17 college, D-43 program).
+     * the visit as its snapshot (FR-STU-09; D-17 college, D-43 program). The
+     * same query also reads the student's sex, which decides whether the
+     * pregnancy answer is stored (D-79) — that one is not a snapshot column.
      *
      * $studentId is the SERVER-side bound student from the kiosk session, set at
      * scan/login. /kiosk/submit is public, so nothing here may be sourced from
      * the request body — that is the same trust rule the flags and the consent
      * timestamp follow (CLAUDE.md).
      *
-     * @return array{college_id: int, course: ?string}
+     * @return array{college_id: int, course: ?string, is_female: bool}
      */
     private function studentSnapshot(int $studentId): array
     {
-        $profile = StudentProfile::where('user_id', $studentId)->first(['college_id', 'course']);
+        $profile = StudentProfile::where('user_id', $studentId)->first(['college_id', 'course', 'sex']);
 
         // Fail loudly rather than (int)-casting a missing value to 0: if the
         // profile row vanished between scan/login and submit (mid-session admin
@@ -258,6 +263,7 @@ final class SubmitKioskVisit
             // reports as "—". blank() catches both null and the empty string that
             // the NOT NULL student_profiles.course column would hold.
             'course' => blank($profile->course) ? null : $profile->course,
+            'is_female' => $profile->isFemale(),
         ];
     }
 

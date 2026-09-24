@@ -7,6 +7,7 @@ namespace App\Http\Requests\Kiosk;
 use App\Models\Appointment;
 use App\Models\ClinicVisit;
 use App\Models\ScreeningResponse;
+use App\Models\StudentProfile;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Arr;
 use Illuminate\Validation\Rule;
@@ -23,6 +24,8 @@ use Illuminate\Validation\Rule;
  * Which questions are required at all depends on the batch's form (D-68),
  * and that form is resolved from the SESSION-bound student's appointment for
  * today — never from the request body, which could name the other one.
+ * Likewise, whether the pregnancy question was asked at all depends on the
+ * session-bound student's sex (D-79), read from their profile.
  *
  * Plausibility bounds come from config/healthpass.php (FR-KSK-08), the SAME
  * source the front-end reads, so the two never drift. The authoritative flag
@@ -40,6 +43,13 @@ final class KioskSubmitRequest extends FormRequest
      * Null until formType() has looked it up.
      */
     private ?string $formType = null;
+
+    /**
+     * Whether the SESSION-bound student is female (D-79) — resolved once per
+     * request from their profile, never from the body. Null until
+     * studentIsFemale() has looked it up.
+     */
+    private ?bool $isFemale = null;
 
     /** The kiosk is public; identity was established earlier in the flow. */
     public function authorize(): bool
@@ -63,6 +73,46 @@ final class KioskSubmitRequest extends FormRequest
     {
         $this->cleanDetails();
         $this->dropSocialHistoryUnlessAssessment();
+        $this->dropPregnancyUnlessFemale();
+    }
+
+    /**
+     * D-79: the pregnancy question is asked of female students only. For a
+     * male student, `isPregnant` and `lastMenstrualPeriod` are removed from
+     * the request HERE, before the rules run, so whatever the browser posted
+     * never reaches validated(). SubmitKioskVisit stores false / NULL for him.
+     */
+    private function dropPregnancyUnlessFemale(): void
+    {
+        $screening = $this->input('screening');
+
+        if ($this->studentIsFemale() || ! is_array($screening)) {
+            return;
+        }
+
+        $this->merge(['screening' => Arr::except($screening, ['isPregnant', 'lastMenstrualPeriod'])]);
+    }
+
+    /**
+     * Whether the SESSION-bound student is female (D-79), by the one rule
+     * StudentProfile::isFemale(). With no session student or no profile the
+     * pregnancy rules stay in force (the stricter, pre-D-79 behaviour); the
+     * controller refuses such a submit anyway.
+     */
+    private function studentIsFemale(): bool
+    {
+        if ($this->isFemale !== null) {
+            return $this->isFemale;
+        }
+
+        $studentId = $this->session()->get('kiosk.student_id');
+
+        if ($studentId === null) {
+            return $this->isFemale = true;
+        }
+
+        return $this->isFemale = StudentProfile::where('user_id', (int) $studentId)
+            ->first(['sex'])?->isFemale() ?? true;
     }
 
     /**
@@ -172,11 +222,9 @@ final class KioskSubmitRequest extends FormRequest
             'vitals.diastolic' => ['required', 'integer', "min:{$bounds['bp_diastolic']['min']}", "max:{$bounds['bp_diastolic']['max']}"],
             'vitals.heartRate' => ['required', 'integer', "min:{$bounds['heart_rate']['min']}", "max:{$bounds['heart_rate']['max']}"],
 
-            // Screening — the form's twelve rows (D-63) answered (true/false), plus pregnancy.
+            // Screening — the form's twelve rows (D-63) answered (true/false),
+            // plus pregnancy for a female student (just below, D-79).
             'screening' => ['required', 'array'],
-            'screening.isPregnant' => ['required', 'boolean'],
-            // LMP required only when pregnant, never in the future (FR-KSK-10).
-            'screening.lastMenstrualPeriod' => ['nullable', 'required_if:screening.isPregnant,true', 'date', 'before_or_equal:today'],
 
             // YES details (D-56), already cleaned by prepareForValidation().
             // Optional here; required on a Medical Clearance just below (D-75).
@@ -186,6 +234,14 @@ final class KioskSubmitRequest extends FormRequest
 
         foreach (array_keys(ScreeningResponse::QUESTIONS) as $question) {
             $rules["screening.{$question}"] = ['required', 'boolean'];
+        }
+
+        // D-79: pregnancy is asked of female students only. For a male the
+        // pair was already removed by prepareForValidation(), so no rule.
+        if ($this->studentIsFemale()) {
+            $rules['screening.isPregnant'] = ['required', 'boolean'];
+            // LMP required only when pregnant, never in the future (FR-KSK-10).
+            $rules['screening.lastMenstrualPeriod'] = ['nullable', 'required_if:screening.isPregnant,true', 'date', 'before_or_equal:today'];
         }
 
         // D-75: on a Medical Clearance, a YES must carry details — the paper

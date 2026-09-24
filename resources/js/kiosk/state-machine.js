@@ -81,8 +81,6 @@ export const SYSTEMS = [
     { key: 'mental_disorder', label: 'MENTAL DISORDER', helper: 'Anxiety, depression or other mental health concerns' },
 ];
 
-// 12 form rows + the pregnancy item = 13 questions to answer (FR-KSK-10).
-export const QUESTION_COUNT = SYSTEMS.length + 1;
 
 /**
  * Personal / Social History (FR-KSK-10a, D-68): section I of the Medical
@@ -1920,28 +1918,54 @@ export function kioskMachine() {
 
         // ── Completion gate (FR-KSK-10) ──────────────────────────────────────
         /**
+         * D-79 — whether to ask the pregnancy question: female students only.
+         * The SERVER decided it at scan/login (`identity.isFemale`); it chooses
+         * screens only, since submit re-reads sex from the session student's
+         * profile. A payload without the field shows the question — the
+         * pre-D-79 behaviour — rather than hide it from a female student.
+         */
+        isFemale() {
+            return this.state.identity?.isFemale !== false;
+        },
+
+        /**
+         * How many questions this student answers (FR-KSK-10): the twelve form
+         * rows, plus pregnancy for a female student (D-79) — 13 or 12. The ONE
+         * total the footer, answeredCount() and the Review gate all read.
+         */
+        questionCount() {
+            return SYSTEMS.length + (this.isFemale() ? 1 : 0);
+        },
+
+        /**
          * Whether the pregnancy item counts as answered: "No" alone is enough,
-         * but "Yes" also requires an LMP date (FR-KSK-10).
+         * but "Yes" also requires an LMP date (FR-KSK-10). A male student is
+         * never asked (D-79), so for him it is answered without a tap.
          */
         pregnancyAnswered() {
+            if (!this.isFemale()) return true;
             const q = this.state.questionnaire;
             return q.isPregnant === false || (q.isPregnant === true && q.lmp !== null);
         },
 
-        /** How many of the 13 questions are answered (footer "{N} of 13"). */
+        /**
+         * How many of the questionCount() questions are answered (footer
+         * "{N} of {total}"). A male's pregnancy item is not a question, so it
+         * is never counted.
+         */
         answeredCount() {
             const answered = SYSTEMS.filter(
                 (s) => this.state.questionnaire.systems[s.key] !== undefined,
             ).length;
-            return answered + (this.pregnancyAnswered() ? 1 : 0);
+            return answered + (this.isFemale() && this.pregnancyAnswered() ? 1 : 0);
         },
 
         /**
-         * All 13 answered → Review & Submit unlocks (FR-KSK-10) — and, on a
+         * All questionCount() answered → Review & Submit unlocks (FR-KSK-10) — and, on a
          * Medical Clearance, every YES carries its detail (D-75).
          */
         questionnaireComplete() {
-            return this.answeredCount() === QUESTION_COUNT && this.firstMissingDetail() === null;
+            return this.answeredCount() === this.questionCount() && this.firstMissingDetail() === null;
         },
 
         /**
@@ -2059,8 +2083,10 @@ export function kioskMachine() {
                 screening: {
                     ...screening,
                     details,
-                    isPregnant: q.isPregnant,
-                    lastMenstrualPeriod: q.lmp,
+                    // D-79: a male student was never asked. The server ignores
+                    // these for him anyway; this only keeps the payload tidy.
+                    isPregnant: this.isFemale() ? q.isPregnant : false,
+                    lastMenstrualPeriod: this.isFemale() ? q.lmp : null,
                 },
                 // D-68: sent only when this student's form has the section. The
                 // server decides that for itself either way — it drops the block

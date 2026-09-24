@@ -507,3 +507,97 @@ test('an overweight BMI is flagged but its badge stays orange "Overweight"', () 
     assert.equal(m.bmiStatus(26.0), 'Overweight');
     assert.match(m.bmiBadgeClass(26.0), /text-hp-orange/);
 });
+
+// ── Pregnancy asked of female students only (D-79) ───────────────────────────
+// The server sends `isFemale` at scan/login; the kiosk uses it to choose what
+// to SHOW. What is stored is decided on the server (KioskSubmitRequest).
+
+/** A headless component at Identity for a student of this sex, on this form. */
+function machineForSex(isFemale, formType = 'clearance') {
+    const m = kioskMachine();
+    m.$refs = { root: { dataset: {} } };
+    m.$nextTick = () => {};
+    m.config = CONFIG;
+    m.arriveAtIdentity({ firstName: 'Alex', hasAppointmentToday: true, formType, isFemale });
+    m.state.consentAt = new Date().toISOString();
+    return m;
+}
+
+for (const formType of ['clearance', 'assessment']) {
+    test(`a male student answers 12 and unlocks Review without the pregnancy question (${formType})`, () => {
+        const m = machineForSex(false, formType);
+        assert.equal(m.isFemale(), false);
+        assert.equal(m.questionCount(), 12);
+        assert.equal(m.pregnancyAnswered(), true);
+
+        for (const s of m.systemList.slice(0, 11)) m.setSystem(s.key, false);
+        assert.equal(m.answeredCount(), 11);
+        assert.equal(m.questionnaireComplete(), false);
+
+        m.setSystem(m.systemList[11].key, false);
+        assert.equal(m.answeredCount(), 12);
+        assert.equal(m.questionnaireComplete(), true);
+    });
+
+    test(`a female student answers 13 and stays locked until pregnancy is answered (${formType})`, () => {
+        const m = machineForSex(true, formType);
+        assert.equal(m.isFemale(), true);
+        assert.equal(m.questionCount(), 13);
+
+        for (const s of m.systemList) m.setSystem(s.key, false);
+        assert.equal(m.answeredCount(), 12);
+        assert.equal(m.questionnaireComplete(), false);
+
+        m.setPregnant(true); // Yes without an LMP is not yet an answer
+        assert.equal(m.questionnaireComplete(), false);
+
+        m.setPregnant(false);
+        assert.equal(m.answeredCount(), 13);
+        assert.equal(m.questionnaireComplete(), true);
+    });
+}
+
+test('a male submission says not pregnant with no LMP, whatever the state holds', () => {
+    const m = machineForSex(false);
+    for (const s of m.systemList) m.setSystem(s.key, false);
+    m.state.questionnaire.isPregnant = true; // tampered / stale state
+    m.state.questionnaire.lmp = '2026-09-01';
+
+    const { screening } = m.buildSubmission();
+    assert.equal(screening.isPregnant, false);
+    assert.equal(screening.lastMenstrualPeriod, null);
+});
+
+test('a female submission carries her pregnancy answer and LMP', () => {
+    const m = machineForSex(true);
+    m.state.questionnaire.isPregnant = true;
+    m.state.questionnaire.lmp = '2026-09-01';
+
+    const { screening } = m.buildSubmission();
+    assert.equal(screening.isPregnant, true);
+    assert.equal(screening.lastMenstrualPeriod, '2026-09-01');
+});
+
+test('a male re-check still hides the pregnancy row on Review', () => {
+    const m = kioskMachine();
+    m.$refs = { root: { dataset: {} } };
+    m.$nextTick = () => {};
+    m.config = CONFIG;
+    m.arriveAtIdentity({
+        firstName: 'Alex', hasAppointmentToday: true, formType: 'clearance', isFemale: false,
+        recheck: { steps: ['temperature'], kept: { vitals: {}, screening: {}, isPregnant: false, lastMenstrualPeriod: null } },
+    });
+
+    assert.equal(m.isRecheck(), true);
+    assert.equal(m.isFemale(), false); // review.blade.php: x-show="isFemale()"
+});
+
+test('reset forgets the student\'s sex with the rest of the session', () => {
+    const m = machineForSex(false);
+    assert.equal(m.questionCount(), 12);
+
+    m.reset();
+
+    assert.equal(m.state.identity, null);
+    assert.equal(m.questionCount(), 13); // back to the neutral default
+});

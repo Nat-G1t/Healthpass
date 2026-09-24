@@ -4,6 +4,19 @@
 
 ### Added
 
+* **The kiosk asks "Are you Pregnant?" only to female students** (D-79,
+  FR-KSK-10 amended, 2026-09-24). No schema change, no new package.
+  * On both forms a male student no longer sees the pregnancy card or its LMP
+    calendar; he answers twelve questions ("{N} of 12 answered") and Review has
+    no Pregnant row. A female student is unchanged (13 questions).
+  * The scan/login payload carries a display-only `isFemale`. At submit
+    `KioskSubmitRequest` re-reads sex from the session student's profile and
+    drops the pregnancy pair for a male before the rules run;
+    `SubmitKioskVisit` stores `is_pregnant = false` and no LMP for him whatever
+    the request says. Printed forms still tick NO.
+  * One rule: `StudentProfile::isFemale()`, now also behind D-70's
+    `ClinicVisit::studentIsFemale()`.
+
 * **Both analytics pages animate in on every load; a single-sex month draws a
   clean donut** (FR-ANL-04, FR-ANL-09, FR-ADM-08 amended, 2026-09-24). No new
   decision, no schema change, no new package.

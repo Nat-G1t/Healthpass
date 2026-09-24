@@ -95,8 +95,8 @@
                                x-text="detailText(sys.key)"></p>
                         </div>
                     </template>
-                    {{-- Pregnancy + LMP. --}}
-                    <div class="flex items-center justify-between gap-2 py-2">
+                    {{-- Pregnancy + LMP — female students only (D-79). --}}
+                    <div x-show="isFemale()" class="flex items-center justify-between gap-2 py-2">
                         <span class="text-base text-hp-slate/70">
                             Pregnant
                             <span x-show="state.questionnaire.isPregnant === true" x-cloak class="block text-sm text-hp-slate/40">LMP: <span x-text="lmpLabel()"></span></span>

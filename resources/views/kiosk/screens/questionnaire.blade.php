@@ -2,12 +2,14 @@
      Signs Disorder of" rows — SKIN … MENTAL DISORDER, reading down the form's
      three columns — as a 2-column grid
      of cards, each with the form's label VERBATIM, one plain-language helper
-     line and Yes/No. Plus the form's pregnancy question, whose "Yes" reveals an
-     inline month calendar for the Last Menstrual Period (future dates disabled,
-     LMP required when pregnant). The twelve cards render from `systemList`
+     line and Yes/No. Plus, for a female student only (D-79), the form's
+     pregnancy question, whose "Yes" reveals an inline month calendar for the
+     Last Menstrual Period (future dates disabled, LMP required when pregnant).
+     The twelve cards render from `systemList`
      (state-machine.js SYSTEMS, mirroring ScreeningResponse::QUESTIONS) — data,
-     not twelve copies of markup. The footer shows "{N} of 13 answered" and Review
-     & Submit stays disabled until all 13 are in.
+     not twelve copies of markup. The footer shows "{N} of {total} answered"
+     (13 for a female student, 12 for a male) and Review & Submit stays
+     disabled until all of them are in.
 
      YES details (the form: "If YES, give details under Remarks"): a Yes card
      offers "Add details", which opens a FULL-WIDTH panel docked at the
@@ -92,8 +94,9 @@
                 </template>
             </div>
 
-            {{-- ── Full-width pregnancy question — the form's wording (FR-KSK-10) ── --}}
-            <div class="mt-3 rounded-xl bg-hp-white p-4 shadow-sm">
+            {{-- ── Full-width pregnancy question — the form's wording (FR-KSK-10) ──
+                 Female students only (D-79); the server stores NO for a male. --}}
+            <div x-show="isFemale()" class="mt-3 rounded-xl bg-hp-white p-4 shadow-sm">
                 <div class="flex items-center justify-between gap-4">
                     <p class="text-base font-semibold leading-tight text-hp-slate">
                         Are you Pregnant?
@@ -193,7 +196,7 @@
         {{-- ── Footer: progress + gated Review & Submit (FR-KSK-10) ─────────── --}}
         <div class="mt-4 flex items-center justify-between">
             <p class="text-base font-medium text-hp-slate/60">
-                <span class="font-semibold text-hp-slate" x-text="answeredCount()"></span> of 13 answered
+                <span class="font-semibold text-hp-slate" x-text="answeredCount()"></span> of <span x-text="questionCount()"></span> answered
             </p>
             <button
                 type="button"
