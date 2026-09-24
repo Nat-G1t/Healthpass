@@ -180,7 +180,7 @@ export const VITALS = {
     },
     2: {
         label: 'Weight',
-        instruction: 'Step onto the scale and stand still, arms relaxed at your sides.',
+        instruction: 'Step onto the scale with both feet fully inside the plate, then stand still with your arms relaxed.',
         fields: [
             { key: 'weight', unit: 'kg', range: 'weight_kg', sensorKey: 'W', sample: 58, clusterTolerance: 1, averageDecimals: 1 },
         ],

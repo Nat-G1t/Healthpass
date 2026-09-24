@@ -56,4 +56,38 @@ class KioskTutorialTest extends TestCase
             ->assertDontSee('walk-in')
             ->assertSee('the day your college scheduled for you');
     }
+
+    // ── Illustrations (FR-STU-11 revision) ────────────────────────────────────
+
+    public function test_every_step_shows_its_illustration(): void
+    {
+        $response = $this->actingAs($this->student())
+            ->get(route('student.tutorial'))
+            ->assertOk()
+            ->assertDontSee('GIF walkthrough coming soon');
+
+        foreach (range(1, 6) as $n) {
+            $response->assertSee(asset("images/tutorial/step{$n}.jpg"));
+        }
+    }
+
+    public function test_the_weight_step_says_both_feet_go_inside_the_plate(): void
+    {
+        $this->actingAs($this->student())
+            ->get(route('student.tutorial'))
+            ->assertOk()
+            ->assertSee('both feet fully inside the weighing plate');
+    }
+
+    public function test_the_served_illustrations_are_web_sized_copies(): void
+    {
+        // The originals in docs/steps/ are 1.2–1.7 MB each — too heavy for a
+        // student on mobile data. This catches a full-size copy sneaking in.
+        foreach (range(1, 6) as $n) {
+            $path = public_path("images/tutorial/step{$n}.jpg");
+
+            $this->assertFileExists($path);
+            $this->assertLessThan(400 * 1024, filesize($path), "step{$n}.jpg is over 400 KB");
+        }
+    }
 }

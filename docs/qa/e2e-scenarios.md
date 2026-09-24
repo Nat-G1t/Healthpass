@@ -623,7 +623,10 @@ Live Queue number and the Director's Batch Approvals number.
 8. **Kiosk Tutorial** shows a dot. Open it but do **not** click Get Started;
    click Dashboard. → **Expect:** the dot is **still there**.
 9. Open Kiosk Tutorial → **Get Started** → **Next** until the card reads
-   **"Step 6 of 6"** (Finishing up). Reload the page. → **Expect:** the dot is
+   **"Step 6 of 6"** (Finishing up). → **Expect:** every step shows its
+   illustration above the text, uncropped, and on a laptop screen the whole
+   card fits without scrolling; the **Weight** step says to keep **both feet
+   fully inside the weighing plate**. Reload the page. → **Expect:** the dot is
    **gone**, and it stays gone after logging out and back in.
 
 **Steps — Nurse:**

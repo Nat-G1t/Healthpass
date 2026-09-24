@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { SAMPLE_COUNT, SCREENS, SOCIAL_HISTORY, kioskMachine } from '../../resources/js/kiosk/state-machine.js';
+import { SAMPLE_COUNT, SCREENS, SOCIAL_HISTORY, VITALS, kioskMachine } from '../../resources/js/kiosk/state-machine.js';
 
 /**
  * Kiosk state-machine hardening (FR-KSK-05/06/07/08/15).
@@ -600,4 +600,9 @@ test('reset forgets the student\'s sex with the rest of the session', () => {
 
     assert.equal(m.state.identity, null);
     assert.equal(m.questionCount(), 13); // back to the neutral default
+});
+
+test('the weight step tells the student to keep both feet inside the plate', () => {
+    // FR-STU-11 revision: a foot on the edge of the plate throws the load cell off.
+    assert.match(VITALS[2].instruction, /both feet/);
 });

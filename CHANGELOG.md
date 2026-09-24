@@ -4,6 +4,23 @@
 
 ### Added
 
+* **The Kiosk Tutorial uses real illustrations, fills the page, and tells
+  students to keep both feet inside the weighing plate** (FR-STU-11
+  amended, PRD revision 1.65, 2026-09-25). No schema change, no new
+  package, no new route.
+  * Steps 2–7 show Nat's illustrations above the text instead of the "GIF
+    walkthrough coming soon" placeholder. `docs/steps/` keeps the 2400 px
+    originals; the page serves 1600 px copies from `public/images/tutorial/`
+    (66–83 KB each), `object-contain`, never cropped.
+  * The card spans the full content width and, on laptop screens and up,
+    is exactly one viewport tall (landing card too), so a whole step fits
+    without scrolling; phones stack and scroll as before.
+  * The tutorial's Weight step and the kiosk's weight instruction say
+    **both feet fully inside the plate**.
+  * Tests: the page renders all six images and the feet wording; each web
+    copy exists and stays under 400 KB; the kiosk `VITALS[2]` instruction
+    mentions both feet.
+
 * **College Admins download a Yearly Clearance Report as a PDF** (D-81, new
   FR-ADM-13, 2026-09-25). No schema change, no new package (dompdf is already
   installed).
