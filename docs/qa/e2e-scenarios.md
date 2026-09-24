@@ -1734,6 +1734,60 @@ prints NO; a female student is asked exactly as before on both forms.
 
 ---
 
+## E2E-29 — The College Admin downloads a Yearly Clearance Report (D-81)
+
+**Goal:** confirm the Yearly Clearance Report (FR-ADM-13) downloads as a PDF
+from the analytics page and its numbers match a hand count of that year's
+encoded visits.
+
+**Accounts:** a College Admin with data, e.g. `admin.ccs@healthpass.test`, and
+the nurse (to encode one more visit if needed).
+
+**Steps:**
+
+1. Log in as the **CCS admin** and open **Analytics**. → **Expect:** a
+   **Yearly Report (PDF)** button right beside **Print Monthly Report**, same
+   style, with a download icon.
+2. Change the **program filter** to one program first (the page reloads), then
+   click **Yearly Report (PDF)**. → **Expect:** a popup, **Download Yearly
+   Report**, with a year list from the **current year** (selected) down to
+   **2021**, and the note "Covers every program in CCS, Jan 1 – Dec 31."
+3. Press **Esc**. → **Expect:** the popup closes. Open it again and click the
+   dark backdrop → closes. Open it again and click **Cancel** → closes.
+4. Open it, keep the current year, click **Confirm**. → **Expect:** the file
+   `HealthPass-Yearly-Report-CCS-<year>.pdf` downloads, the popup closes, and
+   you are **still on Analytics** — no spinner and no orange loading bar left
+   running, and the cards do not replay their load-up animation.
+5. Open the PDF. → **Expect:** the header (university, **College of Computing
+   Studies (CCS)**, "Yearly Clearance Report", the year, "Generated … by
+   <your name>"); **Total clearances**, **Fit · Unfit**, **Male · Female**; a
+   table **Student name · Status · Date · Department**, oldest date first,
+   covering **every program** (the filter from step 2 is ignored); the
+   "data captured by HealthPass only" footer. If the table runs past one page,
+   its header row repeats on page 2.
+6. **Hand count:** as the nurse, open the Clinic Dashboard's encode history
+   and count this year's encoded CCS visits, and how many are Fit and Unfit. →
+   **Expect:** Total = your count, **Fit + Unfit = Total**, and a student
+   encoded twice appears **twice**. Visits still in the Live Queue (not yet
+   encoded) and resting visits are **not** in the report. Every row is a
+   student you can also find, with the same result, on **Batch Tracking →
+   Batch Results** (only visits from your own college's batches count).
+7. Download **2021** (a year with no data). → **Expect:** the file still
+   downloads, every count is **0**, and the table reads "No clearances were
+   encoded for this college in 2021."
+8. **Security negative:** in the address bar open
+   `/admin/analytics/yearly-report?year=<this year>&college=<another college's id>`.
+   → **Expect:** the downloaded file is still named **CCS** and holds only CCS
+   visits. Try `?year=2020` → **Expect:** refused (you are sent back, no file).
+9. Log in as the **Director** and open **Analytics**. → **Expect:** **no**
+   Yearly Report button.
+
+**Pass criteria:** the PDF downloads without leaving Analytics; its five
+numbers equal the hand count and Fit + Unfit = Total; it always covers the whole
+college; an empty year still downloads; `?college=` cannot move the scope.
+
+---
+
 ## Recording results
 
 For each scenario, record: **Pass / Fail / Blocked (not built)**, the tester

@@ -54,6 +54,9 @@ class AnalyticsController extends Controller
             'selectedMonthLabel' => $month->format('F Y'),
             'programs' => $programs,
             'selectedProgram' => $program,
+            // FR-ADM-13 (D-81): the Yearly Report popup's years, newest first.
+            // Built here from the SERVER clock (BR-20) — never in the browser.
+            'reportYears' => range(now()->year, (int) config('healthpass.reports.yearly_first_year')),
             ...$analytics->visitsByProgram(),
             ...$analytics->visitsByPurpose(),
             ...$analytics->vitalSignFlags(),

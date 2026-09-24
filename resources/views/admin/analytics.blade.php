@@ -72,19 +72,103 @@
                 fn ($value) => $value !== null,
             );
         @endphp
-        <a href="{{ route('admin.analytics.print', $printQuery) }}"
-           data-print-trigger
-           class="ml-auto inline-flex items-center gap-2 rounded-full bg-hp-peach px-4 py-1.5 text-xs
-                  font-semibold text-hp-orange transition-[color,background-color,transform]
-                  duration-hp-fast ease-hp-out hover:bg-orange-100
-                  active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2
-                  focus-visible:ring-hp-orange focus-visible:ring-offset-1">
-            <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round"
-                      d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
-            </svg>
-            Print Monthly Report
-        </a>
+        {{-- The two report buttons share one wrapper so they sit on one line
+             and wrap to the next row together on a narrow screen. x-data here
+             is the Yearly Report popup's only state: open or closed. --}}
+        <div class="ml-auto flex flex-wrap items-center justify-end gap-2" x-data="{ yearlyOpen: false }">
+            <a href="{{ route('admin.analytics.print', $printQuery) }}"
+               data-print-trigger
+               class="inline-flex items-center gap-2 rounded-full bg-hp-peach px-4 py-1.5 text-xs
+                      font-semibold text-hp-orange transition-[color,background-color,transform]
+                      duration-hp-fast ease-hp-out hover:bg-orange-100
+                      active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2
+                      focus-visible:ring-hp-orange focus-visible:ring-offset-1">
+                <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+                </svg>
+                Print Monthly Report
+            </a>
+
+            {{-- ── Yearly Report (PDF) (FR-ADM-13, D-81) ─────────────────────────
+                 type="button": this sits inside the filter form, and a plain
+                 <button> would submit it. It only opens the popup below. --}}
+            <button type="button" @click="yearlyOpen = true"
+                    class="inline-flex items-center gap-2 rounded-full bg-hp-peach px-4 py-1.5 text-xs
+                           font-semibold text-hp-orange transition-[color,background-color,transform]
+                           duration-hp-fast ease-hp-out hover:bg-orange-100
+                           active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2
+                           focus-visible:ring-hp-orange focus-visible:ring-offset-1">
+                <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                </svg>
+                Yearly Report (PDF)
+            </button>
+
+            {{-- The year picker. Teleported to <body> (the batches page's
+                 pattern) so no ancestor clips the backdrop — and so its own
+                 <form> is not nested inside the filter form once it is live.
+                 Esc, a backdrop click or Cancel close it.
+
+                 Confirm is a plain GET to the report. The response is a file
+                 download (Content-Disposition: attachment), so the browser saves
+                 it and this page never unloads; the popup closes itself on
+                 submit. data-no-progress keeps the top progress bar
+                 (shared/page-motion.js) from starting a run that no page load
+                 would ever finish. The years come from the server
+                 (AnalyticsController) — never the browser clock. --}}
+            <template x-teleport="body">
+                <div x-show="yearlyOpen" x-cloak
+                     @keydown.escape.window="yearlyOpen = false"
+                     class="fixed inset-0 z-[60] flex items-center justify-center px-4"
+                     role="dialog" aria-modal="true" aria-labelledby="yearly-report-title">
+                    {{-- Backdrop — click outside to dismiss --}}
+                    <div x-show="yearlyOpen" @click="yearlyOpen = false"
+                         x-transition:enter="ease-hp-out duration-hp-base"
+                         x-transition:enter-start="opacity-0"
+                         x-transition:enter-end="opacity-100"
+                         x-transition:leave="ease-hp-in duration-hp-fast"
+                         x-transition:leave-start="opacity-100"
+                         x-transition:leave-end="opacity-0"
+                         class="absolute inset-0 bg-hp-slate/50" aria-hidden="true"></div>
+
+                    {{-- Panel --}}
+                    <form method="GET" action="{{ route('admin.analytics.yearly-report') }}"
+                          data-no-progress
+                          @submit="yearlyOpen = false"
+                          x-show="yearlyOpen"
+                          x-transition:enter="ease-hp-spring duration-hp-slow"
+                          x-transition:enter-start="opacity-0 translate-y-6"
+                          x-transition:enter-end="opacity-100 translate-y-0"
+                          x-transition:leave="ease-hp-in duration-hp-base"
+                          x-transition:leave-start="opacity-100 translate-y-0"
+                          x-transition:leave-end="opacity-0 translate-y-6"
+                          class="relative w-full max-w-sm rounded-2xl bg-hp-white p-6 shadow-xl">
+                        <h2 id="yearly-report-title" class="text-lg font-semibold text-hp-slate">
+                            Download Yearly Report
+                        </h2>
+
+                        <label for="yearly-report-year" class="mt-4 block text-xs font-medium text-hp-slate/70">Year</label>
+                        <select id="yearly-report-year" name="year"
+                                class="mt-1 w-full rounded-lg border-hp-slate/20 py-2 pl-3 pr-8 text-sm text-hp-slate focus:border-hp-orange focus:ring-hp-orange">
+                            @foreach ($reportYears as $reportYear)
+                                <option value="{{ $reportYear }}" @selected($loop->first)>{{ $reportYear }}</option>
+                            @endforeach
+                        </select>
+
+                        <p class="mt-2 text-xs text-hp-slate/50">
+                            Covers every program in {{ $college->code }}, Jan 1 – Dec 31.
+                        </p>
+
+                        <div class="mt-6 flex justify-end gap-2">
+                            <x-hp.button variant="muted" @click="yearlyOpen = false">Cancel</x-hp.button>
+                            <x-hp.button type="submit">Confirm</x-hp.button>
+                        </div>
+                    </form>
+                </div>
+            </template>
+        </div>
     </form>
 
     {{-- ── Clinic Visits by Program (FR-ADM-08) ─────────────────────────── --}}

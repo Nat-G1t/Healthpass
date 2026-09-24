@@ -80,6 +80,7 @@ Only **students** self-register. `nurse`, `physician` (D-64), `college_admin`, a
 | Enable Kiosk Mode · kiosk staff exit | | | ✓ | ✓ | |
 | View own clearance records | ✓ | | | | |
 | View analytics + flagged anomalies | | | | | ✓ |
+| Download own college's Yearly Clearance Report (PDF — FR-ADM-13, D-81; beside Print Monthly Report on the admin's Analytics page) | | ✓ | | | |
 | Provision staff accounts (College Admin / Nurse / Physician) and correct a physician's license | | | | | ✓ |
 | Seed colleges / the first Director | (admin seed) | | | | |
 

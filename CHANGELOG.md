@@ -4,6 +4,27 @@
 
 ### Added
 
+* **College Admins download a Yearly Clearance Report as a PDF** (D-81, new
+  FR-ADM-13, 2026-09-25). No schema change, no new package (dompdf is already
+  installed).
+  * A **Yearly Report (PDF)** button beside Print Monthly Report on the
+    College Admin's Analytics page opens a teleported popup with a year list
+    (2021 → the current year on the server clock, newest first); **Confirm**
+    downloads `HealthPass-Yearly-Report-{CODE}-{YEAR}.pdf` and the admin stays
+    on Analytics (`data-no-progress` keeps the top progress bar from starting).
+  * `GET /admin/analytics/yearly-report?year=` (`Admin\YearlyReportController`,
+    `throttle:10,1,yearly-report`), scoped to `managedCollege()` — never
+    `?college=` — and always the whole college. dompdf renders
+    `admin/yearly-report.blade.php` at US Letter portrait.
+  * `App\Services\YearlyClearanceReport`: encoded visits of both forms in the
+    calendar year (a date range, not `YEAR()`) whose appointment came from a
+    batch THIS college submitted and which were captured under this college
+    (§6.6: only outcomes Batch Results already shows), one row per clearance (Last,
+    First M. · Fit/Unfit · kiosk visit date · program at the visit), oldest
+    first; total / Fit / Unfit / Male / Female come from the same rows.
+  * New config key `healthpass.reports.yearly_first_year` (2021).
+  * A deliberate exception to D-46: the monthly report stays a print view.
+
 * **The kiosk takes five readings per vital instead of seven** (D-80, amends
   D-74; FR-KSK-05, FR-KSK-07 amended, 2026-09-24). No schema change, no new
   package, no firmware change.

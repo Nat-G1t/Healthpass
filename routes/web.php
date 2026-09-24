@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\AnalyticsController as AdminAnalyticsController;
 use App\Http\Controllers\Admin\BatchRequestController as AdminBatchRequestController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\MonthlyReportController as AdminMonthlyReportController;
+use App\Http\Controllers\Admin\YearlyReportController as AdminYearlyReportController;
 use App\Http\Controllers\Auth\PasswordChangeController;
 use App\Http\Controllers\Director\AnalyticsController as DirectorAnalyticsController;
 use App\Http\Controllers\Director\AnomaliesController as DirectorAnomaliesController;
@@ -179,6 +180,13 @@ Route::middleware(['auth', 'role:college_admin', 'college.scope'])
         // managedCollege(), never a request parameter; only month + program
         // carry over from the analytics page's query string.
         Route::get('/analytics/print', AdminMonthlyReportController::class)->name('analytics.print');
+        // Yearly Clearance Report (FR-ADM-13, D-81): one calendar year's
+        // clearances as a DOWNLOADED PDF (dompdf). Same scope rule — the
+        // college is managedCollege(); the only input is ?year=. Its own
+        // throttle bucket (3rd arg): rendering a PDF is expensive, and without
+        // it this would share the per-user counter with the batch routes.
+        Route::get('/analytics/yearly-report', AdminYearlyReportController::class)
+            ->middleware('throttle:10,1,yearly-report')->name('analytics.yearly-report');
         // Activity Log (FR-ADM-10, D-49): who did what for THIS college —
         // batch submissions by any of its admins, and the Director's decisions
         // on them. Read-only and DERIVED from batch_requests; there is no
