@@ -4,6 +4,29 @@
 
 ### Added
 
+* **Both analytics pages animate in on every load; a single-sex month draws a
+  clean donut** (FR-ANL-04, FR-ANL-09, FR-ADM-08 amended, 2026-09-24). No new
+  decision, no schema change, no new package.
+  * On a reload, a month change or a college / program change, the cards fade
+    up one after another (`.hp-load-card`, 60 ms apart via a per-card `--i`),
+    each card's chart draws in as it lands, the purpose / BMI mini bars grow
+    (`.hp-load-bar`, `scaleX`) and the headline numbers (`[data-count-up]`)
+    count up from 0 — about one second in total.
+  * The sequence starts after a fixed CSS lead equal to the view-transition
+    fade (`--hp-load-lead`), so it is never played hidden under it. It is pure
+    CSS with no JS pause: pausing the cards until `pagereveal` could leave
+    Chrome's animations stuck at their first frame (a blank page) on Back.
+    `analytics.js` reads each card's own animation timing, so its chart and
+    counters start with the card however late the script loads. A page
+    restored from the back/forward cache is not replayed. The server still
+    renders the real numbers; the OS reduced-motion setting skips everything.
+  * Back / Forward onto an analytics page no longer leaves the filter spinner
+    up: both pages hide it on `pageshow` and reset the filter selects to the
+    page's real values.
+  * The donut's 2 px slice separator is drawn only when both slices are
+    non-zero, so a month with one sex (e.g. January 2026, 1 M / 0 F) no longer
+    shows a white notch at 12 o'clock. The legend is unchanged.
+
 * **BMI is flagged whenever it is not Normal, and past visits are recomputed**
   (D-78). No schema change, no new package.
   * `is_bmi_flagged` is now set when BMI **< 18.5 or ≥ 25.0** (Normal is

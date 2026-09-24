@@ -1,7 +1,8 @@
 {{-- Flagged Vitals by Sex (FR-ANL-14) — shared by the Director and College
      Admin analytics pages, sitting beside Students Screened by Sex. One
-     stacked bar per flag; hovering a segment shows that sex's count. --}}
-<x-hp.card>
+     stacked bar per flag; hovering a segment shows that sex's count.
+     $loadOrder = this card's place in the page's load-up sequence (--i). --}}
+<x-hp.card class="hp-load-card" style="--i: {{ $loadOrder ?? 0 }}">
     <h3 class="text-sm font-semibold text-hp-slate">Flagged Vitals by Sex</h3>
     <p class="mt-1 text-xs text-hp-slate/50">
         This month's flagged readings, split by the student's profile sex. Follows both filters.

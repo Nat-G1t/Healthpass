@@ -404,4 +404,20 @@ class AnalyticsPageTest extends TestCase
             ->assertSee('BMI Distribution')
             ->assertSee('No visits recorded');
     }
+
+    public function test_count_up_numbers_render_their_real_values(): void
+    {
+        // The load-up animation counts these up from 0 in JS; the HTML must
+        // still carry the REAL numbers (the no-JS / reduced-motion state).
+        $male = $this->makeStudent($this->ccs, self::BSIT, 'M');
+        $female = $this->makeStudent($this->ccs, self::BSCS, 'F');
+        $this->makeVisit($male, $this->ccs, self::BSIT, '2026-05-03', vitals: ['is_bp_flagged' => true]);
+        $this->makeVisit($female, $this->ccs, self::BSCS, '2026-05-04');
+
+        $this->page('?month=2026-05')
+            ->assertOk()
+            ->assertSee('<span data-count-up>2</span>', false)                // visits in the month
+            ->assertSee('text-hp-slate" data-count-up>1</p>', false)           // the BP flag tile
+            ->assertSee('leading-none text-hp-slate" data-count-up>2</p>', false); // donut centre total
+    }
 }

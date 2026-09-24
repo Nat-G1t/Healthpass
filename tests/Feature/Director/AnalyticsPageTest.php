@@ -396,6 +396,23 @@ class AnalyticsPageTest extends TestCase
         $this->assertSame([3, 1], $response->viewData('donut')['datasets'][0]['data']);
     }
 
+    public function test_count_up_numbers_render_their_real_values(): void
+    {
+        // The load-up animation counts these up from 0 in JS; the HTML must
+        // still carry the REAL numbers (the no-JS / reduced-motion state).
+        $male = $this->makeStudent($this->ccs, 'M');
+        $female = $this->makeStudent($this->ccs, 'F');
+        $this->makeVisit($male, $this->ccs, '2026-05-03', vitals: ['is_bp_flagged' => true]);
+        $this->makeVisit($male, $this->ccs, '2026-05-04');
+        $this->makeVisit($female, $this->ccs, '2026-05-05');
+
+        $this->page('?month=2026-05')
+            ->assertOk()
+            ->assertSee('<span data-count-up>3</span>', false)                // visits in the month
+            ->assertSee('text-hp-slate" data-count-up>1</p>', false)           // the BP flag tile
+            ->assertSee('leading-none text-hp-slate" data-count-up>3</p>', false); // donut centre total
+    }
+
     public function test_month_filter_scopes_every_card_except_the_trend(): void
     {
         $student = $this->makeStudent($this->ccs);

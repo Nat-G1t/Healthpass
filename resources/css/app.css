@@ -82,6 +82,11 @@
     50%  { transform: scale(1.06); }
     100% { transform: scale(1); }
 }
+/* Analytics mini bars growing out from their left edge (scaleX, not width). */
+@keyframes hp-grow-x {
+    from { transform: scaleX(0); }
+    to   { transform: scaleX(1); }
+}
 /* SVG success checkmark draw-in — pair with stroke-dasharray on the path. */
 @keyframes hp-check-draw {
     from { stroke-dashoffset: 48; }
@@ -125,6 +130,42 @@
     .hp-stagger > *:nth-child(5) { animation-delay: 160ms; }
     .hp-stagger > *:nth-child(6) { animation-delay: 200ms; }
     .hp-stagger > *:nth-child(7) { animation-delay: 240ms; }
+}
+
+/* ── Analytics load-up (FR-ANL-09/11, FR-ADM-08) ─────────────────────────────
+   Both analytics pages play one ~1 s entrance on every load. Each card carries
+   its reading-order position as `style="--i: N"`; custom properties inherit,
+   so a card's mini bars (and, in analytics.js, its chart and counters) read
+   the same --i and start as their card lands. Mini bars add their own row
+   index `--j` to ripple down the list.
+
+   The whole sequence starts after a fixed lead equal to the page's
+   view-transition fade (::view-transition-new(root) below), so it is never
+   played hidden underneath it. Pure CSS on purpose: an earlier version paused
+   the cards from JS until the page was revealed, and pausing/resuming during
+   a view transition can leave Chrome's animations stuck at their first frame
+   (a blank page). analytics.js reads these animations' own timing, so the
+   charts and counters stay in step with their card. */
+:root {
+    --hp-load-lead: var(--hp-dur-base);  /* wait out the view-transition fade */
+    --hp-load-step: 60ms;                /* gap between one card and the next */
+}
+
+.hp-load-card {
+    animation: hp-fade-up var(--hp-dur-base) var(--hp-ease-out) both;
+    animation-delay: calc(var(--hp-load-lead) + var(--i, 0) * var(--hp-load-step));
+}
+.hp-load-bar {
+    transform-origin: left;
+    animation: hp-grow-x var(--hp-dur-slow) var(--hp-ease-out) both;
+    animation-delay: calc(var(--hp-load-lead) + var(--i, 0) * var(--hp-load-step) + var(--j, 0) * 30ms);
+}
+
+/* The global kill switch above shortens durations but keeps delays, which
+   would hold a late card invisible — so reduced motion drops these outright
+   and the page shows its finished state at once. */
+@media (prefers-reduced-motion: reduce) {
+    .hp-load-card, .hp-load-bar { animation: none; }
 }
 
 /* ── Cross-page transitions — View Transitions API (§5.5) ────────────────────

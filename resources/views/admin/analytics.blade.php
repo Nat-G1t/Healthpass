@@ -8,7 +8,7 @@
          states it and the server derives it from managedCollege(). --}}
 
     {{-- ── College-scope banner (FR-ADM-01 / FR-ADM-06) ─────────────────── --}}
-    <div class="mb-6 flex items-start gap-3 rounded-xl border border-hp-orange/25 bg-hp-peach/40 px-4 py-3.5">
+    <div class="hp-load-card mb-6 flex items-start gap-3 rounded-xl border border-hp-orange/25 bg-hp-peach/40 px-4 py-3.5" style="--i: 0">
         <svg class="mt-0.5 h-4 w-4 shrink-0 text-hp-orange" fill="none" viewBox="0 0 24 24"
              stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round"
@@ -24,7 +24,7 @@
          Month + program scope every card below. Both selects auto-submit the
          GET form; the overlay shows while reloading. --}}
     <form method="GET" action="{{ route('admin.analytics') }}"
-          class="mb-4 flex flex-wrap items-center gap-3">
+          class="hp-load-card mb-4 flex flex-wrap items-center gap-3" style="--i: 1">
         @if (!empty($availableMonths))
             <label for="analytics-month" class="sr-only">Analytics month</label>
             <select id="analytics-month" name="month" data-filter-select
@@ -88,7 +88,7 @@
     </form>
 
     {{-- ── Clinic Visits by Program (FR-ADM-08) ─────────────────────────── --}}
-    <x-hp.card class="mb-5">
+    <x-hp.card class="hp-load-card mb-5" style="--i: 2">
         <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div>
                 <h3 class="text-sm font-semibold text-hp-slate">Clinic Visits by Program</h3>
@@ -97,7 +97,7 @@
                 </p>
             </div>
             <p class="text-3xl font-bold leading-none text-hp-orange">
-                {{ $totalVisits }}
+                <span data-count-up>{{ $totalVisits }}</span>
                 <span class="ml-1 text-sm font-medium text-hp-slate/50">visits in {{ $selectedMonthLabel }}</span>
             </p>
         </div>
@@ -166,8 +166,8 @@
                     @foreach ($purposeRows as $row)
                         <div class="grid grid-cols-[12rem_1fr_2.6rem] items-center gap-2.5">
                             <span class="text-right text-xs text-hp-slate/50">{{ $row['label'] }}</span>
-                            <div class="h-3 rounded-r"
-                                 style="background:#64748B; width: {{ $purposeMax > 0 ? round($row['count'] / $purposeMax * 100, 1) : 0 }}%"></div>
+                            <div class="hp-load-bar h-3 rounded-r"
+                                 style="--j: {{ $loop->index }}; background:#64748B; width: {{ $purposeMax > 0 ? round($row['count'] / $purposeMax * 100, 1) : 0 }}%"></div>
                             <span class="text-xs font-semibold tabular-nums text-hp-slate">{{ $row['count'] }}</span>
                         </div>
                     @endforeach
@@ -177,7 +177,7 @@
     </x-hp.card>
 
     {{-- ── Vital-Sign Flags (FR-ANL-10) ─────────────────────────────────── --}}
-    <x-hp.card class="mb-5">
+    <x-hp.card class="hp-load-card mb-5" style="--i: 3">
         <div class="mb-4">
             <h3 class="text-sm font-semibold text-hp-slate">Vital-Sign Flags</h3>
             <p class="mt-1 text-xs text-hp-slate/50">
@@ -199,7 +199,7 @@
                 @foreach ($flagTiles as $tile)
                     <div class="rounded-xl border border-hp-slate/10 px-4 py-4">
                         <p class="text-[11px] font-semibold uppercase tracking-wider text-hp-slate/50">{{ $tile['label'] }}</p>
-                        <p class="mt-1 text-3xl font-bold tabular-nums text-hp-slate">{{ $tile['count'] }}</p>
+                        <p class="mt-1 text-3xl font-bold tabular-nums text-hp-slate" data-count-up>{{ $tile['count'] }}</p>
                         <span class="mt-1.5 inline-block rounded-full bg-hp-orange/15 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
                             {{ number_format($tile['rate'], 1) }}% of screenings
                         </span>
@@ -222,7 +222,7 @@
         {{-- Visits per Month (FR-ANL-11) — ignores the month filter by design.
              Unlike the Director's, it stays inside this college: an admin is
              never shown another college's numbers, aggregated or not. --}}
-        <x-hp.card class="mb-5">
+        <x-hp.card class="hp-load-card mb-5" style="--i: 4">
             <h3 class="text-sm font-semibold text-hp-slate">Visits per Month</h3>
             <p class="mt-1 text-xs text-hp-slate/50">
                 Clinic visits across all months with data — your college's
@@ -248,7 +248,7 @@
     <div class="mb-5 grid gap-5 lg:grid-cols-2">
 
         {{-- Students Screened by Sex (FR-ANL-04 as amended by D-32). --}}
-        <x-hp.card>
+        <x-hp.card class="hp-load-card" style="--i: 5">
             <h3 class="text-sm font-semibold text-hp-slate">Students Screened by Sex</h3>
             <p class="mt-1 text-xs text-hp-slate/50">
                 Captured kiosk visits, counted once per visit. Follows both filters.
@@ -266,7 +266,7 @@
                     <div class="relative h-40 w-40 shrink-0" data-by-sex data-chart="{{ json_encode($donut) }}">
                         <canvas role="img" aria-label="Donut chart: students screened by sex. The same counts are in the legend beside it."></canvas>
                         <div class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                            <p class="text-2xl font-bold leading-none text-hp-slate">{{ $totalScreened }}</p>
+                            <p class="text-2xl font-bold leading-none text-hp-slate" data-count-up>{{ $totalScreened }}</p>
                             <p class="mt-1 text-[10px] font-semibold uppercase tracking-widest text-hp-slate/40">screened</p>
                         </div>
                     </div>
@@ -290,11 +290,11 @@
             @endif
         </x-hp.card>
 
-        @include('partials.analytics-flags-by-sex')
+        @include('partials.analytics-flags-by-sex', ['loadOrder' => 6])
     </div>
 
     {{-- ── BMI Distribution (FR-ANL-12) — last card, per the mockup ─────── --}}
-    <x-hp.card>
+    <x-hp.card class="hp-load-card" style="--i: 7">
         <h3 class="text-sm font-semibold text-hp-slate">BMI Distribution</h3>
         <p class="mb-3.5 mt-1 text-xs text-hp-slate/50">
             Where screened students fall across BMI categories — rule-based buckets of captured
@@ -311,8 +311,8 @@
                 @foreach ($bmiRows as $row)
                     <div class="grid grid-cols-[12rem_1fr_2.6rem] items-center gap-2.5">
                         <span class="text-right text-xs text-hp-slate/50">{{ $row['label'] }}</span>
-                        <div class="h-3 rounded-r"
-                             style="background:#FF8C2A; opacity: {{ $row['opacity'] }}; width: {{ $bmiMax > 0 ? round($row['count'] / $bmiMax * 100, 1) : 0 }}%"></div>
+                        <div class="hp-load-bar h-3 rounded-r"
+                             style="--j: {{ $loop->index }}; background:#FF8C2A; opacity: {{ $row['opacity'] }}; width: {{ $bmiMax > 0 ? round($row['count'] / $bmiMax * 100, 1) : 0 }}%"></div>
                         <span class="text-xs font-semibold tabular-nums text-hp-slate">{{ $row['count'] }}</span>
                     </div>
                 @endforeach
@@ -342,6 +342,16 @@
                     overlay.classList.add('flex');
                     select.form.submit();
                 });
+            });
+
+            // Back / Forward can bring this page back exactly as it was left:
+            // spinner still up, and the select showing the choice that
+            // navigated away. Hide the spinner and put the selects back to
+            // what this page actually shows (their server-rendered values).
+            window.addEventListener('pageshow', () => {
+                overlay.classList.add('hidden');
+                overlay.classList.remove('flex');
+                document.querySelectorAll('[data-filter-select]').forEach((select) => select.form.reset());
             });
         })();
     </script>

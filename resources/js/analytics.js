@@ -12,7 +12,8 @@
  * Dedicated Vite entry (same pattern as nurse/live-queue.js) so Chart.js is
  * only downloaded on these pages, never in the app-wide bundle. Chart.js v4 is
  * tree-shakeable: registering only the pieces used keeps the build lean.
- * The purpose + BMI mini bars are server-rendered HTML — no JS needed.
+ * The purpose + BMI mini bars are server-rendered HTML — no JS needed (their
+ * load-up growth is CSS, .hp-load-bar in app.css).
  *
  * Legends are server-rendered beside each chart (they carry counts the
  * built-in legend can't show), so `plugins.legend` stays off everywhere.
@@ -32,6 +33,7 @@ import {
     PointElement,
     Tooltip,
 } from 'chart.js';
+import { countUp, prefersReducedMotion } from './shared/motion.js';
 
 Chart.register(
     ArcElement, BarController, BarElement, CategoryScale, DoughnutController,
@@ -40,11 +42,41 @@ Chart.register(
 
 Chart.defaults.font.family = "'Poppins', sans-serif";
 
-// Motion pass (§8): one global entrance animation for every chart — set ONCE
-// here, never per-chart. Skipped entirely under the OS "reduce motion" setting.
-Chart.defaults.animation = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    ? false
-    : { duration: 600, easing: 'easeOutQuart' };
+// ── Load-up sequence (FR-ANL-09/11, FR-ADM-08) ───────────────────────────
+// On every load (a filter change is a full reload too) the cards fade up one
+// after another (CSS: .hp-load-card in app.css), and each card's chart draws
+// in and its headline numbers count up as that card lands. Reduced motion is
+// the ONE switch that turns all of it off: no chart animation, no counting,
+// charts built at once — the page shows its finished state immediately.
+const reduceMotion = prefersReducedMotion();
+
+Chart.defaults.animation = reduceMotion ? false : { duration: 500, easing: 'easeOutQuart' };
+
+/**
+ * Run `start` as `el`'s card lands. The card's fade-up is a plain CSS
+ * animation (.hp-load-card) that began on the page's first frame, possibly
+ * before this module ran — so ask that animation how much of its delay is
+ * left, and the chart / counter inside stays in step with its card however
+ * late this script loads. No animation (reduced motion) → start at once.
+ */
+function afterCardLands(el, start) {
+    const fade = reduceMotion ? null : el.closest('.hp-load-card')?.getAnimations()[0];
+    if (!fade) {
+        start();
+        return;
+    }
+    const waitMs = fade.effect.getComputedTiming().delay - (fade.currentTime ?? 0);
+    setTimeout(start, Math.max(0, waitMs));
+}
+
+// Headline numbers: the server renders the REAL value (the no-JS and
+// reduced-motion state); here it drops to 0 and counts back up.
+document.querySelectorAll('[data-count-up]').forEach((el) => {
+    const target = parseInt(el.textContent, 10) || 0;
+    if (reduceMotion) return;
+    el.textContent = '0';
+    afterCardLands(el, () => countUp(el, target, { duration: 600 }));
+});
 
 /**
  * Read an --hp-* colour token from app.css. They are stored as bare "R G B"
@@ -102,7 +134,7 @@ if (visitsHost) {
         },
     };
 
-    new Chart(visitsHost.querySelector('canvas'), {
+    afterCardLands(visitsHost, () => new Chart(visitsHost.querySelector('canvas'), {
         type: 'bar',
         data: chartData(visitsHost),
         options: {
@@ -131,7 +163,7 @@ if (visitsHost) {
             plugins: { legend: { display: false } },
         },
         plugins: [rowTotals],
-    });
+    }));
 }
 
 // ── Visits per Month — line (FR-ANL-11) ──────────────────────────────────
@@ -170,7 +202,7 @@ if (trendHost) {
 
     const trendData = chartData(trendHost);
 
-    new Chart(trendHost.querySelector('canvas'), {
+    afterCardLands(trendHost, () => new Chart(trendHost.querySelector('canvas'), {
         type: 'line',
         data: {
             labels: trendData.labels,
@@ -206,7 +238,7 @@ if (trendHost) {
             plugins: { legend: { display: false } },
         },
         plugins: [latestPointLabels],
-    });
+    }));
 }
 
 // ── Students Screened by Sex — doughnut (FR-ANL-04) ──────────────────────
@@ -215,15 +247,17 @@ const donutHost = document.querySelector('[data-by-sex]');
 if (donutHost) {
     const donutData = chartData(donutHost);
 
-    new Chart(donutHost.querySelector('canvas'), {
+    afterCardLands(donutHost, () => new Chart(donutHost.querySelector('canvas'), {
         type: 'doughnut',
         data: {
             labels: donutData.labels,
             datasets: donutData.datasets.map((dataset) => ({
                 ...dataset,
-                // 2px surface gap between the slices.
+                // 2px surface gap between the slices — only when there are two
+                // to separate. A zero slice still draws its border, which left
+                // a white notch at 12 o'clock on a single-sex month (FR-ANL-04).
                 borderColor: C.surface,
-                borderWidth: 2,
+                borderWidth: dataset.data.filter((count) => count > 0).length > 1 ? 2 : 0,
             })),
         },
         options: {
@@ -238,7 +272,7 @@ if (donutHost) {
                 legend: { display: false },
             },
         },
-    });
+    }));
 }
 
 // ── Flagged Vitals by Sex — 100% stacked bar (FR-ANL-14) ─────────────────
@@ -273,7 +307,7 @@ if (flagsHost) {
         },
     };
 
-    new Chart(flagsHost.querySelector('canvas'), {
+    afterCardLands(flagsHost, () => new Chart(flagsHost.querySelector('canvas'), {
         type: 'bar',
         data: {
             labels: flagsData.labels,
@@ -320,5 +354,5 @@ if (flagsHost) {
             },
         },
         plugins: [stackTotals],
-    });
+    }));
 }
