@@ -620,7 +620,7 @@ Each vital screen has:
 | 2/4 | Weight | ⚖️ | Load cell scale. Captured: e.g. 64 kg + computed BMI panel (peach bg, shows BMI + status badge + "from Xcm + Ykg"). |
 | 3/4 | Temperature | 🌡️ | IR forehead thermometer. Captured: e.g. 37.9°C, "Slightly Elevated" (flagged badge), normal range note. |
 | — | *(BP step, heart-rate panel)* | ❤️ | **D-66:** the heart-rate sub-panel carries a status badge reading **"Normal" or "High"** (> 100 bpm, from the injected `thresholds.hrMax`) — a status, never an interpretation, and never Fit/Unfit. |
-| 4/4 | Blood Pressure | 💪 | Cuff BP monitor. Has its own instruction step ("Place your arm in the cuff") before measuring. Pulsing arm emoji during scan. Captured: e.g. 145/92 mmHg "Elevated — Flagged" + Heart Rate in peach panel (78 bpm, Normal badge). |
+| 4/4 | Blood Pressure | 💪 | Cuff BP monitor. Has its own instruction step ("Place your arm in the cuff") before measuring. Pulsing arm emoji during scan. Captured: e.g. 145/92 mmHg "Elevated — Flagged" + Heart Rate in peach panel (78 bpm, Normal badge). **(D-82)** A reading from the Bluetooth monitor also lists **Monitor checks** between the badges and the heart-rate panel — Body movement, Cuff too loose, Irregular pulse, Pulse out of range, Improper position — each ✓ OK or ⚠ Detected, captioned "As reported by the blood-pressure monitor."; hidden for a typed BP or a reading with no status. Information only — no flag, no re-check, never Fit/Unfit. |
 
 #### Screen 8 — Questionnaire (rewritten by D-56; rows replaced by D-63)
 - Heading **"Physical Signs Disorder of:"**, sub-line "Answer YES or NO for each."

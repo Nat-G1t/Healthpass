@@ -1791,6 +1791,40 @@ college; an empty year still downloads; `?college=` cannot move the scope.
 
 ---
 
+## E2E-30 — The kiosk BP result lists the monitor's five checks (D-82)
+
+**Goal:** confirm a Bluetooth BP reading shows the monitor's five checks on the
+kiosk as information, a typed BP shows none, and the nurse page is unchanged.
+
+**Accounts:** a student with an appointment **today**; the nurse. The Pi's BP
+bridge running, or a tester who can POST to `/api/kiosk/bp-reading` with the
+`X-Kiosk-Key` header.
+
+**Steps:**
+
+1. At the kiosk, sign in, **I Agree**, enter height, weight and temperature,
+   and on the **Blood Pressure** step tap **Start**. Wait ~3 s.
+2. Take a reading on the monitor (or POST the §11.4 sample with
+   `irregular_pulse: true` and the other four `false`, `suspect: false`). →
+   **Expect:** the numbers, then a **Monitor checks** panel listing Body
+   movement, Cuff too loose, **Irregular pulse ⚠ Detected**, Pulse out of range,
+   Improper position — the other four **✓ OK** — and the caption "As reported
+   by the blood-pressure monitor."; the heart-rate panel below; **no** "The
+   monitor noticed movement or a loose cuff" hint; Retry and Continue visible
+   without scrolling.
+3. Tap **↻ Retry**. → **Expect:** the panel is gone and Start is back.
+4. Triple-tap the corner logo and type a BP (e.g. 120 / 80 / 70). →
+   **Expect:** "Entered manually" and **no** Monitor checks panel.
+5. Retry, take a monitor reading again, and submit the visit.
+6. As the nurse, open that visit's encode page. → **Expect:** exactly as
+   before — its "⚑ Irregular pulse" badge shows; no five-check panel.
+
+**Pass criteria:** the five checks show only for a monitor reading; irregular
+pulse never triggers the retake hint, a flag or Fit/Unfit; the nurse page is
+unchanged.
+
+---
+
 ## Recording results
 
 For each scenario, record: **Pass / Fail / Blocked (not built)**, the tester

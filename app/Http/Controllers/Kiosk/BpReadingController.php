@@ -68,8 +68,10 @@ final class BpReadingController extends Controller
 
     /**
      * The newest unclaimed reading, or null. Only what the kiosk needs leaves
-     * the server: the numbers, `suspect` (to suggest a retake) and
-     * `received_at`. The device flags and raw bytes stay server-side.
+     * the server: the numbers, `suspect` (to suggest a retake), the monitor's
+     * five status `flags` (shown as "Monitor checks", display only — D-82) and
+     * `received_at`. The raw bytes, device model, mean arterial pressure and
+     * device clock stay server-side.
      */
     public function latest(): JsonResponse
     {
@@ -112,9 +114,13 @@ final class BpReadingController extends Controller
         return response()->json(['ok' => true, 'reading' => $this->forScreen($reading)]);
     }
 
-    /** The part of a reading the kiosk screen may see. */
+    /**
+     * The part of a reading the kiosk screen may see. `flags` is for display
+     * only (D-82): submit still takes the device record from the session copy
+     * claim() stored, never from anything the kiosk sends back.
+     */
     private function forScreen(array $reading): array
     {
-        return Arr::only($reading, ['systolic', 'diastolic', 'pulse', 'suspect', 'received_at']);
+        return Arr::only($reading, ['systolic', 'diastolic', 'pulse', 'flags', 'suspect', 'received_at']);
     }
 }

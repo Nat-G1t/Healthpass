@@ -4,6 +4,26 @@
 
 ### Added
 
+* **The kiosk's BP result shows the blood-pressure monitor's five checks**
+  (D-82, supersedes the kiosk clause of D-58 (8), FR-KSK-07a amended, PRD
+  revision 1.66, 2026-09-25). No schema change, no new package, no new route.
+  * A captured reading from the Bluetooth monitor lists a **Monitor checks**
+    panel — Body movement, Cuff too loose, Irregular pulse, Pulse out of
+    range, Improper position — each **✓ OK** or **⚠ Detected** ("— Not
+    reported" when the monitor left a key out), as information only.
+  * Hidden for a typed BP and for a reading with no status (`flags` = `{}`);
+    Retry and manual entry never show a stale panel.
+  * `GET /kiosk/bp-reading/latest` and the claim response now include
+    `flags`; `raw`, `device_model`, `mean_arterial` and `taken_at` still stay
+    server-side, and submit still reads the device record from the session.
+  * Unchanged: the nurse encode page's irregular-pulse badge, the retake
+    suggestion (still `suspect` only), §7.4 flags, the D-72 re-check and
+    analytics.
+  * Tests: `latest`/`claim` send the flags and nothing else new; an empty
+    status reaches the screen empty; new `tests/js/kiosk-bp-monitor-checks.test.js`
+    (sample reading → irregular pulse Detected, no retake hint; empty flags,
+    Retry, manual entry and the simulate path → no panel).
+
 * **The Kiosk Tutorial uses real illustrations, fills the page, and tells
   students to keep both feet inside the weighing plate** (FR-STU-11
   amended, PRD revision 1.65, 2026-09-25). No schema change, no new

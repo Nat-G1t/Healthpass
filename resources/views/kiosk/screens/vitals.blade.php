@@ -289,6 +289,28 @@
                     </div>
                 </template>
 
+                {{-- ── Monitor checks (step 4, monitor readings only) — D-82. ── --}}
+                {{-- The BP monitor's own five status checks, listed as extra
+                     information. Hidden for a typed BP or a reading that carried
+                     no status. Never an assessment (FR-KSK-14): they count
+                     toward no flag, re-check or Fit/Unfit. --}}
+                <template x-if="showsMonitorChecks()">
+                    <div class="w-full rounded-xl border border-hp-slate/10 bg-hp-bg/60 px-4 py-3">
+                        <p class="text-xs font-semibold uppercase tracking-wider text-hp-slate/50">Monitor checks</p>
+                        <ul class="mt-1 divide-y divide-hp-slate/10">
+                            <template x-for="check in monitorCheckList" :key="check.key">
+                                <li class="flex items-center justify-between gap-3 py-1.5">
+                                    <span class="text-base text-hp-slate" x-text="check.label"></span>
+                                    <span x-show="monitorCheckStatus(check.key) === 'ok'" class="rounded-full bg-emerald-50 px-3 py-0.5 text-sm font-semibold text-emerald-600">✓ OK</span>
+                                    <span x-show="monitorCheckStatus(check.key) === 'detected'" x-cloak class="rounded-full bg-hp-peach/40 px-3 py-0.5 text-sm font-semibold text-hp-orange">⚠ Detected</span>
+                                    <span x-show="monitorCheckStatus(check.key) === 'unknown'" x-cloak class="text-sm font-medium text-hp-slate/40">— Not reported</span>
+                                </li>
+                            </template>
+                        </ul>
+                        <p class="mt-1 text-xs text-hp-slate/50">As reported by the blood-pressure monitor.</p>
+                    </div>
+                </template>
+
                 {{-- ── Heart-rate sub-panel (step 4 only) — peach (FR-KSK-05). ── --}}
                 <template x-if="state.vitalStep === 4 && fieldValue('heartRate') !== null">
                     <div class="w-full rounded-xl bg-hp-peach/30 p-4">

@@ -179,12 +179,38 @@ class KioskBpReadingTest extends TestCase
 
         $reading = $this->getJson(route('kiosk.bp-reading.latest'))->assertOk()->json('reading');
 
-        // No flags, no raw bytes, no device model: those stay server-side.
+        // The monitor's five checks reach the screen for display (D-82); the raw
+        // bytes, device model, mean arterial pressure and device clock stay server-side.
         $this->assertSame(
-            ['systolic' => 128, 'diastolic' => 82, 'pulse' => 72, 'suspect' => true],
+            [
+                'systolic' => 128,
+                'diastolic' => 82,
+                'pulse' => 72,
+                'flags' => [
+                    'body_movement' => false,
+                    'cuff_too_loose' => false,
+                    'irregular_pulse' => true,
+                    'pulse_out_of_range' => false,
+                    'improper_position' => false,
+                ],
+                'suspect' => true,
+            ],
             Arr::except($reading, 'received_at'),
         );
         $this->assertNotEmpty($reading['received_at']);
+        foreach (['raw', 'device_model', 'mean_arterial', 'taken_at'] as $hidden) {
+            $this->assertArrayNotHasKey($hidden, $reading);
+        }
+    }
+
+    /** A reading with no measurement status reaches the screen with empty flags, so no panel shows (D-82). */
+    public function test_a_reading_without_status_reaches_the_screen_with_empty_flags(): void
+    {
+        $this->postReading($this->reading(['flags' => new \stdClass]))->assertCreated();
+
+        $reading = $this->getJson(route('kiosk.bp-reading.latest'))->assertOk()->json('reading');
+
+        $this->assertSame([], $reading['flags']);
     }
 
     public function test_latest_is_null_once_the_ttl_lapses(): void
@@ -215,7 +241,13 @@ class KioskBpReadingTest extends TestCase
         $this->withSession($this->signedInStudent())
             ->postJson(route('kiosk.bp-reading.claim'), ['received_at' => $receivedAt])
             ->assertOk()
-            ->assertJson(['ok' => true, 'reading' => ['systolic' => 128, 'diastolic' => 82, 'pulse' => 72]])
+            ->assertJson(['ok' => true, 'reading' => [
+                'systolic' => 128,
+                'diastolic' => 82,
+                'pulse' => 72,
+                'flags' => ['irregular_pulse' => true, 'body_movement' => false], // D-82: shown on the kiosk
+            ]])
+            ->assertJsonMissingPath('reading.raw')
             ->assertSessionHas(BpReadingController::SESSION_KEY.'.raw', '16800052006100ea07090f0e1e0548000400');
 
         // Gone from the cache: nobody can poll or claim it again.

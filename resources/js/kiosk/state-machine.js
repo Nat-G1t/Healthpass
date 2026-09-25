@@ -207,6 +207,20 @@ export const VITALS = {
 };
 
 /**
+ * The blood-pressure monitor's five status checks (D-82), in the order the
+ * kiosk lists them under a captured BP reading. The keys must match
+ * StoreBpReadingRequest::FLAGS — they are the daemon's `flags` keys. Display
+ * only: they count toward no flag, re-check or analytics.
+ */
+export const BP_MONITOR_CHECKS = [
+    { key: 'body_movement', label: 'Body movement' },
+    { key: 'cuff_too_loose', label: 'Cuff too loose' },
+    { key: 'irregular_pulse', label: 'Irregular pulse' },
+    { key: 'pulse_out_of_range', label: 'Pulse out of range' },
+    { key: 'improper_position', label: 'Improper position' },
+];
+
+/**
  * A fresh, uncaptured step. phase: ready → scanning → captured; the blood-
  * pressure step also has 'waiting', from tapping Start until the Bluetooth
  * monitor's reading arrives (D-59), and the height/weight/temperature steps
@@ -225,6 +239,7 @@ function vitalStep() {
         notice: '', // non-blocking nudge (e.g. sensor degraded to manual)
         values: {}, // field key → number, filled on capture
         suspect: false, // D-58: the BP monitor itself flagged the captured reading
+        monitorChecks: null, // D-82: the BP monitor's five status checks for the captured reading; display only
         samples: [], // D-74: sensor readings buffered while 'sampling'
         windowOver: false, // D-74: SAMPLE_WINDOW_MS has passed since the first sample
     };
@@ -352,6 +367,8 @@ export function kioskMachine() {
         socialHistoryLabels: SOCIAL_HISTORY_LABELS,
         detailMax: DETAIL_MAX, // shown as the details panel's "N / 120" counter
         detailMin: DETAIL_MIN, // the panel's "at least 3 characters" hint (D-75)
+        // The BP monitor's five checks, so Blade can x-for over them (D-82).
+        monitorCheckList: BP_MONITOR_CHECKS,
 
         // Web Serial UI status (FR-KSK-07). Lives on the COMPONENT, not in
         // `state`, because the physical sensor connection outlives one student:
@@ -595,7 +612,7 @@ export function kioskMachine() {
             // shows the usual "try again or enter it manually" nudge.
             const forStep = { S: reading.systolic, D: reading.diastolic };
             if (reading.pulse != null) forStep.R = reading.pulse;
-            this.receiveReading(forStep, { suspect: reading.suspect === true });
+            this.receiveReading(forStep, { suspect: reading.suspect === true, flags: reading.flags ?? null });
             // The step has left 'waiting', so this restarts the idle countdown:
             // a reading arriving counts as activity (FR-KSK-15).
             this.bumpIdle();
@@ -1296,9 +1313,10 @@ export function kioskMachine() {
          * The dev "Simulate reading" button calls this SAME function, so manual
          * testing exercises the exact production path. Readings are grouped by the
          * step they belong to, so BP's three values capture together.
-         * `suspect` (D-58) marks a reading the BP monitor itself flagged.
+         * `suspect` (D-58) marks a reading the BP monitor itself flagged;
+         * `flags` (D-82) are the monitor's five status checks, shown only.
          */
-        receiveReading(reading, { suspect = false } = {}) {
+        receiveReading(reading, { suspect = false, flags = null } = {}) {
             const byStep = {};
             for (const [sensorKey, raw] of Object.entries(reading)) {
                 const found = this.findField(sensorKey);
@@ -1306,7 +1324,7 @@ export function kioskMachine() {
                 (byStep[found.step] ??= []).push({ field: found.field, value: Number(raw) });
             }
             for (const [step, items] of Object.entries(byStep)) {
-                this.captureStepFromSensor(Number(step), items, suspect);
+                this.captureStepFromSensor(Number(step), items, { suspect, flags });
             }
         },
 
@@ -1324,7 +1342,7 @@ export function kioskMachine() {
          * (FR-KSK-07): an incomplete or out-of-range reading is never a dead end —
          * it falls back to ready with a nudge to retry or enter it manually.
          */
-        captureStepFromSensor(step, items, suspect = false) {
+        captureStepFromSensor(step, items, { suspect = false, flags = null } = {}) {
             const s = this.state.vitalSteps[step];
             const meta = VITALS[step];
             s.phase = 'scanning';
@@ -1342,6 +1360,7 @@ export function kioskMachine() {
                 s.values = values;
                 s.method = 'sensor';
                 s.suspect = suspect;
+                s.monitorChecks = flags;
                 s.phase = 'captured';
                 s.notice = '';
             }, SCAN_MS);
@@ -1550,6 +1569,7 @@ export function kioskMachine() {
             const s = this.state.vitalSteps[pad.step];
             s.values = { ...s.values, ...pad.draft };
             s.method = 'manual';
+            s.monitorChecks = null; // D-82: a typed BP has no monitor checks
             s.phase = 'captured';
             s.notice = '';
             pad.open = false;
@@ -1590,6 +1610,24 @@ export function kioskMachine() {
 
         isLastStep() {
             return this.stepIndex() >= this.stepCount();
+        },
+
+        /**
+         * Whether the captured BP result lists the monitor's checks (D-82):
+         * only for a reading from the monitor that carried at least one known
+         * status. A typed BP, or a reading with `flags` = {}, shows no panel.
+         */
+        showsMonitorChecks() {
+            const s = this.currentStep();
+            if (this.state.vitalStep !== BP_STEP || s.method !== 'sensor' || !s.monitorChecks) return false;
+            return BP_MONITOR_CHECKS.some(({ key }) => typeof s.monitorChecks[key] === 'boolean');
+        },
+
+        /** One check's status for the panel: 'detected' | 'ok' | 'unknown' (not reported). */
+        monitorCheckStatus(key) {
+            const value = this.currentStep().monitorChecks?.[key];
+            if (typeof value !== 'boolean') return 'unknown';
+            return value ? 'detected' : 'ok';
         },
 
         /** Discard the current step's reading and return it to "ready". */
