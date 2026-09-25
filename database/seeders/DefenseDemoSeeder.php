@@ -18,7 +18,8 @@ use RuntimeException;
  *     php artisan db:seed --class=DefenseDemoSeeder --force
  *
  * It builds exactly the data the laptop shows (the same dev seeders as
- * DatabaseSeeder), then makes it safe for the internet:
+ * DatabaseSeeder) plus the 2021–2025 history (HistoricalClearanceSeeder),
+ * then makes it safe for the internet:
  *
  *  - the demo Director becomes **Dev Director** and the demo Physician becomes
  *    **Dev Physician** (license 123456) — real inboxes, a one-time password
@@ -77,7 +78,10 @@ class DefenseDemoSeeder extends Seeder
         app()->instance('env', 'defense-demo');
 
         try {
-            $this->call(DatabaseSeeder::class);
+            $this->call([
+                DatabaseSeeder::class,
+                HistoricalClearanceSeeder::class, // 2021–2025, for the yearly report (D-81)
+            ]);
         } finally {
             app()->instance('env', $environment);
         }

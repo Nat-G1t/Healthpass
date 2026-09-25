@@ -101,16 +101,16 @@ class DemoClinicVisitSeeder extends Seeder
      * forms, so the Live Queue badge and Visits by Purpose show a mix
      * ('others' needs detail text, so it is left out).
      */
-    private const DEMO_REASONS = [
+    protected const DEMO_REASONS = [
         ['assessment', 'ojt'], ['clearance', 'fieldtrip'], ['assessment', 'rle'],
         ['clearance', 'outbound'], ['assessment', 'sports'], ['assessment', 'off_campus'],
     ];
 
     /** The Director whose approval every demo batch carries. */
-    private User $director;
+    protected User $director;
 
     /** Each college's administrator, keyed by college id — the batch's requester. @var Collection<int, User> */
-    private Collection $admins;
+    protected Collection $admins;
 
     public function run(): void
     {
@@ -252,7 +252,7 @@ class DemoClinicVisitSeeder extends Seeder
      * @param  array<string, int|float>  $corrections  clinic-corrected vitals
      * @return array{encoded_vitals: array<string, int|float>}
      */
-    private function encodedVitals(ClinicVisit $visit, int $respiratoryRate, array $corrections = []): array
+    protected function encodedVitals(ClinicVisit $visit, int $respiratoryRate, array $corrections = []): array
     {
         $vs = $visit->vitalSigns()->firstOrFail();
         // D-66: the flag comes from the SAME helper the encode controller uses,
@@ -816,7 +816,7 @@ class DemoClinicVisitSeeder extends Seeder
      * keeps a created_at/updated_at that was set explicitly instead of
      * stamping "now".
      */
-    private function approvedBatch(
+    protected function approvedBatch(
         string $reference,
         College $college,
         Carbon $date,
@@ -854,7 +854,7 @@ class DemoClinicVisitSeeder extends Seeder
      * generated plus the roster row that points at it (BR-08), created at the
      * moment of approval.
      */
-    private function seat(BatchRequest $batch, User $student, string $reference, string $status): Appointment
+    protected function seat(BatchRequest $batch, User $student, string $reference, string $status): Appointment
     {
         $appointment = new Appointment([
             'reference_no' => $reference,
@@ -890,7 +890,7 @@ class DemoClinicVisitSeeder extends Seeder
      * Plus an all-clear questionnaire and, on an `assessment` batch only, a
      * Personal / Social History (D-68).
      */
-    private function createSpreadVitalsAndScreening(ClinicVisit $visit, int $seq, string $formType): void
+    protected function createSpreadVitalsAndScreening(ClinicVisit $visit, int $seq, string $formType): void
     {
         // Deterministic flag sprinkle (~3–4% each, non-overlapping mostly).
         $bpFlagged = $seq % 29 === 3;
@@ -955,7 +955,7 @@ class DemoClinicVisitSeeder extends Seeder
      * Medical Clearance, exactly as Save & Close behaves. $seq varies the
      * answers so the demo screens show ticked and untouched rows alike.
      */
-    private function medicalAssessment(ClearanceRecord $record, string $formType, int $seq = 0): void
+    protected function medicalAssessment(ClearanceRecord $record, string $formType, int $seq = 0): void
     {
         if ($formType !== 'assessment') {
             return;
