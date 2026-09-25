@@ -543,6 +543,28 @@ sudo systemctl restart nginx php8.2-fpm     # or: healthpass-serve
 sudo systemctl restart healthpass-bp        # the BP bridge (§4a) runs from this checkout
 ```
 
+**Check the branch before pulling.** The Pi must track `main`. `git pull` only
+updates the branch you are on, so a Pi left on an old feature branch "updates"
+successfully and gets nothing new:
+
+```bash
+git branch --show-current            # must print: main
+git fetch origin && git checkout main && git pull --ff-only   # if it doesn't
+```
+
+**BP readings stop arriving after an update?** Restarting `healthpass-bp` can
+leave the Bluetooth link to the monitor stuck, even when no BP code changed
+(seen 2026-09-25). Watch `journalctl -u healthpass-bp -f` while taking a
+measurement; if it never reaches `posted to HealthPass: 201`, reset Bluetooth
+and the bridge:
+
+```bash
+sudo systemctl restart bluetooth healthpass-bp
+```
+
+If that doesn't bring readings back, **reboot the Pi** (`sudo reboot`). The
+bridge starts at boot (§4a) and reconnects to the monitor by itself.
+
 ### Testing the kiosk with your own ID card
 
 Students never self-schedule (D-61), so after an update there is usually no one
