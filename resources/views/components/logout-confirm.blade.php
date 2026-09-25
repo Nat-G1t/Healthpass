@@ -79,7 +79,11 @@
 
                     <form method="POST" action="{{ route('logout') }}">
                         @csrf
-                        <x-hp.button type="submit" variant="primary" data-pending-label="Logging out…">Log out</x-hp.button>
+                        {{-- Wide enough for the spinner + "Logging out…" on one
+                             line: page-motion.js freezes the width at submit, so
+                             a narrower button wrapped the label and both buttons
+                             grew taller. --}}
+                        <x-hp.button type="submit" variant="primary" data-pending-label="Logging out…" class="min-w-[10.5rem] whitespace-nowrap">Log out</x-hp.button>
                     </form>
                 </div>
             </div>
