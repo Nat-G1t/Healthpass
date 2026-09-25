@@ -543,6 +543,24 @@ sudo systemctl restart nginx php8.2-fpm     # or: healthpass-serve
 sudo systemctl restart healthpass-bp        # the BP bridge (§4a) runs from this checkout
 ```
 
+### Testing the kiosk with your own ID card
+
+Students never self-schedule (D-61), so after an update there is usually no one
+with an appointment today. This testing command books one — an approved CCS
+batch of one plus today's appointment — creating the student first if that
+number has no account (its `qr_token` is the student number, so the physical
+ID's QR scans; email login is `<number>@kiosk.test` / `password`):
+
+```bash
+sudo -u www-data php artisan healthpass:kiosk-test-student <student-number>
+sudo -u www-data php artisan healthpass:kiosk-test-student <student-number> --form=assessment --sex=F
+```
+
+A finished kiosk visit uses up the day's appointment — run it again for the next
+pass. The student number is typed here and never committed (no real student data
+in the repo). The rows it writes are real data in this database, so don't run it
+on a database you will demo from.
+
 ---
 
 ## 7. Web Serial permission persistence in unattended kiosk mode (FR-HW-05)
