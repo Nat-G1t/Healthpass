@@ -137,7 +137,11 @@ class BatchRequestController extends Controller
     {
         $college = $this->managedCollege();
 
+        // Only students whose account is active: a deactivated (e.g.
+        // graduated) student cannot be put on a batch — the Form Request
+        // refuses them too.
         $students = $college->studentProfiles()
+            ->whereHas('user', fn ($query) => $query->where('status', 'active'))
             ->orderBy('last_name')
             ->orderBy('first_name')
             ->get(['id', 'student_number', 'first_name', 'middle_name', 'last_name', 'course', 'year_level'])

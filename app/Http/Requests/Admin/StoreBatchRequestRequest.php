@@ -6,6 +6,7 @@ namespace App\Http\Requests\Admin;
 
 use App\Models\BatchRequest;
 use App\Models\StudentProfile;
+use App\Models\User;
 use App\Services\ClinicScheduleService;
 use App\Services\ScheduleClashService;
 use Illuminate\Foundation\Http\FormRequest;
@@ -78,7 +79,10 @@ class StoreBatchRequestRequest extends FormRequest
             'students.*' => [
                 'integer',
                 'distinct',
-                Rule::exists('student_profiles', 'id')->where('college_id', $collegeId),
+                Rule::exists('student_profiles', 'id')
+                    ->where('college_id', $collegeId)
+                    // A deactivated account (e.g. a graduate) is off the roster.
+                    ->whereIn('user_id', User::where('status', 'active')->select('id')),
             ],
         ];
     }
@@ -100,7 +104,7 @@ class StoreBatchRequestRequest extends FormRequest
             'students.required' => 'Select at least one student for this batch.',
             'students.min' => 'Select at least one student for this batch.',
             'students.*.distinct' => 'A student was selected more than once.',
-            'students.*.exists' => 'One of the selected students is not in your college.',
+            'students.*.exists' => 'One of the selected students is not an active student in your college.',
             'students.*.integer' => 'One of the selected students is invalid.',
         ];
     }

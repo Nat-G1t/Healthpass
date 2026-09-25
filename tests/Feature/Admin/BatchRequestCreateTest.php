@@ -195,6 +195,19 @@ class BatchRequestCreateTest extends TestCase
             ->assertDontSee($foreign->student_number);
     }
 
+    public function test_create_page_hides_deactivated_students(): void
+    {
+        $active = StudentProfile::factory()->forCollege($this->ccs)->create();
+        $inactive = StudentProfile::factory()->forCollege($this->ccs)->create();
+        $inactive->user->update(['status' => 'inactive']);
+
+        $this->actingAs($this->admin)
+            ->get('/admin/batches/create')
+            ->assertOk()
+            ->assertSee($active->student_number)
+            ->assertDontSee($inactive->student_number);
+    }
+
     // ── FR-ADM-03: the Program filter lists the college's whole catalog ─────
 
     public function test_create_page_offers_every_catalog_program_of_own_college_only(): void
@@ -382,6 +395,18 @@ class BatchRequestCreateTest extends TestCase
         $this->actingAs($this->admin)
             ->post('/admin/batches', $this->validPayload(['students' => [$foreign->id]]))
             ->assertSessionHasErrors('students.0');
+    }
+
+    public function test_a_deactivated_student_is_rejected(): void
+    {
+        $inactive = StudentProfile::factory()->forCollege($this->ccs)->create();
+        $inactive->user->update(['status' => 'inactive']);
+
+        $this->actingAs($this->admin)
+            ->post('/admin/batches', $this->validPayload(['students' => [$inactive->id]]))
+            ->assertSessionHasErrors('students.0');
+
+        $this->assertSame(0, BatchRequest::count());
     }
 
     public function test_a_mixed_selection_is_rejected_even_with_own_students_present(): void
