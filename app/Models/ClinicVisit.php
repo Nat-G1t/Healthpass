@@ -54,7 +54,12 @@ class ClinicVisit extends Model
      */
     public const SUBMITTED_STATUSES = ['captured', 'encoded'];
 
-    /** What Student remarks read when the student typed no YES details (D-76). */
+    /**
+     * What D-76 pre-filled Student remarks with when the student typed no YES
+     * details. Since D-84 the box opens EMPTY instead, but records encoded
+     * before then saved this text, so the printed form still reads it as
+     * "no remarks" and leaves the line blank (ClearanceDocument::remarks).
+     */
     public const NO_STUDENT_REMARKS = 'No student remarks';
 
     /**
@@ -230,13 +235,14 @@ class ClinicVisit extends Model
     /**
      * D-76 — the default Student remarks on a Medical Clearance encode: the
      * student's own kiosk YES details, one "LABEL: detail" line each in the
-     * form's row order (ScreeningResponse::detailsAsNotes), or
-     * NO_STUDENT_REMARKS when they typed none. Only a DEFAULT — the encode
-     * page puts old() input and a saved record's value ahead of it.
+     * form's row order (ScreeningResponse::detailsAsNotes), or an empty
+     * string when they typed none (D-84), so nothing prints under REMARKS.
+     * Only a DEFAULT — the encode page puts old() input and a saved record's
+     * value ahead of it.
      */
     public function studentRemarks(): string
     {
-        return $this->screeningResponse?->detailsAsNotes() ?: self::NO_STUDENT_REMARKS;
+        return $this->screeningResponse?->detailsAsNotes() ?? '';
     }
 
     // ── Relationships ────────────────────────────────────────────────────────

@@ -352,8 +352,8 @@ class EncodePageTest extends TestCase
             $this->assertDoesNotMatchRegularExpression('~name="'.$column.'" value="1"[^>]*checked~', $html, $column);
         }
 
-        // No details typed → the D-76 default.
-        $this->assertMatchesRegularExpression('~<textarea[^>]*name="nurse_notes"[^>]*>No student remarks</textarea>~', $html);
+        // No details typed → the box opens empty (D-84).
+        $this->assertMatchesRegularExpression('~<textarea[^>]*name="nurse_notes"[^>]*>\s*</textarea>~', $html);
     }
 
     public function test_each_kiosk_answer_prefills_its_own_physical_sign_row(): void
@@ -479,7 +479,8 @@ class EncodePageTest extends TestCase
             ->assertDontSee('Observations, advice given');
     }
 
-    public function test_student_remarks_default_when_there_are_no_yes_details(): void
+    /** D-84: no YES details → the box opens EMPTY, so REMARKS prints blank. */
+    public function test_student_remarks_open_empty_when_there_are_no_yes_details(): void
     {
         // A Yes with no detail (a pre-D-75 visit) still has nothing to quote.
         $visit = $this->makeVisit('No Details', [], ['skin' => true]);
@@ -489,10 +490,8 @@ class EncodePageTest extends TestCase
             ->assertOk()
             ->getContent();
 
-        $this->assertMatchesRegularExpression(
-            '~<textarea[^>]*name="nurse_notes"[^>]*>'.ClinicVisit::NO_STUDENT_REMARKS.'</textarea>~',
-            $html
-        );
+        $this->assertMatchesRegularExpression('~<textarea[^>]*name="nurse_notes"[^>]*>\s*</textarea>~', $html);
+        $this->assertStringNotContainsString(ClinicVisit::NO_STUDENT_REMARKS, $html);
     }
 
     public function test_a_saved_value_wins_over_the_regenerated_default(): void

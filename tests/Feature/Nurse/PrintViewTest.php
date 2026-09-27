@@ -494,6 +494,26 @@ class PrintViewTest extends TestCase
             ->assertSee('<div class="rline" style="font-size: 10pt;">Advised rest and hydration.</div>', false);
     }
 
+    /**
+     * D-84 — no remarks prints NOTHING on the two ruled lines, including a
+     * record encoded before D-84 that saved the old "No student remarks"
+     * default.
+     */
+    public function test_the_old_no_remarks_default_prints_blank_lines(): void
+    {
+        $nurse = $this->nurse();
+        $visit = $this->makeVisit();
+        $this->encode($visit, $nurse, ['nurse_notes' => ClinicVisit::NO_STUDENT_REMARKS]);
+
+        $html = $this->actingAs($nurse)
+            ->get(route('nurse.visits.print', $visit))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertSame(2, preg_match_all('~<div class="rline[^"]*" style="font-size: 10pt;"></div>~', $html));
+        $this->assertStringNotContainsString(ClinicVisit::NO_STUDENT_REMARKS, $html);
+    }
+
     public function test_a_long_clinic_note_shrinks_to_fit_the_two_ruled_lines(): void
     {
         $nurse = $this->nurse();

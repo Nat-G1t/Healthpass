@@ -265,7 +265,9 @@ final class ClearanceDocument
         // it as one paragraph so the space is not wasted.
         $text = trim((string) preg_replace('/\s+/u', ' ', (string) $notes));
 
-        if ($text === '') {
+        // D-84: no remarks leaves the lines blank — including a record encoded
+        // before D-84, which saved the old "No student remarks" default.
+        if ($text === '' || $text === ClinicVisit::NO_STUDENT_REMARKS) {
             return ['lines' => array_fill(0, self::REMARKS_LINES, ''), 'fontSize' => self::REMARKS_MAX_PT];
         }
 
