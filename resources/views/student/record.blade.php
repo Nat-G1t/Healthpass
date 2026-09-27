@@ -95,8 +95,8 @@
 
             {{-- FR-STU-15 — Save as PDF: a plain GET link, because the response
                  is a downloaded file and this page never navigates. ONE file:
-                 the Medical Assessment Form's two Legal pages come down
-                 together, for a print shop to run back-to-back (D-71). --}}
+                 the Medical Assessment Form's two Letter pages come down
+                 together, for a print shop to run back-to-back (D-71/D-83). --}}
             <div class="shrink-0 sm:text-right">
                 <a href="{{ route('student.records.pdf', $visit) }}"
                    class="inline-flex w-full items-center justify-center gap-2 rounded-full bg-hp-orange
@@ -107,7 +107,7 @@
                 </a>
                 <p class="mt-2 text-xs text-hp-slate/50 sm:max-w-[15rem]">
                     @if ($isAssessment)
-                        Both pages in one file — ask a print shop for long bond (US Legal), back-to-back.
+                        Both pages in one file — print on short bond (US Letter), back-to-back.
                     @else
                         One page — US Letter.
                     @endif

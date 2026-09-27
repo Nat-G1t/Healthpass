@@ -79,8 +79,8 @@ class RecordsController extends Controller
      * FR-STU-15 — the student's own Save as PDF. It goes through
      * App\Support\VisitDocument, the same builder the clinic's print and PDF
      * use, so the file a student downloads IS the clinic's document: Letter
-     * and one page for a Medical Clearance, Legal and BOTH pages in one file
-     * for a Medical Assessment Form (D-71). The student gets no front/back
+     * and one page for a Medical Clearance, Letter and BOTH pages in one file
+     * for a Medical Assessment Form (D-71/D-83). The student gets no front/back
      * buttons — a print shop duplexes the one file.
      *
      * It never stamps `printed_at`: that column is the CLINIC's record of

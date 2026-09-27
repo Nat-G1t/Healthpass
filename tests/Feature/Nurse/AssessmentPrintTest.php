@@ -21,8 +21,8 @@ use Tests\TestCase;
 
 /**
  * FR-PRT-07 / D-71 — the printed Medical Assessment Form
- * (PSU-QSP-OSS-004-FO010-R00): two US Legal pages printed back-to-back on one
- * sheet.
+ * (PSU-QSP-OSS-004-FO010-R00): two US Letter pages (D-83; Legal under D-71)
+ * printed back-to-back on one sheet.
  *
  * The clinic's printers rarely duplex, so the encode screen prints the two
  * sides separately (`side=front` / `side=back`) while the PDF carries both
@@ -230,11 +230,12 @@ class AssessmentPrintTest extends TestCase
     // ── 2. The PDF ───────────────────────────────────────────────────────────
 
     /**
-     * Two pages, Legal. dompdf writes one `/Type /Page` object per page (the
-     * page TREE is `/Type /Pages`, which the lookahead excludes) and the
-     * paper size as a MediaBox in points — Legal is 8.5 × 14in = 612 × 1008pt.
+     * Two pages, Letter (D-83). dompdf writes one `/Type /Page` object per
+     * page (the page TREE is `/Type /Pages`, which the lookahead excludes) and
+     * the paper size as a MediaBox in points — Letter is 8.5 × 11in = 612 × 792pt.
+     * Exactly two also proves neither side spilled onto a third page.
      */
-    public function test_the_pdf_is_two_legal_pages(): void
+    public function test_the_pdf_is_two_letter_pages(): void
     {
         $nurse = $this->nurse();
         $visit = $this->makeVisit();
@@ -247,13 +248,13 @@ class AssessmentPrintTest extends TestCase
 
         $this->assertSame(2, preg_match_all('~/Type\s*/Page(?![s])~', $pdf));
         $this->assertMatchesRegularExpression(
-            '~/MediaBox\s*\[\s*0[\d.]*\s+0[\d.]*\s+612(\.\d+)?\s+1008(\.\d+)?~',
+            '~/MediaBox\s*\[\s*0[\d.]*\s+0[\d.]*\s+612(\.\d+)?\s+792(\.\d+)?~',
             $pdf
         );
     }
 
-    /** Legal is 612pt wide; anything drawn past this is off the sheet. */
-    private const LEGAL_WIDTH_PT = 612.0;
+    /** Letter is 612pt wide; anything drawn past this is off the sheet. */
+    private const LETTER_WIDTH_PT = 612.0;
 
     /**
      * The back page's RIGHT column must land ON the paper.
@@ -289,9 +290,9 @@ class AssessmentPrintTest extends TestCase
 
             $this->assertNotNull($x, "The PDF never draws \"{$heading}\".");
             $this->assertLessThan(
-                self::LEGAL_WIDTH_PT,
+                self::LETTER_WIDTH_PT,
                 $x,
-                "\"{$heading}\" is drawn at x={$x}pt, past the ".self::LEGAL_WIDTH_PT
+                "\"{$heading}\" is drawn at x={$x}pt, past the ".self::LETTER_WIDTH_PT
                     ."pt edge of the sheet — the back page's right column fell off the paper."
             );
         }

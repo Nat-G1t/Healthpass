@@ -13,7 +13,7 @@ use Tests\TestCase;
 /**
  * FR-STU-15 / D-73 — the student's own Save as PDF: the SAME document the
  * clinic prints (D-67/D-71), as ONE file. One Letter page for a Medical
- * Clearance; both Legal pages together for a Medical Assessment Form, so a
+ * Clearance; both Letter pages together for a Medical Assessment Form, so a
  * print shop can run it back-to-back.
  *
  * dompdf is a pure-PHP renderer, so these tests really do lay out and produce
@@ -65,7 +65,7 @@ class RecordPdfTest extends TestCase
         );
     }
 
-    /** FR-PRT-05: one Letter page. D-71: both Legal pages in ONE file. */
+    /** FR-PRT-05: one Letter page. D-71/D-83: both Letter pages in ONE file. */
     public function test_the_clearance_is_one_page_and_the_assessment_is_two(): void
     {
         $student = $this->makeStudent();

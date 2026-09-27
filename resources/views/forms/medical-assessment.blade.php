@@ -1,8 +1,9 @@
 {{-- ── Medical Assessment Form — official form PSU-QSP-OSS-004-FO010-R00 ─────
-     Module PRT (FR-PRT-07), Decision D-71.
+     Module PRT (FR-PRT-07), Decisions D-71 and D-83.
 
-     TWO pages on ONE sheet of US Legal (8.5 × 14in "long bond"), printed
-     back-to-back. Most clinic printers cannot duplex, so the encode screen
+     TWO pages on ONE sheet of US Letter (8.5 × 11in "short bond"), printed
+     back-to-back — Letter since D-83 (it was Legal under D-71), and each
+     side fits ONE page. Most clinic printers cannot duplex, so the encode screen
      offers Print front and Print back as separate buttons: this template
      renders BOTH pages by default (the PDF), or just one when handed
      $side = 'front' | 'back' (the two print buttons).
@@ -29,9 +30,15 @@
 <meta charset="utf-8">
 <title>Medical Assessment Form — {{ $visit->reference_no }}</title>
 <style>
-    /* Legal portrait (8.5 × 14in). dompdf reads @page too, so the PDF and
-       the browser print use the same paper. */
-    @page { size: legal portrait; margin: 0.5in 0.7in 0.35in 0.7in; }
+    /* Letter portrait (8.5 × 11in, D-83). dompdf reads @page too, so the PDF
+       and the browser print use the same paper.
+
+       The top and bottom margins are ZERO on purpose: Chrome only offers
+       "Headers and footers" (the date, title and URL along the edges) when
+       the page has a top or bottom margin, so with none the clinic's default
+       print can never carry them. The gap above the letterhead is the
+       sheet's own padding instead (see .sheet). */
+    @page { size: letter portrait; margin: 0 0.7in; }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -45,9 +52,15 @@
         background: #fff;
     }
 
-    /* 7.1in = Legal minus the two 0.7in margins, so the sheet maps 1:1 onto
-       the page in both renderers and simply centres on screen. */
-    .sheet { width: 7.1in; margin: 0 auto; }
+    /* 7.1in = Letter minus the two 0.7in margins, so the sheet maps 1:1 onto
+       the page in both renderers and simply centres on screen.
+
+       padding-top is the gap above the letterhead (D-83): 0.2in — about
+       where Chrome's "Minimum" margins put it on the Epson it was tested on,
+       and just outside the ~0.17in edge a laser printer cannot print. Each
+       side must fit ONE Letter page under it — nothing may spill onto a
+       page 2. */
+    .sheet { width: 7.1in; margin: 0 auto; padding-top: 0.2in; }
 
     /* The front page ends here when both pages render; a single-side print
        has nothing after it, so the class is only added when it is needed. */
@@ -129,10 +142,15 @@
     /* Auto layout on purpose (not `table-layout: fixed`): dompdf's fixed
        layout ignores the colgroup and splits the grid into equal columns,
        which squeezes the long labels into the YES box. */
+    /* No VERTICAL padding on these cells or the history ones (D-83): dompdf
+       adds a cell's padding ON TOP of its stated height while Chrome counts
+       it inside, so with padding every row came out ~3pt taller in the PDF —
+       enough to push the front page onto a second Letter sheet. With none,
+       `height` is the row height in both renderers (the text centres). */
     .signs { width: 6.6in; margin: 5pt 0 0 0.2in; border-collapse: collapse; }
     .signs td {
         border: 1px solid #000;
-        padding: 1.5pt 3pt;
+        padding: 0 3pt;
         height: 13pt;
         font-size: 7pt;
     }
@@ -157,9 +175,9 @@
     .history { width: 100%; margin-top: 6pt; border-collapse: collapse; }
     .history td, .history th {
         border: 1px solid #000;
-        padding: 2pt 5pt;
+        padding: 0 5pt;
         font-size: 8.5pt;
-        height: 13.5pt;
+        height: 15pt;
     }
     .history th { font-weight: normal; text-align: center; font-size: 9pt; }
     .history td.present { text-align: center; white-space: nowrap; }
@@ -175,11 +193,14 @@
     .halves td { vertical-align: top; }
     .halves td.left-col { padding-right: 14pt; }
 
+    /* The back page carries far more than the front, so its vertical gaps
+       are the tight ones (D-83) — that is what lets it fit one Letter page
+       without shrinking any type. */
     .sec { font-weight: bold; font-size: 10.5pt; }
-    .sec-rule { border-bottom: 1px solid #000; margin: 1pt 0 5pt; }
-    .sec-gap { margin-top: 11pt; }
+    .sec-rule { border-bottom: 1px solid #000; margin: 1pt 0 3pt; }
+    .sec-gap { margin-top: 6pt; }
 
-    .line-row { margin-top: 2.5pt; }
+    .line-row { margin-top: 0; }
     .sub { font-style: italic; font-size: 9pt; margin-top: 4pt; }
 
     /* The immunization boxes, four to a row. Fixed cell widths so the left
@@ -190,17 +211,17 @@
     /* ── Pertinent Physical Examination — three columns of groups ────────── */
     .exam-cols { width: 100%; border-collapse: collapse; margin-top: 5pt; }
     .exam-cols td { vertical-align: top; width: 33.33%; padding-right: 10pt; font-size: 9pt; }
-    .exam-group { margin-bottom: 8pt; }
+    .exam-group { margin-bottom: 4pt; }
     .exam-group .g-name { font-weight: bold; font-size: 9pt; }
-    .exam-group div.f { margin-top: 1.5pt; }
+    .exam-group div.f { margin-top: 0.5pt; }
 
     /* ── Fitness line + purposes ────────────────────────────────────────── */
-    .fitness { margin-top: 10pt; font-size: 11pt; }
+    .fitness { margin-top: 6pt; font-size: 11pt; }
     .purposes { width: 100%; border-collapse: collapse; margin-top: 4pt; }
     .purposes td { vertical-align: top; width: 33.33%; padding: 2pt 6pt 2pt 0; }
 
     /* ── Signature footer ───────────────────────────────────────────────── */
-    .footer { width: 100%; border-collapse: collapse; margin-top: 26pt; }
+    .footer { width: 100%; border-collapse: collapse; margin-top: 20pt; }
     .footer td { vertical-align: bottom; }
     .footer .name {
         border-bottom: 1px solid #000;
@@ -519,7 +540,7 @@
 
                 {{-- Past Surgical History sits under section VI on the paper
                      but is NOT female-only — it applies to every student. --}}
-                <div class="line-row" style="margin-top: 11pt;">
+                <div class="line-row" style="margin-top: 6pt;">
                     <b>Past Surgical History / Procedures:</b>
                 </div>
                 <div class="line-row">

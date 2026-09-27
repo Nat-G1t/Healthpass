@@ -390,12 +390,12 @@ function batchForm() {
         // natural width — both papers are 8.5in = 816px at 96dpi — and scaled
         // down to the tile, so the fixed table layout keeps its shape and its
         // type stays crisp instead of reflowing. pageHeight is the paper's
-        // length at 96dpi: Legal 14in, Letter 11in.
+        // length at 96dpi: Letter 11in for both forms since D-83.
         $paperWidthPx = 816;
         $formTiles = [
             'assessment' => [
-                'pageHeight' => 1344,
-                'copy' => "A full health assessment: medical and family history, immunizations and a physician's physical examination. Two pages, printed back-to-back on long bond paper. Best for On-the-job Training, Related Learning Experience, Sports Activities and Off-campus Procedures.",
+                'pageHeight' => 1056,
+                'copy' => "A full health assessment: medical and family history, immunizations and a physician's physical examination. Two pages, printed back-to-back on short bond (Letter) paper. Best for On-the-job Training, Related Learning Experience, Sports Activities and Off-campus Procedures.",
             ],
             'clearance' => [
                 'pageHeight' => 1056,

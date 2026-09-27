@@ -203,7 +203,7 @@
         @endif
         — the assessment below is read-only. Use
         @if ($isAssessment)
-            {{-- D-71: two Legal pages, printed one side at a time. --}}
+            {{-- D-71/D-83: two Letter pages, printed one side at a time. --}}
             <span class="font-semibold">Print front</span> and
             <span class="font-semibold">Print back</span>
         @else
@@ -627,8 +627,8 @@
             </div>
             @endunless
 
-            {{-- The Medical Assessment Form is TWO Legal pages printed
-                 back-to-back on one sheet (D-71), and clinic printers rarely
+            {{-- The Medical Assessment Form is TWO Letter pages printed
+                 back-to-back on one sheet (D-71/D-83), and clinic printers rarely
                  duplex — so it gets Print front and Print back instead of one
                  button. `name="side"` on a submit BUTTON posts that button's
                  own value, which is how the two reach the same endpoint and

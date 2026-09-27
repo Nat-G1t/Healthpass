@@ -39,7 +39,7 @@ use Illuminate\View\View;
  *  - `clearance`  → Medical Clearance, PSU-QSP-OSS-004-FO002-R04 (D-67),
  *    one Letter page, built by App\Support\ClearanceDocument;
  *  - `assessment` → Medical Assessment Form, PSU-QSP-OSS-004-FO010-R00
- *    (D-71), TWO Legal pages printed back-to-back, built by
+ *    (D-71), TWO Letter pages (D-83) printed back-to-back, built by
  *    App\Support\AssessmentDocument.
  *
  * Because clinic printers rarely duplex, the Assessment's HTML prints take a
@@ -138,7 +138,7 @@ class PrintClearanceController extends Controller
      * PHP; `download()` returns it with a Content-Disposition attachment
      * header so the browser saves rather than displays it.
      *
-     * An Assessment PDF is ONE file carrying BOTH Legal pages (D-71) — a
+     * An Assessment PDF is ONE file carrying BOTH Letter pages (D-71/D-83) — a
      * printer that can duplex prints it with "Two-sided" on, which is why
      * there is no third print button.
      *

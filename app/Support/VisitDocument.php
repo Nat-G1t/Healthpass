@@ -15,8 +15,8 @@ use App\Models\MedicalAssessment;
  *
  * Why its own class: since D-73 the document has FIVE callers — the clinic's
  * print, the pre-save preview, the clinic's Reprint, the clinic's Save as PDF
- * and now the student's own Save as PDF. If each decided "assessment → legal,
- * two pages, -medical-assessment.pdf" for itself, a student's download could
+ * and now the student's own Save as PDF. If each decided "assessment → two
+ * pages, -medical-assessment.pdf" for itself, a student's download could
  * one day disagree with the clinic's copy of the same visit. One definition
  * makes that impossible.
  *
@@ -35,12 +35,14 @@ final class VisitDocument
     }
 
     /**
-     * dompdf's paper size. The Medical Assessment Form is US Legal and two
-     * pages (D-71); the Medical Clearance is US Letter and one (FR-PRT-05).
+     * dompdf's paper size. Both forms are US Letter since D-83: the Medical
+     * Assessment Form is two Letter pages (it was Legal under D-71), the
+     * Medical Clearance one (FR-PRT-05). Kept as a method so the clinic's and
+     * the student's PDF still share one definition.
      */
     public static function paper(ClinicVisit $visit): string
     {
-        return $visit->formType() === 'assessment' ? 'legal' : 'letter';
+        return 'letter';
     }
 
     /** The downloaded file's name, e.g. "HP-2026-0042-medical-clearance.pdf". */

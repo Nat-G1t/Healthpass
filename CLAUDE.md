@@ -240,8 +240,10 @@ npm run dev                       # terminal 2
   College Admin reads on Batch Tracking.
 - The printed Medical Clearance must match official form
   **PSU-QSP-OSS-004-FO002-R04** (D-67), and the printed Medical Assessment
-  Form must match **PSU-QSP-OSS-004-FO010-R00** (D-71): US Legal, two pages
-  back-to-back; the clinic prints front and back separately (manual duplex).
+  Form must match **PSU-QSP-OSS-004-FO010-R00** (D-71): US Letter since D-83, two pages
+  back-to-back, each side ONE page; the clinic prints front and back separately
+  (manual duplex). Its `@page` top/bottom margins stay 0 so Chrome's default print
+  carries no headers/footers.
   Print and PDF share one template per form (`resources/views/forms/`),
   written in dompdf-safe CSS (tables, no flex/grid, no JS).
 
