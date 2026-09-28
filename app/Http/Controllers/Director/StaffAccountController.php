@@ -42,9 +42,10 @@ use Illuminate\View\View;
  *     StoreStaffAccountRequest and in guardManageable(), not by the UI.
  *  2. ONE CREDENTIAL PATH — the joining password is generated exactly as
  *     StaffSeeder::createStaff() does (D-35) and the existing
- *     RequirePasswordChange middleware forces the change at first login. The
- *     plaintext is shown once and stored nowhere. The Director issues that
- *     password ONCE, at creation, and can never set it again: a Director who
+ *     RequirePasswordChange middleware forces the change at first login. Since
+ *     D-85 the plaintext is emailed to the new staff member and to nobody else:
+ *     the Director never sees it, and only its hash is stored. The Director
+ *     issues that password ONCE, at creation, and can never set it again: a Director who
  *     could reset an account's password could sign in as that person and read
  *     their records, which is the impersonation D-47 rules out. A forgotten
  *     password goes through the ordinary forgot-password OTP flow (D-20),
@@ -65,7 +66,7 @@ class StaffAccountController extends Controller
      */
     public const MANAGEABLE_ROLES = ['college_admin', 'nurse', 'physician'];
 
-    /** The staff roster, plus the one-time credential if one was just issued. */
+    /** The staff roster. */
     public function index(Request $request): View
     {
         $accounts = User::with('managedCollege')
@@ -130,20 +131,16 @@ class StaffAccountController extends Controller
             'must_change_password' => true,
         ]);
 
-        // Tell them the account exists and where to sign in (D-50). QUEUED, so a
-        // slow or unreachable mail server cannot fail the provisioning that has
-        // already been written. The message carries NO password — that is shown
-        // on this screen once and handed over in person (D-35).
-        SendStaffAccountCreatedMail::dispatch($staff);
+        // Tell them the account exists, where to sign in, and — since D-85 —
+        // their one-time password. QUEUED, so a slow or unreachable mail server
+        // cannot fail the provisioning that has already been written. The
+        // password goes into the (encrypted) job and nowhere else: it is not
+        // flashed to this screen, so the Director never sees it.
+        SendStaffAccountCreatedMail::dispatch($staff, $password);
 
         return redirect()
             ->route('director.staff.index')
-            ->with('status', 'Account created for '.$validated['name'].'. A welcome email is on its way.')
-            ->with('new_staff_credential', [
-                'name' => $validated['name'],
-                'email' => $validated['email'],
-                'password' => $password,
-            ]);
+            ->with('status', 'Account created for '.$validated['name'].'. Their one-time password has been emailed to '.$validated['email'].'.');
     }
 
     /**
@@ -251,13 +248,12 @@ class StaffAccountController extends Controller
     /**
      * The joining password, generated exactly as StaffSeeder::createStaff() does
      * (D-35) — 16 random characters, no symbols, because this string is read off
-     * a screen and typed by hand.
+     * an email and may be typed by hand.
      *
      * Called from store() and nowhere else: this is the only moment in an
      * account's life at which anyone but its owner sets its password. It is
-     * returned in plaintext for a single flash to the next request and is never
-     * written anywhere in readable form — only the bcrypt hash reaches the
-     * database.
+     * returned in plaintext only to be handed to the encrypted welcome-mail job
+     * (D-85) — only the bcrypt hash reaches the users table.
      */
     private function generateOneTimePassword(): string
     {

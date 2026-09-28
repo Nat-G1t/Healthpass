@@ -7,10 +7,9 @@
     EVERY interpolation uses {{ }}, never {!! !!}: the name and college are
     admin-entered text and must not reach a webmail client as live markup.
 
-    NO PASSWORD APPEARS HERE, and the body says so on purpose (D-35 / D-47). The
-    one-time password is shown to the Director once, on screen, and handed over
-    in person. Stating the rule in the message is what makes a future "HealthPass
-    needs your password" mail obviously fake.
+    D-85: the one-time password is in the highlighted box at the bottom, next
+    to the instruction to change it immediately. This email is the only place
+    it exists in readable form — the Director never sees it.
 --}}
 <!DOCTYPE html>
 <html lang="en">
@@ -37,8 +36,8 @@
 
                         <p style="margin:0 0 24px;color:#6B7280;">
                             The University Clinic has created a HealthPass staff account for you.
-                            You can sign in as soon as you have the one-time password the Clinic
-                            Director gave you.
+                            Sign in with your email address and the one-time password at the
+                            bottom of this message.
                         </p>
 
                         {{-- Account summary --}}
@@ -83,18 +82,31 @@
                             Or paste this into your browser: {{ $loginUrl }}
                         </p>
 
-                        {{-- The security note. Not boilerplate: it is what makes a
-                             later "send us your password" mail recognisably fake. --}}
+                        {{-- D-85: the one-time password and the instruction to change
+                             it, highlighted together so neither can be missed. --}}
                         <table width="100%" cellpadding="0" cellspacing="0"
-                               style="background:#FFF7ED;border-radius:8px;padding:16px;margin:0 0 24px;">
+                               style="background:#FFF7ED;border:2px solid #FF8C2A;border-radius:8px;padding:20px;margin:0 0 24px;">
                             <tr>
-                                <td style="font-size:13px;color:#6B7280;">
-                                    <strong style="color:#4B5563;">About your password.</strong>
-                                    HealthPass never sends passwords by email — not in this message and
-                                    not in any other. Yours was handed to you directly by the Clinic
-                                    Director, and you will be asked to replace it with one only you know
-                                    the first time you sign in. If an email ever asks you for your
-                                    HealthPass password, it did not come from us.
+                                <td style="font-size:12px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:#9CA3AF;padding:0 0 8px;">
+                                    Your one-time password
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding:0 0 16px;">
+                                    <span style="display:inline-block;background:#FFCAA0;border-radius:6px;padding:10px 16px;font-family:'Courier New',Courier,monospace;font-size:20px;font-weight:700;letter-spacing:2px;color:#4B5563;word-break:break-all;">{{ $oneTimePassword }}</span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="font-size:15px;font-weight:700;color:#FF8C2A;padding:0 0 6px;">
+                                    Change your password immediately.
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="font-size:13px;line-height:1.6;color:#6B7280;">
+                                    HealthPass will ask you to replace this password with one only you
+                                    know the first time you sign in. Do not share it with anyone — the
+                                    Clinic Director does not know it, and HealthPass will never ask you
+                                    for your password.
                                 </td>
                             </tr>
                         </table>

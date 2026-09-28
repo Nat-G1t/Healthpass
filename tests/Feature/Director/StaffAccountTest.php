@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Director;
 
+use App\Mail\StaffAccountCreatedMail;
 use App\Models\ClearanceRecord;
 use App\Models\ClinicVisit;
 use App\Models\College;
@@ -11,6 +12,7 @@ use App\Models\User;
 use App\Models\VitalSigns;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Route;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -22,7 +24,8 @@ use Tests\TestCase;
  * The security half of this file is the point of it: the Director must never be
  * able to mint another director or a student, must never be able to lock
  * themselves out, and the one-time password must exist in readable form exactly
- * once — on the screen that issued it.
+ * once — in the welcome email to the new staff member, never on the Director's
+ * screen (D-85).
  */
 class StaffAccountTest extends TestCase
 {
@@ -83,18 +86,25 @@ class StaffAccountTest extends TestCase
         ];
     }
 
-    /** Create an account through the endpoint and return [user, plaintext password]. */
+    /**
+     * Create an account through the endpoint and return [user, plaintext password].
+     *
+     * D-85: the password is read from the welcome email, the only place it is
+     * ever readable. The test queue is `sync`, so the job has already run.
+     */
     private function createAccount(array $payload): array
     {
+        Mail::fake();
+
         $response = $this->actingAs($this->director)
             ->post(route('director.staff.store'), $payload);
 
         $response->assertRedirect(route('director.staff.index'));
-        $response->assertSessionHas('new_staff_credential');
 
-        $credential = session('new_staff_credential');
+        $sent = Mail::sent(StaffAccountCreatedMail::class)->first();
+        $this->assertNotNull($sent, 'The welcome email carrying the password was not sent.');
 
-        return [User::where('email', $payload['email'])->firstOrFail(), $credential['password']];
+        return [User::where('email', $payload['email'])->firstOrFail(), $sent->oneTimePassword];
     }
 
     /** An encoded visit + clearance record, so history has something to render. */
@@ -137,7 +147,6 @@ class StaffAccountTest extends TestCase
     }
 
     // ── 1. Access control — every endpoint, every wrong role ─────────────────
-
 
     public function test_the_staff_list_pages_at_ten_and_its_heading_counts_everyone(): void
     {
@@ -400,6 +409,25 @@ class StaffAccountTest extends TestCase
         $this->assertNotSame($password, $created->password);
         $this->assertTrue(Hash::check($password, $created->password));
         $this->assertDatabaseMissing('users', ['password' => $password]);
+    }
+
+    public function test_the_director_never_sees_the_one_time_password(): void
+    {
+        // D-85: the password goes to the new staff member's mailbox only.
+        [, $password] = $this->createAccount([
+            'role' => 'nurse',
+            'name' => 'Ana Reyes',
+            'email' => 'ana.reyes@dhvsu.edu.ph',
+        ]);
+
+        // Nothing carries it to the next request — the old show-once flash is gone.
+        $this->assertStringNotContainsString($password, (string) json_encode(session()->all()));
+
+        $this->actingAs($this->director)
+            ->get(route('director.staff.index'))
+            ->assertOk()
+            ->assertSee('Their one-time password has been emailed to ana.reyes@dhvsu.edu.ph.')
+            ->assertDontSee($password);
     }
 
     public function test_the_director_has_no_way_to_reset_someone_elses_password(): void

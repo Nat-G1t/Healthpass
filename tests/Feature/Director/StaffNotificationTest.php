@@ -12,6 +12,9 @@ use App\Models\College;
 use App\Models\User;
 use App\Support\TransferNotice;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
@@ -22,9 +25,10 @@ use Tests\TestCase;
  * admin is transferred, plus the one-time dashboard notice that accompanies the
  * transfer.
  *
- * The security assertion in here is the one that matters most: the welcome
- * email must NEVER carry the one-time password. D-35 and D-47 both turn on that
- * credential existing in readable form exactly once, on the Director's screen.
+ * D-85 turned the security assertion in here around: the welcome email now
+ * CARRIES the one-time password (the Director never sees it), so what matters
+ * is that the emailed password is the real one, and that the queued job holding
+ * it is encrypted rather than sitting in the `jobs` table as readable text.
  */
 class StaffNotificationTest extends TestCase
 {
@@ -102,10 +106,10 @@ class StaffNotificationTest extends TestCase
         Queue::assertNothingPushed();
     }
 
-    public function test_the_welcome_email_never_contains_the_one_time_password(): void
+    public function test_the_welcome_email_carries_the_one_time_password_and_says_to_change_it(): void
     {
-        // The whole of D-35 and D-47 rests on that credential existing in
-        // readable form exactly once, on the Director's screen.
+        // The test queue is `sync`, so the job runs — and round-trips through
+        // its encrypted payload — before post() returns.
         Mail::fake();
 
         $this->actingAs($this->director)->post(route('director.staff.store'), [
@@ -115,23 +119,45 @@ class StaffNotificationTest extends TestCase
             'managed_college_id' => $this->ccs->id,
         ]);
 
-        $password = session('new_staff_credential')['password'];
-        $this->assertNotEmpty($password);
-
         $created = User::where('email', 'maria.santos@dhvsu.edu.ph')->firstOrFail();
-        $rendered = (new StaffAccountCreatedMail($created))->render();
+        $mail = Mail::sent(StaffAccountCreatedMail::class)->sole();
 
-        $this->assertStringNotContainsString($password, $rendered);
-        // And it says so, which is what makes a later "send us your password"
-        // mail recognisable as a forgery.
-        $this->assertStringContainsString('never sends passwords by email', $rendered);
+        // The emailed password is the account's real one…
+        $this->assertTrue(Hash::check($mail->oneTimePassword, $created->password));
+
+        // …and the message shows it beside the instruction to change it.
+        $rendered = $mail->render();
+        $this->assertStringContainsString($mail->oneTimePassword, $rendered);
+        $this->assertStringContainsString('Change your password immediately.', $rendered);
+    }
+
+    public function test_the_queued_welcome_job_stores_the_password_encrypted(): void
+    {
+        // Production queues on the database driver: the job sits in `jobs`
+        // until the worker sends it. ShouldBeEncrypted must keep the password
+        // out of that row as readable text.
+        config(['queue.default' => 'database']);
+
+        $this->actingAs($this->director)->post(route('director.staff.store'), [
+            'role' => 'nurse',
+            'name' => 'Ana Reyes',
+            'email' => 'ana.reyes@dhvsu.edu.ph',
+        ]);
+
+        $payload = json_decode(DB::table('jobs')->sole()->payload, true);
+        // The queue stores encrypt(serialize($job)), so decrypt, then unserialize.
+        $job = unserialize(Crypt::decrypt($payload['data']['command']));
+
+        $this->assertInstanceOf(SendStaffAccountCreatedMail::class, $job);
+        $this->assertTrue(Hash::check($job->oneTimePassword, User::where('email', 'ana.reyes@dhvsu.edu.ph')->value('password')));
+        $this->assertStringNotContainsString($job->oneTimePassword, DB::table('jobs')->sole()->payload);
     }
 
     public function test_the_welcome_email_carries_a_working_sign_in_link(): void
     {
         $created = $this->admin();
 
-        $rendered = (new StaffAccountCreatedMail($created))->render();
+        $rendered = (new StaffAccountCreatedMail($created, 'OneTimePass1234'))->render();
 
         // Built from route('login'), so it follows APP_URL and needs no edit of
         // its own when the real domain is configured at deployment.
@@ -265,7 +291,7 @@ class StaffNotificationTest extends TestCase
         $staff = $this->admin();
         $staff->update(['status' => 'inactive']);
 
-        (new SendStaffAccountCreatedMail($staff))->handle();
+        (new SendStaffAccountCreatedMail($staff, 'OneTimePass1234'))->handle();
 
         Mail::assertNothingSent();
     }
@@ -292,7 +318,7 @@ class StaffNotificationTest extends TestCase
 
         $staff = $this->admin();
 
-        (new SendStaffAccountCreatedMail($staff))->handle();
+        (new SendStaffAccountCreatedMail($staff, 'OneTimePass1234'))->handle();
 
         Mail::assertSent(
             StaffAccountCreatedMail::class,

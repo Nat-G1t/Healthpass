@@ -292,13 +292,15 @@ or a database client** (FR-AUTH-10):
 
 | Action | What it does |
 |---|---|
-| Create account | `college_admin` (with a college) or `nurse` (without one). Issues a one-time password on the same D-35 terms as the seeder. |
+| Create account | `college_admin` (with a college) or `nurse` (without one). Issues a one-time password on the same D-35 terms as the seeder, and **emails it to the new staff member** (D-85). |
 | Deactivate / Reactivate | An inactive account cannot log in **and is signed out of any session it already has, on its very next request** (FR-AUTH-07). **This is the only removal there is** — accounts are never deleted, so a departed nurse's encoded clearances still render. |
 | Change college | Moves a College Admin to another unit without creating a second account. |
 
-The generated password is displayed **once**, in a panel on that page. It is not
-emailed and is stored nowhere — same rule as the seeder's table. Hand it over
-through official channels.
+**D-85:** the generated password is **emailed to the new staff member** and is
+never shown to the Director. It waits in the `jobs` table **encrypted**
+(`ShouldBeEncrypted`, keyed on `APP_KEY`) until the §3 queue worker sends it, so
+**no worker, no password** — keep the worker running. If the email never arrives,
+the staff member uses "Forgot password" on the login page (same mailbox).
 
 **There is no "reset password" action, deliberately (D-47a).** The Director sets
 an account's password exactly once, when creating it. A Director who could reset
@@ -328,8 +330,8 @@ that still has no in-app recovery path beyond the ordinary forgot-password OTP
 > change. Both links are generated from `route('login')`, so setting `APP_URL`
 > to the real domain in §3 is the only thing needed — there is no separate URL
 > to edit. Both are queued, so they need the §3 worker running; and both need
-> real SMTP, or the notice is written to a log nobody reads. The welcome email
-> deliberately carries **no password**.
+> real SMTP, or the notice is written to a log nobody reads. Since D-85 the
+> welcome email **carries the one-time password**.
 >
 > **Revoking access is immediate.** `App\Http\Middleware\EnsureAccountIsActive`
 > re-reads `users.status` on every web request, so Deactivate cuts an open

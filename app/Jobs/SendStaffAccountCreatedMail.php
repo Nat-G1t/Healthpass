@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Jobs;
 
 use App\Mail\StaffAccountCreatedMail;
+use App\Models\User;
+use Illuminate\Contracts\Queue\ShouldBeEncrypted;
 use Illuminate\Mail\Mailable;
 
 /**
@@ -15,18 +17,31 @@ use Illuminate\Mail\Mailable;
  * remembers to tell the person by hand — which on a hosted deployment means the
  * account may sit unused for weeks.
  *
- * IT CARRIES NO PASSWORD. The one-time password is shown on the Director's
- * screen exactly once and handed over through official channels (D-35, D-47).
- * Emailing it would put a live credential in a mailbox and in every relay
- * between here and there, which is the whole thing that rule exists to prevent.
- * The message says so explicitly, so a future mail asking for the password
- * reads as the phishing attempt it would be.
+ * D-85: IT CARRIES THE ONE-TIME PASSWORD. The password now goes to the new
+ * staff member's own mailbox and the Director never sees it (superseding the
+ * show-once screen of D-35/D-47). RequirePasswordChange still forces it to be
+ * replaced at first sign-in, so it stays a one-use credential.
+ *
+ * ShouldBeEncrypted: a queued job is written to the `jobs` table (and, if every
+ * retry fails, to `failed_jobs`) until the worker sends it. This interface
+ * makes Laravel encrypt that stored payload with APP_KEY, so the password is
+ * never sitting in the database as readable text while the mail waits.
  */
-class SendStaffAccountCreatedMail extends StaffMailJob
+class SendStaffAccountCreatedMail extends StaffMailJob implements ShouldBeEncrypted
 {
+    /** Not readonly, for the same queue-hydration reason as StaffMailJob::$staff. */
+    public string $oneTimePassword;
+
+    public function __construct(User $staff, string $oneTimePassword)
+    {
+        parent::__construct($staff);
+
+        $this->oneTimePassword = $oneTimePassword;
+    }
+
     protected function mailable(): Mailable
     {
-        return new StaffAccountCreatedMail($this->staff);
+        return new StaffAccountCreatedMail($this->staff, $this->oneTimePassword);
     }
 
     protected function description(): string

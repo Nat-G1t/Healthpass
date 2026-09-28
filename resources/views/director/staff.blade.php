@@ -27,58 +27,6 @@
     </div>
 @endif
 
-{{-- ── Show-once credential panel ───────────────────────────────────────────────
-     Rendered ONLY on the request right after a password was issued (D-35/D-47).
-     The plaintext was flashed to the session by the controller and is gone on the
-     next request; nothing anywhere stores it in readable form. --}}
-@if (session('new_staff_credential'))
-    @php $credential = session('new_staff_credential'); @endphp
-    <x-hp.card class="mb-6 border-2 border-hp-orange bg-hp-white" x-data="{ copied: false }">
-        <div class="flex items-start gap-3">
-            <div class="mt-0.5 shrink-0 text-hp-orange">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <rect x="3" y="11" width="18" height="11" rx="2"/>
-                    <path d="M7 11V7a5 5 0 0110 0v4"/>
-                </svg>
-            </div>
-            <div class="min-w-0 flex-1">
-                <h3 class="text-base font-semibold text-hp-slate">
-                    Copy this password now — it will not be shown again
-                </h3>
-                <p class="mt-1 text-[13px] text-hp-slate/70">
-                    Hand it to <strong class="font-semibold text-hp-slate">{{ $credential['name'] }}</strong>
-                    through official channels. HealthPass does not email it and does not
-                    store it anywhere, and <strong class="font-semibold text-hp-slate">this is the only
-                    password you will ever set for them</strong> — if it is lost before they sign in,
-                    they recover it themselves with "Forgot password" on the login page.
-                    They must change it the first time they sign in.
-                </p>
-
-                <dl class="mt-4 grid gap-3 sm:grid-cols-2">
-                    <div>
-                        <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/50">Sign in with</dt>
-                        <dd class="mt-1 break-all font-mono text-sm text-hp-slate">{{ $credential['email'] }}</dd>
-                    </div>
-                    <div>
-                        <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/50">One-time password</dt>
-                        <dd class="mt-1 flex items-center gap-2">
-                            <input type="text" readonly x-ref="pw" value="{{ $credential['password'] }}"
-                                   aria-label="One-time password"
-                                   class="w-full rounded-lg border-[1.5px] border-hp-orange/40 bg-hp-peach/40 px-3 py-2 font-mono text-sm font-semibold tracking-wide text-hp-slate">
-                            <x-hp.button variant="soft" size="sm" class="shrink-0"
-                                         x-on:click="$refs.pw.select(); navigator.clipboard.writeText($refs.pw.value); copied = true; setTimeout(() => copied = false, 1500)">
-                                <span x-show="!copied">Copy</span>
-                                <span x-show="copied" x-cloak>Copied</span>
-                            </x-hp.button>
-                        </dd>
-                    </div>
-                </dl>
-            </div>
-        </div>
-    </x-hp.card>
-@endif
-
 <div class="grid gap-6 lg:grid-cols-3">
 
     {{-- ── New staff account ────────────────────────────────────────────────
@@ -89,8 +37,8 @@
     <x-hp.card class="h-fit lg:col-span-1" x-data="{ role: '{{ old('role', 'college_admin') }}' }">
         <h3 class="text-sm font-semibold text-hp-slate">New staff account</h3>
         <p class="mt-1 text-[13px] text-hp-slate/60">
-            The account is created active, with a one-time password shown once on
-            this page.
+            The account is created active. Its one-time password is emailed
+            straight to the new staff member — it is never shown on this page.
         </p>
 
         <form method="POST" action="{{ route('director.staff.store') }}" class="mt-4 space-y-4">
