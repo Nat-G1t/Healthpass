@@ -459,7 +459,7 @@ class KioskRestAndRecheckTest extends TestCase
         Carbon::setTestNow();
     }
 
-    public function test_a_still_resting_student_is_absent_after_the_cutoff(): void
+    public function test_a_still_resting_student_did_not_finish_after_the_cutoff(): void
     {
         Carbon::setTestNow(today()->setTime(9, 0));
 
@@ -468,10 +468,10 @@ class KioskRestAndRecheckTest extends TestCase
 
         $appointment = Appointment::where('student_id', $student->id)->firstOrFail();
 
-        // 8:00 PM on the clinic date — their result never reached the queue, so
-        // they are as absent as a student who never came (D-55/D-72).
+        // 8:00 PM on the clinic date — their result never reached the queue.
+        // D-86 (was Absent under D-72): they came, so they "did not finish".
         Carbon::setTestNow(today()->setTimeFromTimeString(config('healthpass.absent_cutoff')));
-        $this->assertSame('absent', $appointment->fresh()->clearanceProgress());
+        $this->assertSame('did_not_finish', $appointment->fresh()->clearanceProgress());
 
         Carbon::setTestNow();
     }

@@ -122,17 +122,18 @@
                             (sign in to HealthPass to open it).
                         </p>
 
-                        {{-- Cancellation guidance (D-39; D-61 left only this case) --}}
+                        {{-- Cancellation guidance (D-39; D-61 left only this case).
+                             D-87: nobody can cancel it now — not even the college
+                             admin — so it asks the student to tell the admin. --}}
                         <div style="border-top:1px solid #F3F4F6;padding-top:20px;">
                             <p style="margin:0 0 8px;font-size:14px;font-weight:600;color:#4B5563;">
                                 Need to cancel?
                             </p>
                             <p style="margin:0;font-size:13px;line-height:1.7;color:#6B7280;">
-                                This appointment was booked for you as part of a group, so you
-                                cannot cancel it yourself. Please contact
+                                This appointment was booked for your group and cannot be
+                                cancelled. If you cannot attend, let
                                 {{ $collegeName ? 'your college ('.$collegeName.')' : 'your college' }}
-                                administrator — they will withdraw it, which frees the slot
-                                for another student.
+                                administrator know.
                             </p>
                         </div>
 

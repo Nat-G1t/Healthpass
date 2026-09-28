@@ -24,9 +24,8 @@ class SendAppointmentScheduledMail extends AppointmentMailJob
     }
 
     /**
-     * A student who cancelled — or was withdrawn by their college — while this
-     * job sat on the queue must not then be told their appointment is
-     * confirmed. They get the withdrawal notice instead (FR-STU-13).
+     * An appointment that stopped being `scheduled` while this job sat on the
+     * queue must not then be announced as confirmed.
      */
     protected function isStillRelevant(): bool
     {

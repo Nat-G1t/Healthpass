@@ -22,7 +22,7 @@ use Illuminate\Support\Collection;
  * DEV/DEMO ONLY — synthetic batch requests for the CCS College Admin.
  *
  * Seeds one batch per state so every branch of Batch Tracking (FR-ADM-05), its
- * Batch Results card and popup (FR-ADM-12 / D-55), the batch roster (FR-ADM-07)
+ * Batch Results card and popup (FR-ADM-12 / D-55 / D-86), the batch roster (FR-ADM-07)
  * and the Activity Log (FR-ADM-10) can be clicked through without a live
  * Director, a live kiosk or a live nurse:
  *
@@ -31,10 +31,10 @@ use Illuminate\Support\Collection;
  *                                        more than one row
  *   BR-2026-903  APPROVED   4 students, clinic day 4 days AGO — the Batch
  *                                        Results popup in full: 1 Fit, 1 Unfit,
- *                                        1 still with the nurse, 1 absent
- *   BR-2026-904  APPROVED   3 students, clinic day in 3 days — 2 not yet
- *                                        attended (both withdrawable), 1 already
- *                                        withdrawn
+ *                                        1 did not finish (never encoded), 1
+ *                                        absent; Completed at the 8 PM cutoff
+ *   BR-2026-904  APPROVED   3 students, clinic day in 3 days — all 3 not yet
+ *                                        attended; In progress
  *   BR-2026-905  REJECTED   3 students — the Rejection Reason column, which now
  *                                        sits next to the Cancel column
  *   BR-2026-906  CANCELLED  2 students — the D-52 end state: Cancelled badge,
@@ -144,9 +144,10 @@ class DemoBatchSeeder extends Seeder
         $this->attachOne($batch, $maria, $date, '08:00:00', appointmentStatus: 'completed');
         $this->encode($batch, $maria, $date, 'Unfit', bpFlagged: true);
 
-        // Captured but NOT encoded — the student is at the clinic and the
-        // appointment row still reads 'scheduled'. This is the case that
-        // proves the status column cannot be read off appointments alone.
+        // Captured but NOT encoded — the appointment row still reads
+        // 'scheduled', which proves the status column cannot be read off
+        // appointments alone. The clinic day is over, so D-86 shows this
+        // student as "Did not finish".
         $this->attachOne($batch, $carlo, $date, '08:00:00', appointmentStatus: 'scheduled');
         $this->capture($batch, $carlo, $date);
 
@@ -154,7 +155,7 @@ class DemoBatchSeeder extends Seeder
         $this->attachOne($batch, $angel, $date, '08:00:00', appointmentStatus: 'scheduled');
     }
 
-    /** An upcoming approved batch: withdrawable seats plus one already pulled. */
+    /** An upcoming approved batch: nobody has attended yet (In progress). */
     private function seedApprovedUpcoming(): void
     {
         $date = now()->addDays(3)->toDateString();
@@ -164,8 +165,7 @@ class DemoBatchSeeder extends Seeder
 
         $this->attachOne($batch, $juan, $date, '10:00:00', appointmentStatus: 'scheduled');
         $this->attachOne($batch, $maria, $date, '10:00:00', appointmentStatus: 'scheduled');
-        // Withdrawn by the admin (FR-ADM-07) — the seat is already free.
-        $this->attachOne($batch, $carlo, $date, '10:00:00', appointmentStatus: 'cancelled');
+        $this->attachOne($batch, $carlo, $date, '10:00:00', appointmentStatus: 'scheduled');
     }
 
     /** A Director rejection, so the Reason column renders beside Cancel. */

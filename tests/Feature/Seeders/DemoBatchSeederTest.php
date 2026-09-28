@@ -76,7 +76,8 @@ class DemoBatchSeederTest extends TestCase
             ->sort()->values()->all();
 
         // One of each — the whole point of this fixture.
-        $this->assertSame(['absent', 'completed', 'completed', 'in_clinic'], $progress);
+        // The clinic day is past, so the un-encoded student "did not finish" (D-86).
+        $this->assertSame(['absent', 'completed', 'completed', 'did_not_finish'], $progress);
 
         $results = $batch->batchRequestStudents
             ->map(fn ($row) => $row->appointment?->clearanceResult())
@@ -85,7 +86,7 @@ class DemoBatchSeederTest extends TestCase
         $this->assertSame(['Fit', 'Unfit'], $results);
     }
 
-    public function test_the_upcoming_batch_has_a_withdrawn_seat_and_two_live_ones(): void
+    public function test_the_upcoming_batch_is_still_waiting_on_everyone(): void
     {
         $batch = BatchRequest::where('reference_no', 'BR-2026-904')->firstOrFail();
 
@@ -93,7 +94,7 @@ class DemoBatchSeederTest extends TestCase
             ->map(fn ($row) => $row->appointment?->clearanceProgress())
             ->sort()->values()->all();
 
-        $this->assertSame(['awaiting', 'awaiting', 'withdrawn'], $progress);
+        $this->assertSame(['awaiting', 'awaiting', 'awaiting'], $progress);
     }
 
     public function test_pending_batches_have_no_appointments(): void

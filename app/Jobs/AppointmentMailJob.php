@@ -16,19 +16,20 @@ use Illuminate\Support\Facades\Mail;
 use Throwable;
 
 /**
- * Shared behaviour for every queued email ABOUT one appointment
- * (FR-STU-12 scheduling notice, FR-STU-13 withdrawal notice).
+ * Shared behaviour for every queued email ABOUT one appointment — since D-87
+ * removed the FR-STU-13 withdrawal notice, that is the FR-STU-12 scheduling
+ * notice alone.
  *
  * An *abstract class* is one that cannot be created on its own — it exists only
- * to be extended. Everything the two notices do identically lives here (retry
- * policy, recipient resolution, failure logging); each subclass supplies just
- * the two things that genuinely differ: which Mailable to send, and when
- * sending would no longer be appropriate.
+ * to be extended. The shared parts live here (retry policy, recipient
+ * resolution, failure logging); a subclass supplies just the two things that
+ * differ per notice: which Mailable to send, and when sending would no longer
+ * be appropriate.
  *
- * WHY QUEUED: the web request that creates or withdraws an appointment returns
- * immediately, and a mail server that is down or slow cannot take the booking,
- * the approval or the withdrawal down with it — those transactions have already
- * committed by the time any of this runs.
+ * WHY QUEUED: the web request that creates an appointment returns
+ * immediately, and a mail server that is down or slow cannot take the booking
+ * or the approval down with it — those transactions have already committed by
+ * the time any of this runs.
  *
  * ONE JOB PER STUDENT, always — never one job looping a roster — so a single
  * bad address fails only its own message.

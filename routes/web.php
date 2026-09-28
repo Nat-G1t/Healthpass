@@ -156,19 +156,12 @@ Route::middleware(['auth', 'role:college_admin', 'college.scope'])
         Route::get('/batches/{batch}', [AdminBatchRequestController::class, 'show'])
             ->whereNumber('batch')->name('batches.show');
         // Cancel a whole PENDING batch (FR-ADM-11, D-52). Its own throttle
-        // bucket for the same reason as batch-appt-cancel below: an authed
-        // throttle keys on the user id with no path, so without the 3rd arg
-        // this would share one counter with batch-store.
+        // bucket: an authed throttle keys on the user id with no path, so
+        // without the 3rd arg this would share one counter with batch-store.
         Route::delete('/batches/{batch}/cancel', [AdminBatchRequestController::class, 'cancel'])
             ->whereNumber('batch')
             ->middleware('throttle:20,1,batch-cancel')->name('batches.cancel');
-        // Withdraw ONE student's appointment from an approved batch — the other
-        // half of D-39, since a batch student cannot cancel their own. Its own
-        // throttle bucket: authed throttles key on the user id with no path, so
-        // without the 3rd arg this would share a counter with batch-store.
-        Route::delete('/batches/{batch}/appointments/{appointment}', [AdminBatchRequestController::class, 'cancelAppointment'])
-            ->whereNumber('batch')->whereNumber('appointment')
-            ->middleware('throttle:30,1,batch-appt-cancel')->name('batches.appointments.cancel');
+        // (D-87 removed the per-student withdraw route that sat here.)
         // Analytics (FR-ADM-08, D-45): the Director's six cards, scoped to
         // this admin's college and broken out per program. Same
         // App\Services\ClinicAnalytics behind both pages. Filters are month
@@ -286,7 +279,7 @@ Route::middleware(['auth', 'role:director'])
         // authenticated user the inline throttle keys on the user id with NO
         // path, so without distinct prefixes these five would share one counter
         // with each other and with the batch endpoints above — the same bug
-        // documented at batch-appt-cancel.
+        // documented at batch-cancel.
         Route::get('/staff', [DirectorStaffAccountController::class, 'index'])->name('staff.index');
         Route::post('/staff', [DirectorStaffAccountController::class, 'store'])
             ->middleware('throttle:15,1,staff-store')->name('staff.store');

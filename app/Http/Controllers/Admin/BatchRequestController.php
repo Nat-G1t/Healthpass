@@ -7,8 +7,6 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Admin\Concerns\ScopedToManagedCollege;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreBatchRequestRequest;
-use App\Jobs\SendAppointmentWithdrawnMail;
-use App\Models\Appointment;
 use App\Models\BatchRequest;
 use App\Models\BatchRequestStudent;
 use App\Models\StudentProfile;
@@ -56,16 +54,26 @@ class BatchRequestController extends Controller
      * eager-loads everything Appointment::clearanceProgress() reads, so the
      * page costs the same handful of queries whether a batch has 4 students or
      * 60. The popup rows are built here, per batch, by resultsPopup().
+     *
+     * D-86: the Batch Results card has its own Batch ID search (`?q=`). It is
+     * applied on the SERVER, so it finds a batch on any page, not just the ten
+     * on screen. `%` and `_` typed into it are left as LIKE wildcards, exactly
+     * as on the nurse dashboard's search; the term itself is a bound parameter.
+     *
+     * D-87: students whose appointment was withdrawn under the removed
+     * per-student withdrawal are left out of the counts and the popup
+     * (BatchRequestStudent::scopeNotWithdrawn()).
      */
-    public function index(): View
+    public function index(Request $request): View
     {
         $college = $this->managedCollege();
+        $search = trim((string) $request->query('q', ''));
 
         // FR-UI-06: ten per page. `id` breaks ties between batches submitted
         // in the same second, so no row can land on two pages or on none.
         $batchRequests = $college->batchRequests()
             ->with('reviewer:id,name')
-            ->withCount('batchRequestStudents')
+            ->withCount(['batchRequestStudents' => fn ($query) => $query->notWithdrawn()])
             ->latest()
             ->orderByDesc('id')
             ->paginate(config('healthpass.ui.rows_per_page'))
@@ -73,8 +81,9 @@ class BatchRequestController extends Controller
 
         $approvedBatches = $college->batchRequests()
             ->where('status', 'approved')
+            ->when($search !== '', fn ($query) => $query->where('reference_no', 'like', '%'.$search.'%'))
             ->with([
-                'batchRequestStudents' => fn ($query) => $query->orderBy('id'),
+                'batchRequestStudents' => fn ($query) => $query->notWithdrawn()->orderBy('id'),
                 'batchRequestStudents.student:id,name',
                 'batchRequestStudents.student.studentProfile:id,user_id,student_number',
                 'batchRequestStudents.appointment',
@@ -98,7 +107,16 @@ class BatchRequestController extends Controller
             ->mapWithKeys(fn (BatchRequest $batch): array => [$batch->id => $this->resultsPopup($batch)])
             ->all();
 
-        return view('admin.batches.index', compact('college', 'batchRequests', 'approvedBatches', 'resultPopups'));
+        // The card (and so its search box) shows whenever the college has ANY
+        // approved batch — not only when the search found one — so a search
+        // with no match can still be changed or cleared.
+        $hasApprovedBatches = $search === ''
+            ? $approvedBatches->total() > 0
+            : $college->batchRequests()->where('status', 'approved')->exists();
+
+        return view('admin.batches.index', compact(
+            'college', 'batchRequests', 'approvedBatches', 'resultPopups', 'hasApprovedBatches', 'search',
+        ));
     }
 
     /**
@@ -329,13 +347,14 @@ class BatchRequestController extends Controller
      *
      * Batch Tracking (index) has only ever shown a student COUNT, so before
      * D-40 there was nowhere in the app to see the roster at all, let alone act
-     * on one row of it. This is that page, and it is where the admin withdraws
-     * a single student's appointment.
+     * on one row of it. This was that page, and it was where the admin withdrew
+     * a single student's appointment — until D-87 removed that action.
      *
      * D-53 put each student's progress and Fit/Unfit result here as well; D-55
      * moved both to the Batch Results popup on Batch Tracking (FR-ADM-12), so
-     * this page is back to who is booked, when, and the Withdraw action — and
-     * no longer loads any part of the clinical record.
+     * this page is back to who is booked and when — and no longer loads any
+     * part of the clinical record. D-87 hides the students an earlier
+     * withdrawal removed (BatchRequestStudent::scopeNotWithdrawn()).
      *
      * Scoped the same way as confirmation(): fetched through the managed
      * college's relationship, so another college's batch id 404s (FR-ADM-06).
@@ -354,6 +373,7 @@ class BatchRequestController extends Controller
         // with each student's generated appointment eager-loaded — a page is
         // 4 queries whatever the batch size.
         $rows = $batch->batchRequestStudents()
+            ->notWithdrawn()
             ->with([
                 'student:id,name',
                 'student.studentProfile:id,user_id,student_number,course,year_level',
@@ -364,19 +384,11 @@ class BatchRequestController extends Controller
             ->withQueryString();
 
         // The page header and summary describe the WHOLE roster, never just
-        // the page on screen, so they are counted by their own queries.
-        // "Booked" = an appointment still holding its seat; "withdrawn" = one
-        // the admin cancelled (FR-ADM-07).
+        // the page on screen, so the count is its own query.
         return view('admin.batches.show', [
             'batch' => $batch,
             'rows' => $rows,
-            'totalCount' => $batch->batchRequestStudents()->count(),
-            'activeCount' => $batch->batchRequestStudents()
-                ->whereHas('appointment', fn ($query) => $query->where('status', '!=', 'cancelled'))
-                ->count(),
-            'withdrawnCount' => $batch->batchRequestStudents()
-                ->whereHas('appointment', fn ($query) => $query->where('status', 'cancelled'))
-                ->count(),
+            'totalCount' => $batch->batchRequestStudents()->notWithdrawn()->count(),
         ]);
     }
 
@@ -391,10 +403,9 @@ class BatchRequestController extends Controller
      * and on the Activity Log alike.
      *
      * PENDING ONLY, and deliberately so. Approval fans out one appointment per
-     * student and emails every one of them (BR-08, FR-STU-12); undoing that is
-     * the per-student withdrawal on the batch roster below (FR-ADM-07), which
-     * frees one seat and emails one student. A whole-batch cancel after
-     * approval would be a silent mass-cancellation, so it is not offered.
+     * student and emails every one of them (BR-08, FR-STU-12). A whole-batch
+     * cancel after approval would be a silent mass-cancellation, so it is not
+     * offered — and since D-87 neither is a per-student one.
      *
      * Guards, all resolved server-side:
      *   - the batch is fetched through the managed college, so another
@@ -441,77 +452,5 @@ class BatchRequestController extends Controller
             'status',
             "{$batch->reference_no} has been cancelled. It is no longer waiting for the Clinic Director.",
         );
-    }
-
-    /**
-     * Withdraw ONE student's appointment from an approved batch
-     * (FR-ADM-07, D-40).
-     *
-     * This is the other half of D-39: a batch student cannot cancel their own
-     * appointment, and the email they receive tells them to contact their
-     * college admin — this is what that admin does. Cancelling is all it takes
-     * to free the seat: every capacity count in the app (the daily cap, the
-     * D-37 per-hour cap, the calendar's full-day roll-up) filters on
-     * `status != 'cancelled'`, so the freed hour becomes bookable again with no
-     * extra bookkeeping.
-     *
-     * The appointment ROW IS KEPT and flipped to `cancelled` rather than
-     * deleted, and the pivot row keeps its `appointment_id` — the batch's
-     * history stays readable ("this student was booked, then withdrawn")
-     * instead of silently losing a member.
-     *
-     * Scope + guards, all resolved server-side:
-     *   - the batch is fetched through the managed college (foreign id → 404)
-     *   - the appointment must belong to THAT batch (→ 404), so an appointment
-     *     id from another college's batch cannot be passed in
-     *   - Appointment::isAdminCancellable() must hold — the same rule the view
-     *     uses to decide whether to draw the button, re-read here under a row
-     *     lock so a double-click, or a race with the kiosk checking the student
-     *     in, cannot slip past the unlocked read the page did.
-     */
-    public function cancelAppointment(int $batchId, Appointment $appointment): RedirectResponse
-    {
-        $batch = $this->managedCollege()->batchRequests()->findOrFail($batchId);
-
-        abort_if($appointment->batch_request_id !== $batch->id, 404);
-
-        $wasCancelled = DB::transaction(function () use ($appointment): bool {
-            $locked = Appointment::whereKey($appointment->id)->lockForUpdate()->firstOrFail();
-
-            // Re-checked under the lock, not trusted from the page: between the
-            // roster rendering and this POST the student may have checked in at
-            // the kiosk, or a duplicate submit may already have cancelled it.
-            if (! $locked->isAdminCancellable()) {
-                return false;
-            }
-
-            $locked->update(['status' => 'cancelled']);
-
-            return true;
-        });
-
-        if (! $wasCancelled) {
-            return redirect()->route('admin.batches.show', $batchId)
-                ->with('error', "{$appointment->reference_no} can no longer be withdrawn — the student may have already checked in at the kiosk, or it was cancelled already.");
-        }
-
-        // FR-STU-13 (D-41): tell the student, or they turn up to a seat that no
-        // longer exists — they were emailed when the college booked them
-        // (FR-STU-12) and cannot cancel a batch appointment themselves.
-        //
-        // Queued and dispatched AFTER the transaction, for the same two reasons
-        // as D-39: a mail failure must not roll back the withdrawal, and the
-        // worker must not read a row its own connection cannot see yet. Only
-        // reached when the withdrawal actually happened — a refused one
-        // (already checked in, past date, duplicate submit) returns above and
-        // emails nobody.
-        //
-        // refresh() so the job serializes the row as it now is: $appointment
-        // still holds the pre-update 'scheduled' status in memory, and the
-        // job's own relevance check requires 'cancelled'.
-        SendAppointmentWithdrawnMail::dispatch($appointment->refresh());
-
-        return redirect()->route('admin.batches.show', $batchId)
-            ->with('status', "{$appointment->reference_no} withdrawn — the {$appointment->timeRangeLabel()} seat is free again, and the student has been emailed.");
     }
 }

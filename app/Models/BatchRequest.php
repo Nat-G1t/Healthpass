@@ -104,9 +104,9 @@ class BatchRequest extends Model
      * D-52: may the college still cancel this request itself (FR-ADM-11)?
      *
      * PENDING ONLY. Once the Director has approved it, appointments exist and
-     * students have been emailed (FR-STU-12) — unwinding that is the
-     * per-student withdrawal on the batch roster (FR-ADM-07), not a
-     * whole-batch cancel. A rejected or already-cancelled batch is terminal.
+     * students have been emailed (FR-STU-12), and nothing unwinds them — D-87
+     * removed the per-student withdrawal too. A rejected or already-cancelled
+     * batch is terminal.
      *
      * One rule, called by the Batch Tracking page (to decide whether to draw
      * the button) and by the cancel endpoint on the LOCKED row, so the button
@@ -214,47 +214,69 @@ class BatchRequest extends Model
         return $this->reasonLabel() ?? ucfirst($this->reason);
     }
 
-    // ── Batch results (FR-ADM-12, D-55) ──────────────────────────────────────
+    // ── Batch results (FR-ADM-12, D-55, D-86) ────────────────────────────────
 
     /**
-     * D-55: has every student this batch still holds finished with the clinic?
+     * D-86: when this batch was done, or null while it is still in progress.
      *
-     * FINISHED means each non-withdrawn student is Completed (the nurse has
-     * encoded them) or Absent (no visit by the absent cutoff). A student at the
-     * clinic but not yet encoded keeps the batch open, even past the cutoff;
-     * withdrawn students are ignored, since they no longer hold a seat.
+     * A batch is done at the ABSENT CUTOFF (8:00 PM) on its clinic date, even
+     * if some students never came — D-55 used to keep it open until every
+     * student was Completed or Absent, so one student left un-encoded held it
+     * "In progress" forever. It is done EARLIER, at the last encode, when every
+     * student it still holds has been encoded before the cutoff.
      *
-     * D-72: `rechecking` is unfinished for the same reason `in_clinic` is —
-     * only completed and absent are listed here, so a resting student keeps
-     * the batch open until they come back (or the cutoff makes them absent).
+     * So the time returned is the last encode when everyone finished early, and
+     * otherwise the cutoff itself. An encode made AFTER the cutoff (a
+     * did-not-finish student encoded next morning) never moves it: the batch was
+     * already done at the cutoff.
      *
      * Reads the SAME Appointment::clearanceProgress() the Batch Results popup
-     * rows show, so the Time of Completion column and the popup can never
-     * disagree. Callers eager-load
-     * batchRequestStudents.appointment.clinicVisit.clearanceRecord.
-     */
-    public function isResultsFinished(): bool
-    {
-        return $this->heldAppointments()->every(
-            fn (Appointment $appointment): bool => in_array($appointment->clearanceProgress(), ['completed', 'absent'], true),
-        );
-    }
-
-    /**
-     * D-55: when the batch finished — the time of the LAST encode among its
-     * students. Null while it is unfinished, and null when it finished with
-     * nobody Completed (everyone absent or withdrawn); the view words both.
+     * rows show, so the Status column and the popup can never disagree. Callers
+     * eager-load batchRequestStudents.appointment.clinicVisit.clearanceRecord.
      */
     public function resultsCompletedAt(): ?Carbon
     {
-        if (! $this->isResultsFinished()) {
-            return null;
+        $held = $this->heldAppointments();
+        $cutoff = $this->scheduled_date !== null
+            ? Appointment::absentCutoffOn($this->scheduled_date)
+            : null;
+
+        $allEncoded = $held->isNotEmpty() && $held->every(
+            fn (Appointment $appointment): bool => $appointment->clearanceProgress() === 'completed',
+        );
+
+        if ($allEncoded) {
+            // encoded_at is a nullable column, though every encode path sets it.
+            $lastEncode = $held
+                ->map(fn (Appointment $appointment): ?Carbon => $appointment->clinicVisit->clearanceRecord->encoded_at)
+                ->max();
+
+            return $cutoff !== null && ($lastEncode === null || $lastEncode->gt($cutoff)) ? $cutoff : $lastEncode;
         }
 
-        return $this->heldAppointments()
-            ->filter(fn (Appointment $appointment): bool => $appointment->clearanceProgress() === 'completed')
-            ->map(fn (Appointment $appointment): ?Carbon => $appointment->clinicVisit->clearanceRecord->encoded_at)
-            ->max();
+        if ($cutoff !== null && now()->gte($cutoff)) {
+            return $cutoff;
+        }
+
+        return null;
+    }
+
+    /**
+     * D-86: the Batch Results Status column — `in_progress`, `completed`, or
+     * `no_one_attended` (done, and every student it holds is Absent: nobody
+     * even reached the kiosk). The view owns the wording.
+     */
+    public function resultsStatus(): string
+    {
+        if ($this->resultsCompletedAt() === null) {
+            return 'in_progress';
+        }
+
+        $nobodyCame = $this->heldAppointments()->every(
+            fn (Appointment $appointment): bool => $appointment->clearanceProgress() === 'absent',
+        );
+
+        return $nobodyCame ? 'no_one_attended' : 'completed';
     }
 
     /**

@@ -2,24 +2,24 @@
 
 @php
     // Appointments only exist once the Director has approved (BR-08), so the
-    // Appointment / Time / Withdraw columns are meaningless on a pending,
-    // rejected or cancelled batch — the roster there is just "who was
-    // submitted".
+    // Appointment / Time columns are meaningless on a pending, rejected or
+    // cancelled batch — the roster there is just "who was submitted".
     //
     // D-55: the Status and Result columns and the results roll-up D-53 put on
     // this page are gone. Each student's outcome now lives on the Batch Results
     // popup on Batch Tracking (FR-ADM-12), where every approved batch sits in
-    // one place; the roster is back to who is booked, when, and withdrawing.
+    // one place; the roster is back to who is booked and when. D-87 removed
+    // the Withdraw column, and students an earlier withdrawal removed are not
+    // listed at all.
     $isApproved = $batch->status === 'approved';
 
     $headers = $isApproved
-        ? ['Student', 'Student No.', 'Appointment', 'Time', '']
+        ? ['Student', 'Student No.', 'Appointment', 'Time']
         : ['Student', 'Student No.', 'Course & Year'];
 
-    // $rows is ONE PAGE of the roster (FR-UI-06). $totalCount, $activeCount
-    // (seats still held — what matters when deciding whether to withdraw
-    // someone) and $withdrawnCount come from the controller and count the
-    // WHOLE roster, so the header never shrinks to the page size.
+    // $rows is ONE PAGE of the roster (FR-UI-06). $totalCount comes from the
+    // controller and counts the WHOLE roster, so the header never shrinks to
+    // the page size.
 @endphp
 
 {{-- ── Flash messages ───────────────────────────────────────────────────────── --}}
@@ -97,14 +97,7 @@
             <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
                 Students
             </dt>
-            <dd class="mt-1 text-sm font-semibold text-hp-slate">
-                {{ $totalCount }}
-                @if ($isApproved && $withdrawnCount > 0)
-                    <span class="font-normal text-hp-slate/60">
-                        ({{ $activeCount }} booked, {{ $withdrawnCount }} withdrawn)
-                    </span>
-                @endif
-            </dd>
+            <dd class="mt-1 text-sm font-semibold text-hp-slate">{{ $totalCount }}</dd>
         </div>
     </dl>
 </x-hp.card>
@@ -128,23 +121,6 @@
             before the Clinic Director reviewed it. <strong class="font-semibold">No appointments
             were created</strong>, and the clinic hours it asked for were never held.
             To book these students, submit a new batch request.
-        </p>
-    </div>
-@endif
-
-{{-- ── Withdrawal guidance (FR-ADM-07, D-40) ────────────────────────────────── --}}
-@if ($isApproved)
-    <div class="mb-6 flex items-start gap-3 rounded-xl border border-hp-orange/25 bg-hp-peach/40 px-4 py-3.5">
-        <svg class="mt-0.5 h-4 w-4 shrink-0 text-hp-orange" fill="none" viewBox="0 0 24 24"
-             stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round"
-                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-        </svg>
-        <p class="text-xs leading-relaxed text-hp-slate">
-            Students booked through a batch <strong>cannot cancel their own appointment</strong> —
-            the email they received tells them to contact you. Withdrawing one here frees
-            that student's seat, so another student can book the hour.
-            A student who has already checked in at the kiosk can no longer be withdrawn.
         </p>
     </div>
 @endif
@@ -183,40 +159,6 @@
                         <x-hp.table-cell label="Time">
                             {{-- "—" on pre-D-37 appointments, which sit in no slot --}}
                             {{ $appointment?->timeRangeLabel() ?? '—' }}
-                        </x-hp.table-cell>
-
-                        <x-hp.table-cell label="">
-                            {{-- isAdminCancellable() is the SAME rule the endpoint
-                                 enforces under a row lock, so this button can never
-                                 offer something the server would refuse. --}}
-                            @if ($appointment !== null && $appointment->isAdminCancellable())
-                                <div x-data="{ confirming: false }">
-                                    <x-hp.button variant="danger" size="sm"
-                                                 x-show="!confirming"
-                                                 @click="confirming = true">
-                                        Withdraw
-                                    </x-hp.button>
-
-                                    <div x-show="confirming" x-cloak class="flex flex-wrap items-center gap-2">
-                                        <form method="POST"
-                                              action="{{ route('admin.batches.appointments.cancel', [$batch->id, $appointment->id]) }}">
-                                            @csrf
-                                            @method('DELETE')
-                                            <x-hp.button type="submit" variant="danger" size="sm"
-                                                         data-pending-label="Withdrawing…">
-                                                Confirm
-                                            </x-hp.button>
-                                        </form>
-                                        <button type="button" @click="confirming = false"
-                                                class="text-xs font-semibold text-hp-slate/50
-                                                       transition-colors hover:text-hp-slate">
-                                            Keep
-                                        </button>
-                                    </div>
-                                </div>
-                            @else
-                                <span class="text-hp-slate/50">&mdash;</span>
-                            @endif
                         </x-hp.table-cell>
                     @else
                         <x-hp.table-cell label="Course & Year" class="text-hp-slate/60">

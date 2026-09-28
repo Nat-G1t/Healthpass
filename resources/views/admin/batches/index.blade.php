@@ -72,29 +72,57 @@
     </a>
 </div>
 
-{{-- ── Batch Results (FR-ADM-12, D-55) ────────────────────────────────────── --}}
+{{-- ── Batch Results (FR-ADM-12, D-55, D-86) ─────────────────────────────── --}}
 {{-- Every APPROVED batch of this college, newest clinic date first — a batch
-     appears here the moment the Director approves it. The card only renders
-     when there is at least one (total(), not the current page, so a stale
-     page link can't hide the card), and it is rebuilt on every page load (nothing
-     polls), so a reload after the nurse encodes shows the new result. --}}
-@if ($approvedBatches->total() > 0)
+     appears here the moment the Director approves it. The card renders when
+     the college has at least one ($hasApprovedBatches — decided in the
+     controller, so neither a stale page link nor a search with no match can
+     hide it), and it is rebuilt on every page load (nothing polls), so a
+     reload after the nurse encodes shows the new result. --}}
+@if ($hasApprovedBatches)
     <x-hp.card class="mb-6">
-        <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
-            Batch Results
-        </p>
-        <p class="mb-4 mt-1 text-xs text-hp-slate/50">
-            Who has finished and who didn't show, for every approved batch.
-        </p>
+        <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
+            <div>
+                <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+                    Batch Results
+                </p>
+                <p class="mt-1 text-xs text-hp-slate/50">
+                    Who has finished and who didn't show, for every approved batch.
+                </p>
+            </div>
 
-        <x-hp.table :headers="['Batch ID', 'Time of Completion', '']">
+            {{-- D-86: Batch ID search. A plain GET form, so the server filters
+                 every page (not just the ten on screen) and the term stays in
+                 the URL for the pager links. It only filters this card. --}}
+            <form method="GET" action="{{ route('admin.batches.index') }}" role="search"
+                  class="flex w-full items-center gap-2 sm:w-auto">
+                <label for="results-search" class="sr-only">Search by Batch ID</label>
+                <input id="results-search" name="q" type="search" value="{{ $search }}"
+                       maxlength="30" placeholder="Search Batch ID"
+                       class="w-full rounded-lg border-hp-slate/20 bg-hp-white px-3 py-1.5 text-xs text-hp-slate placeholder-hp-slate/40 focus:border-hp-orange focus:ring-hp-orange sm:w-48">
+                <x-hp.button type="submit" variant="soft" size="sm">Search</x-hp.button>
+                @if ($search !== '')
+                    <a href="{{ route('admin.batches.index') }}"
+                       class="px-1 py-1.5 text-xs font-medium text-hp-slate/50 hover:text-hp-slate">
+                        Clear
+                    </a>
+                @endif
+            </form>
+        </div>
+
+        @if ($approvedBatches->isEmpty())
+            <p class="py-6 text-center text-sm text-hp-slate/50">
+                No approved batch matches “{{ $search }}”.
+            </p>
+        @else
+        <x-hp.table :headers="['Batch ID', 'Time of Completion', 'Status', '']">
             @foreach ($approvedBatches as $batch)
                 @php
-                    // The finished / completion-time rule lives on the model and
-                    // reads the same clearanceProgress() as the popup rows, so the
-                    // column and the popup can never disagree. Only the wording
-                    // lives here.
+                    // D-86: the completion rule lives on the model and reads the
+                    // same clearanceProgress() as the popup rows, so the columns
+                    // and the popup can never disagree. Only the wording lives here.
                     $completedAt = $batch->resultsCompletedAt();
+                    $resultsStatus = $batch->resultsStatus();
                 @endphp
                 <x-hp.table-row>
                     <x-hp.table-cell label="Batch ID" class="font-semibold">
@@ -102,12 +130,20 @@
                     </x-hp.table-cell>
 
                     <x-hp.table-cell label="Time of Completion">
-                        @if (! $batch->isResultsFinished())
-                            <span class="text-hp-slate/60">In progress</span>
-                        @elseif ($completedAt !== null)
+                        @if ($completedAt !== null)
                             {{ $completedAt->format('M j, Y · g:i A') }}
                         @else
-                            <span class="text-hp-slate/60">No one attended</span>
+                            <span class="text-hp-slate/50">&mdash;</span>
+                        @endif
+                    </x-hp.table-cell>
+
+                    <x-hp.table-cell label="Status">
+                        @if ($resultsStatus === 'completed')
+                            <x-hp.badge variant="approved">Completed</x-hp.badge>
+                        @elseif ($resultsStatus === 'no_one_attended')
+                            <x-hp.badge variant="rejected">No one attended</x-hp.badge>
+                        @else
+                            <x-hp.badge variant="live">In progress</x-hp.badge>
                         @endif
                     </x-hp.table-cell>
 
@@ -132,6 +168,7 @@
         </x-hp.table>
 
         <x-hp.pager :paginator="$approvedBatches" />
+        @endif
     </x-hp.card>
 @endif
 
@@ -253,9 +290,12 @@
      hour, a status key and Fit/Unfit, and nothing else of the clinical record
      is ever sent. Every value is written with x-text, which sets textContent,
      so a name is never parsed as markup. The status WORDING lives here — one
-     badge per key, shown with x-show. The panel scrolls for a long roster, and
-     below `md` the table re-flows into stacked cards like everywhere else. --}}
-@if ($approvedBatches->total() > 0)
+     badge per key, shown with x-show. D-86: from `md` up the student list is
+     capped at six rows plus half of the seventh (the half row is the cue that
+     it scrolls), so a big batch can't stretch the popup. Below `md` the table
+     re-flows into stacked cards like everywhere else; a card is several rows
+     tall, so there the list scrolls within the panel's own 90vh instead. --}}
+@if ($approvedBatches->isNotEmpty())
     <template x-teleport="body">
         <div
             x-show="results !== null"
@@ -300,7 +340,7 @@
                     <span x-text="results?.span"></span>
                 </p>
 
-                <div class="mt-5 min-h-0 overflow-y-auto">
+                <div class="mt-5 min-h-0 overflow-y-auto md:max-h-[21rem]">
                     <x-hp.table :headers="['Student', 'Student No.', 'Hour', 'Status', 'Result']">
                         <template x-for="(row, index) in results?.students ?? []" :key="index">
                             <x-hp.table-row>
@@ -330,7 +370,9 @@
                                     <x-hp.badge variant="live" x-show="row.status === 'in_clinic'">At the clinic</x-hp.badge>
                                     <x-hp.badge variant="approved" x-show="row.status === 'completed'">Completed</x-hp.badge>
                                     <x-hp.badge variant="rejected" x-show="row.status === 'absent'">Absent</x-hp.badge>
-                                    <x-hp.badge variant="rejected" x-show="row.status === 'withdrawn'">Withdrawn</x-hp.badge>
+                                    {{-- D-86: reached the kiosk, but by the 8 PM cutoff was
+                                         still resting or not yet encoded. --}}
+                                    <x-hp.badge variant="rejected" x-show="row.status === 'did_not_finish'">Did not finish</x-hp.badge>
                                     <span x-show="row.status === null" class="text-hp-slate/50">&mdash;</span>
                                 </x-hp.table-cell>
 

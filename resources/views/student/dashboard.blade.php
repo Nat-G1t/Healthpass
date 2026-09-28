@@ -57,8 +57,8 @@
         </p>
     </x-hp.card>
 
-    {{-- Card 2: Next Appointment — read-only (D-61). Only the College Admin
-         who requested the batch can withdraw a seat (FR-ADM-07). --}}
+    {{-- Card 2: Next Appointment — read-only (D-61). Nobody cancels a batch
+         appointment — D-87 removed the College Admin's withdrawal too. --}}
     <x-hp.card class="flex flex-col">
         <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
             Next Appointment
@@ -96,12 +96,12 @@
                 <p class="mt-1 text-xs text-hp-slate/40">{{ $nextAppointment->reference_no }}</p>
             </div>
 
-            {{-- D-39: guidance, not a button — only the College Admin who
-                 booked the cohort may withdraw a seat. --}}
+            {{-- D-39: guidance, not a button. D-87: the appointment cannot be
+                 cancelled at all, so the student is only asked to tell the admin. --}}
             @if ($nextAppointment->source === 'batch' && $nextAppointment->scheduled_date->gt(today()))
                 <p class="mt-5 text-xs leading-relaxed text-hp-slate/50">
-                    Booked by your college. Contact your college administrator if you
-                    need this cancelled.
+                    Booked for your group and cannot be cancelled. If you cannot attend,
+                    let your college administrator know.
                 </p>
             @endif
         @else

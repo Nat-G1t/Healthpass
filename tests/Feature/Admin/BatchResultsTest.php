@@ -17,11 +17,12 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 /**
- * The Batch Results card and popup on Batch Tracking (FR-ADM-12, D-55).
+ * The Batch Results card and popup on Batch Tracking (FR-ADM-12, D-55, D-86).
  *
  * A College Admin who booked a cohort wants to see, per batch, who has
  * finished and who did not show, without opening each batch. Every APPROVED
@@ -34,8 +35,9 @@ use Tests\TestCase;
  *   - Appointment::clearanceProgress() — a student with no clinic visit is
  *     ABSENT once the server clock reaches `healthpass.absent_cutoff`
  *     (8:00 PM) on the clinic date, and Not yet attended before that
- *   - BatchRequest::resultsCompletedAt() — a batch is finished once every
- *     non-withdrawn student is Completed or Absent
+ *   - BatchRequest::resultsCompletedAt() / resultsStatus() — D-86: a batch is
+ *     done at that same cutoff even if some students never came, or earlier,
+ *     at its last encode, when everyone was encoded before the cutoff
  *
  * The result is CLINICAL. PRD §6.6 (opened by D-53, moved here by D-55)
  * permits exactly one field of it — Fit / Unfit — to the admin of the
@@ -43,7 +45,9 @@ use Tests\TestCase;
  * record reaches the page.
  *
  * D-55 also trimmed the batch roster: its D-53 Status and Result columns and
- * roll-up are gone, which the last section asserts.
+ * roll-up are gone, which the last section asserts. D-87 removed per-student
+ * withdrawal: the few rows it already produced are hidden from the popup, the
+ * roster and the counts, and the endpoint is gone.
  */
 class BatchResultsTest extends TestCase
 {
@@ -112,7 +116,7 @@ class BatchResultsTest extends TestCase
      * Put one student on $batch and drive them to $stage:
      *
      *   'booked'      — appointment only, nothing at the kiosk
-     *   'withdrawn'   — the admin pulled the seat
+     *   'withdrawn'   — a seat pulled before D-87 removed withdrawal
      *   'in_clinic'   — kiosk visit captured, the nurse has not encoded it
      *   'Fit'/'Unfit' — encoded with that outcome, at $encodedAt
      */
@@ -195,6 +199,21 @@ class BatchResultsTest extends TestCase
     private function popup(TestResponse $response, BatchRequest $batch): array
     {
         return $response->viewData('resultPopups')[$batch->id];
+    }
+
+    /**
+     * The Batch Results row for $batch as [status key, completion time]. Read
+     * from the model the page rendered, because the popup template carries
+     * every badge's text (Alpine shows one), so "Completed" is always in the
+     * HTML and cannot be asserted with assertSee().
+     *
+     * @return array{0: string, 1: ?string}
+     */
+    private function resultRow(TestResponse $response, BatchRequest $batch): array
+    {
+        $row = $response->viewData('approvedBatches')->getCollection()->firstWhere('id', $batch->id);
+
+        return [$row->resultsStatus(), $row->resultsCompletedAt()?->format('M j, Y · g:i A')];
     }
 
     private function countQueries(callable $request): int
@@ -323,6 +342,9 @@ class BatchResultsTest extends TestCase
         $this->assertSame('absent', $this->popup($response, $batch)['students'][0]['status']);
         $response->assertSee('No one attended');
         $response->assertDontSee('In progress');
+        // D-86: done at the cutoff itself, and the column says when.
+        $this->assertSame(['no_one_attended', 'Sep 10, 2026 · 8:00 PM'], $this->resultRow($response, $batch));
+        $response->assertSee('Sep 10, 2026 · 8:00 PM');
     }
 
     public function test_overriding_the_absent_cutoff_moves_the_boundary(): void
@@ -339,38 +361,75 @@ class BatchResultsTest extends TestCase
         $this->assertSame('absent', $this->popup($this->tracking(), $batch)['students'][0]['status']);
     }
 
-    public function test_a_student_at_the_clinic_past_the_cutoff_keeps_the_batch_in_progress(): void
+    public function test_a_student_never_encoded_by_the_cutoff_did_not_finish_and_the_batch_completes(): void
     {
+        // D-86 (was D-55's "keeps the batch in progress"): Cara reached the
+        // kiosk but the nurse never encoded her. The clinic day is over, so she
+        // "did not finish" and the batch is done at 8:00 PM regardless.
         $batch = $this->makeBatch();
         $this->addStudent($batch, 'in_clinic', 'Cara Waiting');
         $this->addStudent($batch, 'booked', 'Dino Booked');
 
-        // The next morning: Dino is absent, but Cara is still waiting on the nurse.
         $this->travelTo(Carbon::parse('2026-09-11 08:00:00'));
         $response = $this->tracking();
 
         $statuses = array_column($this->popup($response, $batch)['students'], 'status');
-        $this->assertSame(['in_clinic', 'absent'], $statuses);
-        $response->assertSee('In progress');
+        $this->assertSame(['did_not_finish', 'absent'], $statuses);
+        // Cara came, so this is Completed — not "No one attended".
+        $this->assertSame(['completed', 'Sep 10, 2026 · 8:00 PM'], $this->resultRow($response, $batch));
+        $response->assertDontSee('In progress');
     }
 
-    public function test_a_finished_batch_shows_the_time_of_its_last_encode(): void
+    public function test_a_batch_with_a_no_show_completes_at_the_cutoff_not_its_last_encode(): void
     {
         $batch = $this->makeBatch();
         $this->addStudent($batch, 'Unfit', 'Ben Flagged', self::CLINIC_DAY.' 15:42:00');
         $this->addStudent($batch, 'Fit', 'Ana Cleared', self::CLINIC_DAY.' 11:05:00');
         $this->addStudent($batch, 'booked', 'Dino Booked');
-        $this->addStudent($batch, 'withdrawn', 'Fina Pulled');
 
-        $this->travelTo(Carbon::parse('2026-09-11 08:00:00'));
+        // A minute before the cutoff Dino may still turn up.
+        $this->travelTo(Carbon::parse(self::CLINIC_DAY.' 19:59:00'));
         $response = $this->tracking();
+        $this->assertSame(['in_progress', null], $this->resultRow($response, $batch));
+        $response->assertSee('In progress');
 
-        $response->assertSee('Sep 10, 2026 · 3:42 PM');
-        $response->assertDontSee('In progress');
+        $this->travelTo(Carbon::parse(self::CLINIC_DAY.' 20:00:00'));
+        $response = $this->tracking();
+        $this->assertSame(['completed', 'Sep 10, 2026 · 8:00 PM'], $this->resultRow($response, $batch));
+        $response->assertSee('Sep 10, 2026 · 8:00 PM');
+        $response->assertDontSee('3:42 PM');
         $response->assertDontSee('No one attended');
     }
 
-    public function test_withdrawn_students_do_not_block_finishing(): void
+    public function test_a_batch_everyone_finished_early_completes_at_its_last_encode(): void
+    {
+        $batch = $this->makeBatch();
+        $this->addStudent($batch, 'Unfit', 'Ben Flagged', self::CLINIC_DAY.' 15:42:00');
+        $this->addStudent($batch, 'Fit', 'Ana Cleared', self::CLINIC_DAY.' 11:05:00');
+
+        // Well before the cutoff — nobody left to wait for.
+        $this->travelTo(Carbon::parse(self::CLINIC_DAY.' 16:00:00'));
+        $response = $this->tracking();
+
+        $this->assertSame(['completed', 'Sep 10, 2026 · 3:42 PM'], $this->resultRow($response, $batch));
+        $response->assertSee('Sep 10, 2026 · 3:42 PM');
+        $response->assertDontSee('In progress');
+    }
+
+    public function test_an_encode_after_the_cutoff_does_not_move_the_completion_time(): void
+    {
+        // Cara did not finish by 8:00 PM; the nurse encodes her next morning.
+        // The batch was already done at the cutoff, and stays done then.
+        $batch = $this->makeBatch();
+        $this->addStudent($batch, 'Fit', 'Ana Cleared', self::CLINIC_DAY.' 10:15:00');
+        $this->addStudent($batch, 'Fit', 'Cara Late', '2026-09-11 09:00:00');
+
+        $this->travelTo(Carbon::parse('2026-09-11 10:00:00'));
+
+        $this->assertSame(['completed', 'Sep 10, 2026 · 8:00 PM'], $this->resultRow($this->tracking(), $batch));
+    }
+
+    public function test_old_withdrawn_students_do_not_block_finishing(): void
     {
         $batch = $this->makeBatch();
         $this->addStudent($batch, 'Fit', 'Ana Cleared', self::CLINIC_DAY.' 09:20:00');
@@ -394,6 +453,58 @@ class BatchResultsTest extends TestCase
 
         $response->assertSee('No one attended');
         $response->assertDontSee('In progress');
+        $this->assertSame(['no_one_attended', 'Sep 10, 2026 · 8:00 PM'], $this->resultRow($response, $batch));
+    }
+
+    // ── Search (D-86) ────────────────────────────────────────────────────────
+
+    public function test_the_results_search_finds_a_batch_on_any_page(): void
+    {
+        // 12 approved batches on one date: newest id first, so the first one
+        // made sits on page 2 of the card.
+        $oldest = $this->makeBatch();
+        foreach (range(1, 11) as $i) {
+            $this->makeBatch();
+        }
+
+        $this->assertArrayNotHasKey($oldest->id, $this->tracking()->viewData('resultPopups'));
+
+        $suffix = substr($oldest->reference_no, -3);
+        $response = $this->actingAs($this->admin)->get('/admin/batches?q='.$suffix)->assertOk();
+
+        $this->assertSame(
+            [$oldest->reference_no],
+            $response->viewData('approvedBatches')->getCollection()->pluck('reference_no')->all(),
+        );
+        // It filters the Batch Results card only — the requests list is whole.
+        $this->assertSame(12, $response->viewData('batchRequests')->total());
+        $response->assertSee('value="'.$suffix.'"', false);
+    }
+
+    public function test_a_search_with_no_match_keeps_the_card_and_says_so(): void
+    {
+        $this->makeBatch();
+
+        $response = $this->actingAs($this->admin)->get('/admin/batches?q=nothing-like-this')->assertOk();
+
+        $response->assertSee('Batch Results');
+        $response->assertSee('No approved batch matches');
+        $response->assertSee('Clear');
+        $this->assertSame([], $response->viewData('resultPopups'));
+    }
+
+    public function test_the_search_never_reaches_another_colleges_batch(): void
+    {
+        $this->makeBatch();
+        $foreign = $this->makeBatch(college: $this->coe);
+
+        $response = $this->actingAs($this->admin)->get('/admin/batches?q='.$foreign->reference_no)->assertOk();
+
+        // The term is echoed back in the box and the no-match line, so assert
+        // on what the card actually lists rather than on the raw HTML.
+        $this->assertCount(0, $response->viewData('approvedBatches')->items());
+        $this->assertArrayNotHasKey($foreign->id, $response->viewData('resultPopups'));
+        $response->assertSee('No approved batch matches');
     }
 
     // ── The popup ────────────────────────────────────────────────────────────
@@ -423,14 +534,31 @@ class BatchResultsTest extends TestCase
             'result' => 'Fit',
         ], $popup['students'][0]);
 
+        // D-87: Fina, withdrawn before withdrawal was removed, is not listed.
         $this->assertSame(
-            [['completed', 'Fit'], ['completed', 'Unfit'], ['in_clinic', null], ['awaiting', null], ['withdrawn', null]],
+            [['completed', 'Fit'], ['completed', 'Unfit'], ['in_clinic', null], ['awaiting', null]],
             array_map(fn (array $row): array => [$row['status'], $row['result']], $popup['students']),
         );
 
         // Embedded in the page for Alpine to open — through Js::from().
         $response->assertSee('results = JSON.parse', false);
         $response->assertSee('Ana Cleared', false);
+    }
+
+    public function test_old_withdrawn_students_are_hidden_from_the_popup_and_the_counts(): void
+    {
+        $batch = $this->makeBatch();
+        $this->addStudent($batch, 'booked', 'Dino Booked');
+        $this->addStudent($batch, 'withdrawn', 'Fina Pulled');
+
+        $response = $this->tracking()->assertOk();
+
+        $this->assertSame(['Dino Booked'], array_column($this->popup($response, $batch)['students'], 'name'));
+        $response->assertDontSee('Fina Pulled');
+        $response->assertDontSee('Withdrawn');
+        // The requests list's Students column counts only who is still booked.
+        $this->assertSame(1, (int) $response->viewData('batchRequests')->getCollection()
+            ->firstWhere('id', $batch->id)->batch_request_students_count);
     }
 
     public function test_a_name_with_an_apostrophe_cannot_break_the_payload(): void
@@ -516,11 +644,43 @@ class BatchResultsTest extends TestCase
         $response->assertDontSee('At the clinic');
         $response->assertDontSee('Not yet attended');
 
-        // What stays: the appointment, its hour, and the Withdraw action.
+        // What stays: the appointment and its hour. D-87 removed Withdraw.
         $response->assertSee($unfit->reference_no);
         $response->assertSee($booked->reference_no);
         $response->assertSee('9:00 AM – 10:00 AM');
-        $response->assertSee('Withdraw');
+        $response->assertDontSee('Withdraw');
+    }
+
+    public function test_the_roster_hides_old_withdrawn_students(): void
+    {
+        $batch = $this->makeBatch();
+        $booked = $this->addStudent($batch, 'booked', 'Dino Booked');
+        $pulled = $this->addStudent($batch, 'withdrawn', 'Fina Pulled');
+
+        $response = $this->actingAs($this->admin)->get("/admin/batches/{$batch->id}");
+
+        $response->assertOk();
+        $response->assertSee('Dino Booked');
+        $response->assertSee($booked->reference_no);
+        $response->assertDontSee('Fina Pulled');
+        $response->assertDontSee($pulled->reference_no);
+        $response->assertDontSee('withdrawn');
+        $response->assertSee('for 1 student');
+        $this->assertSame(1, $response->viewData('totalCount'));
+    }
+
+    public function test_the_per_student_withdraw_endpoint_is_gone(): void
+    {
+        $batch = $this->makeBatch();
+        $appointment = $this->addStudent($batch, 'booked', 'Dino Booked');
+
+        $this->assertFalse(Route::has('admin.batches.appointments.cancel'));
+
+        $response = $this->actingAs($this->admin)
+            ->delete("/admin/batches/{$batch->id}/appointments/{$appointment->id}");
+
+        $this->assertContains($response->status(), [404, 405]);
+        $this->assertSame('scheduled', $appointment->fresh()->status);
     }
 
     public function test_the_roster_still_states_the_date_the_hour_span_and_the_purpose(): void

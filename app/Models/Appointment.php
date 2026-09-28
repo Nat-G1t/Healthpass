@@ -174,28 +174,16 @@ class Appointment extends Model
     }
 
     /**
-     * May the COLLEGE ADMIN withdraw this appointment? (FR-ADM-07, D-40)
+     * The absent cutoff (`healthpass.absent_cutoff`, 8:00 PM) on a clinic date.
      *
-     * The admin keeps this right through the clinic day itself, because "the
-     * student phoned in sick this morning" is the single most common reason a
-     * seat needs freeing, and refusing it would leave a seat blocked for a
-     * student everyone already knows is not coming. (Students never cancel
-     * anything themselves — D-39 took batch appointments away from them, and
-     * D-61 removed self-booking altogether.)
-     *
-     * `scheduled` is the hard limit in the other direction: once the visit is
-     * `checked_in` or `completed` the student is at (or through) the kiosk and
-     * a clinic_visit may already point at this row — cancelling then would
-     * contradict a real encounter, not free a seat.
-     *
-     * A past date is refused because there is no longer a seat to free;
-     * today still counts as cancellable.
+     * One definition shared by clearanceProgress() below and by
+     * BatchRequest::resultsCompletedAt() (D-86: a batch is done at this moment
+     * even if some students never came), so a student's row and their batch's
+     * Status column always flip at the same instant.
      */
-    public function isAdminCancellable(): bool
+    public static function absentCutoffOn(Carbon $clinicDate): Carbon
     {
-        return $this->status === 'scheduled'
-            && $this->source === 'batch'
-            && ! $this->scheduled_date->lt(today());
+        return $clinicDate->copy()->setTimeFromTimeString((string) config('healthpass.absent_cutoff'));
     }
 
     /**
@@ -211,17 +199,22 @@ class Appointment extends Model
      * the clinic with their vitals captured while this row still reads
      * "scheduled". The visit and its clearance record are what carry that.
      *
-     *   withdrawn  — the admin pulled this seat (FR-ADM-07)
-     *   absent     — no visit, and the server clock has reached
-     *                `healthpass.absent_cutoff` (8:00 PM) on the clinic date,
-     *                or any later day (D-55 — was `missed`, flipped at midnight)
-     *   awaiting   — no visit yet, and it is still before that cutoff
-     *   rechecking — D-72: the kiosk captured a high temperature, blood
-     *                pressure or heart rate and the student is resting before
-     *                re-taking it. Their result has not reached the clinic, so
-     *                past the cutoff this becomes `absent` like a no-show.
-     *   in_clinic  — vitals captured at the kiosk, waiting on the nurse
-     *   completed  — the nurse has encoded it; clearanceResult() has a value
+     *   withdrawn      — a seat pulled under the old per-student withdrawal
+     *                    (FR-ADM-07, removed by D-87). No new ones can happen;
+     *                    the few old rows are hidden from the college's pages.
+     *   absent         — no visit, and the server clock has reached
+     *                    `healthpass.absent_cutoff` (8:00 PM) on the clinic date,
+     *                    or any later day (D-55 — was `missed`, flipped at midnight)
+     *   awaiting       — no visit yet, and it is still before that cutoff
+     *   rechecking     — D-72: the kiosk captured a high temperature, blood
+     *                    pressure or heart rate and the student is resting before
+     *                    re-taking it
+     *   in_clinic      — vitals captured at the kiosk, waiting on the nurse
+     *   did_not_finish — D-86: the student reached the kiosk but, by the cutoff,
+     *                    was still resting (never came back to re-check) or was
+     *                    never encoded. It turns `completed` if the nurse encodes
+     *                    them later.
+     *   completed      — the nurse has encoded it; clearanceResult() has a value
      *
      * `checked_in` is deliberately not consulted: nothing in the app ever
      * writes it (the enum value predates the kiosk flow), so keying on it
@@ -240,23 +233,24 @@ class Appointment extends Model
         $visit = $this->clinicVisit;
 
         // D-55: a no-show may still turn up all clinic day, so they only become
-        // absent from the cutoff. Server clock only (like BR-23). D-72 puts a
-        // still-resting student on the same clock: they are at the clinic, but
-        // their result never reached the queue, so by the cutoff they are as
-        // absent as someone who never came.
-        $pastCutoff = now()->gte(
-            $this->scheduled_date->copy()->setTimeFromTimeString((string) config('healthpass.absent_cutoff'))
-        );
+        // absent from the cutoff. Server clock only (like BR-23). D-86: a
+        // student who DID reach the kiosk but is still resting or un-encoded at
+        // the cutoff is "did not finish", not absent — they came.
+        $pastCutoff = now()->gte(self::absentCutoffOn($this->scheduled_date));
 
         if ($visit === null) {
             return $pastCutoff ? 'absent' : 'awaiting';
         }
 
-        if ($visit->status === 'resting') {
-            return $pastCutoff ? 'absent' : 'rechecking';
+        if ($visit->clearanceRecord !== null) {
+            return 'completed';
         }
 
-        return $visit->clearanceRecord === null ? 'in_clinic' : 'completed';
+        if ($pastCutoff) {
+            return 'did_not_finish';
+        }
+
+        return $visit->status === 'resting' ? 'rechecking' : 'in_clinic';
     }
 
     /**

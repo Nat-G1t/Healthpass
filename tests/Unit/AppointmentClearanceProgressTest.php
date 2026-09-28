@@ -85,11 +85,27 @@ class AppointmentClearanceProgressTest extends TestCase
         $this->assertSame('absent', $this->appointment()->clearanceProgress());
     }
 
-    public function test_a_captured_visit_is_in_clinic_even_past_the_cutoff(): void
+    public function test_a_captured_visit_is_in_clinic_before_the_cutoff(): void
     {
-        $this->at('2026-09-11 07:00:00');
+        $this->at(self::CLINIC_DAY.' 19:59:00');
 
         $this->assertSame('in_clinic', $this->appointment(visit: $this->visit(null))->clearanceProgress());
+    }
+
+    public function test_a_captured_visit_not_encoded_by_the_cutoff_did_not_finish(): void
+    {
+        // D-86 (was "in clinic even past the cutoff" under D-55).
+        $this->at(self::CLINIC_DAY.' 20:00:00');
+
+        $this->assertSame('did_not_finish', $this->appointment(visit: $this->visit(null))->clearanceProgress());
+    }
+
+    public function test_an_encode_after_the_cutoff_still_reads_completed(): void
+    {
+        // A did-not-finish student the nurse encodes next morning.
+        $this->at('2026-09-11 09:00:00');
+
+        $this->assertSame('completed', $this->appointment(visit: $this->visit('Fit'))->clearanceProgress());
     }
 
     public function test_an_encoded_visit_is_completed(): void

@@ -282,8 +282,11 @@ class AppointmentEmailTest extends TestCase
 
         $body = (new AppointmentScheduledMail($appointment))->render();
         $this->assertStringContainsString('College of Computing Studies', $body);
-        // Students are told to go to their college, never to self-cancel (D-39, D-61).
-        $this->assertStringContainsString('cannot cancel it yourself', $body);
+        // Students cannot cancel (D-39, D-61), and since D-87 neither can the
+        // college — so they are asked to tell the admin, not promised a withdrawal.
+        $this->assertStringContainsString('cannot be', $body);
+        $this->assertStringContainsString('If you cannot attend', $body);
+        $this->assertStringNotContainsString('withdraw', $body);
         $this->assertStringNotContainsString('cancel from your HealthPass dashboard', $body);
     }
 
