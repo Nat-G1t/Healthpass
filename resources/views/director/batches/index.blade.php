@@ -18,6 +18,10 @@
     and span, and pushing back means rejecting with a written reason. Since
     D-37 a full hour inside the span BLOCKS approval outright rather than
     warning about it.
+
+    D-90: when an earlier pending batch can't fit beside this one, the approve
+    modal becomes a "Schedule conflict" warning — it recommends first come,
+    and can hand off to the reject dialog with a suggested reason.
 --}}
 <div x-data="batchApprovals()">
 
@@ -51,7 +55,39 @@
 
     {{-- ── Requests table (FR-DIRA-01) ─────────────────────────────────── --}}
     <x-hp.card>
-        @if ($batchRequests->isEmpty())
+        {{-- D-90: Batch ID search. A plain GET form, so the server filters
+             every page (not just the ten on screen) and the term stays in the
+             URL for the pager links — the same shape as the College Admin's
+             Batch Results search (D-86). Shown whenever there is anything to
+             search, or a search to change or clear. --}}
+        @if ($search !== '' || $batchRequests->total() > 0)
+            <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
+                <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+                    Batch Requests
+                </p>
+
+                <form method="GET" action="{{ route('director.batches.index') }}" role="search"
+                      class="flex w-full items-center gap-2 sm:w-auto">
+                    <label for="approvals-search" class="sr-only">Search by Batch ID</label>
+                    <input id="approvals-search" name="q" type="search" value="{{ $search }}"
+                           maxlength="30" placeholder="Search Batch ID"
+                           class="w-full rounded-lg border-hp-slate/20 bg-hp-white px-3 py-1.5 text-xs text-hp-slate placeholder-hp-slate/40 focus:border-hp-orange focus:ring-hp-orange sm:w-48">
+                    <x-hp.button type="submit" variant="soft" size="sm">Search</x-hp.button>
+                    @if ($search !== '')
+                        <a href="{{ route('director.batches.index') }}"
+                           class="px-1 py-1.5 text-xs font-medium text-hp-slate/50 hover:text-hp-slate">
+                            Clear
+                        </a>
+                    @endif
+                </form>
+            </div>
+        @endif
+
+        @if ($batchRequests->isEmpty() && $search !== '')
+            <p class="py-6 text-center text-sm text-hp-slate/50">
+                No batch request matches “{{ $search }}”.
+            </p>
+        @elseif ($batchRequests->isEmpty())
             <div class="flex flex-col items-center py-10 text-center">
                 <div class="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-hp-bg">
                     <svg class="h-6 w-6 text-hp-slate/30" fill="none" viewBox="0 0 24 24"
@@ -87,9 +123,25 @@
                             <tr class="text-hp-slate">
                                 <td class="py-3 pr-4">
                                     <div class="flex items-center gap-2">
-                                        <span class="font-medium">{{ $batch->reference_no }}</span>
+                                        <span class="whitespace-nowrap font-medium">{{ $batch->reference_no }}</span>
                                         <x-hp.badge :variant="$batch->status">{{ ucfirst($batch->status) }}</x-hp.badge>
                                     </div>
+
+                                    {{-- D-90: pending batches this one cannot share the
+                                         clinic with, on the SAME row as the batch they
+                                         affect, so the Director sees them before
+                                         clicking Approve. First come is the one to
+                                         approve, so each says which came first. --}}
+                                    @foreach ($conflicts[$batch->id] ?? [] as $other)
+                                        {{-- Two short lines, so the column stays no wider
+                                             than the Batch ID and its badge. --}}
+                                        <p class="mt-1 whitespace-nowrap text-xs font-medium text-hp-orange">
+                                            &#9888; Conflicts with {{ $other->reference_no }}
+                                        </p>
+                                        <p class="w-0 min-w-full text-xs text-hp-slate/60">
+                                            {{ $other->submittedBefore($batch) ? 'which was submitted first' : 'which was submitted after this one' }}
+                                        </p>
+                                    @endforeach
                                 </td>
                                 <td class="py-3 pr-4">{{ $batch->college->code }}</td>
                                 <td class="py-3 pr-4 whitespace-nowrap">{{ $batch->formTypeLabel() }}</td>
@@ -118,10 +170,10 @@
                                             // BR-23: requested for today, but some of
                                             // its hours ended while it sat pending.
                                             $elapsedHours = $batch->elapsedSpanHours();
-                                            $canApprove = $batch->requested_date !== null
-                                                && ! $isStale
-                                                && ! $hasNoSpan
-                                                && $elapsedHours === [];
+                                            // All four together, as one model rule (D-90
+                                            // reads it too). The flags above only pick
+                                            // the message.
+                                            $canApprove = $batch->isApprovable();
                                         @endphp
 
                                         <div class="flex items-center gap-2">
@@ -143,6 +195,11 @@
                                                         'blocks' => (int) $batch->requested_blocks,
                                                         'spanLabel' => $batch->requestedSpanLabel(),
                                                         'url' => route('director.batches.approve', $batch),
+                                                        // D-90: set only when an EARLIER pending batch
+                                                        // can't fit alongside this one; the popup then
+                                                        // warns, and "Reject this one" posts here.
+                                                        'conflict' => $conflictPopups[$batch->id] ?? null,
+                                                        'rejectUrl' => route('director.batches.reject', $batch),
                                                     ]) }})"
                                                     class="inline-flex items-center justify-center gap-2 rounded-full
                                                            bg-hp-orange px-4 py-1.5 text-xs font-semibold text-white
@@ -248,11 +305,53 @@
                 x-transition:leave="ease-hp-in duration-hp-base"
                 x-transition:leave-start="opacity-100 translate-y-0"
                 x-transition:leave-end="opacity-0 translate-y-6"
-                class="relative w-full max-w-md rounded-2xl bg-hp-white p-6 shadow-xl"
+                class="relative w-full rounded-2xl bg-hp-white p-6 shadow-xl"
+                {{-- D-90: a little wider for the conflict warning, so its three
+                     buttons sit on one row. --}}
+                :class="batch?.conflict ? 'max-w-lg' : 'max-w-md'"
             >
                 <h2 id="approve-batch-title" class="text-lg font-semibold text-hp-slate">
-                    Approve <span x-text="batch?.ref"></span>?
+                    <span x-show="! batch?.conflict">Approve <span x-text="batch?.ref"></span>?</span>
+                    <span x-show="batch?.conflict" x-cloak>Schedule conflict</span>
                 </h2>
+
+                {{-- D-90: an EARLIER pending batch asked for these hours and the
+                     clinic can't fit both. A warning, not a block — the Director
+                     may still approve — but it recommends first come, and lists
+                     where this batch could go instead. --}}
+                <template x-if="batch?.conflict">
+                    <div class="mt-3 rounded-lg border border-hp-orange/40 bg-hp-peach/30 px-4 py-3 text-sm text-hp-slate">
+                        <template x-for="other in batch.conflict.earlier" :key="other.ref">
+                            <p class="mb-2">
+                                <strong x-text="other.ref"></strong>
+                                (<span x-text="other.college"></span>) asked for
+                                <span x-text="other.span"></span> on the same day first, submitted
+                                <span x-text="other.submitted"></span>.
+                            </p>
+                        </template>
+                        <p>
+                            This batch, <strong x-text="batch.ref"></strong>, was submitted
+                            <span x-text="batch.conflict.submitted"></span>. The clinic can't
+                            fit both.
+                        </p>
+                        <p class="mt-2 font-semibold">
+                            Recommended: approve
+                            <span x-text="batch.conflict.earlier.map((other) => other.ref).join(' and ')"></span>
+                            first, and reject this one so the college can resubmit.
+                        </p>
+                        <p class="mt-2 text-xs text-hp-slate/70">
+                            <span x-show="batch.conflict.freeStarts.length > 0">
+                                Start times still free that day for this batch:
+                                <strong x-text="batch.conflict.freeStarts.join(', ')"></strong>.
+                            </span>
+                            <span x-show="batch.conflict.freeStarts.length === 0">
+                                No other start time is free that day for this batch; the college
+                                will need another date.
+                            </span>
+                        </p>
+                    </div>
+                </template>
+
                 <p class="mt-1.5 text-sm text-hp-slate/70">
                     One appointment will be created for each of the
                     <strong x-text="batch?.students"></strong> students in this batch,
@@ -301,15 +400,17 @@
 
                     {{-- Capacity BLOCK (FR-DIRA-06 as amended by D-37).
                          This used to be a warning that still let the approval
-                         through. It no longer does: an hour already at the
-                         hourly cap means the clinic cannot process the cohort,
-                         and confirm-only approval (D-36) leaves no way to move
-                         the batch — so the only outcome is reject-and-resubmit. --}}
+                         through. It no longer does: an hour without room for
+                         the cohort means the clinic cannot process it, and
+                         confirm-only approval (D-36) leaves no way to move the
+                         batch — so the only outcome is reject-and-resubmit.
+                         D-91: "without room" counts this batch's own students,
+                         not just whether the hour is already at the cap. --}}
                     <p x-show="fullSlots.length > 0" x-cloak
                        class="mt-3 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
                         &#9888; The <strong x-text="fullSlots.join(' and the ')"></strong>
-                        slot in this batch's span is already fully booked, so this batch
-                        cannot be approved. Reject it with a reason so the college can
+                        slot in this batch's span doesn't have room for its students, so this
+                        batch cannot be approved. Reject it with a reason so the college can
                         resubmit for another date or start time.
                     </p>
 
@@ -322,10 +423,17 @@
                         resubmit for a later time.
                     </p>
 
-                    <div class="mt-6 flex justify-end gap-3">
-                        <x-hp.button variant="muted" @click="close()">Cancel</x-hp.button>
+                    <div class="mt-6 flex flex-wrap justify-end gap-3">
+                        <x-hp.button variant="muted" @click="close()">
+                            <span x-text="batch?.conflict ? 'Close' : 'Cancel'"></span>
+                        </x-hp.button>
+                        {{-- D-90: the recommended way out of a conflict, one click
+                             away, with the reason already written for the college. --}}
+                        <x-hp.button variant="danger" x-show="batch?.conflict" x-cloak @click="rejectInstead()">
+                            Reject this one
+                        </x-hp.button>
                         <x-hp.button type="submit" variant="primary" x-bind:disabled="submitting || isBlocked">
-                            <span x-text="submitting ? 'Approving…' : 'Confirm & Approve'"></span>
+                            <span x-text="submitting ? 'Approving…' : (batch?.conflict ? 'Approve anyway' : 'Confirm & Approve')"></span>
                         </x-hp.button>
                     </div>
                 </form>
@@ -426,7 +534,9 @@
     function batchApprovals() {
         return {
             // ── Approve (confirm-only since D-36) ────────────────────────
-            // { ref, form, students, requested, time, blocks, spanLabel, url } of the row being approved
+            // { ref, form, students, requested, time, blocks, spanLabel, url,
+            //   conflict, rejectUrl } of the row being approved. `conflict` is
+            // null unless an earlier pending batch can't fit beside it (D-90).
             batch: null,
             submitting: false,                        // disables Approve after first click
             booked: null,                             // null until the capacity fetch answers
@@ -469,10 +579,20 @@
                 this.batch = null;
             },
 
-            openReject(target) {
+            // `reason` pre-fills the box — D-90's conflict popup passes the
+            // suggested one; the Director can still edit it before sending.
+            openReject(target, reason = '') {
                 this.rejectTarget = target;
-                this.reason = '';
+                this.reason = reason;
                 this.rejecting = false;
+            },
+
+            // D-90: "Reject this one" in the conflict popup swaps straight to
+            // the reject box for the same batch, reason already written.
+            rejectInstead() {
+                const batch = this.batch;
+                this.close();
+                this.openReject({ ref: batch.ref, form: batch.form, url: batch.rejectUrl }, batch.conflict.reason);
             },
 
             closeReject() {
@@ -490,10 +610,14 @@
                 const requestedDate = this.batch?.requested;
                 if (!requestedDate) return;
 
+                // D-91: `students` lets the server check each hour has room for
+                // the students this batch would put there, not just that the
+                // hour isn't already at the cap.
                 const params = new URLSearchParams({
                     date: requestedDate,
                     time: this.batch?.time ?? '',
                     blocks: this.batch?.blocks ?? '',
+                    students: this.batch?.students ?? '',
                 });
 
                 try {

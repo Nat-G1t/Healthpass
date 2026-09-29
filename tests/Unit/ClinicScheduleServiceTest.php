@@ -111,6 +111,17 @@ class ClinicScheduleServiceTest extends TestCase
         );
     }
 
+    public function test_seats_by_slot_fills_each_hour_to_the_cap_and_leaves_the_remainder_last(): void
+    {
+        // D-91: the same split the approve fan-out makes — 12 + 12 + 1.
+        $span = $this->service()->span('07:00:00', 3);
+
+        $this->assertSame(
+            ['07:00:00' => 12, '08:00:00' => 12, '09:00:00' => 1],
+            $this->service()->seatsBySlot($span, 25),
+        );
+    }
+
     // ── Elapsed hours (BR-23) ────────────────────────────────────────────────
 
     /**

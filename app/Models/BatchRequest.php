@@ -188,6 +188,37 @@ class BatchRequest extends Model
             ->elapsedSlotsIn($this->requested_date->toDateString(), $this->requestedSpan());
     }
 
+    /**
+     * Can the Director approve this batch at all? Pending, with a requested
+     * date that hasn't passed (D-36), an hour span (D-37) and no hour of it
+     * already over (BR-23).
+     *
+     * The Approvals page greys out Approve on this rule, and D-90's conflict
+     * check skips a batch that fails it — advising the Director to approve a
+     * batch that cannot be approved would be no advice at all. Capacity is not
+     * part of it: that needs the booked counts, and approve() checks it under
+     * a lock.
+     */
+    public function isApprovable(): bool
+    {
+        return $this->status === 'pending'
+            && $this->requested_date !== null
+            && ! $this->hasStaleRequestedDate()
+            && $this->requestedSpan() !== []
+            && $this->elapsedSpanHours() === [];
+    }
+
+    /**
+     * D-90: was this batch submitted before $other? First come is the batch
+     * the Director is advised to approve. Two batches submitted in the same
+     * second go to the lower id, the row that was written first.
+     */
+    public function submittedBefore(BatchRequest $other): bool
+    {
+        return $this->created_at->lt($other->created_at)
+            || ($this->created_at->eq($other->created_at) && $this->id < $other->id);
+    }
+
     /** "Medical Clearance" / "Medical Assessment Form" (D-62). */
     public function formTypeLabel(): string
     {

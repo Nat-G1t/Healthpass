@@ -11,12 +11,15 @@ use App\Jobs\SendAppointmentScheduledMail;
 use App\Models\Appointment;
 use App\Models\BatchRequest;
 use App\Models\User;
+use App\Services\BatchConflictService;
 use App\Services\ClinicScheduleService;
 use App\Services\ReferenceNumberService;
 use App\Services\ScheduleClashService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
@@ -44,29 +47,101 @@ class BatchApprovalController extends Controller
     public function __construct(
         private readonly ClinicScheduleService $schedule,
         private readonly ScheduleClashService $clashes,
+        private readonly BatchConflictService $conflicts,
     ) {}
 
-    /** All colleges' batch requests, newest first (FR-DIRA-01). */
-    public function index(): View
+    /**
+     * All colleges' batch requests, newest first (FR-DIRA-01).
+     *
+     * D-90: a Batch ID search (`?q=`), applied on the SERVER so it finds a
+     * batch on any page — the same shape as the College Admin's Batch Results
+     * search (D-86). And for every pending row on the page, the other pending
+     * batches it cannot share the clinic with (BatchConflictService), looked
+     * up across ALL pending batches, not just the ten on screen. They feed the
+     * row's "Conflicts with …" line and, for a batch that came SECOND, the
+     * approve popup's warning.
+     */
+    public function index(Request $request): View
     {
+        $search = trim((string) $request->query('q', ''));
+
         // FR-UI-06: ten per page; id breaks created_at ties.
         $batchRequests = BatchRequest::with('college')
             ->withCount('batchRequestStudents')
+            ->when($search !== '', fn ($query) => $query->where('reference_no', 'like', '%'.$search.'%'))
             ->latest()
             ->orderByDesc('id')
             ->paginate(config('healthpass.ui.rows_per_page'))
             ->withQueryString();
 
-        return view('director.batches.index', compact('batchRequests'));
+        $conflicts = $batchRequests->getCollection()
+            ->filter(fn (BatchRequest $batch): bool => $batch->status === 'pending')
+            ->mapWithKeys(fn (BatchRequest $batch): array => [$batch->id => $this->conflicts->conflictsWith($batch)])
+            ->filter(fn (Collection $found): bool => $found->isNotEmpty());
+
+        $conflictPopups = $batchRequests->getCollection()
+            ->filter(fn (BatchRequest $batch): bool => $conflicts->has($batch->id))
+            ->mapWithKeys(fn (BatchRequest $batch): array => [$batch->id => $this->conflictPopup($batch, $conflicts[$batch->id])])
+            ->filter()
+            ->all();
+
+        return view('director.batches.index', compact('batchRequests', 'search', 'conflicts', 'conflictPopups'));
+    }
+
+    /**
+     * The approve popup's conflict warning for $batch (D-90), or null when none
+     * of its conflicts was submitted before it: approving the batch that came
+     * FIRST is the recommended move and needs no warning.
+     *
+     * The Director cannot move a batch's hours (D-36, D-37), so "change their
+     * time" means rejecting it with a reason that names the start hours still
+     * free once the earlier batch is in — pre-filled here, editable in the
+     * reject box. It never names the other college: the College Admin reads it.
+     *
+     * @param  Collection<int, BatchRequest>  $conflicts
+     * @return array{submitted: string, earlier: list<array{ref: string, college: string, submitted: string, span: string}>, freeStarts: list<string>, reason: string}|null
+     */
+    private function conflictPopup(BatchRequest $batch, Collection $conflicts): ?array
+    {
+        $earlier = $conflicts
+            ->filter(fn (BatchRequest $other): bool => $other->submittedBefore($batch))
+            ->values();
+
+        if ($earlier->isEmpty()) {
+            return null;
+        }
+
+        $freeStarts = array_map(
+            fn (string $slot): string => $this->schedule->startLabel($slot),
+            $this->conflicts->freeStartsAfter($batch, $earlier),
+        );
+
+        $date = $batch->requested_date->format('M j, Y');
+        $why = 'Another college requested these clinic hours first, and the clinic cannot fit both batches.';
+
+        return [
+            'submitted' => $batch->created_at->format('M j, Y · g:i A'),
+            'earlier' => $earlier->map(fn (BatchRequest $other): array => [
+                'ref' => $other->reference_no,
+                'college' => $other->college->code,
+                'submitted' => $other->created_at->format('M j, Y · g:i A'),
+                'span' => $other->requestedSpanLabel(),
+            ])->all(),
+            'freeStarts' => $freeStarts,
+            'reason' => $freeStarts === []
+                ? "{$why} No other start time is free on {$date}, so please resubmit for another date."
+                : "{$why} Please resubmit for {$date} starting at ".Arr::join($freeStarts, ', ', ' or ').', or choose another date.',
+        ];
     }
 
     /**
      * JSON: how full one date — and, since D-37, one batch's hour span — is.
      * Polled by the approve modal when it opens.
      *
-     * `time` + `blocks` are the batch's stored span. When they are supplied the
-     * response also carries `full_slots`: the hours in that span already at the
-     * hourly cap. A non-empty list is what makes the modal refuse to submit
+     * `time` + `blocks` are the batch's stored span, and `students` its roster
+     * size. When they are supplied the response also carries `full_slots`: the
+     * hours in that span without room for the students the batch would put
+     * there (D-91). A non-empty list is what makes the modal refuse to submit
      * (FR-DIRA-06 is a HARD BLOCK since D-37) — but this endpoint only informs
      * the UI; approve() re-checks under lock and is the real gate.
      */
@@ -76,6 +151,7 @@ class BatchApprovalController extends Controller
             'date' => ['required', 'date_format:Y-m-d'],
             'time' => ['nullable', 'string'],
             'blocks' => ['nullable', 'integer', 'min:1', 'max:24'],
+            'students' => ['required_with:time', 'nullable', 'integer', 'min:1', 'max:'.$this->schedule->maxBatchSize()],
         ]);
 
         // Same counting rule as every capacity check (BR-02): cancelled slots are free.
@@ -92,7 +168,7 @@ class BatchApprovalController extends Controller
             'span_label' => $this->schedule->spanLabel($span),
             'full_slots' => array_map(
                 fn (string $slot): string => $this->schedule->label($slot),
-                $this->schedule->fullSlotsIn($validated['date'], $span),
+                $this->schedule->fullSlotsIn($validated['date'], $span, (int) ($validated['students'] ?? 0)),
             ),
             // BR-23: hours of the span that have already ended (today only).
             'elapsed_slots' => array_map(
@@ -196,15 +272,22 @@ class BatchApprovalController extends Controller
             $elapsedHours = $locked->elapsedSpanHours();
 
             if ($elapsedHours !== []) {
-                return ['span_elapsed', $this->schedule->label($elapsedHours[0])];
+                return ['span_elapsed', $elapsedHours[0]];
             }
 
             // D-37 hard block. Read under the same lock as the write, so an
-            // hour cannot fill between the check and the fan-out.
-            $fullSlots = $this->schedule->fullSlotsIn($scheduledDate, $span, lock: true);
+            // hour cannot fill between the check and the fan-out. D-91: it
+            // counts the students this batch would ADD to each hour — the
+            // same pivot rows the fan-out below assigns.
+            $fullSlots = $this->schedule->fullSlotsIn(
+                $scheduledDate,
+                $span,
+                $locked->batchRequestStudents()->count(),
+                lock: true,
+            );
 
             if ($fullSlots !== []) {
-                return ['span_full', $this->schedule->label($fullSlots[0])];
+                return ['span_full', $fullSlots[0]];
             }
 
             // D-54 / D-77 / BR-25: no student on this batch may already have a
@@ -266,13 +349,17 @@ class BatchApprovalController extends Controller
                 ->with('error', $this->clashMessage($batch, $outcome[1]));
         }
 
-        // Both span refusals carry the offending hour's label alongside the reason.
+        // Both span refusals carry the offending hour's slot key alongside the reason.
         if (is_array($outcome)) {
-            [$reason, $hourLabel] = $outcome;
+            [$reason, $slot] = $outcome;
+            $hourLabel = $this->schedule->label($slot);
 
             $why = $reason === 'span_elapsed'
                 ? "the {$hourLabel} slot in its span has already passed"
-                : "the {$hourLabel} slot in its span is already fully booked";
+                : "the {$hourLabel} slot in its span ".$this->schedule->noRoomReason(
+                    $batch->requested_date->toDateString(),
+                    $slot,
+                );
 
             return redirect()->route('director.batches.index')
                 ->with('error', "{$batch->reference_no} cannot be approved — {$why}. Reject it with a reason so the college can resubmit for another date or start time.");

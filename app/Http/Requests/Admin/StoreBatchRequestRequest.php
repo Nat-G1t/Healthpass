@@ -173,16 +173,18 @@ class StoreBatchRequestRequest extends FormRequest
                 return;
             }
 
-            // (4) Every hour in the span must have room. Name the offending
-            // hour — "full" alone doesn't tell the admin what to move away from.
-            $fullSlots = $schedule->fullSlotsIn($date, $span);
+            // (4) Every hour in the span must have room for the students this
+            // batch puts there (D-91), not merely be below the cap. Name the
+            // offending hour — "full" alone doesn't tell the admin what to
+            // move away from.
+            $fullSlots = $schedule->fullSlotsIn($date, $span, $studentCount);
 
             if ($fullSlots !== []) {
                 $validator->errors()->add('requested_time', sprintf(
-                    'This batch would run %s, but the %s slot is already fully booked. Please choose a different start time or date.',
+                    'This batch would run %s, but the %s. Please choose a different start time or date.',
                     $schedule->spanLabel($span),
                     implode(' and the ', array_map(
-                        fn (string $slot): string => $schedule->label($slot),
+                        fn (string $slot): string => $schedule->label($slot).' slot '.$schedule->noRoomReason($date, $slot),
                         $fullSlots,
                     )),
                 ));

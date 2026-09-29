@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Models\Appointment;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /**
  * D-37 — the clinic day as a list of one-hour booking slots.
@@ -244,6 +245,28 @@ class ClinicScheduleService
         return $this->span($startSlot, $this->blocksFor($studentCount));
     }
 
+    /**
+     * How many of a batch's students land in each hour of its span (D-91):
+     * the hourly cap in every hour, the remainder in the last — 25 students
+     * from 7 AM are 12 + 12 + 1. The approve fan-out assigns students in
+     * exactly this order (`intdiv($index, $perHour)`), so a capacity check
+     * built on this map checks the appointments approval will really create.
+     *
+     * @param  list<string>  $span
+     * @return array<string, int> slot => seats the batch takes there
+     */
+    public function seatsBySlot(array $span, int $studentCount): array
+    {
+        $perHour = $this->hourlyCapacity();
+        $seats = [];
+
+        foreach (array_values($span) as $index => $slot) {
+            $seats[$slot] = max(0, min($perHour, $studentCount - $index * $perHour));
+        }
+
+        return $seats;
+    }
+
     // ── Counting (BR-02, D-37) ───────────────────────────────────────────────
 
     /**
@@ -333,7 +356,13 @@ class ClinicScheduleService
     }
 
     /**
-     * Slots in $span that are already at the hourly cap, as slot keys.
+     * Slots in $span with no room for their share of a batch of $studentCount
+     * students, as slot keys.
+     *
+     * D-91: a slot is full FOR THIS BATCH when what is already booked there
+     * plus the seats the batch would take there (seatsBySlot()) goes over the
+     * hourly cap. Before D-91 only an hour already AT the cap was refused, so
+     * an hour holding 8 still took another batch's 12 and ended with 20.
      *
      * The caller names the offending hour in its error message rather than a
      * bare "full" — the College Admin has to know WHICH hour to move away from.
@@ -341,14 +370,30 @@ class ClinicScheduleService
      * @param  list<string>  $span
      * @return list<string>
      */
-    public function fullSlotsIn(string $date, array $span, bool $lock = false): array
+    public function fullSlotsIn(string $date, array $span, int $studentCount, bool $lock = false): array
     {
         $capacity = $this->hourlyCapacity();
+        $seats = $this->seatsBySlot($span, $studentCount);
 
         return array_values(array_filter(
             $span,
-            fn (string $slot): bool => $this->bookedInSlot($date, $slot, $lock) >= $capacity,
+            fn (string $slot): bool => $seats[$slot] > 0
+                && $this->bookedInSlot($date, $slot, $lock) + $seats[$slot] > $capacity,
         ));
+    }
+
+    /**
+     * Why a slot has no room for a batch (D-91): "is already fully booked"
+     * when no seat is left, otherwise "has only 4 seats left". One wording
+     * for the batch form, its locked re-check and the Director's refusal.
+     */
+    public function noRoomReason(string $date, string $slot): string
+    {
+        $left = max(0, $this->hourlyCapacity() - $this->bookedInSlot($date, $slot));
+
+        return $left === 0
+            ? 'is already fully booked'
+            : 'has only '.$left.' '.Str::plural('seat', $left).' left';
     }
 
     // ── Month calendar (FR-STU-03, FR-ADM-04) ────────────────────────────────

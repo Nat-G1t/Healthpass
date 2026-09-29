@@ -402,6 +402,43 @@ class BatchApprovalDecisionTest extends TestCase
         $this->assertDatabaseCount('appointments', 12);
     }
 
+    /**
+     * D-91: an hour that isn't full yet can still be too full for THIS batch.
+     * Before D-91 an hour holding 8 took all 8 of these students and ended at 16.
+     */
+    public function test_approval_is_refused_when_an_hour_lacks_room_for_the_batchs_students(): void
+    {
+        $date = now()->addDays(7)->toDateString();
+        $batch = $this->makeBatchWithStudents(8, ['requested_date' => $date]);
+
+        Appointment::factory()->count(8)->inSlot('07:00:00')->create([
+            'scheduled_date' => $date,
+            'status' => 'scheduled',
+        ]);
+
+        $this->approve($batch)
+            ->assertRedirect('/director/batches')
+            ->assertSessionHas('error', fn (string $error) => str_contains($error, '7:00 AM – 8:00 AM slot in its span has only 4 seats left'));
+
+        $this->assertSame('pending', $batch->fresh()->status);
+        $this->assertDatabaseCount('appointments', 8);
+    }
+
+    public function test_a_batch_that_exactly_fills_the_seats_left_is_approved(): void
+    {
+        $date = now()->addDays(7)->toDateString();
+        $batch = $this->makeBatchWithStudents(4, ['requested_date' => $date]);
+
+        Appointment::factory()->count(8)->inSlot('07:00:00')->create([
+            'scheduled_date' => $date,
+            'status' => 'scheduled',
+        ]);
+
+        $this->approve($batch)->assertSessionHas('status');
+
+        $this->assertSame(12, Appointment::whereDate('scheduled_date', $date)->where('scheduled_time', '07:00:00')->count());
+    }
+
     public function test_a_full_hour_outside_the_span_does_not_block_approval(): void
     {
         $date = now()->addDays(7)->toDateString();

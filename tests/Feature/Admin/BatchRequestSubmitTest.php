@@ -199,6 +199,43 @@ class BatchRequestSubmitTest extends TestCase
         $this->assertDatabaseCount('batch_requests', 0);
     }
 
+    public function test_an_hour_without_room_for_the_batchs_students_is_rejected(): void
+    {
+        // D-91: 7 AM is not full (8 of 12), but 12 more students won't fit.
+        $date = now()->addDays(7)->toDateString();
+
+        Appointment::factory()->count(8)->inSlot('07:00:00')->create([
+            'scheduled_date' => $date,
+            'status' => 'scheduled',
+        ]);
+
+        $this->submitBatch(12, [
+            'requested_date' => $date,
+            'requested_time' => '07:00:00',
+        ])->assertSessionHasErrors('requested_time');
+
+        $this->assertStringContainsString(
+            'the 7:00 AM – 8:00 AM slot has only 4 seats left',
+            session('errors')->first('requested_time'),
+        );
+        $this->assertDatabaseCount('batch_requests', 0);
+    }
+
+    public function test_a_batch_that_exactly_fills_the_seats_left_is_accepted(): void
+    {
+        $date = now()->addDays(7)->toDateString();
+
+        Appointment::factory()->count(8)->inSlot('07:00:00')->create([
+            'scheduled_date' => $date,
+            'status' => 'scheduled',
+        ]);
+
+        $this->submitBatch(4, [
+            'requested_date' => $date,
+            'requested_time' => '07:00:00',
+        ])->assertSessionHasNoErrors();
+    }
+
     public function test_a_full_hour_outside_the_span_does_not_block_the_batch(): void
     {
         $date = now()->addDays(7)->toDateString();

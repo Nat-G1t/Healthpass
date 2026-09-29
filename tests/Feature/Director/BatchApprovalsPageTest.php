@@ -253,7 +253,7 @@ class BatchApprovalsPageTest extends TestCase
         Carbon::setTestNow(Carbon::parse('2026-07-27 12:00', 'Asia/Manila'));
 
         $this->actingAs($this->director)
-            ->getJson('/director/batches/capacity?date='.today()->toDateString().'&time=11:00:00&blocks=3')
+            ->getJson('/director/batches/capacity?date='.today()->toDateString().'&time=11:00:00&blocks=3&students=30')
             ->assertOk()
             ->assertJsonPath('elapsed_slots', ['11:00 AM – 12:00 PM'])
             ->assertJsonPath('full_slots', []);
@@ -283,10 +283,31 @@ class BatchApprovalsPageTest extends TestCase
         ]);
 
         $this->actingAs($this->director)
-            ->getJson("/director/batches/capacity?date={$date}&time=07:00:00&blocks=3")
+            ->getJson("/director/batches/capacity?date={$date}&time=07:00:00&blocks=3&students=25")
             ->assertOk()
             ->assertJsonPath('full_slots', ['8:00 AM – 9:00 AM'])
             ->assertJsonPath('span_label', '7:00 AM – 10:00 AM (3 slots)');
+    }
+
+    public function test_capacity_feed_counts_the_students_the_batch_would_add(): void
+    {
+        // D-91: 7 AM holds 8 — room for 4 more, not for 5.
+        $date = now()->addDays(3)->toDateString();
+
+        Appointment::factory()->count(8)->inSlot('07:00:00')->create([
+            'scheduled_date' => $date,
+            'status' => 'scheduled',
+        ]);
+
+        $this->actingAs($this->director)
+            ->getJson("/director/batches/capacity?date={$date}&time=07:00:00&blocks=1&students=4")
+            ->assertOk()
+            ->assertJsonPath('full_slots', []);
+
+        $this->actingAs($this->director)
+            ->getJson("/director/batches/capacity?date={$date}&time=07:00:00&blocks=1&students=5")
+            ->assertOk()
+            ->assertJsonPath('full_slots', ['7:00 AM – 8:00 AM']);
     }
 
     public function test_rows_show_the_admins_requested_date_or_a_dash(): void

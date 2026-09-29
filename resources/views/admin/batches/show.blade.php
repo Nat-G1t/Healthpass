@@ -1,26 +1,17 @@
 <x-layout.sidebar title="Batch Roster">
 
-@php
-    // Appointments only exist once the Director has approved (BR-08), so the
-    // Appointment / Time columns are meaningless on a pending, rejected or
-    // cancelled batch — the roster there is just "who was submitted".
-    //
-    // D-55: the Status and Result columns and the results roll-up D-53 put on
-    // this page are gone. Each student's outcome now lives on the Batch Results
-    // popup on Batch Tracking (FR-ADM-12), where every approved batch sits in
-    // one place; the roster is back to who is booked and when. D-87 removed
-    // the Withdraw column, and students an earlier withdrawal removed are not
-    // listed at all.
-    $isApproved = $batch->status === 'approved';
+{{--
+    D-55: the Status and Result columns and the results roll-up D-53 put on
+    this page are gone. Each student's outcome now lives on the Batch Results
+    popup on Batch Tracking (FR-ADM-12), where every approved batch sits in
+    one place; the roster is back to who is booked and when. D-87 removed
+    the Withdraw column, and students an earlier withdrawal removed are not
+    listed at all. The table itself is shared with the Submitted page (D-88).
 
-    $headers = $isApproved
-        ? ['Student', 'Student No.', 'Appointment', 'Time']
-        : ['Student', 'Student No.', 'Course & Year'];
-
-    // $rows is ONE PAGE of the roster (FR-UI-06). $totalCount comes from the
-    // controller and counts the WHOLE roster, so the header never shrinks to
-    // the page size.
-@endphp
+    $rows is ONE PAGE of the roster (FR-UI-06). $totalCount comes from the
+    controller and counts the WHOLE roster, so the header never shrinks to
+    the page size.
+--}}
 
 {{-- ── Flash messages ───────────────────────────────────────────────────────── --}}
 @if (session('status'))
@@ -131,49 +122,7 @@
         Students in this batch
     </p>
 
-    @if ($rows->isEmpty())
-        <p class="py-6 text-center text-sm text-hp-slate/50">
-            This batch has no students on it.
-        </p>
-    @else
-        <x-hp.table :headers="$headers">
-            @foreach ($rows as $row)
-                @php
-                    $profile = $row->student?->studentProfile;
-                    $appointment = $row->appointment;
-                @endphp
-                <x-hp.table-row>
-                    <x-hp.table-cell label="Student" class="font-medium">
-                        {{ $row->student?->name ?? 'Unknown student' }}
-                    </x-hp.table-cell>
-
-                    <x-hp.table-cell label="Student No." class="text-hp-slate/60">
-                        {{ $profile?->student_number ?? '—' }}
-                    </x-hp.table-cell>
-
-                    @if ($isApproved)
-                        <x-hp.table-cell label="Appointment" class="font-mono text-xs">
-                            {{ $appointment?->reference_no ?? '—' }}
-                        </x-hp.table-cell>
-
-                        <x-hp.table-cell label="Time">
-                            {{-- "—" on pre-D-37 appointments, which sit in no slot --}}
-                            {{ $appointment?->timeRangeLabel() ?? '—' }}
-                        </x-hp.table-cell>
-                    @else
-                        <x-hp.table-cell label="Course & Year" class="text-hp-slate/60">
-                            {{ $profile?->course ?? '—' }}
-                            @if ($profile?->year_level)
-                                · Year {{ $profile->year_level }}
-                            @endif
-                        </x-hp.table-cell>
-                    @endif
-                </x-hp.table-row>
-            @endforeach
-        </x-hp.table>
-
-        <x-hp.pager :paginator="$rows" />
-    @endif
+    @include('admin.batches.partials.roster')
 </x-hp.card>
 
 </x-layout.sidebar>

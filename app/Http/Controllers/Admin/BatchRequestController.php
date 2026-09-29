@@ -10,12 +10,14 @@ use App\Http\Requests\Admin\StoreBatchRequestRequest;
 use App\Models\BatchRequest;
 use App\Models\BatchRequestStudent;
 use App\Models\StudentProfile;
+use App\Services\BatchConflictService;
 use App\Services\ClinicScheduleService;
 use App\Services\ReferenceNumberService;
 use App\Services\ScheduleClashService;
 use App\Support\AssessmentDocument;
 use App\Support\ClearanceDocument;
 use App\Support\Programs;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -39,6 +41,7 @@ class BatchRequestController extends Controller
     public function __construct(
         private readonly ClinicScheduleService $schedule,
         private readonly ScheduleClashService $clashes,
+        private readonly BatchConflictService $conflicts,
     ) {}
 
     /**
@@ -277,12 +280,12 @@ class BatchRequestController extends Controller
             // being approved into the last seats of one of those hours.
             // Re-check HERE under a row lock.
             $span = $this->schedule->span($startSlot, $blocks);
-            $fullSlots = $this->schedule->fullSlotsIn($requestedDate, $span, lock: true);
+            $fullSlots = $this->schedule->fullSlotsIn($requestedDate, $span, $studentUserIds->count(), lock: true);
 
             if ($fullSlots !== []) {
                 throw ValidationException::withMessages([
                     'requested_time' => sprintf(
-                        'The %s slot filled up while you were submitting. Please choose a different start time or date.',
+                        'The %s slot no longer has room for this batch — it filled up while you were submitting. Please choose a different start time or date.',
                         $this->schedule->label($fullSlots[0]),
                     ),
                 ]);
@@ -331,6 +334,17 @@ class BatchRequestController extends Controller
      * Post-submit confirmation screen (FR-ADM-04). Fetched through the
      * managed college's relationship, so another college's batch id is a
      * plain 404 (FR-ADM-06) — ids can't be enumerated across colleges.
+     *
+     * D-88: it also lists the students on the batch (the same roster query as
+     * the Batch Roster page) and offers the D-52 Cancel while the batch is
+     * pending, so the admin can check everything they sent and withdraw it on
+     * the spot if something is wrong.
+     *
+     * D-90: while pending, a heads-up when another request for the same hours
+     * was submitted FIRST and the clinic can't fit both — if the Director
+     * approves that one first, this one will be refused. It never says whose
+     * request it is; `freeStarts` are the start hours that would still fit, so
+     * the admin can cancel and resubmit for one of them.
      */
     public function confirmation(int $batchId): View
     {
@@ -338,7 +352,41 @@ class BatchRequestController extends Controller
             ->withCount('batchRequestStudents')
             ->findOrFail($batchId);
 
-        return view('admin.batches.confirmation', ['batch' => $batch]);
+        $earlier = $this->conflicts->conflictsWith($batch)
+            ->filter(fn (BatchRequest $other): bool => $other->submittedBefore($batch))
+            ->values();
+
+        $freeStarts = $earlier->isEmpty() ? null : array_map(
+            fn (string $slot): string => $this->schedule->startLabel($slot),
+            $this->conflicts->freeStartsAfter($batch, $earlier),
+        );
+
+        return view('admin.batches.confirmation', [
+            'batch' => $batch,
+            'rows' => $this->rosterPage($batch),
+            'freeStarts' => $freeStarts,
+        ]);
+    }
+
+    /**
+     * One page of a batch's roster (FR-UI-06): ten per page, in a stable order
+     * (id is unique), with each student's generated appointment eager-loaded —
+     * a page is 4 queries whatever the batch size. Shared by the Batch Roster
+     * and the Submitted page (D-88). D-87 hides the students an earlier
+     * withdrawal removed.
+     */
+    private function rosterPage(BatchRequest $batch): LengthAwarePaginator
+    {
+        return $batch->batchRequestStudents()
+            ->notWithdrawn()
+            ->with([
+                'student:id,name',
+                'student.studentProfile:id,user_id,student_number,course,year_level',
+                'appointment',
+            ])
+            ->orderBy('id')
+            ->paginate(config('healthpass.ui.rows_per_page'))
+            ->withQueryString();
     }
 
     /**
@@ -369,25 +417,11 @@ class BatchRequestController extends Controller
             ])
             ->findOrFail($batchId);
 
-        // FR-UI-06: the roster pages at ten, in a stable order (id is unique),
-        // with each student's generated appointment eager-loaded — a page is
-        // 4 queries whatever the batch size.
-        $rows = $batch->batchRequestStudents()
-            ->notWithdrawn()
-            ->with([
-                'student:id,name',
-                'student.studentProfile:id,user_id,student_number,course,year_level',
-                'appointment',
-            ])
-            ->orderBy('id')
-            ->paginate(config('healthpass.ui.rows_per_page'))
-            ->withQueryString();
-
         // The page header and summary describe the WHOLE roster, never just
         // the page on screen, so the count is its own query.
         return view('admin.batches.show', [
             'batch' => $batch,
-            'rows' => $rows,
+            'rows' => $this->rosterPage($batch),
             'totalCount' => $batch->batchRequestStudents()->notWithdrawn()->count(),
         ]);
     }

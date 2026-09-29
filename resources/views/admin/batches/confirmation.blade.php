@@ -1,4 +1,8 @@
-﻿<x-layout.sidebar title="Batch Request Submitted">
+<x-layout.sidebar title="Batch Request Submitted">
+
+{{-- `cancelTarget` feeds the shared cancel dialog (D-88, FR-ADM-11): null, or
+     the { id, ref, students, date } of this batch once Cancel is clicked. --}}
+<div x-data="{ cancelTarget: null }">
 
 {{-- ── Page header ──────────────────────────────────────────────────────────── --}}
 <div class="mb-7">
@@ -49,7 +53,9 @@
             </dd>
         </div>
 
-        {{-- Form type (D-62) — the official form the clinic will use --}}
+        {{-- Form type (D-62) — the official form the clinic will use. D-88
+             dropped the "Service" row under it, which always read "Medical
+             Clearance" even on a Medical Assessment Form batch. --}}
         <div class="flex items-start justify-between gap-4">
             <dt class="text-sm text-hp-slate/50">Form</dt>
             <dd class="text-right text-sm font-semibold text-hp-slate">
@@ -62,16 +68,6 @@
             <dt class="text-sm text-hp-slate/50">Reason</dt>
             <dd class="text-right text-sm font-semibold text-hp-slate">
                 {{ $batch->reasonText() }}
-            </dd>
-        </div>
-
-        {{-- Service --}}
-        <div class="flex items-center justify-between gap-4">
-            <dt class="text-sm text-hp-slate/50">Service</dt>
-            <dd>
-                <x-hp.badge variant="positive">
-                    Medical Clearance
-                </x-hp.badge>
             </dd>
         </div>
 
@@ -110,7 +106,48 @@
     </dl>
 </x-hp.card>
 
+{{-- ── Heads-up: an earlier request wants the same hours (D-90) ─────────────── --}}
+{{-- $freeStarts is null when there is nothing to warn about. It never says
+     whose request came first — only what that means for this one. --}}
+@if ($freeStarts !== null)
+    <div class="mb-6 flex items-start gap-3 rounded-xl border border-hp-orange/40 bg-hp-peach/30 px-4 py-3.5">
+        <svg class="mt-0.5 h-4 w-4 shrink-0 text-hp-orange" fill="none" viewBox="0 0 24 24"
+             stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round"
+                  d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+        </svg>
+        <div class="text-xs leading-relaxed text-hp-slate">
+            <p class="text-sm font-semibold">Another request is waiting for these hours</p>
+            <p class="mt-1">
+                It was submitted before yours, and the clinic can't fit both. If the
+                Clinic Director approves it first, this request will be rejected.
+            </p>
+            <p class="mt-1">
+                @if ($freeStarts === [])
+                    No other start time is free that day. To be safe, cancel this request
+                    and submit it again for another date.
+                @else
+                    To be safe, cancel this request and submit it again starting at
+                    <strong class="font-semibold">{{ Illuminate\Support\Arr::join($freeStarts, ', ', ' or ') }}</strong>,
+                    which still have room that day.
+                @endif
+            </p>
+        </div>
+    </div>
+@endif
+
+{{-- ── Students on this batch (D-88) ────────────────────────────────────────── --}}
+<x-hp.card class="mb-6">
+    <p class="mb-5 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+        Students in this batch
+    </p>
+
+    @include('admin.batches.partials.roster')
+</x-hp.card>
+
 {{-- ── What happens next --}}
+{{-- D-88: since D-36 the Director confirms the requested date and time as they
+     are (or rejects with a reason) — they can no longer move them. --}}
 <x-hp.card class="mb-6 bg-hp-bg">
     <div class="flex gap-3">
         <svg class="mt-0.5 h-4 w-4 shrink-0 text-hp-orange" fill="none" viewBox="0 0 24 24"
@@ -121,10 +158,11 @@
         <div>
             <p class="text-sm font-semibold text-hp-slate">What happens next</p>
             <p class="mt-1 text-xs leading-relaxed text-hp-slate/60">
-                The Clinic Director reviews the request and confirms your
-                requested date (they may adjust it if the clinic is full that
-                day). Once approved, an appointment is created automatically for
-                every listed student — you can follow the status in Batch Tracking.
+                The Clinic Director reviews the request and either approves your
+                requested date and time or rejects it with a reason you can read in
+                Batch Tracking. Once approved, an appointment is created automatically
+                for every listed student, and each student is emailed their schedule.
+                Until then, you can still cancel this request.
             </p>
         </div>
     </div>
@@ -146,6 +184,35 @@
               hover:border-hp-orange/40 hover:text-hp-orange sm:w-auto">
         Back to Dashboard
     </a>
+
+    {{-- D-88: withdraw it right here (FR-ADM-11). isCancellable() is the SAME
+         rule the cancel endpoint re-checks under a row lock, so the button never
+         offers what the server would refuse. Plain <button> because the payload
+         is built with Js::from(), which isn't compiled inside a component tag's
+         attribute. `students` is cast to int: withCount() is a string on MySQL,
+         and the dialog compares it with === 1 to pluralise. --}}
+    @if ($batch->isCancellable())
+        <button type="button"
+            @click="cancelTarget = {{ Illuminate\Support\Js::from([
+                'id' => $batch->id,
+                'ref' => $batch->reference_no,
+                'students' => (int) $batch->batch_request_students_count,
+                'date' => $batch->requested_date?->format('M j, Y'),
+            ]) }}"
+            class="inline-flex w-full items-center justify-center gap-2 rounded-full
+                   border-[1.5px] border-red-300 bg-transparent px-6 py-2.5 text-sm
+                   font-semibold text-red-500 hover:bg-red-50 active:scale-[0.97]
+                   transition-[color,background-color,border-color,transform]
+                   duration-hp-fast ease-hp-out focus-visible:outline-none
+                   focus-visible:ring-2 focus-visible:ring-red-500
+                   focus-visible:ring-offset-1 sm:ml-auto sm:w-auto">
+            Cancel Request
+        </button>
+    @endif
+
+</div>
+
+<x-batch-cancel-confirm />
 
 </div>
 

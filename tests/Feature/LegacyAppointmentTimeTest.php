@@ -97,7 +97,8 @@ class LegacyAppointmentTimeTest extends TestCase
             $this->assertSame(0, $this->schedule()->bookedInSlot($date, $slot), "{$slot} should be empty");
         }
 
-        $this->assertSame([], $this->schedule()->fullSlotsIn($date, $this->schedule()->slots()));
+        // A full day of students (12 in every hour) still fits: the legacy rows hold no seat.
+        $this->assertSame([], $this->schedule()->fullSlotsIn($date, $this->schedule()->slots(), $this->schedule()->maxBatchSize()));
     }
 
     public function test_legacy_appointments_still_count_toward_the_daily_cap(): void
