@@ -753,12 +753,13 @@ requested_date        date NULL             -- admin-proposed clinic date, set a
 requested_time        time NULL             -- D-37: admin-chosen START hour of the batch's span (canonical 'H:i:s')
 requested_blocks      tinyint unsigned NULL -- D-37: span LENGTH in whole hours = ceil(students / hourly_capacity), always computed server-side. Start + block count, NEVER an end time and never both: the count is what every consumer loops over, an end time is ambiguous about the last hour, and re-deriving it later could silently shrink an approved span if a student left the roster. Both columns NULL only on pre-D-37 batches, which (like a NULL requested_date under D-36) cannot be approved at all
 scheduled_date        date NULL             -- FINAL appointment date, stamped at approval; = requested_date since D-36 (D-5, amended by D-29/D-36)
-status                enum('pending','approved','rejected','cancelled') DEFAULT 'pending'  -- D-52 added 'cancelled'; the transition is pending → {approved, rejected, cancelled} and all three are terminal (BR-24)
+status                enum('pending','approved','rejected','cancelled') DEFAULT 'pending'  -- D-52 added 'cancelled'; the transition is pending → {approved, rejected, cancelled}, plus approved → cancelled until the first clinic hour (D-92); rejected and cancelled are terminal (BR-24)
 rejection_reason      text NULL             -- Director's written reason, required on reject (10-500 chars, D-36); NULL on pending/approved and on pre-D-36 rejections
 reviewed_by           bigint NULL FK → users.id   -- director who acted
 reviewed_at           timestamp NULL
-cancelled_at          timestamp NULL        -- D-52: when the College Admin cancelled a PENDING request (FR-ADM-11)
+cancelled_at          timestamp NULL        -- D-52: when the College Admin cancelled the request (FR-ADM-11) — pending, or since D-92 approved before its first clinic hour
 cancelled_by          bigint NULL FK → users.id   -- D-52: the admin who ACTED, not requested_by — a college may have two admins since D-47. Both cancellation columns are NULL on every non-cancelled row and are NEVER backfilled. They exist because the College Activity Log (D-49) is DERIVED from this table and needs an actor + a timestamp to place the event; reviewed_by/reviewed_at were deliberately NOT reused, since they mean "the Director decided" in three other places and a cancellation is not a decision
+cancellation_reason   text NULL             -- D-92: the College Admin's written reason (10-500 chars), required on every cancel; read by the Director, emailed to an approved batch's students. NULL on pre-D-92 cancellations, never backfilled
 created_at, updated_at
 ```
 
