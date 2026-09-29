@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { SAMPLE_COUNT, SCREENS, SOCIAL_HISTORY, VITALS, kioskMachine } from '../../resources/js/kiosk/state-machine.js';
+import { CANCELLABLE_SCREENS, SAMPLE_COUNT, SCREENS, SOCIAL_HISTORY, VITALS, kioskMachine } from '../../resources/js/kiosk/state-machine.js';
 
 /**
  * Kiosk state-machine hardening (FR-KSK-05/06/07/08/15).
@@ -605,4 +605,60 @@ test('reset forgets the student\'s sex with the rest of the session', () => {
 test('the weight step tells the student to keep both feet inside the plate', () => {
     // FR-STU-11 revision: a foot on the edge of the plate throws the load cell off.
     assert.match(VITALS[2].instruction, /both feet/);
+});
+
+// ── Student Cancel (D-89) ─────────────────────────────────────────────────────
+// A top-left Cancel on every mid-screening screen. It asks first ("Start
+// over?"), then does exactly what the 90 s idle reset does.
+
+test('Cancel shows on the mid-screening screens and nowhere else', () => {
+    const m = machineAtIdentity({ firstName: 'Juan', hasAppointmentToday: true });
+
+    assert.deepEqual(CANCELLABLE_SCREENS, ['identity', 'consent', 'vitals', 'questionnaire', 'social-history', 'review']);
+
+    for (const screen of SCREENS) {
+        m.state.screen = screen;
+        assert.equal(m.canCancel(), CANCELLABLE_SCREENS.includes(screen), screen);
+    }
+});
+
+test('Cancel hides while a visit is being saved', () => {
+    const m = machineAtIdentity({ firstName: 'Juan', hasAppointmentToday: true });
+    m.state.screen = 'review';
+
+    m.state.submit.status = 'sending';
+    assert.equal(m.canCancel(), false);
+
+    m.state.submit.status = 'error'; // a failed submit may be abandoned
+    assert.equal(m.canCancel(), true);
+
+    m.state.recheck.status = 'sending'; // the D-72 rest POST
+    assert.equal(m.canCancel(), false);
+});
+
+test('Keep going closes the popup and changes nothing', () => {
+    const m = machineAtIdentity({ firstName: 'Juan', hasAppointmentToday: true });
+    m.confirmIdentity();
+
+    m.openCancel();
+    assert.equal(m.state.cancel.open, true);
+
+    m.closeCancel();
+    assert.equal(m.state.cancel.open, false);
+    assert.equal(m.state.screen, 'consent');
+    assert.equal(m.state.identity.firstName, 'Juan');
+});
+
+test('Start over wipes the session back to the scan screen', () => {
+    const m = machineAtIdentity({ firstName: 'Juan', hasAppointmentToday: true });
+    m.confirmIdentity();
+    m.state.questionnaire.systems.eyes = true;
+
+    m.openCancel();
+    m.reset(); // the popup's "Start over" button
+
+    assert.equal(m.state.screen, 'welcome');
+    assert.equal(m.state.cancel.open, false);
+    assert.equal(m.state.identity, null);
+    assert.deepEqual(m.state.questionnaire.systems, {});
 });

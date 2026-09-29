@@ -1,5 +1,5 @@
-{{-- Discreet staff-exit prompt (FR-KSK-16). Hidden until the corner gesture
-     (5 taps within ~3 s) opens it; overlays whatever screen is active so a nurse
+{{-- Discreet staff-exit prompt (FR-KSK-16). Hidden until the top-centre gesture
+     (5 taps within ~3 s, D-89) opens it; overlays whatever screen is active so a nurse
      can end the session at any point. Reuses the login fields + shared keyboard
      (state.login) for the staff credentials. A valid nurse or physician (D-64) is authenticated
      server-side and the page navigates to the queue; Cancel just dismisses it.

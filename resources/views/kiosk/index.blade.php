@@ -209,22 +209,34 @@
                 {{-- D-72: shown instead of Complete when a reading is high. --}}
                 @include('kiosk.screens.rest')
 
-                {{-- Discreet staff-exit hotspot (FR-KSK-16): an invisible corner
-                     target present on EVERY screen. Five taps within ~3 s open the
-                     nurse prompt — the only way out of /kiosk. Top-LEFT, away from
-                     the vitals top-right manual-entry logo so the two gestures never
-                     collide. Sized generously (~5 rem square, scaled by --k-zoom)
-                     for the 15.6″ portrait panel so a nurse can hit it reliably
-                     without looking; the corner stays empty on every screen (the
-                     email-login content is vertically centred, far below it). --}}
+                {{-- Student Cancel (D-89): top-left on every mid-screening screen
+                     (canCancel() owns the list). It asks first, in the popup
+                     below, then starts over exactly as the idle reset does. --}}
+                <button
+                    type="button"
+                    x-show="canCancel()"
+                    x-cloak
+                    @click="openCancel()"
+                    class="absolute left-6 top-6 z-30 rounded-full border border-hp-slate/20 bg-hp-white px-5 py-2.5 text-base font-medium text-hp-slate/70 transition-colors hover:text-hp-orange"
+                >✕ Cancel</button>
+
+                {{-- Discreet staff-exit hotspot (FR-KSK-16): an invisible target
+                     present on EVERY screen. Five taps within ~3 s open the nurse
+                     prompt — the only way out of /kiosk. Top-CENTRE since D-89 (the
+                     top-left corner is the student's Cancel now), clear of the
+                     vitals top-right manual-entry logo too. Only screen titles sit
+                     under it, never a button. Sized generously (5 × 8 rem, scaled
+                     by --k-zoom) for the 15.6″ portrait panel so a nurse can hit it
+                     reliably without looking. --}}
                 <button
                     type="button"
                     @click="exitTap()"
-                    class="absolute left-0 top-0 z-30 h-20 w-20 opacity-0"
+                    class="absolute left-1/2 top-0 z-30 h-20 w-32 -translate-x-1/2 opacity-0"
                     aria-hidden="true"
                     tabindex="-1"
                 ></button>
 
+                @include('kiosk.partials.cancel-confirm')
                 @include('kiosk.partials.staff-exit')
             </div>
         </div>

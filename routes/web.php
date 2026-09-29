@@ -362,7 +362,7 @@ Route::prefix('kiosk')->name('kiosk.')->middleware('kiosk.access')->group(functi
     Route::post('/reset', [KioskController::class, 'reset'])
         ->middleware('throttle:30,1,kiosk-reset')
         ->name('reset');
-    // Discreet staff exit (FR-KSK-16): the 5-tap corner gesture opens a prompt
+    // Discreet staff exit (FR-KSK-16): the 5-tap top-centre gesture opens a prompt
     // for a nurse's credentials; a valid nurse is logged in and the kiosk hands
     // off to the nurse queue. Same tight throttle as login — it is a credential
     // check on a public terminal, so brute-force attempts are capped per IP.

@@ -39,6 +39,12 @@ export const SCREENS = [
     'rest',
 ];
 
+// D-89: the screens that show the student's top-left Cancel — every screen in
+// the middle of a screening. Welcome has nothing to cancel; Complete and Rest
+// already reset themselves with a Done button; Email Login keeps its own
+// "← Cancel"; No Schedule and Already Screened keep "Back to start".
+export const CANCELLABLE_SCREENS = ['identity', 'consent', 'vitals', 'questionnaire', 'social-history', 'review'];
+
 export const VITAL_STEPS = 4;
 
 // The blood-pressure step — the one the Bluetooth monitor fills (D-58).
@@ -347,6 +353,10 @@ function freshState() {
         // (`state.login`) for the nurse's email/password, since the two are
         // never shown at once and share the exact same input shape.
         exit: { open: false, status: 'idle', error: '' }, // idle | sending | error
+
+        // The student's "Start over?" confirmation behind the top-left Cancel
+        // (D-89). In `state`, so every reset closes it.
+        cancel: { open: false },
     };
 }
 
@@ -1022,11 +1032,38 @@ export function kioskMachine() {
             return 'Enter ⏎';
         },
 
+        // ── Student Cancel (D-89) ────────────────────────────────────────────
+        // A student called away mid-screening shouldn't leave the next person
+        // waiting out the 90 s idle reset. The top-left Cancel asks first, then
+        // runs reset() — the same wipe as the idle reset: nothing is saved and
+        // the server forgets the student. A resting visit (D-72) stays resting,
+        // exactly as when a re-check is abandoned; the student scans again.
+
+        /**
+         * Is the top-left Cancel shown? Only on the mid-screening screens, and
+         * never while a submit or rest POST is in flight — the visit is being
+         * saved, so the screen must not reset under it.
+         */
+        canCancel() {
+            return CANCELLABLE_SCREENS.includes(this.state.screen)
+                && this.state.submit.status !== 'sending'
+                && this.state.recheck.status !== 'sending';
+        },
+
+        openCancel() {
+            this.state.cancel.open = true;
+        },
+
+        closeCancel() {
+            this.state.cancel.open = false;
+        },
+
         // ── Discreet staff exit (FR-KSK-16) ──────────────────────────────────
         // A student cannot navigate out of /kiosk; ending a shift requires a
-        // hidden corner gesture — five taps within ~3 s of the first — then a
-        // nurse's credentials. Stray taps reset the count, so it never opens by
-        // accident.
+        // hidden gesture at the top-centre of the screen (D-89 moved it there
+        // from the top-left corner, which the student Cancel now uses) — five
+        // taps within ~3 s of the first — then a nurse's credentials. Stray
+        // taps reset the count, so it never opens by accident.
         exitTap() {
             const now = Date.now();
             if (this._exitTaps === 0 || now - this._exitFirstTap > EXIT_GESTURE_WINDOW_MS) {

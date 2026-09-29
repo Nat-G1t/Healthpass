@@ -271,7 +271,7 @@ final class KioskController extends Controller
      *
      * The kiosk has no nav and the Pi runs Chromium in --kiosk mode, so a student
      * cannot leave /kiosk on their own. To END a shift a staff member taps the
-     * hidden corner gesture (5 taps within ~3 s) which opens this prompt. We
+     * hidden top-centre gesture (5 taps within ~3 s) which opens this prompt. We
      * authenticate the staff member here — not just check a password — so the
      * redirect actually lands inside the (auth-gated) nurse queue instead of
      * bouncing to the login page. An email is required to know WHO to sign in.
