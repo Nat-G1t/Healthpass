@@ -372,10 +372,11 @@ so it never ships to the Pi.
 
 The **only** exit is a discreet staff gesture:
 
-- **Gesture:** an invisible 40×40 hotspot in the **top-left corner**, present on every
+- **Gesture:** an invisible hotspot at the **top-centre** of the screen (D-89 moved it
+  off the top-left corner, which now holds the student's Cancel), present on every
   screen (`index.blade.php`). **5 taps within ~3 s** of the first tap open the prompt
-  (`exitTap()` in `state-machine.js`); stray taps reset the count. Top-left is chosen so
-  it never collides with the vitals **top-right** triple-tap manual-entry logo (FR-KSK-06).
+  (`exitTap()` in `state-machine.js`); stray taps reset the count. It never collides with
+  the vitals **top-right** triple-tap manual-entry logo (FR-KSK-06).
 - **Prompt:** a modal (`partials/staff-exit.blade.php`) reusing the login fields + the
   shared on-screen keyboard (`partials/credential-keyboard.blade.php`, also used by the
   email-login screen). It asks for a **nurse email + password**.
@@ -411,7 +412,8 @@ Backed by `php artisan test tests/Feature/Kiosk` — **22 passing**.
 | Gesture | Where | Action |
 |---|---|---|
 | **3 taps** on the logo | **vitals screen, top-RIGHT** | manual-entry numeric pad (FR-KSK-06) |
-| **5 taps** on the corner | **every screen, top-LEFT** (invisible 48px hotspot) | staff-exit prompt (FR-KSK-16) |
+| **5 taps** at the top | **every screen, top-CENTRE** (invisible hotspot, D-89) | staff-exit prompt (FR-KSK-16) |
+| **✕ Cancel** | **mid-screening screens, top-LEFT** (visible) | "Start over?" → reset (FR-KSK-18, D-89) |
 
 ## Kiosk Web Serial sensors (FR-KSK-07 / FR-HW-05) — Week 5
 
