@@ -83,6 +83,14 @@
     </div>
 @endif
 
+{{-- D-93: a Remove that found nothing to remove, or an encode link for a visit
+     a colleague already removed. --}}
+@if (session('error'))
+    <div data-hp-flash data-flash-sticky class="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        {{ session('error') }}
+    </div>
+@endif
+
 <x-hp.card>
 
     {{-- ── Empty state — the queue is clear ─────────────────────────────────────
@@ -140,6 +148,79 @@
     </div>
 
 </x-hp.card>
+
+{{-- ── Remove-from-queue confirmation (D-93) ────────────────────────────────────
+     Opened by the `queue-remove` window event that live-queue.js fires when a
+     row's Remove button is clicked — one listener for server-rendered and
+     poll-added rows alike, so this popup never depends on how a row was built.
+     `target` is null (closed) or the { url, name, ref } of that row.
+
+     Same dialog shape as the app's other confirms: teleported to <body> so no
+     ancestor clips the backdrop, and dismissable with Esc, a backdrop click or
+     "Keep in queue". The DELETE only happens from the red button in here.
+──────────────────────────────────────────────────────────────────────────────── --}}
+<div x-data="{ target: null, sending: false }"
+     @queue-remove.window="target = $event.detail; sending = false">
+    <template x-teleport="body">
+        <div
+            x-show="target !== null"
+            x-cloak
+            @keydown.escape.window="target = null"
+            class="fixed inset-0 z-[60] flex items-center justify-center px-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="queue-remove-title"
+        >
+            <div
+                x-show="target !== null"
+                @click="target = null"
+                x-transition:enter="ease-hp-out duration-hp-base"
+                x-transition:enter-start="opacity-0"
+                x-transition:enter-end="opacity-100"
+                x-transition:leave="ease-hp-in duration-hp-fast"
+                x-transition:leave-start="opacity-100"
+                x-transition:leave-end="opacity-0"
+                class="absolute inset-0 bg-hp-slate/50"
+                aria-hidden="true"
+            ></div>
+
+            <div
+                x-show="target !== null"
+                x-transition:enter="ease-hp-spring duration-hp-slow"
+                x-transition:enter-start="opacity-0 translate-y-6"
+                x-transition:enter-end="opacity-100 translate-y-0"
+                x-transition:leave="ease-hp-in duration-hp-base"
+                x-transition:leave-start="opacity-100 translate-y-0"
+                x-transition:leave-end="opacity-0 translate-y-6"
+                class="relative w-full max-w-md rounded-2xl bg-hp-white p-6 shadow-xl"
+            >
+                <h2 id="queue-remove-title" class="text-lg font-semibold text-hp-slate">
+                    Remove <span x-text="target?.name"></span> from the queue?
+                </h2>
+                <p class="mt-1 font-mono text-xs text-hp-slate/40" x-text="target?.ref"></p>
+
+                <p class="mt-3 text-sm text-hp-slate/70">
+                    Use this when a student left the clinic without being seen.
+                    Their kiosk readings and answers for this visit are
+                    <strong class="font-semibold text-hp-slate">deleted</strong>, and nothing is encoded.
+                </p>
+                <p class="mt-3 rounded-lg bg-hp-bg px-4 py-3 text-xs text-hp-slate">
+                    This cannot be undone. If the student comes back today, they can go
+                    through the kiosk again.
+                </p>
+
+                <form method="POST" :action="target?.url" @submit="sending = true" class="mt-6 flex justify-end gap-3">
+                    @csrf
+                    @method('DELETE')
+                    <x-hp.button variant="muted" @click="target = null">Keep in queue</x-hp.button>
+                    <x-hp.button type="submit" variant="danger" x-bind:disabled="sending">
+                        <span x-text="sending ? 'Removing…' : 'Remove'"></span>
+                    </x-hp.button>
+                </form>
+            </div>
+        </div>
+    </template>
+</div>
 
 @push('scripts')
     @vite('resources/js/nurse/live-queue.js')

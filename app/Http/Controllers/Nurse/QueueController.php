@@ -7,7 +7,9 @@ namespace App\Http\Controllers\Nurse;
 use App\Http\Controllers\Controller;
 use App\Models\ClinicVisit;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 
@@ -88,6 +90,49 @@ class QueueController extends Controller
     }
 
     /**
+     * Remove a student from the Live Queue (D-93).
+     *
+     * A student finishes the kiosk, lands in the queue, and then leaves the
+     * clinic without being seen. Before D-93 their row sat at the top of the
+     * queue for the rest of the day with no way to clear it.
+     *
+     * The visit is DELETED, not flagged: its vital signs and screening answers
+     * go with it (both tables cascade on delete). Nothing was ever encoded, so
+     * no clearance record or printed document refers to it. The student's
+     * appointment is untouched and has no submitted visit any more, so
+     * Appointment::todayFor() offers it again — if they come back, they simply
+     * go through the kiosk again.
+     *
+     * Only a `captured` visit can be removed — one still WAITING in the queue.
+     * The status is re-read under a row lock, so a colleague who encoded this
+     * visit a moment ago wins, and an encoded record can never be deleted.
+     */
+    public function remove(ClinicVisit $visit): RedirectResponse
+    {
+        $removed = DB::transaction(function () use ($visit): bool {
+            $locked = ClinicVisit::whereKey($visit->id)->lockForUpdate()->first();
+
+            if ($locked === null || $locked->status !== 'captured') {
+                return false;
+            }
+
+            $locked->delete();
+
+            return true;
+        });
+
+        $name = $visit->student->name ?? 'The student';
+
+        if (! $removed) {
+            return redirect()->route('nurse.queue')
+                ->with('error', "{$name} is no longer waiting in the queue, so nothing was removed.");
+        }
+
+        return redirect()->route('nurse.queue')
+            ->with('status', "{$name} was removed from the queue. If they come back, they can go through the kiosk again.");
+    }
+
+    /**
      * Shape one visit into the lean row payload the queue table renders.
      * Mirrors the columns of the server-rendered table in nurse/queue.blade.php.
      *
@@ -125,6 +170,8 @@ class QueueController extends Controller
             // Where the row's "Encode Result" link points (FR-NRS-03) — built
             // server-side so the JS poller never guesses the route shape.
             'encode_url' => route('nurse.visits.encode', $visit),
+            // D-93: where the row's Remove confirmation posts, for the same reason.
+            'remove_url' => route('nurse.visits.remove', $visit),
         ];
     }
 

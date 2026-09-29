@@ -112,9 +112,12 @@ class ActivityLogController extends Controller
             // A pending batch has no decision yet. reviewed_at is the guard
             // rather than status, because it is the field that carries WHEN —
             // an entry with no timestamp could not be placed on a timeline.
-            if ($batch->reviewed_at !== null && in_array($batch->status, ['approved', 'rejected'], true)) {
+            //
+            // D-92: a batch cancelled AFTER approval still carries its approval
+            // stamp, and that approval really happened, so it stays on the log.
+            if ($batch->reviewed_at !== null && in_array($batch->status, ['approved', 'rejected', 'cancelled'], true)) {
                 $entries[] = [
-                    'type' => $batch->status,
+                    'type' => $batch->status === 'rejected' ? 'rejected' : 'approved',
                     'at' => $batch->reviewed_at,
                     'actor' => $batch->reviewer?->name,
                     'actorRole' => 'Clinic Director',
@@ -133,6 +136,9 @@ class ActivityLogController extends Controller
             // The actor is `canceller`, NOT `requester`: a college can have
             // more than one admin (D-47), so the admin who cancelled is not
             // necessarily the one who submitted.
+            //
+            // D-92: the college's written reason, when there is one (batches
+            // cancelled before D-92 have none).
             if ($batch->cancelled_at !== null && $batch->status === 'cancelled') {
                 $entries[] = [
                     'type' => 'cancelled',
@@ -140,7 +146,9 @@ class ActivityLogController extends Controller
                     'actor' => $batch->canceller?->name,
                     'actorRole' => 'College Admin',
                     'batch' => $batch,
-                    'detail' => 'Withdrawn before the Clinic Director reviewed it — no appointments were created.',
+                    'detail' => $batch->cancellation_reason ?? ($batch->wasCancelledAfterApproval()
+                        ? 'Cancelled after approval — its appointments were cancelled.'
+                        : 'Withdrawn before the Clinic Director reviewed it — no appointments were created.'),
                 ];
             }
 

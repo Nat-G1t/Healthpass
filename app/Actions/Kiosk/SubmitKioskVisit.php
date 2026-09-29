@@ -131,7 +131,14 @@ final class SubmitKioskVisit
             // appointment row until the transaction ends, so the second waits
             // here, then sees the first one's visit and is refused — the same
             // lock-then-recheck pattern the capacity checks use.
-            Appointment::whereKey($appointment->id)->lockForUpdate()->first();
+            $lockedAppointment = Appointment::whereKey($appointment->id)->lockForUpdate()->first();
+
+            // D-92: the college may have cancelled this batch while the student
+            // was at the kiosk. The cancel holds this same row lock, so once we
+            // hold it the status is final.
+            if ($lockedAppointment?->status !== 'scheduled') {
+                throw ValidationException::withMessages(['appointment' => self::NO_SCHEDULE_MESSAGE]);
+            }
 
             if ($appointment->clinicVisit()->submitted()->exists()) {
                 throw ValidationException::withMessages(['appointment' => self::ALREADY_SCREENED_MESSAGE]);

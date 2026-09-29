@@ -117,9 +117,12 @@ class BatchConfirmationPageTest extends TestCase
             ->assertSee('id="cancel-batch-title"', false)
             ->assertSee('Keep it');
 
-        // The button feeds the SAME cancel endpoint Batch Tracking uses.
+        // The button feeds the SAME cancel endpoint Batch Tracking uses. D-92:
+        // the dialog now carries a required written reason.
+        $this->confirmationPage($batch)->assertSee('name="cancellation_reason"', false);
+
         $this->actingAs($this->admin)
-            ->delete("/admin/batches/{$batch->id}/cancel")
+            ->delete("/admin/batches/{$batch->id}/cancel", ['cancellation_reason' => 'The field trip was postponed.'])
             ->assertRedirect(route('admin.batches.index'));
 
         $this->assertSame('cancelled', $batch->fresh()->status);

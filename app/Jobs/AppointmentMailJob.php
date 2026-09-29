@@ -16,9 +16,8 @@ use Illuminate\Support\Facades\Mail;
 use Throwable;
 
 /**
- * Shared behaviour for every queued email ABOUT one appointment — since D-87
- * removed the FR-STU-13 withdrawal notice, that is the FR-STU-12 scheduling
- * notice alone.
+ * Shared behaviour for every queued email ABOUT one appointment — the
+ * FR-STU-12 scheduling notice and, since D-92, the batch cancellation notice.
  *
  * An *abstract class* is one that cannot be created on its own — it exists only
  * to be extended. The shared parts live here (retry policy, recipient

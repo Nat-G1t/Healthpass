@@ -12,12 +12,16 @@ use App\Models\College;
 use App\Models\StudentProfile;
 use App\Models\User;
 use App\Services\YearlyClearanceReport;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Barryvdh\DomPDF\PDF as DomPdf;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Response;
 use Illuminate\Testing\TestResponse;
+use Mockery;
 use Tests\TestCase;
 
 /**
- * Yearly Clearance Report (FR-ADM-13, D-81) — one calendar year's clearances
+ * Yearly Clearance Report (FR-ADM-13, D-81, D-94) — a span of years' clearances
  * for the admin's college, downloaded as a PDF.
  *
  * The numbers are checked against App\Services\YearlyClearanceReport directly
@@ -143,9 +147,37 @@ class YearlyReportTest extends TestCase
         return new YearlyClearanceReport($this->ccs, $year);
     }
 
-    private function download(string $query = '?year=2026'): TestResponse
+    private function download(string $query = '?from=2026&to=2026'): TestResponse
     {
         return $this->actingAs($this->admin)->get('/admin/analytics/yearly-report'.$query);
+    }
+
+    /**
+     * Download with dompdf swapped out, and hand back the view name and data
+     * the controller gave it — so a test can render the report's HTML and read
+     * it, instead of parsing PDF bytes.
+     *
+     * @return array{0: string, 1: array<string, mixed>}
+     */
+    private function capturePdf(string $query): array
+    {
+        $captured = [];
+
+        $pdf = Mockery::mock(DomPdf::class);
+        $pdf->shouldReceive('setPaper')->andReturnSelf();
+        $pdf->shouldReceive('download')->andReturnUsing(
+            fn (string $name): Response => new Response('%PDF', 200, ['Content-Disposition' => "attachment; filename={$name}"]),
+        );
+
+        Pdf::shouldReceive('loadView')->once()->andReturnUsing(function (string $view, array $data) use (&$captured, $pdf) {
+            $captured = [$view, $data];
+
+            return $pdf;
+        });
+
+        $this->download($query)->assertOk();
+
+        return $captured;
     }
 
     // ── The download (HTTP layer) ────────────────────────────────────────────
@@ -166,17 +198,17 @@ class YearlyReportTest extends TestCase
 
     public function test_every_other_role_and_a_guest_are_refused(): void
     {
-        $this->get('/admin/analytics/yearly-report?year=2026')->assertRedirect('/login');
+        $this->get('/admin/analytics/yearly-report?from=2026&to=2026')->assertRedirect('/login');
 
         // The role middleware bounces every other role to its own home.
         foreach (['student', 'nurse', 'director'] as $role) {
             $this->actingAs(User::factory()->create(['role' => $role]))
-                ->get('/admin/analytics/yearly-report?year=2026')
+                ->get('/admin/analytics/yearly-report?from=2026&to=2026')
                 ->assertRedirect();
         }
 
         $this->actingAs(User::factory()->physician()->create())
-            ->get('/admin/analytics/yearly-report?year=2026')
+            ->get('/admin/analytics/yearly-report?from=2026&to=2026')
             ->assertRedirect();
     }
 
@@ -184,12 +216,12 @@ class YearlyReportTest extends TestCase
     {
         $unassigned = User::factory()->create(['role' => 'college_admin', 'managed_college_id' => null]);
 
-        $this->actingAs($unassigned)->get('/admin/analytics/yearly-report?year=2026')->assertForbidden();
+        $this->actingAs($unassigned)->get('/admin/analytics/yearly-report?from=2026&to=2026')->assertForbidden();
     }
 
     public function test_an_empty_year_still_downloads(): void
     {
-        $this->download('?year=2021')
+        $this->download('?from=2021&to=2021')
             ->assertOk()
             ->assertHeader('Content-Disposition', 'attachment; filename=HealthPass-Yearly-Report-CCS-2021.pdf');
 
@@ -202,15 +234,75 @@ class YearlyReportTest extends TestCase
 
     public function test_the_first_year_and_the_current_year_are_accepted(): void
     {
-        $this->download('?year=2021')->assertOk();
-        $this->download('?year=2026')->assertOk();
+        $this->download('?from=2021&to=2021')->assertOk();
+        $this->download('?from=2026&to=2026')->assertOk();
     }
 
     public function test_a_year_outside_the_range_or_not_a_number_is_refused(): void
     {
-        foreach (['?year=2020', '?year=2027', '?year=abc', ''] as $query) {
-            $this->download($query)->assertRedirect()->assertSessionHasErrors('year');
+        $refused = [
+            '?from=2020&to=2026' => 'from',
+            '?from=2026&to=2027' => 'to',
+            '?from=abc&to=2026' => 'from',
+            '?from=2026' => 'to',
+            '' => 'from',
+        ];
+
+        foreach ($refused as $query => $field) {
+            $this->download($query)->assertRedirect()->assertSessionHasErrors($field);
         }
+    }
+
+    // ── The year span (D-94) ─────────────────────────────────────────────────
+
+    public function test_an_end_year_before_the_start_year_is_refused(): void
+    {
+        $this->download('?from=2025&to=2023')
+            ->assertRedirect()
+            ->assertSessionHasErrors(['to' => 'The end year cannot be before the start year.']);
+    }
+
+    public function test_a_span_downloads_with_both_years_in_the_file_name(): void
+    {
+        $this->download('?from=2021&to=2026')
+            ->assertOk()
+            ->assertHeader('Content-Disposition', 'attachment; filename=HealthPass-Yearly-Report-CCS-2021-2026.pdf');
+    }
+
+    public function test_a_span_prints_the_span_totals_then_one_section_per_year(): void
+    {
+        $juan = $this->makeStudent($this->ccs, 'Santos', 'Juan');
+        $maria = $this->makeStudent($this->ccs, 'Reyes', 'Maria', 'F');
+        $this->makeVisit($juan, $this->ccs, '2024-03-14 09:00', 'Unfit');
+        $this->makeVisit($maria, $this->ccs, '2026-03-14 09:00', 'Fit');
+
+        [$view, $data] = $this->capturePdf('?from=2024&to=2026');
+        $html = view($view, $data)->render();
+
+        $this->assertSame([2024, 2025, 2026], array_column($data['sections'], 'year'));
+        $this->assertSame(['total' => 2, 'fit' => 1, 'unfit' => 1, 'male' => 1, 'female' => 1], $data['spanSummary']);
+
+        $this->assertStringContainsString('January 1, 2024 – December 31, 2026', $html);
+        $this->assertStringContainsString('Total clearances, 2024–2026: <strong>2</strong>', $html);
+        // Each year its own section, oldest first; an empty year says so in one line.
+        $this->assertSame(3, substr_count($html, '<div class="year">'));
+        $this->assertStringContainsString('No clearances in 2025.', $html);
+        $this->assertTrue(strpos($html, 'Santos, Juan') < strpos($html, 'Reyes, Maria'));
+    }
+
+    public function test_one_year_prints_exactly_as_before(): void
+    {
+        $juan = $this->makeStudent($this->ccs, 'Santos', 'Juan');
+        $this->makeVisit($juan, $this->ccs, '2026-03-14 09:00');
+
+        [$view, $data] = $this->capturePdf('?from=2026&to=2026');
+        $html = view($view, $data)->render();
+
+        $this->assertStringContainsString('January 1 – December 31, 2026', $html);
+        $this->assertStringContainsString('Total clearances: <strong>1</strong>', $html);
+        $this->assertStringContainsString('Santos, Juan', $html);
+        // No span page and no page break for a single year.
+        $this->assertStringNotContainsString('<div class="year">', $html);
     }
 
     // ── Scope (FR-AUTH-06 / FR-ADM-06) ───────────────────────────────────────
@@ -231,7 +323,7 @@ class YearlyReportTest extends TestCase
         $this->makeVisit($theirs, $this->coe, '2026-03-15 09:00');
 
         // Still this admin's college in the file name — ?college= is never read.
-        $this->download('?year=2026&college='.$this->coe->id)
+        $this->download('?from=2026&to=2026&college='.$this->coe->id)
             ->assertOk()
             ->assertHeader('Content-Disposition', 'attachment; filename=HealthPass-Yearly-Report-CCS-2026.pdf');
     }
@@ -352,31 +444,24 @@ class YearlyReportTest extends TestCase
 
     // ── The analytics page ───────────────────────────────────────────────────
 
-    public function test_the_analytics_page_offers_the_button_and_every_year_newest_first(): void
+    public function test_the_analytics_page_offers_a_start_and_an_end_year_newest_first(): void
     {
         $response = $this->actingAs($this->admin)->get('/admin/analytics')
             ->assertOk()
             ->assertSee('Yearly Report (PDF)')
             ->assertSee('Download Yearly Report')
             ->assertSee(route('admin.analytics.yearly-report'), false)
+            // D-94: two pickers, each offering 2026 down to 2021.
             ->assertSeeInOrder([
-                '<option value="2026" selected',
-                '<option value="2025"',
-                '<option value="2024"',
-                '<option value="2023"',
-                '<option value="2022"',
-                '<option value="2021"',
-            ], false);
+                'name="from"',
+                '<option value="2026" selected', '<option value="2025"', '<option value="2021"',
+                'name="to"',
+                '<option value="2026" selected', '<option value="2025"', '<option value="2021"',
+            ], false)
+            ->assertSee('Covers every program in CCS.');
 
         $this->assertStringNotContainsString('<option value="2020"', $response->getContent());
         $this->assertStringNotContainsString('<option value="2027"', $response->getContent());
-    }
-
-    public function test_the_director_analytics_page_has_no_yearly_report(): void
-    {
-        $this->actingAs(User::factory()->create(['role' => 'director']))
-            ->get('/director/analytics')
-            ->assertOk()
-            ->assertDontSee('Yearly Report');
+        $this->assertStringNotContainsString('name="year"', $response->getContent());
     }
 }

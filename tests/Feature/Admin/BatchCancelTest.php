@@ -4,31 +4,37 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Admin;
 
+use App\Jobs\SendAppointmentCancelledMail;
+use App\Mail\AppointmentCancelledMail;
 use App\Models\Appointment;
 use App\Models\BatchRequest;
 use App\Models\BatchRequestStudent;
+use App\Models\ClinicVisit;
 use App\Models\College;
 use App\Models\StudentProfile;
 use App\Models\User;
 use App\Services\ClinicScheduleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 /**
- * College Admin cancels their own PENDING batch request (FR-ADM-11, D-52).
+ * College Admin cancels their own batch request (FR-ADM-11): a PENDING one
+ * (D-52), or since D-92 an APPROVED one until its first clinic hour starts and
+ * as long as no student has used the kiosk — always with a written reason.
  *
- * Before D-52 a college that changed its mind had to ask the Director to
- * REJECT the batch, which put a rejection on the college's record for
- * something the college itself wanted withdrawn. This is that withdrawal.
- *
- * The rule under test throughout is BatchRequest::isCancellable() — pending
- * only — enforced on a LOCKED row, so what the page draws and what the
- * endpoint allows can never disagree.
+ * The rule under test throughout is BatchRequest::isCancellable(), enforced on
+ * a LOCKED row, so what the page draws and what the endpoint allows can never
+ * disagree.
  */
 class BatchCancelTest extends TestCase
 {
     use RefreshDatabase;
+
+    private const REASON = 'The field trip was moved to next semester.';
 
     private College $ccs;
 
@@ -64,7 +70,7 @@ class BatchCancelTest extends TestCase
         $this->director = User::factory()->create(['role' => 'director']);
     }
 
-    /** A batch in the given status, with $studentCount students on it. */
+    /** A batch in the given status, with $studentCount students on it. Its clinic day is 5 days out, 9–10 AM. */
     private function makeBatch(
         string $status = 'pending',
         int $studentCount = 4,
@@ -126,13 +132,35 @@ class BatchCancelTest extends TestCase
         return $batch;
     }
 
-    private function cancel(BatchRequest $batch, ?User $as = null): TestResponse
+    private function cancel(BatchRequest $batch, ?User $as = null, ?string $reason = self::REASON): TestResponse
     {
         return $this->actingAs($as ?? $this->admin)
-            ->delete("/admin/batches/{$batch->id}/cancel");
+            ->delete("/admin/batches/{$batch->id}/cancel", $reason === null ? [] : ['cancellation_reason' => $reason]);
     }
 
-    // ── The happy path ───────────────────────────────────────────────────────
+    /** Move the clock to the start of the batch's first clinic hour. */
+    private function startFirstHour(BatchRequest $batch): void
+    {
+        $this->travelTo(Carbon::parse($batch->requested_date->toDateString().' 09:00:00'));
+    }
+
+    /** One of the batch's students reaches the kiosk (a resting first pass is enough). */
+    private function giveKioskVisit(BatchRequest $batch, string $status = 'resting'): void
+    {
+        $appointment = Appointment::where('batch_request_id', $batch->id)->firstOrFail();
+
+        ClinicVisit::create([
+            'reference_no' => 'HP-'.now()->year.'-9001',
+            'student_id' => $appointment->student_id,
+            'college_id' => $batch->college_id,
+            'appointment_id' => $appointment->id,
+            'login_method' => 'qr',
+            'status' => $status,
+            'checked_in_at' => now(),
+        ]);
+    }
+
+    // ── Pending (D-52) ───────────────────────────────────────────────────────
 
     public function test_admin_can_cancel_a_pending_batch(): void
     {
@@ -148,16 +176,20 @@ class BatchCancelTest extends TestCase
         $this->assertSame('cancelled', $batch->status);
         $this->assertNotNull($batch->cancelled_at);
         $this->assertSame($this->admin->id, $batch->cancelled_by);
+        $this->assertSame(self::REASON, $batch->cancellation_reason);
     }
 
-    public function test_cancelling_creates_no_appointments_and_touches_none(): void
+    public function test_cancelling_a_pending_batch_creates_no_appointments_and_emails_nobody(): void
     {
+        Queue::fake();
         $batch = $this->makeBatch('pending');
 
         $this->cancel($batch)->assertRedirect('/admin/batches');
 
-        // A pending batch never had appointments; cancelling must not invent any.
+        // A pending batch never had appointments; cancelling must not invent any,
+        // and no student was ever told about it.
         $this->assertSame(0, Appointment::where('batch_request_id', $batch->id)->count());
+        Queue::assertNothingPushed();
     }
 
     public function test_the_director_decision_fields_are_left_alone(): void
@@ -186,34 +218,135 @@ class BatchCancelTest extends TestCase
         $this->assertSame($this->admin->id, $batch->requested_by);
     }
 
-    // ── The guard: pending only ──────────────────────────────────────────────
+    // ── The reason (D-92) ────────────────────────────────────────────────────
 
-    public function test_an_approved_batch_cannot_be_cancelled(): void
+    public function test_a_reason_is_required(): void
     {
+        $batch = $this->makeBatch('pending');
+
+        $this->cancel($batch, reason: null)->assertSessionHasErrors('cancellation_reason');
+
+        $this->assertSame('pending', $batch->refresh()->status);
+    }
+
+    public function test_a_reason_shorter_than_ten_characters_is_refused(): void
+    {
+        $batch = $this->makeBatch('approved');
+
+        $this->cancel($batch, reason: 'oops')->assertSessionHasErrors('cancellation_reason');
+
+        $this->assertSame('approved', $batch->refresh()->status);
+        $this->assertSame(4, Appointment::where('batch_request_id', $batch->id)->where('status', 'scheduled')->count());
+    }
+
+    // ── Approved (D-92) ──────────────────────────────────────────────────────
+
+    public function test_an_approved_batch_can_be_cancelled_before_its_first_hour(): void
+    {
+        Queue::fake();
         $batch = $this->makeBatch('approved');
 
         $response = $this->cancel($batch);
 
         $response->assertRedirect('/admin/batches');
-        $response->assertSessionHas('error');
+        $response->assertSessionHas('status');
 
-        $this->assertSame('approved', $batch->refresh()->status);
-        $this->assertNull($batch->cancelled_at);
+        $batch->refresh();
+
+        $this->assertSame('cancelled', $batch->status);
+        $this->assertSame(self::REASON, $batch->cancellation_reason);
+        // The approval really happened, so its stamp stays.
+        $this->assertSame($this->director->id, $batch->reviewed_by);
+        $this->assertTrue($batch->wasCancelledAfterApproval());
+        $this->assertSame(4, Appointment::where('batch_request_id', $batch->id)->where('status', 'cancelled')->count());
     }
 
-    public function test_an_approved_batchs_appointments_survive_a_cancel_attempt(): void
+    public function test_every_student_is_emailed_once(): void
     {
+        Queue::fake();
         $batch = $this->makeBatch('approved');
 
         $this->cancel($batch);
 
-        // The refusal must not have swept the cohort's seats away — this is the
-        // silent mass-cancellation D-52 declined to build.
-        $this->assertSame(
-            4,
-            Appointment::where('batch_request_id', $batch->id)->where('status', 'scheduled')->count(),
-        );
+        Queue::assertPushed(SendAppointmentCancelledMail::class, 4);
     }
+
+    public function test_a_student_withdrawn_earlier_is_not_emailed_again(): void
+    {
+        Queue::fake();
+        $batch = $this->makeBatch('approved');
+        // A withdrawal from before D-87 removed it — already cancelled and emailed then.
+        Appointment::where('batch_request_id', $batch->id)->first()->update(['status' => 'cancelled']);
+
+        $this->cancel($batch);
+
+        Queue::assertPushed(SendAppointmentCancelledMail::class, 3);
+    }
+
+    public function test_cancelling_frees_the_seats(): void
+    {
+        $batch = $this->makeBatch('approved');
+        $schedule = app(ClinicScheduleService::class);
+        $date = $batch->scheduled_date->toDateString();
+
+        $this->assertSame(4, $schedule->bookedInSlot($date, '09:00:00'));
+
+        $this->cancel($batch);
+
+        $this->assertSame(0, $schedule->bookedInSlot($date, '09:00:00'));
+    }
+
+    public function test_an_approved_batch_cannot_be_cancelled_once_its_first_hour_starts(): void
+    {
+        Queue::fake();
+        $batch = $this->makeBatch('approved');
+        $this->startFirstHour($batch);
+
+        $response = $this->cancel($batch);
+
+        $response->assertRedirect('/admin/batches');
+        $response->assertSessionHas('error', fn (string $message): bool => str_contains($message, 'first clinic hour'));
+
+        $this->assertSame('approved', $batch->refresh()->status);
+        $this->assertNull($batch->cancelled_at);
+        $this->assertSame(4, Appointment::where('batch_request_id', $batch->id)->where('status', 'scheduled')->count());
+        Queue::assertNothingPushed();
+    }
+
+    public function test_an_approved_batch_can_still_be_cancelled_a_minute_before_its_first_hour(): void
+    {
+        $batch = $this->makeBatch('approved');
+        $this->travelTo(Carbon::parse($batch->requested_date->toDateString().' 08:59:00'));
+
+        $this->cancel($batch)->assertSessionHas('status');
+
+        $this->assertSame('cancelled', $batch->refresh()->status);
+    }
+
+    public function test_an_approved_batch_cannot_be_cancelled_once_a_student_used_the_kiosk(): void
+    {
+        $batch = $this->makeBatch('approved');
+        // Even a RESTING first pass (D-72) counts — the student came.
+        $this->giveKioskVisit($batch, 'resting');
+
+        $this->cancel($batch)
+            ->assertSessionHas('error', fn (string $message): bool => str_contains($message, 'kiosk'));
+
+        $this->assertSame('approved', $batch->refresh()->status);
+    }
+
+    public function test_the_cancelled_batch_keeps_its_students_on_the_roster(): void
+    {
+        $batch = $this->makeBatch('approved');
+        $this->cancel($batch);
+
+        // D-87's "withdrawn" filter must not swallow a whole cancelled batch.
+        $this->actingAs($this->admin)->get("/admin/batches/{$batch->id}")
+            ->assertOk()
+            ->assertViewHas('totalCount', 4);
+    }
+
+    // ── Refusals ─────────────────────────────────────────────────────────────
 
     public function test_a_rejected_batch_cannot_be_cancelled(): void
     {
@@ -233,12 +366,13 @@ class BatchCancelTest extends TestCase
 
         $this->travel(2)->minutes();
 
-        $this->cancel($batch, as: $this->otherAdmin)->assertSessionHas('error');
+        $this->cancel($batch, as: $this->otherAdmin, reason: 'A second, different reason.')->assertSessionHas('error');
 
         $batch->refresh();
 
         $this->assertSame($this->admin->id, $batch->cancelled_by);
         $this->assertEquals($firstStamp, $batch->cancelled_at);
+        $this->assertSame(self::REASON, $batch->cancellation_reason);
     }
 
     // ── Scope (FR-ADM-06) ────────────────────────────────────────────────────
@@ -261,39 +395,39 @@ class BatchCancelTest extends TestCase
 
         $this->post('/logout');
 
-        $this->delete("/admin/batches/{$batch->id}/cancel")->assertRedirect('/login');
+        $this->delete("/admin/batches/{$batch->id}/cancel", ['cancellation_reason' => self::REASON])->assertRedirect('/login');
         $this->assertSame('pending', $batch->refresh()->status);
     }
 
     // ── Batch Tracking (FR-ADM-05) ───────────────────────────────────────────
 
-    public function test_tracking_page_offers_cancel_only_on_a_pending_row(): void
+    public function test_tracking_page_offers_cancel_on_pending_and_not_yet_started_rows(): void
     {
         $pending = $this->makeBatch('pending');
         $approved = $this->makeBatch('approved');
+        $visited = $this->makeBatch('approved');
+        $this->giveKioskVisit($visited);
 
-        $response = $this->actingAs($this->admin)->get('/admin/batches');
+        $content = $this->actingAs($this->admin)->get('/admin/batches')->assertOk()->getContent();
 
-        $response->assertOk();
+        // Two of the three rows carry a Cancel button…
+        $this->assertSame(2, substr_count($content, 'cancelTarget = JSON.parse'));
 
-        $content = $response->getContent();
-
-        // Exactly one of the two rows carries a Cancel button…
-        $this->assertSame(1, substr_count($content, 'cancelTarget = JSON.parse'));
-
-        // …and it is the PENDING one — the payload names the row it would act
-        // on, so the reference inside it is the proof.
-        $this->assertMatchesRegularExpression(
-            '/cancelTarget = JSON\.parse\(.*'.preg_quote($pending->reference_no, '/').'/',
-            $content,
-        );
+        // …and the payload names the row it would act on, so the reference
+        // inside it is the proof.
+        foreach ([$pending, $approved] as $batch) {
+            $this->assertMatchesRegularExpression(
+                '/cancelTarget = JSON\.parse\(.*'.preg_quote($batch->reference_no, '/').'/',
+                $content,
+            );
+        }
         $this->assertDoesNotMatchRegularExpression(
-            '/cancelTarget = JSON\.parse\(.*'.preg_quote($approved->reference_no, '/').'/',
+            '/cancelTarget = JSON\.parse\(.*'.preg_quote($visited->reference_no, '/').'/',
             $content,
         );
     }
 
-    public function test_the_dialogs_form_posts_to_the_cancel_route(): void
+    public function test_the_dialogs_form_posts_to_the_cancel_route_with_a_reason(): void
     {
         $batch = $this->makeBatch('pending');
 
@@ -306,6 +440,7 @@ class BatchCancelTest extends TestCase
         // simply 404 on click. Pin the exact string the page ships.
         $response->assertSee(':action="`http://localhost/admin/batches/${cancelTarget?.id}/cancel`"', false);
         $response->assertSee('name="_method" value="DELETE"', false);
+        $response->assertSee('name="cancellation_reason"', false);
 
         // And that assembled URL is really the route, for this batch.
         $this->assertSame(
@@ -314,9 +449,10 @@ class BatchCancelTest extends TestCase
         );
     }
 
-    public function test_tracking_page_has_no_cancel_column_when_nothing_is_pending(): void
+    public function test_tracking_page_has_no_cancel_column_when_nothing_is_cancellable(): void
     {
-        $this->makeBatch('approved');
+        $batch = $this->makeBatch('approved');
+        $this->startFirstHour($batch);
 
         $response = $this->actingAs($this->admin)->get('/admin/batches');
 
@@ -381,9 +517,22 @@ class BatchCancelTest extends TestCase
         $response->assertDontSee('✕ Rejected');
     }
 
+    public function test_the_director_can_read_the_reason(): void
+    {
+        $batch = $this->makeBatch('approved');
+        $this->cancel($batch, as: $this->otherAdmin);
+
+        $this->actingAs($this->director)->get('/director/batches')
+            ->assertOk()
+            ->assertSee('View reason')
+            ->assertSee('after you approved it')
+            ->assertSee(self::REASON)
+            ->assertSee($this->otherAdmin->name);
+    }
+
     // ── The Activity Log (FR-ADM-10, D-49 — derived, not logged) ─────────────
 
-    public function test_the_activity_log_records_the_cancellation(): void
+    public function test_the_activity_log_records_the_cancellation_and_its_reason(): void
     {
         $batch = $this->makeBatch('pending');
         $this->cancel($batch, as: $this->otherAdmin);
@@ -394,7 +543,19 @@ class BatchCancelTest extends TestCase
         $response->assertSee('Cancelled');
         // The actor is the admin who pressed the button, not the submitter.
         $response->assertSee($this->otherAdmin->name);
-        $response->assertSee('Withdrawn before the Clinic Director reviewed it');
+        $response->assertSee(self::REASON);
+    }
+
+    public function test_the_activity_log_keeps_the_approval_of_a_batch_cancelled_later(): void
+    {
+        $batch = $this->makeBatch('approved');
+        $this->cancel($batch);
+
+        $this->actingAs($this->admin)->get('/admin/activity')
+            ->assertOk()
+            ->assertSee('Approved')
+            ->assertSee('Cancelled')
+            ->assertSee(self::REASON);
     }
 
     public function test_the_activity_log_shows_no_cancellation_entry_while_pending(): void
@@ -405,12 +566,12 @@ class BatchCancelTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('Submitted');
-        $response->assertDontSee('Withdrawn before the Clinic Director reviewed it');
+        $response->assertDontSee(self::REASON);
     }
 
     // ── The roster page ──────────────────────────────────────────────────────
 
-    public function test_the_roster_explains_a_cancelled_batch(): void
+    public function test_the_roster_explains_a_cancelled_pending_batch(): void
     {
         $batch = $this->makeBatch('pending');
         $this->cancel($batch);
@@ -421,5 +582,53 @@ class BatchCancelTest extends TestCase
         $response->assertSee('This request was cancelled');
         $response->assertSee($this->admin->name);
         $response->assertSee('No appointments');
+        $response->assertSee(self::REASON);
+    }
+
+    public function test_the_roster_explains_a_batch_cancelled_after_approval(): void
+    {
+        $batch = $this->makeBatch('approved');
+        $this->cancel($batch);
+
+        $this->actingAs($this->admin)->get("/admin/batches/{$batch->id}")
+            ->assertOk()
+            ->assertSee('after the Clinic Director approved it')
+            ->assertDontSee('No appointments');
+    }
+
+    // ── The student's email (D-92) ───────────────────────────────────────────
+
+    public function test_the_email_names_the_batch_the_date_and_the_reason(): void
+    {
+        $batch = $this->makeBatch('approved');
+        $this->cancel($batch, reason: 'Postponed <b>until</b> further notice.');
+
+        $appointment = Appointment::where('batch_request_id', $batch->id)->firstOrFail();
+        $mail = new AppointmentCancelledMail($appointment);
+        $html = $mail->render();
+
+        $this->assertStringContainsString($batch->reference_no, $html);
+        $this->assertStringContainsString($appointment->reference_no, $html);
+        $this->assertStringContainsString($appointment->scheduled_date->format('l, F j, Y'), $html);
+        $this->assertStringContainsString('Your approved schedule is cancelled', $html);
+        // Typed by an admin, so it is escaped — never live markup in a webmail.
+        $this->assertStringContainsString('Postponed &lt;b&gt;until&lt;/b&gt; further notice.', $html);
+        $this->assertStringContainsString('was cancelled', $mail->envelope()->subject);
+    }
+
+    public function test_the_email_job_goes_to_the_students_own_address(): void
+    {
+        $batch = $this->makeBatch('approved', studentCount: 1);
+        Mail::fake();
+
+        // Sync queue in the test env: the job runs during the request.
+        $this->cancel($batch);
+
+        $student = Appointment::where('batch_request_id', $batch->id)->firstOrFail()->student;
+
+        Mail::assertSent(
+            AppointmentCancelledMail::class,
+            fn (AppointmentCancelledMail $mail): bool => $mail->hasTo($student->email),
+        );
     }
 }

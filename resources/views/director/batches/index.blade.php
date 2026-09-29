@@ -253,7 +253,31 @@
                                              because it is NOT a Director decision — labelling
                                              it "Rejected" would credit the Director with an
                                              action they never took. --}}
-                                        <span class="text-sm font-semibold text-hp-slate/60">↩ Cancelled by college</span>
+                                        <span class="whitespace-nowrap text-sm font-semibold text-hp-slate/60">↩ Cancelled by college</span>
+                                        {{-- D-92: an approved batch can be cancelled too
+                                             (until its first hour), and every cancel now
+                                             carries the college's written reason. --}}
+                                        @if ($batch->wasCancelledAfterApproval())
+                                            <p class="mt-0.5 whitespace-nowrap text-xs text-hp-slate/50">after you approved it</p>
+                                        @endif
+                                        @if ($batch->cancellation_reason !== null)
+                                            <button type="button"
+                                                @click="cancelDetail = {{ Illuminate\Support\Js::from([
+                                                    'ref' => $batch->reference_no,
+                                                    'college' => $batch->college->code,
+                                                    'reason' => $batch->cancellation_reason,
+                                                    'by' => $batch->canceller?->name,
+                                                    'at' => $batch->cancelled_at?->format('M j, Y g:i A'),
+                                                    'afterApproval' => $batch->wasCancelledAfterApproval(),
+                                                ]) }}"
+                                                class="mt-1.5 inline-flex items-center justify-center gap-2 rounded-full
+                                                       border-[1.5px] border-hp-slate/30 px-4 py-1 text-xs font-semibold
+                                                       text-hp-slate transition-colors duration-hp-fast hover:bg-hp-slate/10
+                                                       focus-visible:outline-none focus-visible:ring-2
+                                                       focus-visible:ring-hp-slate focus-visible:ring-offset-1">
+                                                View reason
+                                            </button>
+                                        @endif
                                     @else
                                         <span class="text-sm font-semibold text-hp-slate/60">✕ Rejected</span>
                                     @endif
@@ -527,6 +551,62 @@
         </div>
     </template>
 
+    {{-- ── Cancellation reason (D-92) — read-only ──────────────────────── --}}
+    {{-- Same teleport/transition conventions as the modals above. --}}
+    <template x-teleport="body">
+        <div
+            x-show="cancelDetail !== null"
+            x-cloak
+            @keydown.escape.window="cancelDetail = null"
+            class="fixed inset-0 z-[60] flex items-center justify-center px-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cancel-reason-title"
+        >
+            <div
+                x-show="cancelDetail !== null"
+                @click="cancelDetail = null"
+                x-transition:enter="ease-hp-out duration-hp-base"
+                x-transition:enter-start="opacity-0"
+                x-transition:enter-end="opacity-100"
+                x-transition:leave="ease-hp-in duration-hp-fast"
+                x-transition:leave-start="opacity-100"
+                x-transition:leave-end="opacity-0"
+                class="absolute inset-0 bg-hp-slate/50"
+                aria-hidden="true"
+            ></div>
+
+            <div
+                x-show="cancelDetail !== null"
+                x-transition:enter="ease-hp-spring duration-hp-slow"
+                x-transition:enter-start="opacity-0 translate-y-6"
+                x-transition:enter-end="opacity-100 translate-y-0"
+                x-transition:leave="ease-hp-in duration-hp-base"
+                x-transition:leave-start="opacity-100 translate-y-0"
+                x-transition:leave-end="opacity-0 translate-y-6"
+                class="relative w-full max-w-md rounded-2xl bg-hp-white p-6 shadow-xl"
+            >
+                <h2 id="cancel-reason-title" class="text-lg font-semibold text-hp-slate">
+                    <span x-text="cancelDetail?.ref"></span> was cancelled
+                </h2>
+                <p class="mt-1 text-sm text-hp-slate/70">
+                    By <span x-text="cancelDetail?.by ?? 'the college'"></span>
+                    (<span x-text="cancelDetail?.college"></span>)<span x-show="cancelDetail?.at">
+                    on <span x-text="cancelDetail?.at"></span></span><span x-show="cancelDetail?.afterApproval">,
+                    after you approved it — its appointments were cancelled and each student was emailed this reason</span>.
+                </p>
+
+                <p class="mt-4 text-xs font-semibold uppercase tracking-widest text-hp-slate/40">Reason</p>
+                <p class="mt-1.5 whitespace-pre-line rounded-lg bg-hp-bg px-4 py-3 text-sm text-hp-slate"
+                   x-text="cancelDetail?.reason"></p>
+
+                <div class="mt-6 flex justify-end">
+                    <x-hp.button variant="muted" @click="cancelDetail = null">Close</x-hp.button>
+                </div>
+            </div>
+        </div>
+    </template>
+
 </div>
 
 @push('scripts')
@@ -549,6 +629,9 @@
             reason: '',
             rejecting: false,
             reasonMin: {{ $reasonMin }},
+
+            // ── Cancellation reason (D-92) ──────────────────────────────
+            cancelDetail: null,                       // { ref, college, reason, by, at, afterApproval } or null
 
             // FR-DIRA-06 (D-37): a full hour anywhere in the span BLOCKS
             // approval. The server refuses the POST too — this only saves the

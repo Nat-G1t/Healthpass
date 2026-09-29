@@ -38,6 +38,9 @@ const BTN_BASE =
 const BTN_PRIMARY = 'bg-hp-orange text-white hover:bg-orange-500 focus-visible:ring-hp-orange';
 const BTN_GHOST =
     'bg-transparent text-hp-slate border-[1.5px] border-hp-slate/30 hover:bg-hp-slate/8 focus-visible:ring-hp-slate';
+// D-93: the red Remove button beside Encode Result.
+const BTN_REMOVE =
+    'ml-1.5 bg-transparent text-red-500 border-[1.5px] border-red-300 hover:bg-red-50 focus-visible:ring-red-500';
 const BADGE = 'inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold leading-none bg-hp-peach text-hp-orange';
 
 // D-62: the small form-type chip beside the name (mirrors queue-row.blade.php).
@@ -122,6 +125,10 @@ function buildRow(visit) {
         '<td class="py-4 pr-4 text-right whitespace-nowrap">' +
         `<span class="queue-btn-next"><a href="${esc(visit.encode_url)}" class="${BTN_BASE} ${BTN_PRIMARY}">Encode Result</a></span>` +
         `<span class="queue-btn-rest"><a href="${esc(visit.encode_url)}" class="${BTN_BASE} ${BTN_GHOST}">Encode Result</a></span>` +
+        // D-93: Remove — opens the confirm popup (see the click listener in init()).
+        `<button type="button" data-queue-remove data-remove-url="${esc(visit.remove_url)}" ` +
+        `data-remove-name="${esc(visit.name)}" data-remove-ref="${esc(visit.reference_no)}" ` +
+        `class="${BTN_BASE} ${BTN_REMOVE}">Remove</button>` +
         '</td>';
     return row;
 }
@@ -282,6 +289,22 @@ function init() {
             prefersReducedMotion() ? 0 : GHOST_HOLD_MS,
         );
     }
+
+    // D-93: one delegated listener serves every Remove button — server-rendered
+    // rows and the ones buildRow() adds later alike. It only hands the row's
+    // details to the Alpine confirm popup in queue.blade.php, which owns the
+    // actual DELETE form; nothing is removed without that confirmation.
+    document.querySelector('[data-queue-body]')?.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-queue-remove]');
+        if (!button) return;
+        window.dispatchEvent(new CustomEvent('queue-remove', {
+            detail: {
+                url: button.dataset.removeUrl,
+                name: button.dataset.removeName,
+                ref: button.dataset.removeRef,
+            },
+        }));
+    });
 
     setInterval(() => poll(feedUrl), POLL_MS);
     setInterval(updateSubtitle, 1000);

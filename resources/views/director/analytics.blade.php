@@ -4,7 +4,9 @@
          Layout follows the approved mockup
          (docs/prototypes/web/director-analytics-rescope.html): filters row,
          Visits by College (purpose inside), Vital-Sign Flags, trend + donut
-         side by side, BMI last. No print, no CSV export (FR-ANL-06 retired). --}}
+         side by side, BMI last. No print, no CSV export (FR-ANL-06 retired) —
+         the one exception is the Yearly Report PDF (D-94), counts by college
+         and program, never a copy of the charts. --}}
 
     {{-- ── Filters row (FR-ANL-13) ──────────────────────────────────────────
          Month + college scope every card except the trend. Both selects
@@ -37,6 +39,17 @@
         <p class="text-[11px] text-hp-slate/40">
             Month + college scope every card below · the trend always shows the whole year
         </p>
+
+        {{-- ── Yearly Report (PDF) (D-94) ────────────────────────────────────
+             Every college and program, for a span of years. The month and
+             college filters above do not apply to it. The years come from the
+             server (AnalyticsController) — never the browser clock. --}}
+        <div class="ml-auto flex items-center">
+            <x-yearly-report-picker
+                :action="route('director.analytics.yearly-report')"
+                :years="$reportYears"
+                note="Covers every college and program." />
+        </div>
     </form>
 
     {{-- ── Clinic Visits by College / by Program (FR-ANL-09, D-46) ────────

@@ -109,9 +109,19 @@
             @if ($batch->cancelled_at !== null)
                 on {{ $batch->cancelled_at->format('M j, Y \a\t g:i A') }}
             @endif
-            before the Clinic Director reviewed it. <strong class="font-semibold">No appointments
-            were created</strong>, and the clinic hours it asked for were never held.
+            {{-- D-92: an approved batch can be cancelled too, until its first hour. --}}
+            @if ($batch->wasCancelledAfterApproval())
+                after the Clinic Director approved it. <strong class="font-semibold">Every
+                appointment on it was cancelled</strong>, its clinic hours were freed, and each
+                student was emailed.
+            @else
+                before the Clinic Director reviewed it. <strong class="font-semibold">No appointments
+                were created</strong>, and the clinic hours it asked for were never held.
+            @endif
             To book these students, submit a new batch request.
+            @if ($batch->cancellation_reason !== null)
+                <span class="mt-1.5 block whitespace-pre-line"><strong class="font-semibold">Reason:</strong> {{ $batch->cancellation_reason }}</span>
+            @endif
         </p>
     </div>
 @endif

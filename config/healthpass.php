@@ -183,10 +183,11 @@ return [
         'recheck_rest_minutes' => env('HEALTHPASS_RECHECK_REST_MINUTES', 10),
     ],
 
-    // FR-ADM-13 (D-81): the College Admin's Yearly Clearance Report.
+    // FR-ADM-13 (D-81, D-94): the Yearly Clearance Report — the College
+    // Admin's and, since D-94, the Director's.
     'reports' => [
-        // First calendar year the report's year picker offers (it runs up to the
-        // current year on the server clock).
+        // First calendar year the report's start/end year pickers offer (they
+        // run up to the current year on the server clock).
         'yearly_first_year' => 2021,
     ],
 

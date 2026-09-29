@@ -12,6 +12,7 @@ use App\Http\Controllers\Director\AnomaliesController as DirectorAnomaliesContro
 use App\Http\Controllers\Director\BatchApprovalController as DirectorBatchApprovalController;
 use App\Http\Controllers\Director\DashboardController as DirectorDashboardController;
 use App\Http\Controllers\Director\StaffAccountController as DirectorStaffAccountController;
+use App\Http\Controllers\Director\YearlyReportController as DirectorYearlyReportController;
 use App\Http\Controllers\Kiosk\BpReadingController;
 use App\Http\Controllers\Kiosk\KioskController;
 use App\Http\Controllers\Nurse\DashboardController as NurseDashboardController;
@@ -155,7 +156,8 @@ Route::middleware(['auth', 'role:college_admin', 'college.scope'])
         // managedCollege() like every other /admin read, so a foreign id 404s.
         Route::get('/batches/{batch}', [AdminBatchRequestController::class, 'show'])
             ->whereNumber('batch')->name('batches.show');
-        // Cancel a whole PENDING batch (FR-ADM-11, D-52). Its own throttle
+        // Cancel a whole batch (FR-ADM-11): pending (D-52), or approved until
+        // its first clinic hour starts, with a written reason (D-92). Its own throttle
         // bucket: an authed throttle keys on the user id with no path, so
         // without the 3rd arg this would share one counter with batch-store.
         Route::delete('/batches/{batch}/cancel', [AdminBatchRequestController::class, 'cancel'])
@@ -173,9 +175,9 @@ Route::middleware(['auth', 'role:college_admin', 'college.scope'])
         // managedCollege(), never a request parameter; only month + program
         // carry over from the analytics page's query string.
         Route::get('/analytics/print', AdminMonthlyReportController::class)->name('analytics.print');
-        // Yearly Clearance Report (FR-ADM-13, D-81): one calendar year's
+        // Yearly Clearance Report (FR-ADM-13, D-81): a span of calendar years'
         // clearances as a DOWNLOADED PDF (dompdf). Same scope rule — the
-        // college is managedCollege(); the only input is ?year=. Its own
+        // college is managedCollege(); the only input is ?from=&to= (D-94). Its own
         // throttle bucket (3rd arg): rendering a PDF is expensive, and without
         // it this would share the per-user counter with the batch routes.
         Route::get('/analytics/yearly-report', AdminYearlyReportController::class)
@@ -207,11 +209,28 @@ Route::middleware(['auth', 'role:nurse,physician'])
         // Encode Result / "Doctor's Assessment" (FR-NRS-03). {visit} is
         // route-model-bound to ClinicVisit by the controller's type-hint —
         // Laravel looks the id up and 404s unknown ids before our code runs.
-        Route::get('/visits/{visit}/encode', [NurseEncodeController::class, 'show'])->name('visits.encode');
+        //
+        // D-93: a colleague may remove the visit from the queue while this
+        // page is open. `missing()` runs instead of the plain 404 when the
+        // {visit} id no longer exists, so they land back on the queue with a
+        // plain-language reason.
+        $removedFromQueue = fn () => redirect()->route('nurse.queue')
+            ->with('error', 'That student was removed from the queue, so there is nothing to encode.');
+        Route::get('/visits/{visit}/encode', [NurseEncodeController::class, 'show'])
+            ->missing($removedFromQueue)->name('visits.encode');
         // Save & Close (FR-NRS-04): creates the clearance record and flips the
         // visit to encoded — one-time, guarded in the controller + DB unique.
         Route::post('/visits/{visit}/encode', [NurseEncodeController::class, 'store'])
+            ->missing($removedFromQueue)
             ->middleware('throttle:40,1,encode-store')->name('visits.encode.store');
+        // Remove from queue (D-93): deletes a still-waiting (`captured`) visit
+        // and its readings, for a student who left without being seen. Its own
+        // throttle bucket — an authed throttle keys on the user id with no
+        // path, so without the 3rd arg it would share encode-store's counter.
+        Route::delete('/visits/{visit}', [NurseQueueController::class, 'remove'])
+            ->missing(fn () => redirect()->route('nurse.queue')
+                ->with('error', 'That student is no longer in the queue, so nothing was removed.'))
+            ->middleware('throttle:30,1,queue-remove')->name('visits.remove');
         // Medical Clearance document (Module PRT, FR-PRT-01..06 / FR-NRS-05) —
         // official form PSU-QSP-OSS-004-FO002-R04 (D-67) as a standalone
         // document, rendered from one Blade template by both renderers.
@@ -249,6 +268,11 @@ Route::middleware(['auth', 'role:director'])
         // charts — visits by college, flags, trend, BMI, by-sex donut —
         // scoped by the month + college filters (D-32 rescope).
         Route::get('/analytics', DirectorAnalyticsController::class)->name('analytics');
+        // Yearly Clearance Report (D-94): every college and program's counts
+        // for a span of years, downloaded as a PDF — the same year-span popup
+        // as the College Admin's report. Its own throttle bucket, like theirs.
+        Route::get('/analytics/yearly-report', DirectorYearlyReportController::class)
+            ->middleware('throttle:10,1,director-yearly-report')->name('analytics.yearly-report');
         // Flagged Anomalies (FR-ANL-05): stat cards + the flagged-visits
         // table. Flags surface from CAPTURE (FR-ANL-07) — un-encoded visits
         // are included, unlike every case statistic on Analytics.

@@ -55,6 +55,14 @@
     </div>
 @endif
 
+{{-- D-92: the cancel reason failed validation. Shown at page level because the
+     redirect closes the dialog it was typed into. --}}
+@error('cancellation_reason')
+    <div data-hp-flash data-flash-sticky class="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        {{ $message }}
+    </div>
+@enderror
+
 {{-- ── Page header ────────────────────────────────────────────────────────── --}}
 <div class="mb-6 flex flex-wrap items-end justify-between gap-3">
     <div>
@@ -258,6 +266,8 @@
                                         'ref' => $batch->reference_no,
                                         'students' => (int) $batch->batch_request_students_count,
                                         'date' => $batch->requested_date?->format('M j, Y'),
+                                        // D-92: approved batches are cancellable too, and the dialog warns that students are emailed.
+                                        'approved' => $batch->status === 'approved',
                                     ]) }}"
                                     class="inline-flex items-center justify-center gap-2 rounded-full
                                            border-[1.5px] border-red-300 bg-transparent px-4 py-1.5 text-xs

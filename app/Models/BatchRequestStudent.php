@@ -32,10 +32,18 @@ class BatchRequestStudent extends Model
      *
      * A row with no appointment yet (pending / rejected / cancelled batch) is
      * kept: whereDoesntHave() only drops rows whose appointment IS cancelled.
+     *
+     * D-92: when the college cancels a whole APPROVED batch, every one of its
+     * appointments is cancelled too — but those students were not withdrawn,
+     * the batch was. So a cancelled appointment only counts as withdrawn while
+     * its batch is NOT cancelled; otherwise the cancelled batch's roster and
+     * student count would read empty.
      */
     public function scopeNotWithdrawn(Builder $query): Builder
     {
-        return $query->whereDoesntHave('appointment', fn (Builder $appointment) => $appointment->where('status', 'cancelled'));
+        return $query->whereDoesntHave('appointment', fn (Builder $appointment) => $appointment
+            ->where('status', 'cancelled')
+            ->whereHas('batchRequest', fn (Builder $batch) => $batch->where('status', '!=', 'cancelled')));
     }
 
     // ── Relationships ────────────────────────────────────────────────────────

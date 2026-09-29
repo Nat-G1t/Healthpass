@@ -50,6 +50,9 @@ class AnalyticsController extends Controller
             'selectedMonthLabel' => $month->format('F Y'),
             'colleges' => College::orderBy('code')->get(['id', 'code']),
             'selectedCollegeId' => $college?->id,
+            // D-94: the Yearly Report popup's years for its start and end
+            // pickers, newest first — from the SERVER clock (BR-20).
+            'reportYears' => range(now()->year, (int) config('healthpass.reports.yearly_first_year')),
             ...$visitCards,
             ...$analytics->visitsByPurpose(),
             ...$analytics->vitalSignFlags(),

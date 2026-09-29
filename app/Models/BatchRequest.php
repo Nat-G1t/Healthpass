@@ -80,6 +80,7 @@ class BatchRequest extends Model
         'reviewed_at',
         'cancelled_at',
         'cancelled_by',
+        'cancellation_reason',
     ];
 
     protected function casts(): array
@@ -101,20 +102,61 @@ class BatchRequest extends Model
     }
 
     /**
-     * D-52: may the college still cancel this request itself (FR-ADM-11)?
+     * May the college still cancel this request itself (FR-ADM-11)?
      *
-     * PENDING ONLY. Once the Director has approved it, appointments exist and
-     * students have been emailed (FR-STU-12), and nothing unwinds them — D-87
-     * removed the per-student withdrawal too. A rejected or already-cancelled
-     * batch is terminal.
+     * D-52 allowed PENDING only. D-92 (supersedes that clause and D-87's
+     * "nobody cancels an approved batch") also allows an APPROVED batch, but
+     * only while nothing has happened yet on the clinic day:
+     *   - its first clinic hour has not started (server clock, like BR-23), and
+     *   - no student from it has used the kiosk — a visit in ANY status, a
+     *     resting one included, means someone came.
+     * So a cancel never strands a visit the clinic is working on. A rejected
+     * or already-cancelled batch is terminal.
      *
-     * One rule, called by the Batch Tracking page (to decide whether to draw
-     * the button) and by the cancel endpoint on the LOCKED row, so the button
-     * can never offer something the server would refuse.
+     * One rule, called by the Batch Tracking and Submitted pages (to decide
+     * whether to draw the button) and by the cancel endpoint on the LOCKED row,
+     * so the button can never offer something the server would refuse.
      */
     public function isCancellable(): bool
     {
-        return $this->status === 'pending';
+        if ($this->status === 'pending') {
+            return true;
+        }
+
+        return $this->status === 'approved'
+            && ! $this->hasFirstHourStarted()
+            && ! $this->hasKioskVisit();
+    }
+
+    /**
+     * D-92: has the approved batch's first clinic hour begun? True when there
+     * is no hour to measure (a pre-D-37 batch) — those dates are long past.
+     */
+    public function hasFirstHourStarted(): bool
+    {
+        $span = $this->requestedSpan();
+
+        if ($this->scheduled_date === null || $span === []) {
+            return true;
+        }
+
+        return now()->gte(Carbon::parse($this->scheduled_date->toDateString().' '.$span[0]));
+    }
+
+    /** D-92: has any student on this batch reached the kiosk (any visit status)? */
+    public function hasKioskVisit(): bool
+    {
+        return $this->appointments()->whereHas('clinicVisit')->exists();
+    }
+
+    /**
+     * D-92: was this batch cancelled AFTER the Director approved it? A decision
+     * stamp on a cancelled row can only be an approval — a rejected batch can
+     * never be cancelled.
+     */
+    public function wasCancelledAfterApproval(): bool
+    {
+        return $this->status === 'cancelled' && $this->reviewed_at !== null;
     }
 
     /**
@@ -357,5 +399,11 @@ class BatchRequest extends Model
     public function batchRequestStudents(): HasMany
     {
         return $this->hasMany(BatchRequestStudent::class);
+    }
+
+    /** The appointments this batch's approval created (none before approval). */
+    public function appointments(): HasMany
+    {
+        return $this->hasMany(Appointment::class);
     }
 }

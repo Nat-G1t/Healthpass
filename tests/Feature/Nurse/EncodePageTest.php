@@ -172,11 +172,14 @@ class EncodePageTest extends TestCase
             ->assertRedirect('/student/dashboard');
     }
 
-    public function test_unknown_visit_returns_404(): void
+    public function test_unknown_visit_sends_the_nurse_back_to_the_queue(): void
     {
+        // D-93: a missing id is usually a visit a colleague removed from the
+        // queue, so the route's missing() handler explains instead of a 404.
         $this->actingAs($this->nurse())
             ->get(route('nurse.visits.encode', 999999))
-            ->assertNotFound();
+            ->assertRedirect(route('nurse.queue'))
+            ->assertSessionHas('error');
     }
 
     // ── 2. Captured visit — the editable form ─────────────────────────────────

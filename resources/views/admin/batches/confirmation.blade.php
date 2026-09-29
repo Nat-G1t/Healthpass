@@ -1,8 +1,15 @@
 <x-layout.sidebar title="Batch Request Submitted">
 
 {{-- `cancelTarget` feeds the shared cancel dialog (D-88, FR-ADM-11): null, or
-     the { id, ref, students, date } of this batch once Cancel is clicked. --}}
+     the { id, ref, students, date, approved } of this batch once Cancel is clicked. --}}
 <div x-data="{ cancelTarget: null }">
+
+{{-- D-92: the cancel reason failed validation; the redirect closed the dialog. --}}
+@error('cancellation_reason')
+    <div data-hp-flash data-flash-sticky class="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        {{ $message }}
+    </div>
+@enderror
 
 {{-- ── Page header ──────────────────────────────────────────────────────────── --}}
 <div class="mb-7">
@@ -198,6 +205,8 @@
                 'ref' => $batch->reference_no,
                 'students' => (int) $batch->batch_request_students_count,
                 'date' => $batch->requested_date?->format('M j, Y'),
+                // D-92: this page can be reopened after the Director approved it.
+                'approved' => $batch->status === 'approved',
             ]) }}"
             class="inline-flex w-full items-center justify-center gap-2 rounded-full
                    border-[1.5px] border-red-300 bg-transparent px-6 py-2.5 text-sm

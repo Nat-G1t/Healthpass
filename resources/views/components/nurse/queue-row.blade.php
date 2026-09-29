@@ -125,6 +125,15 @@
                 class="{{ $btnBase }} bg-hp-orange text-white hover:bg-orange-500 focus-visible:ring-hp-orange">Encode Result</a></span>
             <span class="queue-btn-rest"><a href="{{ route('nurse.visits.encode', $visit) }}"
                 class="{{ $btnBase }} bg-transparent text-hp-slate border-[1.5px] border-hp-slate/30 hover:bg-hp-slate/8 focus-visible:ring-hp-slate">Encode Result</a></span>
+            {{-- D-93: Remove from queue. It only opens the confirm popup in
+                 queue.blade.php (live-queue.js listens for data-queue-remove),
+                 so the payload rides in data attributes — the same shape the
+                 JS-built rows use. --}}
+            <button type="button" data-queue-remove
+                data-remove-url="{{ route('nurse.visits.remove', $visit) }}"
+                data-remove-name="{{ $visit->student->name ?? '—' }}"
+                data-remove-ref="{{ $visit->reference_no }}"
+                class="{{ $btnBase }} ml-1.5 bg-transparent text-red-500 border-[1.5px] border-red-300 hover:bg-red-50 focus-visible:ring-red-500">Remove</button>
         @endif
     </td>
 

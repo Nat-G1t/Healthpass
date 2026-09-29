@@ -66,7 +66,8 @@ class BatchApprovalController extends Controller
         $search = trim((string) $request->query('q', ''));
 
         // FR-UI-06: ten per page; id breaks created_at ties.
-        $batchRequests = BatchRequest::with('college')
+        // `canceller` names who cancelled a batch in the D-92 reason popup.
+        $batchRequests = BatchRequest::with(['college', 'canceller:id,name'])
             ->withCount('batchRequestStudents')
             ->when($search !== '', fn ($query) => $query->where('reference_no', 'like', '%'.$search.'%'))
             ->latest()
