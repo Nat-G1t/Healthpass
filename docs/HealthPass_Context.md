@@ -328,7 +328,7 @@ Progress steps: Consent → Account Info → Email Verify → Link ID
 #### Student Dashboard (`student-dashboard`)
 - 3 stat cards across:
   - **Clearance Status** (status badge + orange left border) with the line **"Your college requests your clinic schedule."** where the "Book New Appointment" button used to be (D-61).
-  - **Next Appointment** — **read-only since D-61**: the nearest upcoming non-cancelled appointment (date + service + time) with its **"Booked by <College>"** badge (`Appointment::scheduledByLabel()`, batch case only). No cancel action; a future one also says "Booked by your college. Contact your college administrator if you need this cancelled." A student on two future batches sees the nearest; their emails cover the rest. Empty state: "No upcoming appointment", with no Book link.
+  - **Next Appointment** — **read-only since D-61**: the nearest upcoming non-cancelled appointment (date + service + time) with its **"Booked by <College>"** badge (`Appointment::scheduledByLabel()`, batch case only). No cancel action; a future one also says "Booked by your college. Contact your college administrator if you need this cancelled." A student on two future batches sees the nearest; their emails cover the rest. Empty state: "No upcoming appointment", with no Book link. **(D-101)** It shows **"Batch ID: BR-YYYY-###"** — the number the scheduling email gives — not the APT reference; Recent Activity's appointment events name the batch the same way.
   - **Past Clearances** (large count, "View all →" link).
 - **Recent Activity** timeline card below (bullet list of timestamped events).
 
@@ -402,7 +402,7 @@ Students are scheduled only through their college (a batch request the Clinic Di
 
 ### NURSE + PHYSICIAN — the Clinic Dashboard (D-64)
 
-Every page in this section is shared by the nurse and the University Physician. The sidebar's first item is **Clinic Dashboard** (the stat tiles + the clinic-wide encode history, D-44), and the sidebar role label reads "Nurse" or "Physician". The history's **Encoded by** column shows the encoder's name plus a **Nurse / Physician** badge; both roles see the same rows. (A separate clinic logs page was considered and dropped — this history is the log.) Opening a record with View shows '← Back to Clinic Dashboard', returning to the dashboard with the same month / result / search filters and page; opened from the Live Queue, the page links back to the Live Queue (2026-09-23).
+Every page in this section is shared by the nurse and the University Physician. The sidebar's first item is **Clinic Dashboard** (the stat tiles + the clinic-wide encode history, D-44), and the sidebar role label reads "Nurse" or "Physician". The history's **Encoded by** column shows the encoder's name plus a **Nurse / Physician** badge; both roles see the same rows. (A separate clinic logs page was considered and dropped — this history is the log.) Opening a record with View shows '← Back to Clinic Dashboard', returning to the dashboard with the same year / month / result / search filters and page; opened from the Live Queue, the page links back to the Live Queue (2026-09-23). **(D-100)** The history filters by **Year** (All years, 2021 → now) then **Month** (All months, January–December — usable once a year is picked, months with no encoded results greyed out) and Result, applied with Apply; the search box matches the **reference number or student ID** (not the name), and a **Student ID** column sits beside the student's name.
 
 #### Live Queue (`nurse-dashboard`)
 - **Header**: blinking LIVE dot + "LIVE QUEUE" pill (peach bg, orange text) + "{n} students waiting · updated just now".
@@ -559,6 +559,7 @@ then nurse-edited — D-76).
 - **BMI Distribution** (FR-ANL-12, optional) — four rule-based buckets of captured screenings: Underweight (< 18.5), Normal (18.5–24.9), Overweight (25–29.9), Obese (≥ 30). Descriptive only, no profiling (no-AI lock).
 
 #### Flagged Anomalies (`director-flagged`)
+- **Year picker (D-102)** above the cards: 2021 → the current year, default the current year, reloads on change. Cards and table count visits checked in that year; View carries `?year=` so the record page's back link returns to it.
 - **5 stat cards** (orange left border, D-66): High Blood Pressure, Fever, Abnormal BMI, **High Heart Rate**, **Abnormal Respiratory Rate** — each subtitle quoting its threshold from config.
 - **Table**: Student (600), College (muted — capture-time `clinic_visits.college_id` snapshot, not the student's current college), Flag (flagged badge), Value (orange 700), View (link). **The Category column is dropped (D-32).**
 - Source: `ClinicVisit::scopeFlagged()` — clinic visits where `vital_signs.is_bp_flagged OR is_temp_flagged OR is_bmi_flagged OR is_hr_flagged OR is_rr_flagged` = true (D-66), joined to student name and the visit's snapshot college. That one scope is also what the Director dashboard preview and the D-57 sidebar badge count, so all three moved together.
