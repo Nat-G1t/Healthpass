@@ -492,7 +492,7 @@
     <x-hp.card class="lg:sticky lg:top-20">
         <h3 class="text-sm font-semibold text-hp-slate">Assessment</h3>
         <p class="mt-0.5 text-xs text-hp-slate/50">
-            Result is required; notes are optional. The purpose comes from the batch (BR-16).
+            Result is required; notes are optional. The purpose comes from the batch.
         </p>
 
         {{-- Save & Close POSTs the assessment (FR-NRS-04). Fields re-populate

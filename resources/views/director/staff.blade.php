@@ -8,7 +8,7 @@
         colleges, correct a physician's license number, and deactivate anyone who
         has left. Accounts are never deleted — their records
         stay in the system. A staff member who forgets their password recovers it
-        themselves with "Forgot password" on the login page (FR-AUTH-10).
+        themselves with "Forgot password" on the login page.
     </p>
 </div>
 

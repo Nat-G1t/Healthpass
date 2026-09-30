@@ -293,8 +293,8 @@ final class ClinicAnalytics
         return [
             'screenings' => $screenings,
             'flagTiles' => [
-                $tile('High Blood Pressure', 'is_bp_flagged', "≥ {$thresholds['bp_systolic']}/{$thresholds['bp_diastolic']} · locked threshold"),
-                $tile('Fever', 'is_temp_flagged', "> {$thresholds['temperature_max']} °C · per PRD business rule"),
+                $tile('High Blood Pressure', 'is_bp_flagged', "≥ {$thresholds['bp_systolic']}/{$thresholds['bp_diastolic']} · flagged at capture"),
+                $tile('Fever', 'is_temp_flagged', "> {$thresholds['temperature_max']} °C · flagged at capture"),
                 $tile('Abnormal BMI', 'is_bmi_flagged', "BMI < {$thresholds['bmi_normal_min']} or ≥ {$thresholds['bmi_normal_max']} · flagged at capture"),
                 // D-66. The heart-rate tile counts captures like the three
                 // above; the respiratory-rate one can only count visits the

@@ -604,7 +604,7 @@ function batchForm() {
                         <p class="mt-1 text-xs text-hp-slate/50">
                             When should these students visit the clinic? The
                             Director confirms this date or rejects with a reason
-                            — they cannot change it (D-36).
+                            — they cannot change it.
                         </p>
                         @error('requested_date')
                             <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
