@@ -47,8 +47,11 @@ class MonthlyReportController extends Controller
 
         $analytics = new ClinicAnalytics($month, $college, $program);
 
-        return view('admin.monthly-report', [
-            'college' => $college,
+        // D-97: the template is shared with the Director's report, so the
+        // caller names the scope it prints under.
+        return view('reports.monthly-report', [
+            'scopeName' => "{$college->name} ({$college->code})",
+            'scopeCode' => $college->code,
             'monthLabel' => $month->format('F Y'),
             'selectedProgram' => $program,
             'generatedAt' => now(),

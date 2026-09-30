@@ -4,9 +4,10 @@
          Layout follows the approved mockup
          (docs/prototypes/web/director-analytics-rescope.html): filters row,
          Visits by College (purpose inside), Vital-Sign Flags, trend + donut
-         side by side, BMI last. No print, no CSV export (FR-ANL-06 retired) —
-         the one exception is the Yearly Report PDF (D-94), counts by college
-         and program, never a copy of the charts. --}}
+         side by side, BMI last. No CSV export (FR-ANL-06 retired). Two
+         printouts, never a copy of the charts: the Yearly Report PDF (D-94),
+         counts by college and program, and the Monthly Clinic Report (D-97),
+         this page's cards as tables. --}}
 
     {{-- ── Filters row (FR-ANL-13) ──────────────────────────────────────────
          Month + college scope every card except the trend. Both selects
@@ -40,11 +41,38 @@
             Month + college scope every card below · the trend always shows the whole year
         </p>
 
-        {{-- ── Yearly Report (PDF) (D-94) ────────────────────────────────────
+        {{-- ── Print Monthly Report (D-97) ────────────────────────────────────
+             The admin's FR-ADM-09 button, one level up: carries the CURRENT
+             month + college into the print URL, so the printout is the page
+             the Director is looking at. Nulls are dropped — an empty
+             ?college= would not read as "All colleges". Loads into the hidden
+             print frame (partials/print-frame) and prints in place.
+
+             ── Yearly Report (PDF) (D-94) ────────────────────────────────────
              Every college and program, for a span of years. The month and
              college filters above do not apply to it. The years come from the
              server (AnalyticsController) — never the browser clock. --}}
-        <div class="ml-auto flex items-center">
+        @php
+            $printQuery = array_filter(
+                ['month' => $selectedMonth, 'college' => $selectedCollegeId],
+                fn ($value) => $value !== null,
+            );
+        @endphp
+        <div class="ml-auto flex flex-wrap items-center justify-end gap-2">
+            <a href="{{ route('director.analytics.print', $printQuery) }}"
+               data-print-trigger
+               class="inline-flex items-center gap-2 rounded-full bg-hp-peach px-4 py-1.5 text-xs
+                      font-semibold text-hp-orange transition-[color,background-color,transform]
+                      duration-hp-fast ease-hp-out hover:bg-orange-100
+                      active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2
+                      focus-visible:ring-hp-orange focus-visible:ring-offset-1">
+                <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+                </svg>
+                Print Monthly Report
+            </a>
+
             <x-yearly-report-picker
                 :action="route('director.analytics.yearly-report')"
                 :years="$reportYears"
@@ -332,6 +360,9 @@
             });
         })();
     </script>
+
+    {{-- Hidden frame the Print Monthly Report link loads into (D-97). --}}
+    @include('partials.print-frame')
 
     @vite('resources/js/analytics.js')
 

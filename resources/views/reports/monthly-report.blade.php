@@ -1,8 +1,18 @@
-{{-- ── Printable Monthly Clinic Report (FR-ADM-09, D-46) ───────────────────────
+{{-- ── Printable Monthly Clinic Report (FR-ADM-09, D-46; Director D-97) ────────
      The artifact a college HANDS OVER, as opposed to the screen it looks at
      (FR-ADM-08 / admin/analytics.blade.php). Same six card builders, same
      scope, rendered as TABLES: charts do not print reliably and a report has
      to be readable on paper.
+
+     ONE template, two callers (D-97):
+       - College Admin (Admin\MonthlyReportController): its college, visits
+         by PROGRAM, optional program filter.
+       - Director (Director\MonthlyReportController): all colleges → visits by
+         COLLEGE plus the College Summary table; one college picked on the
+         analytics page → that college's programs and its one summary row.
+     The caller names the scope ($scopeName / $scopeCode); the visits table is
+     by program when $programRows is present, by college otherwise, and the
+     College Summary prints only when $summaryRows is present.
 
      Standalone HTML document — no app sidebar, no Vite bundle, all CSS inline
      — the same shape as nurse/print.blade.php, because the page's only job is
@@ -20,7 +30,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Monthly Clinic Report — {{ $college->code }} — {{ $monthLabel }}</title>
+<title>Monthly Clinic Report — {{ $scopeCode }} — {{ $monthLabel }}</title>
 <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -116,7 +126,7 @@
     <p class="clinic">University Clinic &middot; HealthPass</p>
 
     <h1 class="title">Monthly Clinic Report</h1>
-    <p class="college">{{ $college->name }} ({{ $college->code }})</p>
+    <p class="college">{{ $scopeName }}</p>
     <p class="period">{{ $monthLabel }}</p>
 
     @if ($selectedProgram !== null)
@@ -136,6 +146,7 @@
     <strong>{{ $totalVisits }}</strong> total visits
 </p>
 
+@if (isset($programRows))
 {{-- ── Clinic Visits by Program (FR-ADM-08 as printed) ───────────────────── --}}
 <div class="block">
     <h2>Clinic Visits by Program</h2>
@@ -168,6 +179,83 @@
         </tfoot>
     </table>
 </div>
+@else
+{{-- ── Clinic Visits by College (FR-ANL-09 as printed, D-97) ─────────────── --}}
+<div class="block">
+    <h2>Clinic Visits by College</h2>
+    <p class="note">
+        Kiosk check-ins, counted under the college recorded at capture.
+        Colleges with no visits this month are listed with zeros.
+    </p>
+    <table>
+        <thead>
+            <tr>
+                <th>College</th>
+                <th class="num">Visits</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach ($collegeRows as $row)
+                <tr>
+                    <td>{{ $row['code'] }}</td>
+                    <td class="num">{{ $row['visits'] }}</td>
+                </tr>
+            @endforeach
+        </tbody>
+        <tfoot>
+            <tr>
+                <td>Total</td>
+                <td class="num">{{ $totalVisits }}</td>
+            </tr>
+        </tfoot>
+    </table>
+</div>
+@endif
+
+@isset($summaryRows)
+{{-- ── College Summary (D-97, Director only) ─────────────────────────────── --}}
+<div class="block">
+    <h2>College Summary</h2>
+    <p class="note">
+        Per college: visits, screenings with at least one vital-sign flag (counted once),
+        screenings with an abnormal BMI, and visits by sex.
+    </p>
+    <table>
+        <thead>
+            <tr>
+                <th>College</th>
+                <th class="num">Visits</th>
+                <th class="num">Flagged</th>
+                <th class="num">Abnormal BMI</th>
+                <th class="num">Male</th>
+                <th class="num">Female</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach ($summaryRows as $row)
+                <tr>
+                    <td>{{ $row['code'] }}</td>
+                    <td class="num">{{ $row['visits'] }}</td>
+                    <td class="num">{{ $row['flagged'] }}</td>
+                    <td class="num">{{ $row['bmi'] }}</td>
+                    <td class="num">{{ $row['male'] }}</td>
+                    <td class="num">{{ $row['female'] }}</td>
+                </tr>
+            @endforeach
+        </tbody>
+        <tfoot>
+            <tr>
+                <td>Total</td>
+                <td class="num">{{ $summaryTotals['visits'] }}</td>
+                <td class="num">{{ $summaryTotals['flagged'] }}</td>
+                <td class="num">{{ $summaryTotals['bmi'] }}</td>
+                <td class="num">{{ $summaryTotals['male'] }}</td>
+                <td class="num">{{ $summaryTotals['female'] }}</td>
+            </tr>
+        </tfoot>
+    </table>
+</div>
+@endisset
 
 {{-- ── Visits by Purpose ─────────────────────────────────────────────────── --}}
 <div class="block">

@@ -11,6 +11,7 @@ use App\Http\Controllers\Director\AnalyticsController as DirectorAnalyticsContro
 use App\Http\Controllers\Director\AnomaliesController as DirectorAnomaliesController;
 use App\Http\Controllers\Director\BatchApprovalController as DirectorBatchApprovalController;
 use App\Http\Controllers\Director\DashboardController as DirectorDashboardController;
+use App\Http\Controllers\Director\MonthlyReportController as DirectorMonthlyReportController;
 use App\Http\Controllers\Director\StaffAccountController as DirectorStaffAccountController;
 use App\Http\Controllers\Director\YearlyReportController as DirectorYearlyReportController;
 use App\Http\Controllers\Kiosk\BpReadingController;
@@ -268,6 +269,10 @@ Route::middleware(['auth', 'role:director'])
         // charts — visits by college, flags, trend, BMI, by-sex donut —
         // scoped by the month + college filters (D-32 rescope).
         Route::get('/analytics', DirectorAnalyticsController::class)->name('analytics');
+        // Printable Monthly Clinic Report (D-97): the College Admin's report
+        // one level up — by college, plus a College Summary table. Carries the
+        // analytics page's month + college filters, nothing else.
+        Route::get('/analytics/print', DirectorMonthlyReportController::class)->name('analytics.print');
         // Yearly Clearance Report (D-94): every college and program's counts
         // for a span of years, downloaded as a PDF — the same year-span popup
         // as the College Admin's report. Its own throttle bucket, like theirs.

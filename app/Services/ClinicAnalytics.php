@@ -494,6 +494,75 @@ final class ClinicAnalytics
         ];
     }
 
+    /**
+     * College Summary (D-97, the Director's printed Monthly Clinic Report):
+     * one row per college in scope — all 11 with zeros, or just the filtered
+     * one — alphabetical by code, with a totals row.
+     *
+     *  - visits:  kiosk check-ins, the same count as Clinic Visits by College
+     *  - flagged: screenings carrying ANY of the five FR-ANL-10 flags, counted
+     *             once however many they carry
+     *  - bmi:     screenings with the Abnormal BMI flag on its own
+     *  - male / female: visits by profile sex, like Students Screened by Sex
+     *
+     * Two grouped queries with SUM(CASE WHEN … THEN 1 ELSE 0 END), the
+     * portable form flagsBySex() uses — MySQL's IF() would fail on SQLite.
+     *
+     * @return array{summaryRows: list<array{code: string, visits: int, flagged: int, bmi: int, male: int, female: int}>, summaryTotals: array{visits: int, flagged: int, bmi: int, male: int, female: int}}
+     */
+    public function collegeSummary(): array
+    {
+        // The same five flag columns as vitalSignFlags() — fixed names, never input.
+        $anyFlag = collect(['is_bp_flagged', 'is_temp_flagged', 'is_bmi_flagged', 'is_hr_flagged', 'is_rr_flagged'])
+            ->map(fn (string $column): string => "vital_signs.{$column} = 1")
+            ->implode(' OR ');
+
+        $flags = $this->screeningsInScope()
+            ->groupBy('clinic_visits.college_id')
+            ->selectRaw('clinic_visits.college_id, '
+                ."SUM(CASE WHEN {$anyFlag} THEN 1 ELSE 0 END) as flagged, "
+                .'SUM(CASE WHEN vital_signs.is_bmi_flagged = 1 THEN 1 ELSE 0 END) as bmi')
+            ->toBase()
+            ->get()
+            ->keyBy('college_id');
+
+        // LEFT join, so a visit whose student has no profile still counts as a
+        // visit — the column must agree with Clinic Visits by College.
+        $visits = $this->visitsInScope()
+            ->leftJoin('student_profiles', 'student_profiles.user_id', '=', 'clinic_visits.student_id')
+            ->groupBy('clinic_visits.college_id')
+            ->selectRaw('clinic_visits.college_id, COUNT(*) as visits, '
+                ."SUM(CASE WHEN student_profiles.sex = 'M' THEN 1 ELSE 0 END) as male, "
+                ."SUM(CASE WHEN student_profiles.sex = 'F' THEN 1 ELSE 0 END) as female")
+            ->toBase()
+            ->get()
+            ->keyBy('college_id');
+
+        // (int) casts throughout: MySQL's PDO hands SUM/COUNT back as strings.
+        $rows = College::orderBy('code')
+            ->when($this->college, fn ($query) => $query->whereKey($this->college->id))
+            ->get(['id', 'code'])
+            ->map(fn (College $unit): array => [
+                'code' => $unit->code,
+                'visits' => (int) ($visits[$unit->id]->visits ?? 0),
+                'flagged' => (int) ($flags[$unit->id]->flagged ?? 0),
+                'bmi' => (int) ($flags[$unit->id]->bmi ?? 0),
+                'male' => (int) ($visits[$unit->id]->male ?? 0),
+                'female' => (int) ($visits[$unit->id]->female ?? 0),
+            ]);
+
+        return [
+            'summaryRows' => $rows->values()->all(),
+            'summaryTotals' => [
+                'visits' => (int) $rows->sum('visits'),
+                'flagged' => (int) $rows->sum('flagged'),
+                'bmi' => (int) $rows->sum('bmi'),
+                'male' => (int) $rows->sum('male'),
+                'female' => (int) $rows->sum('female'),
+            ],
+        ];
+    }
+
     // ── Row helpers, shared by the two "visits by …" cards ───────────────────
 
     /**
