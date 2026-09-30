@@ -7,6 +7,7 @@ namespace Tests\Feature\Nurse;
 use App\Models\ClearanceRecord;
 use App\Models\ClinicVisit;
 use App\Models\College;
+use App\Models\StudentProfile;
 use App\Models\User;
 use App\Models\VitalSigns;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -16,8 +17,9 @@ use Tests\TestCase;
  * FR-NRS-09 (D-44) — Nurse Dashboard.
  *
  * The nurse's landing page: four stat tiles plus the CLINIC-WIDE encode
- * history (every nurse's encodes, newest first), filterable by month and
- * result, searchable by student name or reference number, paginated.
+ * history (every nurse's encodes, newest first), filterable by year, month
+ * and result, searchable by reference number or student ID (D-100),
+ * paginated.
  *
  * Encoding is what puts a row here: a still-`captured` visit belongs to the
  * Live Queue, not the history.
@@ -234,10 +236,76 @@ class DashboardPageTest extends TestCase
         $this->encodedVisit('Last Month Student', $nurse, encodedAt: $lastMonth->toDateTimeString());
 
         $this->actingAs($nurse)
-            ->get(route('nurse.dashboard', ['month' => $lastMonth->format('Y-m')]))
+            ->get(route('nurse.dashboard', ['year' => (string) $lastMonth->year, 'month' => $lastMonth->format('m')]))
             ->assertOk()
             ->assertSee('Last Month Student')
             ->assertDontSee('This Month Student');
+    }
+
+    public function test_year_filter_alone_shows_every_month_of_that_year(): void
+    {
+        // D-100: a year with "All months" is the whole calendar year.
+        $nurse = $this->nurse();
+        $this->encodedVisit('January Student', $nurse, encodedAt: '2025-01-15 09:00:00');
+        $this->encodedVisit('December Student', $nurse, encodedAt: '2025-12-20 09:00:00');
+        $this->encodedVisit('Next Year Student', $nurse, encodedAt: '2026-01-05 09:00:00');
+
+        $this->actingAs($nurse)
+            ->get(route('nurse.dashboard', ['year' => '2025']))
+            ->assertOk()
+            ->assertSee('January Student')
+            ->assertSee('December Student')
+            ->assertDontSee('Next Year Student')
+            ->assertViewHas('selectedYear', 2025)
+            ->assertViewHas('selectedMonth', null);
+    }
+
+    public function test_the_month_picker_is_told_which_months_have_encodes(): void
+    {
+        // The page greys out every other month of the picked year.
+        $nurse = $this->nurse();
+        $this->encodedVisit('March Student', $nurse, encodedAt: '2025-03-10 09:00:00');
+        $this->encodedVisit('Another March Student', $nurse, encodedAt: '2025-03-11 09:00:00');
+        $this->encodedVisit('July Student', $nurse, encodedAt: '2025-07-10 09:00:00');
+
+        $this->actingAs($nurse)
+            ->get(route('nurse.dashboard'))
+            ->assertOk()
+            ->assertViewHas('encodedMonths', fn (array $months): bool => $months === [2025 => [3, 7]])
+            // All twelve months are listed, whatever the data.
+            ->assertViewHas('monthOptions', fn (array $options): bool => count($options) === 12
+                && $options[0]['label'] === 'January' && $options[11]['value'] === '12');
+    }
+
+    public function test_a_month_without_encodes_falls_back_to_all_months_of_the_year(): void
+    {
+        // A hand-typed URL for a greyed-out month must not show an empty
+        // table under a picker that says otherwise.
+        $nurse = $this->nurse();
+        $this->encodedVisit('March Student', $nurse, encodedAt: '2025-03-10 09:00:00');
+
+        $this->actingAs($nurse)
+            ->get(route('nurse.dashboard', ['year' => '2025', 'month' => '08']))
+            ->assertOk()
+            ->assertSee('March Student')
+            ->assertViewHas('selectedMonth', null);
+    }
+
+    public function test_an_unusable_year_or_a_month_without_a_year_shows_everything(): void
+    {
+        $nurse = $this->nurse();
+        $this->encodedVisit('Old Student', $nurse, encodedAt: '2025-03-10 09:00:00');
+        $this->encodedVisit('New Student', $nurse);
+
+        foreach ([['year' => '1999'], ['year' => 'abc'], ['month' => '03']] as $query) {
+            $this->actingAs($nurse)
+                ->get(route('nurse.dashboard', $query))
+                ->assertOk()
+                ->assertSee('Old Student')
+                ->assertSee('New Student')
+                ->assertViewHas('selectedYear', null)
+                ->assertViewHas('selectedMonth', null);
+        }
     }
 
     public function test_result_filter_narrows_the_history(): void
@@ -253,17 +321,35 @@ class DashboardPageTest extends TestCase
             ->assertDontSee('Fit Student');
     }
 
-    public function test_search_matches_the_student_name(): void
+    public function test_search_matches_the_student_id(): void
     {
         $nurse = $this->nurse();
+        $wanted = $this->encodedVisit('Maricel Santos', $nurse);
+        $other = $this->encodedVisit('Juan Dela Cruz', $nurse);
+
+        StudentProfile::factory()->create(['user_id' => $wanted->clinicVisit->student_id, 'student_number' => '2021-10457']);
+        StudentProfile::factory()->create(['user_id' => $other->clinicVisit->student_id, 'student_number' => '2022-20001']);
+
+        // A partial ID is enough, and the row shows the ID it matched.
+        $this->actingAs($nurse)
+            ->get(route('nurse.dashboard', ['q' => '10457']))
+            ->assertOk()
+            ->assertSee('Maricel Santos')
+            ->assertSee('2021-10457')
+            ->assertDontSee('Juan Dela Cruz');
+    }
+
+    public function test_search_no_longer_matches_the_student_name(): void
+    {
+        // D-100: the box searches reference numbers and student IDs only.
+        $nurse = $this->nurse();
         $this->encodedVisit('Maricel Santos', $nurse);
-        $this->encodedVisit('Juan Dela Cruz', $nurse);
 
         $this->actingAs($nurse)
             ->get(route('nurse.dashboard', ['q' => 'maricel']))
             ->assertOk()
-            ->assertSee('Maricel Santos')
-            ->assertDontSee('Juan Dela Cruz');
+            ->assertDontSee('Maricel Santos')
+            ->assertSee('Nothing matches these filters');
     }
 
     public function test_search_matches_the_reference_number(): void

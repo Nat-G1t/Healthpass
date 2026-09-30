@@ -64,18 +64,48 @@
 
         {{-- Filters (GET, so the filtered view is shareable and bookmarkable —
              the URL alone says what is on screen). No `page` field: applying a
-             filter always starts again at page 1. --}}
+             filter always starts again at page 1.
+
+             D-100: Year, then January–December of that year, as on Analytics.
+             The small Alpine component only shapes the Month picker while the
+             nurse chooses — it waits for a year, and greys out the months of
+             that year with no encoded results (`encoded` comes from the server,
+             e.g. {"2026": [9, 10]}). Nothing is sent until Apply; the server
+             re-checks both values anyway. A disabled <select> is left out of
+             the submit, which is exactly "All months". --}}
         <form method="GET" action="{{ route('nurse.dashboard') }}"
+              x-data="{
+                  year: @js($selectedYear === null ? '' : (string) $selectedYear),
+                  month: @js($selectedMonth ?? ''),
+                  encoded: @js($encodedMonths),
+                  hasEncodes(month) { return (this.encoded[this.year] ?? []).includes(month); },
+                  init() {
+                      this.$watch('year', () => { if (! this.hasEncodes(Number(this.month))) this.month = ''; });
+                  },
+              }"
               class="mb-5 flex flex-wrap items-end gap-3">
 
             <div class="flex flex-col gap-1">
-                <label for="history-month" class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Month</label>
-                <select id="history-month" name="month"
+                <label for="history-year" class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Year</label>
+                <select id="history-year" name="year" x-model="year"
                         class="rounded-lg border-hp-slate/20 bg-hp-white py-1.5 pl-3 pr-8 text-xs font-medium text-hp-slate focus:border-hp-orange focus:ring-hp-orange">
+                    <option value="">All years</option>
+                    @foreach ($years as $year)
+                        <option value="{{ $year }}" @selected($year === $selectedYear)>{{ $year }}</option>
+                    @endforeach
+                </select>
+            </div>
+
+            <div class="flex flex-col gap-1">
+                <label for="history-month" class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Month</label>
+                <select id="history-month" name="month" x-model="month" :disabled="year === ''"
+                        class="rounded-lg border-hp-slate/20 bg-hp-white py-1.5 pl-3 pr-8 text-xs font-medium text-hp-slate focus:border-hp-orange focus:ring-hp-orange disabled:cursor-not-allowed disabled:opacity-50">
                     <option value="">All months</option>
-                    @foreach ($availableMonths as $month)
-                        <option value="{{ $month['value'] }}" @selected($month['value'] === $selectedMonth)>
-                            {{ $month['label'] }}
+                    @foreach ($monthOptions as $monthOption)
+                        <option value="{{ $monthOption['value'] }}" class="disabled:bg-hp-slate/15 disabled:text-hp-slate/40"
+                                @selected($monthOption['value'] === $selectedMonth)
+                                :disabled="! hasEncodes({{ $monthOption['number'] }})">
+                            {{ $monthOption['label'] }}
                         </option>
                     @endforeach
                 </select>
@@ -95,13 +125,13 @@
             <div class="flex min-w-[200px] flex-1 flex-col gap-1">
                 <label for="history-search" class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Search</label>
                 <input id="history-search" name="q" type="search" value="{{ $search }}"
-                       placeholder="Student name or reference no."
+                       placeholder="Reference no. or student ID"
                        class="w-full rounded-lg border-hp-slate/20 bg-hp-white py-1.5 px-3 text-xs text-hp-slate placeholder-hp-slate/40 focus:border-hp-orange focus:ring-hp-orange">
             </div>
 
             <x-hp.button type="submit" variant="soft" size="sm">Apply</x-hp.button>
 
-            @if ($selectedMonth !== null || $selectedResult !== null || $search !== '')
+            @if ($selectedYear !== null || $selectedResult !== null || $search !== '')
                 <a href="{{ route('nurse.dashboard') }}"
                    class="px-1 py-1.5 text-xs font-medium text-hp-slate/50 hover:text-hp-slate">
                     Clear
@@ -121,7 +151,7 @@
                 </div>
                 <p class="text-sm font-medium text-hp-slate">No encoded results yet</p>
                 <p class="mt-0.5 text-xs text-hp-slate/50">
-                    @if ($selectedMonth !== null || $selectedResult !== null || $search !== '')
+                    @if ($selectedYear !== null || $selectedResult !== null || $search !== '')
                         Nothing matches these filters — try clearing them.
                     @else
                         Results appear here as soon as you encode a visit from the Live Queue.
@@ -130,7 +160,7 @@
             </div>
         @else
             <div class="overflow-x-auto">
-                <x-hp.table :headers="['Reference No', 'Student', 'College', 'Program', 'Result', 'Encoded by', 'Encoded at', 'Printed', '']">
+                <x-hp.table :headers="['Reference No', 'Student', 'Student ID', 'College', 'Program', 'Result', 'Encoded by', 'Encoded at', 'Printed', '']">
                     @foreach ($records as $record)
                         @php
                             $visit = $record->clinicVisit;
@@ -142,6 +172,11 @@
 
                             <x-hp.table-cell label="Student" class="font-medium">
                                 {{ $visit?->student?->name ?? '—' }}
+                            </x-hp.table-cell>
+
+                            {{-- D-100: what the search box matches, next to the name. --}}
+                            <x-hp.table-cell label="Student ID">
+                                <span class="font-mono text-xs text-hp-slate/70">{{ $visit?->student?->studentProfile?->student_number ?? '—' }}</span>
                             </x-hp.table-cell>
 
                             <x-hp.table-cell label="College">

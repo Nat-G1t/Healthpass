@@ -20,8 +20,10 @@ use Illuminate\Database\Eloquent\Builder;
  * offers a month that would render every card empty.
  *
  * Since D-99 the two analytics pages pick a YEAR and then a month of it
- * (years(), monthsOf(), resolvePicked()); the Nurse Dashboard and the
- * printed monthly reports still use the single-list available() / resolve().
+ * (years(), monthsOf(), resolvePicked()); the printed monthly reports still
+ * use the single-list resolve(). The Nurse Dashboard's own Year + Month
+ * pickers (D-100) count encoded results, not check-ins, so they only borrow
+ * years().
  */
 final class VisitMonths
 {
@@ -32,8 +34,8 @@ final class VisitMonths
      * portable to the SQLite test database.
      *
      * @param  College|null  $college  Narrow the list to one college's data.
-     *                                 The Director and the Nurse pass nothing
-     *                                 — they read the whole clinic. The College
+     *                                 The Director passes nothing
+     *                                 — it reads the whole clinic. The College
      *                                 Admin page (D-45) passes its managed
      *                                 college so its picker never offers a
      *                                 month in which only OTHER colleges had

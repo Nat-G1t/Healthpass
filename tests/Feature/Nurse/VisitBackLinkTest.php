@@ -15,14 +15,14 @@ use Tests\TestCase;
 /**
  * FR-NRS-09 — the visit page's back link returns to where it was opened from:
  * the Clinic Dashboard (View, with its filters and page kept) or the Live
- * Queue. The dashboard URL is built only from four whitelisted keys, so
+ * Queue. The dashboard URL is built only from whitelisted keys, so
  * nothing else in the query string can ride along into the link.
  */
 class VisitBackLinkTest extends TestCase
 {
     use RefreshDatabase;
 
-    private const DASHBOARD_STATE = ['month' => '2026-09', 'result' => 'Fit', 'q' => 'Cruz', 'page' => '2'];
+    private const DASHBOARD_STATE = ['year' => '2026', 'month' => '09', 'result' => 'Fit', 'q' => 'HP-2026', 'page' => '2'];
 
     private function encodedVisit(string $studentName, User $encoder): ClinicVisit
     {
@@ -70,11 +70,12 @@ class VisitBackLinkTest extends TestCase
         $nurse = User::factory()->create(['role' => 'nurse']);
         $visit = $this->encodedVisit('Ana Cruz', $nurse);
 
-        $expected = route('nurse.visits.encode', ['visit' => $visit, 'from' => 'dashboard', 'result' => 'Fit', 'q' => 'Cruz']);
+        $year = (string) now()->year;
+        $expected = route('nurse.visits.encode', ['visit' => $visit, 'from' => 'dashboard', 'year' => $year, 'result' => 'Fit', 'q' => 'HP-2026']);
 
         $this->actingAs($nurse)
             // An empty month is dropped, so the link stays clean.
-            ->get(route('nurse.dashboard', ['month' => '', 'result' => 'Fit', 'q' => 'Cruz']))
+            ->get(route('nurse.dashboard', ['year' => $year, 'month' => '', 'result' => 'Fit', 'q' => 'HP-2026']))
             ->assertOk()
             ->assertSee($expected);
     }
