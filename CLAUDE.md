@@ -210,15 +210,21 @@ npm run dev                       # terminal 2
 - **Manual vitals entry is a first-class kiosk path**, sensors are
   progressive enhancement. Every reading records `entry_method`.
 - **Clinic capacity is TWO config values, never constants in a controller
-  (D-37):** `hourly_capacity` (**12**) and `daily_capacity` (**120**). The
+  (D-37):** `hourly_capacity` (**20** since D-95 — a 3-minute kiosk budget
+  against the measured 2:20 average) and `daily_capacity` (**200**). The
   clinic day is **ten one-hour slots derived from `clinic_hours`**
   (7–8 AM … 4–5 PM, **lunch included**) — never hardcode 7–5 in a view; ask
   `App\Services\ClinicScheduleService`. Every appointment carries a
   `scheduled_time` slot key in canonical `'H:i:s'` form; there is **one
   counter per hour** (the constraint is clinic congestion, not kiosk
-  throughput). A day is full only when **every** slot is at 12. Pre-D-37
-  rows keep `scheduled_time` NULL, render as "—", and are seen by the daily
-  cap only — **never backfill them**.
+  throughput). A day is full only when **every** slot is at the hourly cap.
+  Pre-D-37 rows keep `scheduled_time` NULL, render as "—", and are seen by
+  the daily cap only — **never backfill them**.
+- **Arrival times (D-96):** approval gives each batch student an
+  `arrival_time` inside their hour, 3600 s ÷ `hourly_capacity` apart
+  (3 minutes), taking the times no other non-cancelled appointment holds.
+  It is emailed, so it is stored and never recomputed. Pre-D-96 rows are
+  NULL — never backfill them.
 - **On today, an hour stops being bookable once it has ENDED (BR-23)** — at
   12:00 the 11–12 slot is gone, 12–1 is not. Binds the College Admin's
   batch start hour *and* Director approval (any elapsed hour
