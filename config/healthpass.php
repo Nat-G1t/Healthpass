@@ -6,15 +6,21 @@ return [
     // Clinic staff update these values without touching any controller or view.
     //
     // D-37 made the clinic day TEN one-hour booking slots (clinic_hours below,
-    // 7 AM–5 PM, lunch included). A kiosk session takes at most 5 minutes, so a
-    // slot holds 12 students — 12 × 10 = 120 a day. There is ONE counter per
-    // hour: what is being capped is clinic congestion, not kiosk throughput.
-    'hourly_capacity' => env('HEALTHPASS_HOURLY_CAPACITY', 12),
+    // 7 AM–5 PM, lunch included). D-95 sets a slot at 20 students: the kiosk's
+    // measured average is 2:20 from QR scan to submit, and each student is
+    // budgeted 3 minutes (60 ÷ 20) — so the ONE kiosk is busy ~47 minutes an
+    // hour and the slack absorbs hand-offs and rest & re-checks (D-72). 30 an
+    // hour would need 70 kiosk-minutes an hour and the queue would grow all
+    // day. There is ONE counter per hour; with a second kiosk, raise this.
+    //
+    // The same number sets each student's arrival time inside the hour
+    // (D-96): 3600 s ÷ hourly_capacity apart — ClinicScheduleService.
+    'hourly_capacity' => env('HEALTHPASS_HOURLY_CAPACITY', 20),
 
     // The outer daily cap. It equals hourly_capacity × the number of slots, and
     // is still enforced separately because it is the only cap that sees legacy
     // pre-D-37 appointments (scheduled_time NULL), which belong to no slot.
-    'daily_capacity' => env('HEALTHPASS_DAILY_CAPACITY', 120),
+    'daily_capacity' => env('HEALTHPASS_DAILY_CAPACITY', 200),
 
     // FR-UI-06: rows per page on every table that can run past ten (Batch
     // Tracking, the batch roster, the activity log, the Director's staff list),

@@ -247,8 +247,8 @@ class ClinicScheduleService
 
     /**
      * How many of a batch's students land in each hour of its span (D-91):
-     * the hourly cap in every hour, the remainder in the last — 25 students
-     * from 7 AM are 12 + 12 + 1. The approve fan-out assigns students in
+     * the hourly cap in every hour, the remainder in the last — 45 students
+     * from 7 AM are 20 + 20 + 5. The approve fan-out assigns students in
      * exactly this order (`intdiv($index, $perHour)`), so a capacity check
      * built on this map checks the appointments approval will really create.
      *
@@ -320,6 +320,57 @@ class ClinicScheduleService
         }
 
         return $bySlot;
+    }
+
+    // ── Arrival times (D-96) ─────────────────────────────────────────────────
+
+    /**
+     * Every arrival time inside one slot, in order: the slot's start, then one
+     * kiosk budget apart — 3600 s ÷ hourly_capacity, so 3 minutes at 20 an
+     * hour. 8 AM → 08:00:00, 08:03:00 … 08:57:00. Same 'H:i:s' form as a slot.
+     *
+     * @return list<string>
+     */
+    public function arrivalTimes(string $slot): array
+    {
+        $capacity = $this->hourlyCapacity();
+
+        if ($capacity < 1) {
+            return [];
+        }
+
+        $start = Carbon::createFromFormat(self::SLOT_FORMAT, $slot);
+        $budgetSeconds = intdiv(3600, $capacity);
+
+        return array_map(
+            fn (int $seat): string => $start->copy()->addSeconds($seat * $budgetSeconds)->format(self::SLOT_FORMAT),
+            range(0, $capacity - 1),
+        );
+    }
+
+    /**
+     * The arrival times in one slot that no appointment holds yet, earliest
+     * first — shared by every batch in that hour, so two batches can never
+     * hand out the same time.
+     *
+     * "Free", not "after the last one": a cancelled batch (D-92) gives its
+     * times back, and the next batch fills that gap instead of doubling up on
+     * a time someone already has in their inbox. Called inside the approval
+     * transaction, after its locked capacity check.
+     *
+     * @return list<string>
+     */
+    public function freeArrivalTimes(string $date, string $slot): array
+    {
+        $taken = Appointment::query()
+            ->whereDate('scheduled_date', $date)
+            ->where('scheduled_time', $slot)
+            ->where('status', '!=', 'cancelled')
+            ->whereNotNull('arrival_time')
+            ->pluck('arrival_time')
+            ->all();
+
+        return array_values(array_diff($this->arrivalTimes($slot), $taken));
     }
 
     /**

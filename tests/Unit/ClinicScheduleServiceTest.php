@@ -52,9 +52,10 @@ class ClinicScheduleServiceTest extends TestCase
 
     public function test_capacities_come_from_config(): void
     {
-        $this->assertSame(12, $this->service()->hourlyCapacity());
-        $this->assertSame(120, $this->service()->dailyCapacity());
-        $this->assertSame(120, $this->service()->maxBatchSize());
+        // D-95: 20 an hour (a 3-minute kiosk budget), 20 × ten slots a day.
+        $this->assertSame(20, $this->service()->hourlyCapacity());
+        $this->assertSame(200, $this->service()->dailyCapacity());
+        $this->assertSame(200, $this->service()->maxBatchSize());
     }
 
     // ── Labels ───────────────────────────────────────────────────────────────
@@ -67,21 +68,21 @@ class ClinicScheduleServiceTest extends TestCase
 
     public function test_span_label_reads_as_a_range_with_a_slot_count(): void
     {
-        $span = $this->service()->spanForStudents('07:00:00', 30);
+        $span = $this->service()->spanForStudents('07:00:00', 45);
 
         $this->assertSame('7:00 AM – 10:00 AM (3 slots)', $this->service()->spanLabel($span));
     }
 
     // ── Span maths (FR-ADM-04) ───────────────────────────────────────────────
 
-    public function test_batch_of_twenty_five_spans_three_hours(): void
+    public function test_batch_of_forty_five_spans_three_hours(): void
     {
-        $this->assertSame(3, $this->service()->blocksFor(25));
+        $this->assertSame(3, $this->service()->blocksFor(45));
     }
 
-    public function test_batch_of_twenty_four_spans_two_hours(): void
+    public function test_batch_of_forty_spans_two_hours(): void
     {
-        $this->assertSame(2, $this->service()->blocksFor(24));
+        $this->assertSame(2, $this->service()->blocksFor(40));
     }
 
     public function test_a_single_student_still_takes_one_whole_hour(): void
@@ -93,33 +94,48 @@ class ClinicScheduleServiceTest extends TestCase
     {
         $this->assertSame(
             ['07:00:00', '08:00:00', '09:00:00'],
-            $this->service()->spanForStudents('07:00:00', 25),
+            $this->service()->spanForStudents('07:00:00', 45),
         );
     }
 
     public function test_span_that_would_cross_closing_time_is_empty(): void
     {
-        // 25 students need 3 hours; starting at 3 PM would end at 6 PM.
-        $this->assertSame([], $this->service()->spanForStudents('15:00:00', 25));
+        // 45 students need 3 hours; starting at 3 PM would end at 6 PM.
+        $this->assertSame([], $this->service()->spanForStudents('15:00:00', 45));
     }
 
     public function test_span_ending_exactly_at_closing_time_fits(): void
     {
         $this->assertSame(
             ['14:00:00', '15:00:00', '16:00:00'],
-            $this->service()->spanForStudents('14:00:00', 25),
+            $this->service()->spanForStudents('14:00:00', 45),
         );
     }
 
     public function test_seats_by_slot_fills_each_hour_to_the_cap_and_leaves_the_remainder_last(): void
     {
-        // D-91: the same split the approve fan-out makes — 12 + 12 + 1.
+        // D-91: the same split the approve fan-out makes — 20 + 20 + 5.
         $span = $this->service()->span('07:00:00', 3);
 
         $this->assertSame(
-            ['07:00:00' => 12, '08:00:00' => 12, '09:00:00' => 1],
-            $this->service()->seatsBySlot($span, 25),
+            ['07:00:00' => 20, '08:00:00' => 20, '09:00:00' => 5],
+            $this->service()->seatsBySlot($span, 45),
         );
+    }
+
+    // ── Arrival times (D-96) ─────────────────────────────────────────────────
+
+    public function test_arrival_times_are_one_kiosk_budget_apart_from_the_hourly_capacity(): void
+    {
+        // 20 an hour → 3 minutes apart; the grid follows the config, so 24 an
+        // hour would be 2½ minutes apart.
+        $this->assertSame(['07:00:00', '07:03:00'], array_slice($this->service()->arrivalTimes('07:00:00'), 0, 2));
+
+        config(['healthpass.hourly_capacity' => 24]);
+
+        $times = $this->service()->arrivalTimes('07:00:00');
+        $this->assertCount(24, $times);
+        $this->assertSame(['07:00:00', '07:02:30', '07:05:00'], array_slice($times, 0, 3));
     }
 
     // ── Elapsed hours (BR-23) ────────────────────────────────────────────────

@@ -22,6 +22,7 @@ class Appointment extends Model
         'service_type',
         'scheduled_date',
         'scheduled_time',
+        'arrival_time',
         'status',
         'source',
         'batch_request_id',
@@ -67,6 +68,20 @@ class Appointment extends Model
         }
 
         return app(ClinicScheduleService::class)->label($this->scheduled_time);
+    }
+
+    /**
+     * D-96: when to arrive inside the slot — "8:03 AM" — or null for an
+     * appointment approved before D-96, which was only ever given its hour.
+     * Like scheduled_time, the column is an 'H:i:s' string, not a Carbon cast.
+     */
+    public function arrivalTimeLabel(): ?string
+    {
+        if ($this->arrival_time === null) {
+            return null;
+        }
+
+        return Carbon::createFromFormat(ClinicScheduleService::SLOT_FORMAT, $this->arrival_time)->format('g:i A');
     }
 
     /**

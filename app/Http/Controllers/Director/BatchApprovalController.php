@@ -322,16 +322,27 @@ class BatchApprovalController extends Controller
             // hour, in pivot-row id order — a deterministic assignment, so
             // re-running the same batch would always produce the same roster
             // per hour. The last block takes whatever remainder is left.
+            //
+            // D-96: inside its hour, each student takes the next arrival time
+            // still FREE there (other batches may already hold some) — read
+            // once per hour, under the capacity lock above. The locked check
+            // guarantees there are enough; `?? null` only guards a cap
+            // lowered after earlier times were handed out.
             $perHour = $this->schedule->hourlyCapacity();
             $pivotRows = $locked->batchRequestStudents()->orderBy('id')->get();
+            $freeTimesBySlot = [];
 
             foreach ($pivotRows->values() as $index => $pivotRow) {
+                $slot = $span[intdiv($index, $perHour)];
+                $freeTimesBySlot[$slot] ??= $this->schedule->freeArrivalTimes($scheduledDate, $slot);
+
                 $appointment = Appointment::create([
                     'reference_no' => $refService->generateAppointmentRef(),
                     'student_id' => $pivotRow->student_id,
                     'service_type' => $locked->service_type,
                     'scheduled_date' => $scheduledDate,
-                    'scheduled_time' => $span[intdiv($index, $perHour)],
+                    'scheduled_time' => $slot,
+                    'arrival_time' => $freeTimesBySlot[$slot][$index % $perHour] ?? null,
                     'status' => 'scheduled',
                     'source' => 'batch',
                     'batch_request_id' => $locked->id,

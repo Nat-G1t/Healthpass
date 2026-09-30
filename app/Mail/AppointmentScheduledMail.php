@@ -53,6 +53,9 @@ class AppointmentScheduledMail extends Mailable
                 // timeRangeLabel() returns "—" for a NULL slot, purposeText()
                 // returns null and the template drops the row.
                 'timeRange' => $this->appointment->timeRangeLabel(),
+                // D-96: this student's own time inside the hour; null on an
+                // appointment approved before D-96, and the row is dropped.
+                'arrivalTime' => $this->appointment->arrivalTimeLabel(),
                 'purposeText' => $this->appointment->purposeText(),
                 'collegeName' => $this->appointment->batchRequest?->college?->name,
                 'clinicLocation' => (string) config('healthpass.clinic_location'),

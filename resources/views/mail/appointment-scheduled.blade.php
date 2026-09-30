@@ -77,6 +77,15 @@
                                     {{ $timeRange }}
                                 </td>
                             </tr>
+                            {{-- D-96: the student's own arrival time inside that hour --}}
+                            @if ($arrivalTime)
+                                <tr>
+                                    <td style="padding:8px 0;color:#9CA3AF;border-top:1px solid #F3F4F6;">Arrive at</td>
+                                    <td style="padding:8px 0;font-weight:700;color:#FF8C2A;border-top:1px solid #F3F4F6;">
+                                        {{ $arrivalTime }}
+                                    </td>
+                                </tr>
+                            @endif
                             @if ($purposeText)
                                 <tr>
                                     <td style="padding:8px 0;color:#9CA3AF;border-top:1px solid #F3F4F6;">Purpose</td>
@@ -107,7 +116,12 @@
                             <p style="margin:0;font-size:13px;line-height:1.7;color:#6B7280;">
                                 Your <strong>Student ID</strong> — you will scan it at the self-service
                                 kiosk when you arrive to start your vitals and screening.
-                                Please come a few minutes before your time slot.
+                                @if ($arrivalTime)
+                                    Please arrive at <strong>{{ $arrivalTime }}</strong> — every student
+                                    in your hour has their own arrival time, so the line at the clinic stays short.
+                                @else
+                                    Please come a few minutes before your time slot.
+                                @endif
                             </p>
                         </div>
 

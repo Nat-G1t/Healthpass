@@ -37,6 +37,12 @@ class BatchRequestSubmitTest extends TestCase
     {
         parent::setUp();
 
+        // Written around D-37's 12 an hour and 120 a day, which these tests'
+        // numbers (13 → 12 + 1, a full hour of 12, a 121-student batch …)
+        // still exercise. The D-95 default of 20 is asserted in
+        // the unit test ClinicScheduleServiceTest.
+        config(['healthpass.hourly_capacity' => 12, 'healthpass.daily_capacity' => 120]);
+
         $this->ccs = College::create(['code' => 'CCS', 'name' => 'College of Computing Studies']);
         $this->cea = College::create(['code' => 'CEA', 'name' => 'College of Engineering and Architecture']);
 

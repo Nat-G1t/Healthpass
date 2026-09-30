@@ -74,6 +74,13 @@
                     {{-- D-37 slot; "—" on pre-D-37 appointments --}}
                     <span class="font-semibold text-hp-slate">· {{ $nextAppointment->timeLabel() }}</span>
                 </p>
+                {{-- D-96: the student's own arrival time inside that hour
+                     (absent on appointments approved before D-96) --}}
+                @if ($nextAppointment->arrivalTimeLabel())
+                    <p class="mt-1 text-sm text-hp-slate/60">
+                        Arrive at <span class="font-semibold text-hp-orange">{{ $nextAppointment->arrivalTimeLabel() }}</span>
+                    </p>
+                @endif
                 <div class="mt-3 flex flex-wrap gap-1.5">
                     <x-hp.badge variant="neutral">
                         {{ ucfirst($nextAppointment->service_type) }}
