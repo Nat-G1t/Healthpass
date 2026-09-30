@@ -1,5 +1,30 @@
 ﻿<x-layout.sidebar title="Flagged Anomalies">
 
+    {{-- ── Year filter (D-102) ─────────────────────────────────────────────
+         Scopes the cards AND the table to visits checked in that year. Like
+         the Analytics filters it reloads on change (GET, so the URL says
+         what is on screen); the years come from the server clock. --}}
+    <form method="GET" action="{{ route('director.anomalies') }}" class="mb-4 flex flex-wrap items-center gap-3">
+        <label for="anomalies-year" class="sr-only">Year</label>
+        <select id="anomalies-year" name="year"
+                class="rounded-lg border-hp-slate/20 py-1.5 pl-3 pr-8 text-xs font-medium text-hp-slate focus:border-hp-orange focus:ring-hp-orange">
+            @foreach ($years as $yearOption)
+                <option value="{{ $yearOption }}" @selected($yearOption === $year)>{{ $yearOption }}</option>
+            @endforeach
+        </select>
+        <p class="text-[11px] text-hp-slate/40">Cards and table show visits checked in during {{ $year }}</p>
+    </form>
+
+    <script>
+        (function () {
+            const select = document.getElementById('anomalies-year');
+            select.addEventListener('change', () => select.form.submit());
+            // Back / Forward can restore this page with the select still on
+            // the year that navigated away — put it back to the year shown.
+            window.addEventListener('pageshow', () => select.form.reset());
+        })();
+    </script>
+
     {{-- ── Stat cards (FR-ANL-05): one per flag type ─────────────────────
          Subtitles quote the thresholds from config/healthpass.php (BR-13:
          one source — kiosk badges, queue flags, and this screen agree).
@@ -85,7 +110,7 @@
                               d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
                 </div>
-                <p class="text-sm font-medium text-hp-slate">No flagged visits</p>
+                <p class="text-sm font-medium text-hp-slate">No flagged visits in {{ $year }}</p>
                 <p class="mt-0.5 text-xs text-hp-slate/50">
                     Kiosk vitals that trip a flag threshold will appear here.
                 </p>
@@ -125,7 +150,7 @@
                                     </div>
                                 </td>
                                 <td class="py-3 pl-3 text-right">
-                                    <a href="{{ route('director.anomalies.show', $visit) }}"
+                                    <a href="{{ route('director.anomalies.show', ['visit' => $visit, 'year' => $year]) }}"
                                        class="text-xs font-semibold text-hp-orange hover:underline">
                                         View
                                     </a>

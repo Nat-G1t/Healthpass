@@ -1,6 +1,6 @@
 <x-layout.sidebar title="Record Detail">
 
-    <a href="{{ route('director.anomalies') }}"
+    <a href="{{ route('director.anomalies', ['year' => $year]) }}"
        class="mb-4 inline-block text-xs font-semibold text-hp-orange hover:underline">
         &larr; Flagged Anomalies
     </a>

@@ -54,7 +54,7 @@ class AnomaliesPageTest extends TestCase
      * overridden. Flag booleans are set explicitly here exactly like the
      * kiosk submit does (stored at capture, never recomputed).
      */
-    private function makeVisit(College $college, array $vitalOverrides = [], string $status = 'captured'): ClinicVisit
+    private function makeVisit(College $college, array $vitalOverrides = [], string $status = 'captured', ?string $checkedInAt = null): ClinicVisit
     {
         static $seq = 8000;
 
@@ -64,7 +64,7 @@ class AnomaliesPageTest extends TestCase
             'college_id' => $college->id,
             'login_method' => 'qr',
             'status' => $status,
-            'checked_in_at' => now(),
+            'checked_in_at' => $checkedInAt ?? now(),
         ]);
 
         VitalSigns::create(array_merge([
@@ -114,6 +114,60 @@ class AnomaliesPageTest extends TestCase
 
         $page2 = $this->actingAs($this->director)->get('/director/anomalies?page=2')->assertOk();
         $this->assertCount(2, $page2->viewData('visits')->items());
+    }
+
+    // ── The year filter (D-102) ──────────────────────────────────────────────
+
+    public function test_the_page_opens_on_this_year_and_leaves_other_years_out(): void
+    {
+        $thisYear = $this->makeVisit($this->ccs, ['is_bp_flagged' => true, 'bp_systolic' => 150]);
+        $this->makeVisit($this->ccs, ['is_bp_flagged' => true, 'bp_systolic' => 150], checkedInAt: '2025-06-10 09:00:00');
+
+        $response = $this->actingAs($this->director)->get('/director/anomalies')->assertOk();
+
+        $this->assertSame(now()->year, $response->viewData('year'));
+        $this->assertSame(1, $response->viewData('stats')['bp']);
+        $this->assertSame([$thisYear->id], collect($response->viewData('visits')->items())->pluck('id')->all());
+        $response->assertSee('1 flagged');
+    }
+
+    public function test_picking_a_year_scopes_the_cards_and_the_table(): void
+    {
+        $this->makeVisit($this->ccs, ['is_bp_flagged' => true, 'bp_systolic' => 150]);
+        $lastYear = $this->makeVisit($this->ccs, ['is_temp_flagged' => true, 'temperature_c' => 38.4], checkedInAt: '2025-06-10 09:00:00');
+
+        $response = $this->actingAs($this->director)->get('/director/anomalies?year=2025')->assertOk();
+
+        $this->assertSame(2025, $response->viewData('year'));
+        $this->assertSame(['bp' => 0, 'temp' => 1, 'bmi' => 0, 'hr' => 0, 'rr' => 0], $response->viewData('stats'));
+        $this->assertSame([$lastYear->id], collect($response->viewData('visits')->items())->pluck('id')->all());
+
+        // A year with nothing flagged says so, naming the year.
+        $this->actingAs($this->director)->get('/director/anomalies?year=2023')
+            ->assertOk()
+            ->assertSee('No flagged visits in 2023');
+    }
+
+    public function test_an_unusable_year_falls_back_to_this_year(): void
+    {
+        foreach (['1999', 'abc', (string) (now()->year + 1)] as $year) {
+            $this->actingAs($this->director)->get('/director/anomalies?year='.$year)
+                ->assertOk()
+                ->assertViewHas('year', now()->year);
+        }
+    }
+
+    public function test_view_and_back_links_keep_the_picked_year(): void
+    {
+        $visit = $this->makeVisit($this->ccs, ['is_bp_flagged' => true, 'bp_systolic' => 150], checkedInAt: '2025-06-10 09:00:00');
+
+        $this->actingAs($this->director)->get('/director/anomalies?year=2025')
+            ->assertOk()
+            ->assertSee(route('director.anomalies.show', ['visit' => $visit, 'year' => 2025]), false);
+
+        $this->actingAs($this->director)->get(route('director.anomalies.show', ['visit' => $visit, 'year' => 2025]))
+            ->assertOk()
+            ->assertSee(route('director.anomalies', ['year' => 2025]), false);
     }
 
     public function test_guests_and_other_roles_cannot_open_anomalies(): void

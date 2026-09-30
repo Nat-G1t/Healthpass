@@ -7,6 +7,9 @@ namespace App\Http\Controllers\Director;
 use App\Http\Controllers\Controller;
 use App\Models\ClinicVisit;
 use App\Models\VitalSigns;
+use App\Support\VisitMonths;
+use Carbon\CarbonImmutable;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 /**
@@ -17,11 +20,20 @@ use Illuminate\View\View;
  * (un-encoded) visits appear here too. The respiratory-rate flag is the one
  * exception by nature, not by scope: the kiosk cannot measure that vital, so
  * it can only appear once the clinic types the rate at encode (D-65/D-66).
+ *
+ * D-102: one YEAR at a time (?year=, this year by default) — the cards and
+ * the table both, by the visit's check-in date.
  */
 class AnomaliesController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): View
     {
+        $years = VisitMonths::years();
+        $year = $this->selectedYear($request);
+        $start = CarbonImmutable::create($year, 1, 1)->startOfYear();
+        // Carbon bounds, not YEAR(): YEAR() is MySQL-only and the tests run on SQLite.
+        $inYear = fn ($visit) => $visit->whereBetween('checked_in_at', [$start, $start->endOfYear()]);
+
         // One count per flag type. vital_signs is 1:1 with clinic_visits,
         // so counting rows counts visits. A visit tripping two flags counts
         // in both cards — the cards answer "how many of each anomaly", not
@@ -33,7 +45,7 @@ class AnomaliesController extends Controller
         // here would report an anomaly that may not survive the re-check. The
         // table below inherits the same exclusion from scopeFlagged().
         $submitted = fn (string $flag): int => VitalSigns::where($flag, true)
-            ->whereHas('clinicVisit', fn ($visit) => $visit->submitted())
+            ->whereHas('clinicVisit', fn ($visit) => $inYear($visit->submitted()))
             ->count();
 
         $stats = [
@@ -49,6 +61,7 @@ class AnomaliesController extends Controller
         // (FR-STU-09, D-17); everything the table shows is eager-loaded,
         // so rendering never triggers per-row queries.
         $visits = ClinicVisit::flagged()
+            ->where($inYear)
             ->with([
                 'student:id,name',
                 'college:id,code',
@@ -60,15 +73,18 @@ class AnomaliesController extends Controller
             ->paginate(config('healthpass.ui.rows_per_page'))
             ->withQueryString();
 
-        return view('director.anomalies.index', compact('stats', 'visits'));
+        return view('director.anomalies.index', compact('stats', 'visits', 'years', 'year'));
     }
 
     /**
      * Record detail behind each row's "View" link. Read-only by design:
      * the Director reviews, only the Nurse encodes (locked roles).
+     * The row's ?year= rides along so the back link returns to that year.
      */
-    public function show(ClinicVisit $visit): View
+    public function show(Request $request, ClinicVisit $visit): View
     {
+        $year = $this->selectedYear($request);
+
         $visit->load([
             'student.studentProfile',
             'college',
@@ -76,6 +92,20 @@ class AnomaliesController extends Controller
             'clearanceRecord',
         ]);
 
-        return view('director.anomalies.show', compact('visit'));
+        return view('director.anomalies.show', compact('visit', 'year'));
+    }
+
+    /**
+     * The ?year= filter as a year the picker offers (2021 to this year, as on
+     * Analytics). Missing or anything else — hand-typed, malformed — falls
+     * back to this year on the SERVER clock (BR-20).
+     */
+    private function selectedYear(Request $request): int
+    {
+        $year = $request->query('year');
+
+        return is_string($year) && ctype_digit($year) && in_array((int) $year, VisitMonths::years(), true)
+            ? (int) $year
+            : now()->year;
     }
 }
