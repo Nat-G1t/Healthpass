@@ -20,22 +20,36 @@
         </p>
     </div>
 
-    {{-- ── Filters row ───────────────────────────────────────────────────────
-         Month + program scope every card below. Both selects auto-submit the
-         GET form; the overlay shows while reloading. --}}
+    {{-- ── Filters row (D-99) ────────────────────────────────────────────────
+         Year + month + program scope every card below; the trend takes the
+         year and the program but not the month. Every select auto-submits
+         the GET form; the overlay shows while reloading. --}}
     <form method="GET" action="{{ route('admin.analytics') }}"
           class="hp-load-card mb-4 flex flex-wrap items-center gap-3" style="--i: 1">
-        @if (!empty($availableMonths))
-            <label for="analytics-month" class="sr-only">Analytics month</label>
-            <select id="analytics-month" name="month" data-filter-select
-                    class="rounded-lg border-hp-slate/20 py-1.5 pl-3 pr-8 text-xs font-medium text-hp-slate focus:border-hp-orange focus:ring-hp-orange">
-                @foreach ($availableMonths as $month)
-                    <option value="{{ $month['value'] }}" @selected($month['value'] === $selectedMonth)>
-                        {{ $month['label'] }}
-                    </option>
-                @endforeach
-            </select>
-        @endif
+        <label for="analytics-year" class="sr-only">Analytics year</label>
+        <select id="analytics-year" name="year" data-filter-select
+                class="rounded-lg border-hp-slate/20 py-1.5 pl-3 pr-8 text-xs font-medium text-hp-slate focus:border-hp-orange focus:ring-hp-orange">
+            @foreach ($years as $year)
+                <option value="{{ $year }}" @selected($year === $selectedYear)>{{ $year }}</option>
+            @endforeach
+        </select>
+
+        {{-- January–December of the chosen year. A month this college has no
+             visits in is greyed out — grey text on a grey fill, so it reads as
+             unpickable at a glance — except the one being shown: a disabled
+             option is left out of the form submit, so changing another filter
+             would lose it. --}}
+        <label for="analytics-month" class="sr-only">Analytics month</label>
+        <select id="analytics-month" name="month" data-filter-select
+                class="rounded-lg border-hp-slate/20 py-1.5 pl-3 pr-8 text-xs font-medium text-hp-slate focus:border-hp-orange focus:ring-hp-orange">
+            @foreach ($monthOptions as $monthOption)
+                <option value="{{ $monthOption['value'] }}" class="disabled:bg-hp-slate/15 disabled:text-hp-slate/40"
+                        @selected($monthOption['value'] === $selectedMonthNumber)
+                        @disabled(! $monthOption['hasVisits'] && $monthOption['value'] !== $selectedMonthNumber)>
+                    {{ $monthOption['label'] }}
+                </option>
+            @endforeach
+        </select>
 
         <label for="analytics-program" class="sr-only">Program filter</label>
         <select id="analytics-program" name="program" data-filter-select
@@ -49,7 +63,7 @@
         </select>
 
         <p class="text-[11px] text-hp-slate/40">
-            Month + program scope every card below · the trend always shows the whole year
+            Year, month + program scope every card below · the trend shows the whole year
         </p>
 
         {{-- ── Print Monthly Report (FR-ADM-09, D-46) ───────────────────────
@@ -124,12 +138,14 @@
                 </p>
             </div>
         @else
-            {{-- Horizontal bar — one row per program, zeros included. 56px a
-                 row (against the Director's 32) because program names are
-                 wrapped onto two or three axis lines, not 3-letter codes. One
-                 series since D-60, so no legend: the table repeats the numbers. --}}
+            {{-- Horizontal bar — one row per program, zeros included. At least
+                 56px a row (against the Director's 32) because program names
+                 are wrapped onto several axis lines, not 3-letter codes; a
+                 college with longer names gets taller rows ($programRowHeight,
+                 from ClinicAnalytics). One series since D-60, so no legend: the
+                 table repeats the numbers. --}}
             <div data-visits-bar data-chart="{{ json_encode($programBar) }}"
-                 style="height: {{ count($programRows) * 56 + 24 }}px">
+                 style="height: {{ count($programRows) * $programRowHeight + 24 }}px">
                 <canvas role="img"
                         aria-label="Bar chart: clinic visits per program. The same numbers are in the table below."></canvas>
             </div>
@@ -233,27 +249,27 @@
 
     {{-- ── Trend: its own row, so the two by-sex cards below sit as a pair ── --}}
 
-        {{-- Visits per Month (FR-ANL-11) — ignores the month filter by design.
-             Unlike the Director's, it stays inside this college: an admin is
-             never shown another college's numbers, aggregated or not. --}}
+        {{-- Visits per Month (FR-ANL-11, D-99) — the selected year for the
+             selected program; only the month filter doesn't narrow it. It
+             always stays inside this college: an admin is never shown
+             another college's numbers, aggregated or not. --}}
         <x-hp.card class="hp-load-card mb-5" style="--i: 4">
             <h3 class="text-sm font-semibold text-hp-slate">Visits per Month</h3>
             <p class="mt-1 text-xs text-hp-slate/50">
-                Clinic visits across all months with data — your college's
-                whole-year view (ignores the month filter above by design).
+                Your college's clinic visits in each month of {{ $trendYear }} — follows the year and program filters.
             </p>
 
-            @if ($trendMonthCount === 0)
+            @if ($trendTotal === 0)
                 <div class="flex flex-col items-center py-10 text-center">
-                    <p class="text-sm font-medium text-hp-slate/60">No visits recorded yet</p>
-                    <p class="mt-1 text-xs text-hp-slate/40">The trend appears once visits span a month.</p>
+                    <p class="text-sm font-medium text-hp-slate/60">No visits recorded in {{ $trendYear }}</p>
+                    <p class="mt-1 text-xs text-hp-slate/40">The trend fills in as your students check in at the kiosk.</p>
                 </div>
             @else
                 {{-- One series since D-60, so no legend: the latest point is
                      direct-labeled by the chart itself. --}}
                 <div class="mt-3 h-56" data-trend data-chart="{{ json_encode($trend) }}">
                     <canvas role="img"
-                            aria-label="Line chart: clinic visits per month, all months with data."></canvas>
+                            aria-label="Line chart: clinic visits per month in {{ $trendYear }}."></canvas>
                 </div>
             @endif
         </x-hp.card>

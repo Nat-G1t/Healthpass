@@ -157,7 +157,10 @@ if (visitsHost) {
                 y: {
                     grid: { display: false },
                     border: { display: false },
-                    ticks: { color: C.ink, font: { size: 11, weight: 600 } },
+                    // autoSkip off: Chart.js otherwise hides every other label
+                    // when the tallest one doesn't fit its row, leaving
+                    // programs unnamed. The Blade view sizes the rows to fit.
+                    ticks: { color: C.ink, font: { size: 11, weight: 600 }, autoSkip: false },
                 },
             },
             plugins: { legend: { display: false } },

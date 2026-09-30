@@ -462,6 +462,9 @@ class YearlyReportTest extends TestCase
 
         $this->assertStringNotContainsString('<option value="2020"', $response->getContent());
         $this->assertStringNotContainsString('<option value="2027"', $response->getContent());
-        $this->assertStringNotContainsString('name="year"', $response->getContent());
+        // The popup's old single ?year= select is gone. The one name="year"
+        // left on the page is the analytics filter's year picker (D-99).
+        $this->assertSame(1, substr_count($response->getContent(), 'name="year"'));
+        $this->assertStringContainsString('id="analytics-year" name="year"', $response->getContent());
     }
 }

@@ -175,7 +175,7 @@ class KioskRestAndRecheckTest extends TestCase
         $this->assertSame(0, $analytics->visitsByProgram()['totalVisits']);
         $this->assertSame(0, $analytics->vitalSignFlags()['screenings']);
         $this->assertSame(0, $analytics->bySexDonut()['totalScreened']);
-        $this->assertSame([], $analytics->visitsTrend()['trend']['labels']);
+        $this->assertSame(0, $analytics->visitsTrend()['trendTotal']);
         $this->assertSame([], VisitMonths::available());
     }
 

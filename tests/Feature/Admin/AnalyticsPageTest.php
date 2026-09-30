@@ -138,6 +138,15 @@ class AnalyticsPageTest extends TestCase
         return $this->actingAs($this->admin)->get('/admin/analytics'.$query);
     }
 
+    /** The month picker's values that are not greyed out (D-99). */
+    private function pickableMonths(TestResponse $response): array
+    {
+        return array_column(
+            array_filter($response->viewData('monthOptions'), fn (array $option) => $option['hasVisits']),
+            'value',
+        );
+    }
+
     /** The card's visit counts keyed by program, for readable assertions. */
     private function programTotals(TestResponse $response): array
     {
@@ -219,8 +228,11 @@ class AnalyticsPageTest extends TestCase
 
     public function test_the_trend_stays_inside_the_college(): void
     {
-        // FR-ANL-11 ignores the MONTH — but not the college. The Director's
-        // trend is clinic-wide; an admin's must never be.
+        // FR-ANL-11 ignores the MONTH — but never the college: an admin's
+        // trend is never clinic-wide. The server clock sits in February, so
+        // the current year's axis stops there (D-99).
+        $this->travelTo('2026-02-15 10:00:00');
+
         $ccsStudent = $this->makeStudent($this->ccs, self::BSIT);
         $coeStudent = $this->makeStudent($this->coe);
         $this->makeVisit($ccsStudent, $this->ccs, self::BSIT, '2026-01-10');
@@ -243,12 +255,34 @@ class AnalyticsPageTest extends TestCase
 
         $response = $this->page()->assertOk();
 
-        $this->assertSame(
-            [['value' => '2026-03', 'label' => 'March 2026']],
-            $response->viewData('availableMonths'),
-        );
+        // D-99: all twelve months are listed, but only March can be picked —
+        // June had visits from COE alone.
+        $this->assertCount(12, $response->viewData('monthOptions'));
+        $this->assertSame(['03'], $this->pickableMonths($response));
         // …and the default month is the newest one CCS has data in, not June.
         $this->assertSame('2026-03', $response->viewData('selectedMonth'));
+
+        // Asking for June anyway lands on CCS's latest month of that year.
+        $this->assertSame('2026-03', $this->page('?year=2026&month=06')->assertOk()->viewData('selectedMonth'));
+    }
+
+    public function test_the_year_and_month_pickers_scope_the_page(): void
+    {
+        // D-99: the ?year= + ?month= pair picks the month, and the trend is
+        // that year only — a visit from the year before never enters it.
+        $student = $this->makeStudent($this->ccs, self::BSIT);
+        $this->makeVisit($student, $this->ccs, self::BSIT, '2025-05-10');
+        $this->makeVisit($student, $this->ccs, self::BSIT, '2025-05-11');
+        $this->makeVisit($student, $this->ccs, self::BSIT, '2026-05-10');
+
+        $response = $this->page('?year=2025&month=05')->assertOk();
+
+        $this->assertSame(2025, $response->viewData('selectedYear'));
+        $this->assertSame('2025-05', $response->viewData('selectedMonth'));
+        $this->assertSame(2, $response->viewData('totalVisits'));
+        $this->assertSame(2025, $response->viewData('trendYear'));
+        $this->assertSame(2, $response->viewData('trendTotal'));
+        $this->assertCount(12, $response->viewData('trend')['labels']); // a past year runs to December
     }
 
     // ── Clinic Visits by Program (FR-ADM-08) ─────────────────────────────────
@@ -291,6 +325,25 @@ class AnalyticsPageTest extends TestCase
 
         $this->assertSame(1, $rows[self::BSIT]);
         $this->assertSame(0, $rows[self::BSCS]);
+    }
+
+    public function test_program_rows_are_tall_enough_for_the_longest_name(): void
+    {
+        // Chart.js hides y-axis labels that don't fit their row, which left
+        // every other COE program unnamed (2026-09-30). CCS's names wrap to
+        // two lines and keep the 56 px minimum; COE's longest wraps to five.
+        $this->makeVisit($this->makeStudent($this->ccs, self::BSIT), $this->ccs, self::BSIT, '2026-05-05');
+
+        $ccs = $this->page('?month=2026-05')->assertOk();
+        $this->assertSame(56, $ccs->viewData('programRowHeight'));
+        $ccs->assertSee('style="height: '.(4 * 56 + 24).'px"', false); // CCS: 4 programs
+
+        $coeAdmin = User::factory()->create([
+            'role' => 'college_admin',
+            'managed_college_id' => $this->coe->id,
+        ]);
+        $coe = $this->actingAs($coeAdmin)->get('/admin/analytics')->assertOk();
+        $this->assertSame(84, $coe->viewData('programRowHeight'));
     }
 
     public function test_visits_with_no_program_snapshot_fall_into_a_not_specified_row(): void
@@ -342,7 +395,7 @@ class AnalyticsPageTest extends TestCase
         $this->assertSame([0, 0, 0, 1], array_column($response->viewData('bmiRows'), 'count'));
         $this->assertSame([['label' => 'Not specified', 'count' => 1]], $response->viewData('purposeRows'));
         // …the trend too: it ignores only the MONTH.
-        $this->assertSame([1], $response->viewData('trend')['datasets'][0]['data']);
+        $this->assertSame(1, $response->viewData('trendTotal'));
     }
 
     public function test_the_month_filter_scopes_every_card_except_the_trend(): void

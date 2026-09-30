@@ -31,7 +31,7 @@ use Illuminate\Support\Facades\DB;
  *    check-ins per unit, with a Visits-by-Purpose breakdown from the linked
  *    appointments.
  *  - Vital-Sign Flags (FR-ANL-10): count + rate per flag column (five since D-66).
- *  - Visits per Month trend (FR-ANL-11): whole-year, ignores the month.
+ *  - Visits per Month trend (FR-ANL-11): the selected year, month by month (D-99).
  *  - BMI Distribution (FR-ANL-12): four rule-based buckets.
  *  - Students Screened by Sex (FR-ANL-04 as amended).
  *  - Flagged Vitals by Sex (FR-ANL-14): each flag split male / female.
@@ -70,6 +70,12 @@ final class ClinicAnalytics
     /** Wrap width for the program bar's y-axis labels, in characters. */
     private const PROGRAM_LABEL_WRAP = 26;
 
+    /** The shortest program-bar row, in px — room for a three-line label. */
+    private const PROGRAM_ROW_MIN_HEIGHT = 56;
+
+    /** One wrapped label line in a program-bar row, in px (11px text + leading). */
+    private const PROGRAM_LABEL_LINE_HEIGHT = 14;
+
     /**
      * @param  CarbonImmutable  $month  The month every filtered card scopes to.
      * @param  College|null  $college  null = all colleges (Director only).
@@ -99,8 +105,13 @@ final class ClinicAnalytics
      * capture-time college snapshot (FR-STU-09) and the capture-time program
      * snapshot (D-43). Applied to any query that has `clinic_visits` in it,
      * whether that is the base table or a join.
+     *
+     * $bounds replaces the month's date range — only the Visits per Month
+     * trend passes one, its whole year (D-99).
+     *
+     * @param  array{0: CarbonImmutable, 1: CarbonImmutable}|null  $bounds
      */
-    private function scopeToVisits(Builder $query): Builder
+    private function scopeToVisits(Builder $query, ?array $bounds = null): Builder
     {
         return $query
             // D-72: a resting visit is a first pass the clinic never saw, so it
@@ -110,7 +121,7 @@ final class ClinicAnalytics
             // method is also handed a VitalSigns query that JOINS
             // clinic_visits, and an Eloquent scope only exists on its own model.
             ->whereIn('clinic_visits.status', ClinicVisit::SUBMITTED_STATUSES)
-            ->whereBetween('clinic_visits.checked_in_at', $this->monthBounds())
+            ->whereBetween('clinic_visits.checked_in_at', $bounds ?? $this->monthBounds())
             ->when($this->college, fn ($q) => $q->where('clinic_visits.college_id', $this->college->id))
             ->when($this->course, fn ($q) => $q->where('clinic_visits.course', $this->course));
     }
@@ -205,14 +216,13 @@ final class ClinicAnalytics
         }
 
         $rows = $rows->sortByDesc('visits')->values();
+        $labels = $rows->map(fn (array $row) => $this->wrapLabel($row['program']))->all();
 
         return [
             'programRows' => $rows->all(),
             ...$this->totals($rows),
-            'programBar' => $this->visitsBar(
-                $rows->map(fn (array $row) => $this->wrapLabel($row['program']))->all(),
-                $rows,
-            ),
+            'programBar' => $this->visitsBar($labels, $rows),
+            'programRowHeight' => $this->programRowHeight($labels),
         ];
     }
 
@@ -299,53 +309,45 @@ final class ClinicAnalytics
     }
 
     /**
-     * Visits per Month trend (FR-ANL-11): clinic visits per month, across ALL
-     * months with data. The MONTH filter is always ignored — that is the whole
-     * point of the card.
+     * Visits per Month trend (FR-ANL-11 as amended by D-99): clinic visits in
+     * each month of the SELECTED YEAR, inside the page's college + program
+     * scope like every other card. Only the month itself is ignored — the
+     * card is the year around it.
+     *
+     * The axis runs January to December with zeros included; in the current
+     * year it stops at the current month on the SERVER clock (BR-20), so
+     * months that have not happened yet don't read as a drop to zero.
      *
      * Months are derived in PHP from Carbon-cast dates, so no MySQL-only date
      * functions reach the SQLite test DB.
      *
-     * @param  bool  $withinScope  false (Director): the clinic-wide, all-college
-     *                             series — FR-ANL-11 ignores the page filters by
-     *                             design. true (College Admin): narrowed to this
-     *                             service's college + program, because an admin
-     *                             must never be shown another college's numbers,
-     *                             aggregated or not (FR-ADM-06).
-     * @return array{trend: array, trendMonthCount: int}
+     * @return array{trend: array, trendYear: int, trendTotal: int}
      */
-    public function visitsTrend(bool $withinScope = false): array
+    public function visitsTrend(): array
     {
-        $visitsByMonth = ClinicVisit::query()
-            // D-72. The trend bypasses scopeToVisits() (it spans every month),
-            // so it applies the same exclusion itself.
-            ->submitted()
-            ->whereNotNull('checked_in_at')
-            ->when($withinScope && $this->college, fn ($q) => $q->where('clinic_visits.college_id', $this->college->id))
-            ->when($withinScope && $this->course, fn ($q) => $q->where('clinic_visits.course', $this->course))
+        $yearStart = $this->month->startOfYear();
+        $now = CarbonImmutable::now();
+        $lastMonth = $yearStart->year === $now->year ? $now->month : 12;
+
+        $visitsByMonth = $this->scopeToVisits(ClinicVisit::query(), [$yearStart, $yearStart->endOfYear()])
             ->pluck('checked_in_at')
-            ->countBy(fn ($date) => $date->format('Y-m'));
+            ->countBy(fn ($date) => (int) $date->format('n'));
 
-        $months = $visitsByMonth->keys()->sort()->values();
-
-        // Short month names; the year is added only when the data spans
-        // more than one calendar year, to keep the axis readable.
-        $spansYears = $months->map(fn (string $m) => substr($m, 0, 4))->unique()->count() > 1;
-        $label = fn (string $yearMonth) => CarbonImmutable::createFromFormat('Y-m-d', $yearMonth.'-01')
-            ->format($spansYears ? 'M Y' : 'M');
+        $months = collect(range(1, $lastMonth));
 
         return [
             'trend' => [
-                'labels' => $months->map($label)->all(),
+                'labels' => $months->map(fn (int $month) => $yearStart->setMonth($month)->format('M'))->all(),
                 'datasets' => [
                     [
                         'label' => 'Clinic visits',
-                        'data' => $months->map(fn (string $m) => $visitsByMonth[$m] ?? 0)->all(),
+                        'data' => $months->map(fn (int $month) => $visitsByMonth[$month] ?? 0)->all(),
                         'borderColor' => self::VISITS_COLOR,
                     ],
                 ],
             ],
-            'trendMonthCount' => $months->count(),
+            'trendYear' => $yearStart->year,
+            'trendTotal' => (int) $visitsByMonth->sum(),
         ];
     }
 
@@ -642,5 +644,21 @@ final class ClinicAnalytics
     private function wrapLabel(string $label): array
     {
         return explode("\n", wordwrap($label, self::PROGRAM_LABEL_WRAP, "\n", cut_long_words: true));
+    }
+
+    /**
+     * Pixels per program-bar row: tall enough for the most-wrapped label on
+     * the chart, plus a line of air between neighbours. Colleges whose names
+     * wrap to three lines or fewer keep the 56 px minimum; COE's five-line
+     * names get 84. A fixed 56 px was too short for them, and Chart.js hid
+     * every other program name (2026-09-30).
+     *
+     * @param  list<list<string>>  $labels  Wrapped labels, from wrapLabel().
+     */
+    private function programRowHeight(array $labels): int
+    {
+        $lines = max([1, ...array_map('count', $labels)]);
+
+        return max(self::PROGRAM_ROW_MIN_HEIGHT, ($lines + 1) * self::PROGRAM_LABEL_LINE_HEIGHT);
     }
 }

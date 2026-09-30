@@ -1159,6 +1159,29 @@
 
 ### Changed
 
+* **Analytics pick a year, then a month** (D-99, amends FR-ANL-11, FR-ANL-13
+  and FR-ADM-08, PRD revision 1.83, 2026-09-30). No schema change, no new
+  package, no new route.
+  * Director and College Admin Analytics: a **year** picker (2021 → the
+    current year on the server clock) beside a **month** picker that always
+    lists January–December with no year in the label. Months with no visits
+    in scope are greyed out (disabled, grey text on a grey fill) — the
+    selected college on the Director page, the admin's own college on theirs.
+  * `?year=2026&month=09` replaces the single `?month=2026-09`, which is still
+    read (bookmarks, the Print Monthly Report link). A month with no visits
+    moves to that year's latest month with visits; a year with none keeps the
+    month and shows every card empty (`VisitMonths::resolvePicked()`).
+  * **Visits per Month** shows only the selected year — January to December
+    with zeros, stopping at the current month in the current year — and now
+    follows the Director's college filter as well as the admin's program
+    filter. `ClinicAnalytics::visitsTrend()` loses its `withinScope` flag and
+    returns `trendYear` / `trendTotal` instead of `trendMonthCount`.
+  * Unchanged: the Nurse Dashboard's month filter, both printed monthly
+    reports and the Yearly Report.
+  * Tests: year list, twelve-month picker with greyed months, greying by the
+    Director's college, the keep-month / latest-month / empty-year rule,
+    malformed year and month, and the trend's year, axis and college scope.
+
 * **One clinic schedule per student per day** (D-77, amends D-54 / BR-25,
   FR-ADM-04, FR-DIRA-02, 2026-09-23). No schema change, no new package, no new
   route. A batch now clashes with any other `pending`/`approved` batch the
@@ -1256,6 +1279,16 @@
     trap already noted on the kiosk-devices Revoke button.
 
 ### Fixed
+
+* **Every program is named on the Clinic Visits by Program chart**
+  (2026-09-30). No schema change, no new package, no new route.
+  * Rows were a fixed 56 px, too short for program names that wrap to four or
+    five lines (CBS, CIT, COE, GS), so Chart.js hid every other name.
+  * Rows now grow with the most-wrapped name: `ClinicAnalytics::visitsByProgram()`
+    returns `programRowHeight` (COE 84 px; colleges with shorter names keep 56).
+    Chart.js's `autoSkip` is off on that axis. Affects the College Admin page
+    and the Director page with one college selected.
+  * Tests: CCS keeps 56 px rows and the bar's height follows; COE gets 84.
 
 * **The visit page links back to the Clinic Dashboard when opened from it**
   (FR-NRS-09 amended). No schema change, no new package, no new route.

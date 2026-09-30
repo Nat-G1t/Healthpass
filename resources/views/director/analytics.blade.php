@@ -9,22 +9,36 @@
          counts by college and program, and the Monthly Clinic Report (D-97),
          this page's cards as tables. --}}
 
-    {{-- ── Filters row (FR-ANL-13) ──────────────────────────────────────────
-         Month + college scope every card except the trend. Both selects
-         auto-submit the GET form; the overlay shows while reloading. --}}
+    {{-- ── Filters row (FR-ANL-13, D-99) ────────────────────────────────────
+         Year + month + college scope every card; the trend takes the year
+         and the college but not the month. Every select auto-submits the
+         GET form; the overlay shows while reloading. --}}
     <form method="GET" action="{{ route('director.analytics') }}"
           class="hp-load-card mb-4 flex flex-wrap items-center gap-3" style="--i: 0">
-        @if (!empty($availableMonths))
-            <label for="analytics-month" class="sr-only">Analytics month</label>
-            <select id="analytics-month" name="month" data-filter-select
-                    class="rounded-lg border-hp-slate/20 py-1.5 pl-3 pr-8 text-xs font-medium text-hp-slate focus:border-hp-orange focus:ring-hp-orange">
-                @foreach ($availableMonths as $month)
-                    <option value="{{ $month['value'] }}" @selected($month['value'] === $selectedMonth)>
-                        {{ $month['label'] }}
-                    </option>
-                @endforeach
-            </select>
-        @endif
+        <label for="analytics-year" class="sr-only">Analytics year</label>
+        <select id="analytics-year" name="year" data-filter-select
+                class="rounded-lg border-hp-slate/20 py-1.5 pl-3 pr-8 text-xs font-medium text-hp-slate focus:border-hp-orange focus:ring-hp-orange">
+            @foreach ($years as $year)
+                <option value="{{ $year }}" @selected($year === $selectedYear)>{{ $year }}</option>
+            @endforeach
+        </select>
+
+        {{-- January–December of the chosen year. A month the selected
+             college (or the whole clinic) has no visits in is greyed out —
+             grey text on a grey fill, so it reads as unpickable at a glance —
+             except the one being shown: a disabled option is left out of the
+             form submit, so changing another filter would lose it. --}}
+        <label for="analytics-month" class="sr-only">Analytics month</label>
+        <select id="analytics-month" name="month" data-filter-select
+                class="rounded-lg border-hp-slate/20 py-1.5 pl-3 pr-8 text-xs font-medium text-hp-slate focus:border-hp-orange focus:ring-hp-orange">
+            @foreach ($monthOptions as $monthOption)
+                <option value="{{ $monthOption['value'] }}" class="disabled:bg-hp-slate/15 disabled:text-hp-slate/40"
+                        @selected($monthOption['value'] === $selectedMonthNumber)
+                        @disabled(! $monthOption['hasVisits'] && $monthOption['value'] !== $selectedMonthNumber)>
+                    {{ $monthOption['label'] }}
+                </option>
+            @endforeach
+        </select>
 
         <label for="analytics-college" class="sr-only">College filter</label>
         <select id="analytics-college" name="college" data-filter-select
@@ -38,7 +52,7 @@
         </select>
 
         <p class="text-[11px] text-hp-slate/40">
-            Month + college scope every card below · the trend always shows the whole year
+            Year, month + college scope every card below · the trend shows the whole year
         </p>
 
         {{-- ── Print Monthly Report (D-97) ────────────────────────────────────
@@ -93,9 +107,9 @@
         $unitKey = $byProgram ? 'program' : 'code';
         $unitRows = $byProgram ? $programRows : $collegeRows;
         $unitBar = $byProgram ? $programBar : $collegeBar;
-        // Program names wrap onto two or three axis lines; college codes are
-        // three letters on one.
-        $unitRowHeight = $byProgram ? 56 : 32;
+        // Program names wrap onto several axis lines — the row grows with the
+        // longest (ClinicAnalytics); college codes are three letters on one.
+        $unitRowHeight = $byProgram ? $programRowHeight : 32;
     @endphp
     <x-hp.card class="hp-load-card mb-5" style="--i: 1">
         <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
@@ -226,25 +240,25 @@
 
     {{-- ── Trend: its own row, so the two by-sex cards below sit as a pair ── --}}
 
-        {{-- Visits per Month (FR-ANL-11) — ignores both filters by design. --}}
+        {{-- Visits per Month (FR-ANL-11, D-99) — the selected year for the
+             selected college; only the month filter doesn't narrow it. --}}
         <x-hp.card class="hp-load-card mb-5" style="--i: 3">
             <h3 class="text-sm font-semibold text-hp-slate">Visits per Month</h3>
             <p class="mt-1 text-xs text-hp-slate/50">
-                Clinic visits across all months with data — the whole-year,
-                all-college view (ignores the filters above by design).
+                Clinic visits in each month of {{ $trendYear }} — follows the year and college filters.
             </p>
 
-            @if ($trendMonthCount === 0)
+            @if ($trendTotal === 0)
                 <div class="flex flex-col items-center py-10 text-center">
-                    <p class="text-sm font-medium text-hp-slate/60">No visits recorded yet</p>
-                    <p class="mt-1 text-xs text-hp-slate/40">The trend appears once visits span a month.</p>
+                    <p class="text-sm font-medium text-hp-slate/60">No visits recorded in {{ $trendYear }}</p>
+                    <p class="mt-1 text-xs text-hp-slate/40">The trend fills in as students check in at the kiosk.</p>
                 </div>
             @else
                 {{-- One series since D-60, so no legend: the latest point is
                      direct-labeled by the chart itself. --}}
                 <div class="mt-3 h-56" data-trend data-chart="{{ json_encode($trend) }}">
                     <canvas role="img"
-                            aria-label="Line chart: clinic visits per month, all months with data."></canvas>
+                            aria-label="Line chart: clinic visits per month in {{ $trendYear }}."></canvas>
                 </div>
             @endif
         </x-hp.card>

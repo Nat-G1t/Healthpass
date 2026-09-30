@@ -23,7 +23,8 @@ use Tests\TestCase;
  *
  *  - visits count from CAPTURE (FR-ANL-07 as rewritten): captured and
  *    encoded visits alike;
- *  - the month + college filters scope every card except the trend.
+ *  - the year + month + college filters scope every card; the trend takes
+ *    the year and the college but not the month (D-99).
  */
 class AnalyticsPageTest extends TestCase
 {
@@ -119,6 +120,15 @@ class AnalyticsPageTest extends TestCase
     private function page(string $query = ''): TestResponse
     {
         return $this->actingAs($this->director)->get('/director/analytics'.$query);
+    }
+
+    /** The month picker's values that are not greyed out (D-99). */
+    private function pickableMonths(TestResponse $response): array
+    {
+        return array_column(
+            array_filter($response->viewData('monthOptions'), fn (array $option) => $option['hasVisits']),
+            'value',
+        );
     }
 
     public function test_guests_and_other_roles_cannot_open_analytics(): void
@@ -336,27 +346,52 @@ class AnalyticsPageTest extends TestCase
         $this->assertSame(33.3, $tiles[0]['rate']); // 1 of 3 screenings
     }
 
-    public function test_trend_covers_all_months_and_ignores_both_filters(): void
+    public function test_trend_is_the_selected_year_and_follows_the_college(): void
     {
-        // Jan ×2 (both colleges), Feb ×1, Mar ×1 — one series since D-60.
+        // D-99. The server clock sits in April, so the current year's axis
+        // stops there instead of dropping to zero for months still to come.
+        $this->travelTo('2026-04-15 10:00:00');
+
         $ccsStudent = $this->makeStudent($this->ccs);
         $coeStudent = $this->makeStudent($this->coe);
+        $this->makeVisit($ccsStudent, $this->ccs, '2025-12-20'); // another year — never in 2026's trend
         $this->makeVisit($ccsStudent, $this->ccs, '2026-01-10');
         $this->makeVisit($coeStudent, $this->coe, '2026-01-20');
-        $this->makeVisit($ccsStudent, $this->ccs, '2026-02-05');
         $this->makeVisit($ccsStudent, $this->ccs, '2026-03-01');
 
-        $expected = function ($response): void {
-            $trend = $response->viewData('trend');
-            $this->assertSame(['Jan', 'Feb', 'Mar'], $trend['labels']);
-            $this->assertCount(1, $trend['datasets']);
-            $this->assertSame([2, 1, 1], $trend['datasets'][0]['data']);
-        };
+        // All colleges: January to April, February's and April's zeros included.
+        $all = $this->page('?year=2026&month=01')->assertOk();
+        $trend = $all->viewData('trend');
+        $this->assertSame(['Jan', 'Feb', 'Mar', 'Apr'], $trend['labels']);
+        $this->assertCount(1, $trend['datasets']);
+        $this->assertSame([2, 0, 1, 0], $trend['datasets'][0]['data']);
+        $this->assertSame(2026, $all->viewData('trendYear'));
+        $this->assertSame(3, $all->viewData('trendTotal'));
 
-        // The same series regardless of the selected month AND college —
-        // the trend ignores both filters by design (FR-ANL-11/13).
-        $expected($this->page('?month=2026-01')->assertOk());
-        $expected($this->page('?month=2026-02&college='.$this->ccs->id)->assertOk());
+        // The month does not narrow it…
+        $this->assertSame($trend, $this->page('?year=2026&month=03')->assertOk()->viewData('trend'));
+
+        // …the college does.
+        $ccs = $this->page('?year=2026&month=01&college='.$this->ccs->id)->assertOk();
+        $this->assertSame([1, 0, 1, 0], $ccs->viewData('trend')['datasets'][0]['data']);
+    }
+
+    public function test_a_past_years_trend_runs_january_to_december(): void
+    {
+        $this->travelTo('2026-04-15 10:00:00');
+
+        $student = $this->makeStudent($this->ccs);
+        $this->makeVisit($student, $this->ccs, '2025-02-10');
+        $this->makeVisit($student, $this->ccs, '2025-12-20');
+        $this->makeVisit($student, $this->ccs, '2026-01-10'); // another year
+
+        $trend = $this->page('?year=2025&month=02')->assertOk()->viewData('trend');
+
+        $this->assertSame(
+            ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+            $trend['labels'],
+        );
+        $this->assertSame([0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], $trend['datasets'][0]['data']);
     }
 
     public function test_bmi_buckets_split_on_the_rule_boundaries(): void
@@ -432,10 +467,10 @@ class AnalyticsPageTest extends TestCase
         $this->assertSame([0, 1, 0, 0], array_column($may->viewData('bmiRows'), 'count'));
     }
 
-    public function test_college_filter_scopes_every_card_except_the_trend(): void
+    public function test_college_filter_scopes_every_card(): void
     {
         // Same month, two colleges. Every card scopes on the capture-time
-        // college snapshot (FR-STU-09).
+        // college snapshot (FR-STU-09) — since D-99 the trend too.
         $ccsStudent = $this->makeStudent($this->ccs, 'M');
         $coeStudent = $this->makeStudent($this->coe, 'F');
         $this->makeVisit($ccsStudent, $this->ccs, '2026-05-05', vitals: ['is_bp_flagged' => true]);
@@ -451,6 +486,7 @@ class AnalyticsPageTest extends TestCase
         $this->assertSame(1, $response->viewData('flagTiles')[0]['count']);
         $this->assertSame([1, 0], $response->viewData('donut')['datasets'][0]['data']);
         $this->assertSame(1, $response->viewData('bmiTotal'));
+        $this->assertSame(1, $response->viewData('trendTotal'));
     }
 
     public function test_invalid_month_and_college_fall_back_gracefully(): void
@@ -465,12 +501,28 @@ class AnalyticsPageTest extends TestCase
         $this->assertSame('2026-05', $response->viewData('selectedMonth'));
         $this->assertNull($response->viewData('selectedCollegeId'));
         $this->assertSame(1, $response->viewData('totalVisits'));
+
+        // D-99: a year outside the picker, a non-number, or a month that
+        // doesn't exist degrade the same way.
+        foreach (['?year=2019&month=05', '?year=abc&month=05', '?year=2026&month=13'] as $query) {
+            $this->assertSame('2026-05', $this->page($query)->assertOk()->viewData('selectedMonth'));
+        }
     }
 
-    public function test_month_picker_lists_visit_months_newest_first(): void
+    public function test_year_picker_offers_2021_to_the_current_year(): void
     {
-        // FR-ANL-13: every month with a visit is offered, newest first —
-        // and the newest month with data is the default scope.
+        // D-99: every year from the Yearly Report's first year to the SERVER
+        // clock's, newest first — whether or not it has visits.
+        $this->travelTo('2026-04-15 10:00:00');
+
+        $this->assertSame([2026, 2025, 2024, 2023, 2022, 2021], $this->page()->assertOk()->viewData('years'));
+    }
+
+    public function test_month_picker_lists_twelve_months_and_greys_out_empty_ones(): void
+    {
+        // D-99: January to December of the selected year, no year in the
+        // label; only months with a visit can be picked. The newest month
+        // with data is still the default scope.
         $student = $this->makeStudent($this->ccs);
         $this->makeVisit($student, $this->ccs, '2026-03-10');
         $this->makeVisit($student, $this->ccs, '2026-06-05');
@@ -478,13 +530,66 @@ class AnalyticsPageTest extends TestCase
         $response = $this->page()->assertOk();
 
         $this->assertSame(
-            [
-                ['value' => '2026-06', 'label' => 'June 2026'],
-                ['value' => '2026-03', 'label' => 'March 2026'],
-            ],
-            $response->viewData('availableMonths'),
+            ['January', 'February', 'March', 'April', 'May', 'June', 'July',
+                'August', 'September', 'October', 'November', 'December'],
+            array_column($response->viewData('monthOptions'), 'label'),
         );
+        $this->assertSame(['03', '06'], $this->pickableMonths($response));
+        $this->assertSame(2026, $response->viewData('selectedYear'));
         $this->assertSame('2026-06', $response->viewData('selectedMonth'));
+
+        // A greyed-out month renders disabled, with the grey fill + text.
+        $this->assertMatchesRegularExpression(
+            '/<option value="01" class="disabled:bg-hp-slate\/15 disabled:text-hp-slate\/40"\s+disabled>/',
+            $response->getContent(),
+        );
+    }
+
+    public function test_the_month_picker_greys_out_by_the_selected_college(): void
+    {
+        // D-99: with CCS picked, a month only COE had visits in is greyed
+        // out, and asking for it moves to CCS's latest month of that year.
+        $ccsStudent = $this->makeStudent($this->ccs);
+        $coeStudent = $this->makeStudent($this->coe);
+        $this->makeVisit($ccsStudent, $this->ccs, '2026-03-10');
+        $this->makeVisit($coeStudent, $this->coe, '2026-05-10');
+
+        $all = $this->page('?year=2026&month=05')->assertOk();
+        $this->assertSame('2026-05', $all->viewData('selectedMonth'));
+        $this->assertSame(['03', '05'], $this->pickableMonths($all));
+
+        $ccs = $this->page('?year=2026&month=05&college='.$this->ccs->id)->assertOk();
+        $this->assertSame('2026-03', $ccs->viewData('selectedMonth'));
+        $this->assertSame(['03'], $this->pickableMonths($ccs));
+    }
+
+    public function test_switching_year_keeps_the_month_or_moves_to_that_years_latest(): void
+    {
+        $this->travelTo('2026-09-30 10:00:00');
+
+        $student = $this->makeStudent($this->ccs);
+        $this->makeVisit($student, $this->ccs, '2024-02-10');
+        $this->makeVisit($student, $this->ccs, '2024-06-10');
+        $this->makeVisit($student, $this->ccs, '2025-09-10');
+        $this->makeVisit($student, $this->ccs, '2026-09-10');
+
+        // September 2025 has visits — the month is kept.
+        $this->assertSame('2025-09', $this->page('?year=2025&month=09')->assertOk()->viewData('selectedMonth'));
+
+        // September 2024 has none — that year's latest month with visits.
+        $this->assertSame('2024-06', $this->page('?year=2024&month=09')->assertOk()->viewData('selectedMonth'));
+
+        // 2022 has none at all — the month stays and every card is empty.
+        $empty = $this->page('?year=2022&month=09')->assertOk();
+        $this->assertSame('2022-09', $empty->viewData('selectedMonth'));
+        $this->assertSame(0, $empty->viewData('totalVisits'));
+        $this->assertSame(0, $empty->viewData('trendTotal'));
+        $empty->assertSee('No visits recorded in 2022');
+        $this->assertSame([], $this->pickableMonths($empty));
+
+        // The month being shown is never disabled — a disabled option is left
+        // out of the form submit, so the next filter change would lose it.
+        $this->assertMatchesRegularExpression('/<option value="09" class="[^"]*"\s+selected\s*>/', $empty->getContent());
     }
 
     // ── Card swap: by-College becomes by-Program for one college (D-46) ──────

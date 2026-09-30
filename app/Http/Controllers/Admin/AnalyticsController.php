@@ -26,8 +26,8 @@ use Illuminate\View\View;
  * there is nothing for it to override, and no future edit to a validation rule
  * can accidentally open one.
  *
- * The only two filters are the month and the program, and the program is
- * checked against THIS college's catalog before it reaches a query.
+ * The only filters are the year + month (D-99) and the program, and the
+ * program is checked against THIS college's catalog before it reaches a query.
  */
 class AnalyticsController extends Controller
 {
@@ -37,11 +37,14 @@ class AnalyticsController extends Controller
     {
         $college = $this->managedCollege();
 
-        // Both filters degrade rather than error, matching how the Director
-        // page resolves its own (FR-ANL-13): an unparseable month falls back
+        // Every filter degrades rather than errors, matching how the Director
+        // page resolves its own (FR-ANL-13): an unusable year/month falls back
         // to the newest month this college has data in, and an unknown
-        // program falls back to "All programs".
-        $month = VisitMonths::resolve($request->query('month'), $college);
+        // program falls back to "All programs". D-99: the month picker greys
+        // out months by this college, and a month it has no visits in moves
+        // to that year's latest one that it does.
+        $month = VisitMonths::resolvePicked($request->query('year'), $request->query('month'), $college);
+        $years = VisitMonths::years();
         $programs = Programs::forCollege($college->id);
         $program = $this->resolveProgram($request->query('program'), $programs);
 
@@ -49,22 +52,28 @@ class AnalyticsController extends Controller
 
         return view('admin.analytics', [
             'college' => $college,
-            'availableMonths' => VisitMonths::available($college),
+            // D-99: a year picker, then January–December of that year.
+            'years' => $years,
+            'selectedYear' => $month->year,
+            'monthOptions' => VisitMonths::monthsOf($month->year, $college),
+            'selectedMonthNumber' => $month->format('m'),
+            // Y-m, still what the Print Monthly Report link carries.
             'selectedMonth' => $month->format('Y-m'),
             'selectedMonthLabel' => $month->format('F Y'),
             'programs' => $programs,
             'selectedProgram' => $program,
             // FR-ADM-13 (D-81, D-94): the Yearly Report popup's years for both
             // its start and end pickers, newest first.
-            // Built here from the SERVER clock (BR-20) — never in the browser.
-            'reportYears' => range(now()->year, (int) config('healthpass.reports.yearly_first_year')),
+            // Built from the SERVER clock (BR-20) — never in the browser. The
+            // same list as the year picker above.
+            'reportYears' => $years,
             ...$analytics->visitsByProgram(),
             ...$analytics->visitsByPurpose(),
             ...$analytics->vitalSignFlags(),
-            // withinScope: the trend still ignores the month (it is the
-            // whole-year view) but stays inside this college — an admin is
-            // never shown another college's numbers, aggregated or not.
-            ...$analytics->visitsTrend(withinScope: true),
+            // D-99: the selected year, month by month — inside this college
+            // (an admin is never shown another college's numbers, aggregated
+            // or not) and the selected program.
+            ...$analytics->visitsTrend(),
             ...$analytics->bmiDistribution(),
             ...$analytics->bySexDonut(),
             ...$analytics->flagsBySex(),
