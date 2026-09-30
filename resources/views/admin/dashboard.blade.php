@@ -88,7 +88,7 @@
 
         <x-hp.card>
             <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
-                Registered Students
+                Active Students
             </p>
             <p class="mt-3 text-3xl font-bold leading-none text-hp-slate" data-hp-countup>{{ $stats['students'] }}</p>
             <p class="mt-2 text-xs text-hp-slate/50">in {{ $college->code }}</p>

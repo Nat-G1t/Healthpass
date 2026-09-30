@@ -30,7 +30,12 @@ class DashboardController extends Controller
             ->pluck('total', 'status');
 
         $stats = [
-            'students' => $college->studentProfiles()->count(),
+            // D-98: ACTIVE students only — the same set the batch form lists.
+            // A graduated (inactive) account can never be put on a batch, so
+            // counting it here made the card disagree with that form.
+            'students' => $college->studentProfiles()
+                ->whereHas('user', fn ($query) => $query->where('status', 'active'))
+                ->count(),
             'batches' => (int) $batchesByStatus->sum(),
             'pending' => (int) $batchesByStatus->get('pending', 0),
             'approved' => (int) $batchesByStatus->get('approved', 0),

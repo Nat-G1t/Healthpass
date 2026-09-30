@@ -115,6 +115,20 @@ class DashboardTest extends TestCase
         $this->assertSame(2, $stats['approved']);
     }
 
+    public function test_the_student_card_counts_only_active_students(): void
+    {
+        // D-98: graduated (inactive) accounts can't be put on a batch, so the
+        // card must not count them either — it matches the batch picker.
+        StudentProfile::factory()->count(2)->forCollege($this->ccs)->create();
+        $graduate = User::factory()->create(['role' => 'student', 'status' => 'inactive']);
+        StudentProfile::factory()->forCollege($this->ccs)->create(['user_id' => $graduate->id]);
+
+        $response = $this->actingAs($this->admin)->get('/admin/dashboard');
+
+        $response->assertOk()->assertSee('Active Students');
+        $this->assertSame(2, $response->viewData('stats')['students']);
+    }
+
     // ── FR-ADM-06: cross-college isolation ───────────────────────────────────
 
     public function test_table_never_lists_another_colleges_batches(): void
