@@ -54,8 +54,9 @@
                             <p style="margin:0;font-size:15px;font-weight:600;color:#4B5563;text-decoration:line-through;">
                                 {{ $appointment->scheduled_date->format('l, F j, Y') }} · {{ $timeRange }}
                             </p>
+                            {{-- D-101: the Batch ID, not the APT reference number. --}}
                             <p style="margin:6px 0 0;font-size:12px;color:#9CA3AF;">
-                                {{ $formLabel }} · Ref. {{ $appointment->reference_no }}
+                                {{ $formLabel }}@if ($batchRef) · Batch {{ $batchRef }}@endif
                             </p>
                         </div>
 

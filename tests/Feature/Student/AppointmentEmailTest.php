@@ -152,7 +152,10 @@ class AppointmentEmailTest extends TestCase
         $firstBody = (new AppointmentScheduledMail($first))->render();
         $this->assertStringContainsString($first->scheduled_date->format('l, F j, Y'), $firstBody);
         $this->assertStringContainsString('7:00 AM – 8:00 AM', $firstBody);
-        $this->assertStringContainsString($first->reference_no, $firstBody);
+        // D-101: the Batch ID, never the appointment's own APT reference.
+        $this->assertStringContainsString('Batch ID', $firstBody);
+        $this->assertStringContainsString($batch->reference_no, $firstBody);
+        $this->assertStringNotContainsString($first->reference_no, $firstBody);
 
         $lastBody = (new AppointmentScheduledMail($last))->render();
         $this->assertStringContainsString('8:00 AM – 9:00 AM', $lastBody);
@@ -247,8 +250,9 @@ class AppointmentEmailTest extends TestCase
 
         $body = (new AppointmentScheduledMail($appointment))->render();
 
-        // Renders, and shows the em dash the rest of the app uses for these.
-        $this->assertStringContainsString($appointment->reference_no, $body);
+        // Renders, and shows the em dash the rest of the app uses for these —
+        // for the slot, and for the Batch ID of a row with no batch (D-101).
+        $this->assertStringNotContainsString($appointment->reference_no, $body);
         $this->assertStringContainsString('—', $body);
     }
 

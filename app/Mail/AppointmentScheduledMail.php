@@ -49,6 +49,10 @@ class AppointmentScheduledMail extends Mailable
             with: [
                 'appointment' => $this->appointment,
                 'studentName' => $this->appointment->student->name,
+                // D-101: the student is told the Batch ID (BR-YYYY-###), the
+                // number their college also sees — not the appointment's own
+                // APT reference. "—" for an appointment with no batch.
+                'batchRef' => $this->appointment->batchRequest?->reference_no,
                 // Both of these are NULL-safe on pre-D-37 / pre-D-28 rows:
                 // timeRangeLabel() returns "—" for a NULL slot, purposeText()
                 // returns null and the template drops the row.

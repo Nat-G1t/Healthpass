@@ -202,12 +202,13 @@ class BatchApprovalDecisionTest extends TestCase
         $this->approve($batch)->assertRedirect('/director/batches');
 
         // FR-DIRA-03: each student immediately sees their new appointment —
-        // the dashboard's Next Appointment card shows its APT reference.
+        // the dashboard's Next Appointment card shows its Batch ID (D-101).
         foreach ($batch->batchRequestStudents()->with(['student', 'appointment'])->get() as $pivot) {
             $this->actingAs($pivot->student)
                 ->get('/student/dashboard')
                 ->assertOk()
-                ->assertSee($pivot->appointment->reference_no);
+                ->assertSee('Batch ID: '.$batch->reference_no)
+                ->assertDontSee($pivot->appointment->reference_no);
         }
     }
 

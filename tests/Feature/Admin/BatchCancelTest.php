@@ -608,7 +608,9 @@ class BatchCancelTest extends TestCase
         $html = $mail->render();
 
         $this->assertStringContainsString($batch->reference_no, $html);
-        $this->assertStringContainsString($appointment->reference_no, $html);
+        // D-101: the Batch ID only — the APT reference is no longer shown.
+        $this->assertStringContainsString('Batch '.$batch->reference_no, $html);
+        $this->assertStringNotContainsString($appointment->reference_no, $html);
         $this->assertStringContainsString($appointment->scheduled_date->format('l, F j, Y'), $html);
         $this->assertStringContainsString('Your approved schedule is cancelled', $html);
         // Typed by an admin, so it is escaped — never live markup in a webmail.

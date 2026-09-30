@@ -100,7 +100,10 @@
                     </svg>
                     {{ $clinicHoursLabel }}
                 </p>
-                <p class="mt-1 text-xs text-hp-slate/40">{{ $nextAppointment->reference_no }}</p>
+                {{-- D-101: the Batch ID the scheduling email gives, not the APT reference. --}}
+                @if ($nextAppointment->batchRequest)
+                    <p class="mt-1 text-xs text-hp-slate/40">Batch ID: {{ $nextAppointment->batchRequest->reference_no }}</p>
+                @endif
             </div>
 
             {{-- D-39: guidance, not a button. D-87: the appointment cannot be

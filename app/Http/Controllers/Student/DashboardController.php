@@ -47,7 +47,11 @@ class DashboardController extends Controller
         );
 
         // Fetch more than 8 per source so the merged sort picks the true 8 newest overall
-        $recentAppointments = $user->appointments()->latest()->take(16)->get();
+        $recentAppointments = $user->appointments()
+            ->with('batchRequest:id,reference_no') // the Batch ID in each event (D-101)
+            ->latest()
+            ->take(16)
+            ->get();
         $recentVisits = $user->clinicVisits()
             // D-72: Recent Activity lists submitted visits only, like My Records.
             ->submitted()
@@ -61,7 +65,9 @@ class DashboardController extends Controller
                 $recentAppointments->map(fn ($a) => [
                     'icon' => $a->status === 'cancelled' ? 'x' : 'calendar',
                     'label' => $a->status === 'cancelled' ? 'Appointment cancelled' : 'Appointment booked',
-                    'detail' => $a->reference_no.' · '.ucfirst($a->service_type).' Clearance',
+                    // D-101: the Batch ID the student was emailed, not the APT reference.
+                    'detail' => ($a->batchRequest ? 'Batch '.$a->batchRequest->reference_no.' · ' : '')
+                        .ucfirst($a->service_type).' Clearance',
                     'at' => $a->created_at,
                 ])
             )

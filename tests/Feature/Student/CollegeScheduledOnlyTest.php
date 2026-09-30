@@ -103,8 +103,10 @@ class CollegeScheduledOnlyTest extends TestCase
         $this->actingAs($this->student)
             ->get(route('student.dashboard'))
             ->assertOk()
-            // The Next Appointment card is still there, read-only…
-            ->assertSee($appointment->reference_no)
+            // The Next Appointment card is still there, read-only, naming
+            // the Batch ID rather than the APT reference (D-101)…
+            ->assertSee('Batch ID: BR-'.now()->year.'-001')
+            ->assertDontSee($appointment->reference_no)
             ->assertSee('Booked by College of Computing Studies')
             // …with the one-line notice where Book New Appointment used to be…
             ->assertSee('Your college requests your clinic schedule.')

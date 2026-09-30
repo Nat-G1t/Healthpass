@@ -46,13 +46,13 @@
                             You did not need to do anything — the details are below.
                         </p>
 
-                        {{-- Reference block --}}
+                        {{-- Batch ID block (D-101 — was the APT reference number) --}}
                         <div style="text-align:center;background:#FFF7F0;border-radius:10px;padding:20px 0;margin-bottom:24px;">
                             <p style="margin:0 0 6px;font-size:12px;color:#9CA3AF;letter-spacing:1px;text-transform:uppercase;">
-                                Reference number
+                                Batch ID
                             </p>
                             <p style="margin:0;font-size:24px;font-weight:700;letter-spacing:3px;color:#FF8C2A;">
-                                {{ $appointment->reference_no }}
+                                {{ $batchRef ?? '—' }}
                             </p>
                         </div>
 
