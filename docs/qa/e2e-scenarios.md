@@ -1597,7 +1597,7 @@ before the cutoff and **Absent** after it; and BMI never triggers any of it.
 
 ---
 
-## E2E-26 — A student reads their own record and saves it as a PDF (D-73)
+## E2E-26 — A student reads their own record, with no download (D-73, D-106)
 
 **Roles:** Student · Nurse (to encode) · a second Student (the 404 check)
 **Preconditions:** two students on approved batches for today — **one on a
@@ -1624,11 +1624,10 @@ HP-2026-9001 / HP-2026-9005 pair works). Both have completed a kiosk pass.
 6. Read the **Clinic Notes** card. → **Expect:** the nurse's note verbatim.
 7. Narrow the browser to **phone width (~390px)**. → **Expect:** every card
    stacks and stays readable; no horizontal scrolling.
-8. Click **Save as PDF**. → **Expect:** a download named
-   `HP-…-medical-clearance.pdf`. Open it: **one US Letter page**, identical to
-   what the clinic prints. Sign back in as the nurse and open the visit. →
-   **Expect:** the encode screen still says the document has **not** been
-   printed — a student's download is not a clinic print.
+8. Look over the Result card and the whole page for a way to get the
+   document. → **Expect:** there is **no Save as PDF** button and no other
+   download (D-106). The Result card shows the result with its details below
+   it, and no empty space where the button used to be.
 
 ### Part B — a Medical Assessment Form record
 
@@ -1643,29 +1642,31 @@ HP-2026-9001 / HP-2026-9005 pair works). Both have completed a kiosk pass.
     History** (female students only — a male student's page has neither), and
     the **Pertinent Physical Examination** showing only the findings the clinic
     ticked.
-11. Click **Save as PDF**. → **Expect:** one file named
-    `HP-…-medical-assessment.pdf`. Open it and check the page count: **two US
-    Legal pages in the one file** — front and back. There are **no** "front" /
-    "back" buttons on the student's page.
+11. Look for a download. → **Expect:** none — no Save as PDF, and no "front" /
+    "back" print buttons either (D-106).
 
 ### Part C — nothing you shouldn't see
 
 12. Copy the other student's record URL (`/student/records/<their id>`) and open
     it while signed in as the first student. → **Expect:** **404**, not 403.
-    Same for `/student/records/<their id>/pdf`.
 13. Take a student whose visit is still **awaiting encode** (`captured`) and
     open their own record URL. → **Expect:** **404** — nothing clinical exists
     before the clinic encodes it (FR-STU-08). Same for a **resting** visit
     (D-72), which the list does not show at all.
-14. Reload the PDF URL more than **ten times in a minute**. → **Expect:** a
-    **429**; the page itself still loads.
+14. Signed in as the first student, type **your own** encoded record's URL
+    with `/pdf` on the end (`/student/records/<your id>/pdf`). → **Expect:**
+    the **404** page — the student download route no longer exists (D-106).
+15. Sign in as the **nurse**, open the same visit from the encode history and
+    click **Save as PDF**. → **Expect:** the clinic's PDF still downloads — the
+    clinic's copy is unchanged.
 
 **Pass criteria:** the record page shows the clinic's confirmed vitals, the
 twelve rows with the clinic's findings, the notes and — on an Assessment — that
-form's own sections, with V/VI only for a female student; Save as PDF returns
-the clinic's own document as one file (Letter ×1 / Legal ×2) and never stamps
-`printed_at`; another student's record and an un-encoded visit are both 404;
-and My Records carries no record data of its own.
+form's own sections, with V/VI only for a female student; the page offers **no
+download** and `/student/records/<id>/pdf` is a 404 even for the student's own
+visit, while the clinic's Save as PDF still works; another student's record and
+an un-encoded visit are both 404; and My Records carries no record data of its
+own.
 
 ---
 

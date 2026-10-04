@@ -25,8 +25,8 @@
          shrink-to-fit script.
 
      Every value arrives from App\Support\ClearanceDocument — the print, the
-     preview, the clinic PDF and (prompt 14) the student download all build
-     their data there, so the four can never disagree.
+     preview and the clinic PDF all build their data there, so the three can
+     never disagree.
 
      One page, always (FR-PRT-05): nothing here may wrap onto a page 2.
      R04 has no BMI box, so BMI is not printed (it stays on My Records).

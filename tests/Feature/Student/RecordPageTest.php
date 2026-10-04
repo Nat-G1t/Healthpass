@@ -6,6 +6,7 @@ namespace Tests\Feature\Student;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Route;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Support\StudentRecordFixture;
 use Tests\TestCase;
@@ -18,6 +19,10 @@ use Tests\TestCase;
  * FR-STU-08 — nothing clinical before encoding: a captured or resting visit
  * has no page at all, and neither does another student's visit. Both are 404,
  * never 403 — a 403 would confirm the id exists.
+ *
+ * D-106 — the student reads the record on screen but no longer downloads the
+ * document: the Save as PDF button and its route (FR-STU-15) are gone, and the
+ * old URL is a 404.
  */
 class RecordPageTest extends TestCase
 {
@@ -39,9 +44,7 @@ class RecordPageTest extends TestCase
             ->assertSee('Field Trip/Educational Tour')
             // D-64: who encoded it, with their role.
             ->assertSee('Jane Dela Cruz')
-            ->assertSee('Nurse')
-            ->assertSee('Save as PDF')
-            ->assertSee(route('student.records.pdf', $visit), false);
+            ->assertSee('Nurse');
     }
 
     public function test_another_students_visit_is_not_found(): void
@@ -256,5 +259,44 @@ class RecordPageTest extends TestCase
             ->get(route('student.records.show', $visit))
             ->assertOk()
             ->assertSee('Clinic');
+    }
+
+    // ── 4. No student download (D-106, supersedes FR-STU-15) ────────────────
+
+    /** Hiding the button is not enough: the route itself is gone. */
+    public function test_the_student_pdf_route_no_longer_exists(): void
+    {
+        $this->assertFalse(Route::has('student.records.pdf'));
+    }
+
+    /**
+     * The old URL typed by hand, for the student's OWN encoded visit — the
+     * one case the removed route used to serve.
+     */
+    public function test_the_old_pdf_url_is_not_found(): void
+    {
+        $student = $this->makeStudent();
+        $visit = $this->encodedVisit($student);
+
+        $this->actingAs($student)
+            ->get("/student/records/{$visit->id}/pdf")
+            ->assertNotFound();
+    }
+
+    public function test_the_record_page_offers_no_download(): void
+    {
+        $student = $this->makeStudent();
+
+        foreach (['clearance', 'assessment'] as $formType) {
+            $visit = $this->encodedVisit($student, $formType);
+
+            $html = $this->actingAs($student)
+                ->get(route('student.records.show', $visit))
+                ->assertOk()
+                ->assertDontSee('Save as PDF')
+                ->getContent();
+
+            $this->assertDoesNotMatchRegularExpression('~href="[^"]*/pdf"~', $html);
+        }
     }
 }

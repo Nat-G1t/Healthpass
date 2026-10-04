@@ -1159,6 +1159,26 @@
 
 ### Changed
 
+* **Students no longer download their clearance document** (D-106,
+  supersedes FR-STU-15 and the student half of D-73; amends FR-STU-07,
+  FR-STU-08, FR-PRT-02 and §6.6; PRD revision 1.90, 2026-10-04). No schema
+  change, no new package; one route removed.
+  * The Clinic Record page keeps everything it showed — result, purpose,
+    encoder, vitals, physical signs, student remarks and the Assessment
+    sections — minus the **Save as PDF** button and its note. The Result card
+    drops its right-hand column, so the details span the card.
+  * **Removed:** `GET /student/records/{visit}/pdf` (`student.records.pdf`,
+    `throttle:10,1,record-pdf`) and `Student\RecordsController::pdf()`. The
+    old URL is a 404 for every visit, the student's own included.
+  * Unchanged: the clinic's Print / Save as PDF (`nurse.visits.print`,
+    `nurse.visits.pdf`), `App\Support\VisitDocument` and the `forms/`
+    templates, which the Director-approved release (D-113) and the clinic's
+    Upcoming Batches downloads (D-114) will reuse.
+  * Tests: `RecordPdfTest` is deleted; `RecordPageTest` now checks that the
+    route name is gone, that `/student/records/{own visit}/pdf` is a 404, and
+    that neither form's record page shows "Save as PDF" or any link ending in
+    `/pdf`. The clinic's PDF tests are untouched and green.
+
 * **The batch reason is called Purpose; a batch needs at least two
   students** (D-105, amends FR-ADM-02, FR-ADM-03, FR-ADM-05, FR-DIRA-01,
   BR-06 and BR-07, PRD revision 1.89, 2026-10-04). No schema change, no new

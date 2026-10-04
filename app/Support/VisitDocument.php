@@ -13,11 +13,11 @@ use App\Models\MedicalAssessment;
  * (D-62) and nothing else: which template renders it, what paper it is laid
  * out on, and what the downloaded file is called.
  *
- * Why its own class: since D-73 the document has FIVE callers — the clinic's
- * print, the pre-save preview, the clinic's Reprint, the clinic's Save as PDF
- * and now the student's own Save as PDF. If each decided "assessment → two
- * pages, -medical-assessment.pdf" for itself, a student's download could
- * one day disagree with the clinic's copy of the same visit. One definition
+ * Why its own class: the document has several callers — the clinic's print,
+ * the pre-save preview, the clinic's Reprint and the clinic's Save as PDF
+ * (D-73 added a student Save as PDF; D-106 removed it). If each decided
+ * "assessment → two pages, -medical-assessment.pdf" for itself, one copy
+ * could one day disagree with another copy of the same visit. One definition
  * makes that impossible.
  *
  * It holds no state, so every method is static (the same shape as
@@ -37,8 +37,8 @@ final class VisitDocument
     /**
      * dompdf's paper size. Both forms are US Letter since D-83: the Medical
      * Assessment Form is two Letter pages (it was Legal under D-71), the
-     * Medical Clearance one (FR-PRT-05). Kept as a method so the clinic's and
-     * the student's PDF still share one definition.
+     * Medical Clearance one (FR-PRT-05). Kept as a method so every PDF of a
+     * visit shares one definition.
      */
     public static function paper(ClinicVisit $visit): string
     {

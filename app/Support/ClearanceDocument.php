@@ -13,11 +13,12 @@ use App\Models\ClinicVisit;
  * once and handed to the ONE template (`resources/views/forms/`) that both the
  * browser print and the dompdf PDF render.
  *
- * Why a class and not view logic: four callers render this same document —
- * the nurse's print, the pre-save preview, the clinic's Save as PDF and
- * (prompt 14) the student's download. If each assembled its own view data the
- * four could quietly disagree about an age, a purpose or a physician name, and
- * a clearance is an official record. One builder makes that impossible.
+ * Why a class and not view logic: three callers render this same document —
+ * the nurse's print, the pre-save preview and the clinic's Save as PDF (the
+ * student's download, added by D-73, was removed by D-106). If each assembled
+ * its own view data they could quietly disagree about an age, a purpose or a
+ * physician name, and a clearance is an official record. One builder makes
+ * that impossible.
  *
  * A "support class" is just a plain PHP class under `app/Support` — no Laravel
  * base class, no magic. It is called statically because it holds no state.

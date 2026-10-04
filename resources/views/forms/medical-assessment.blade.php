@@ -21,8 +21,8 @@
          default and would drop a background fill on an official form.
 
      Every value arrives from App\Support\AssessmentDocument — the print, the
-     pre-save preview, the clinic PDF and (prompt 14) the student download all
-     build their data there, so the four can never disagree.
+     pre-save preview and the clinic PDF all build their data there, so the
+     three can never disagree.
 ──────────────────────────────────────────────────────────────────────────── --}}
 <!DOCTYPE html>
 <html lang="en">

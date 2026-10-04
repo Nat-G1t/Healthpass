@@ -14,11 +14,12 @@ use App\Models\User;
 use App\Models\VitalSigns;
 
 /**
- * D-73 — one fixture for the student's record page and their Save as PDF.
+ * D-73 — one fixture for the student's record page (it also served the
+ * student's Save as PDF tests until D-106 removed that download).
  *
- * A PHP trait is a block of methods a class can pull in; both test classes
- * `use` this one so a visit is built the same way for the page and for the
- * document it downloads, and the two can never drift apart.
+ * A PHP trait is a block of methods a class can pull in; a test class `use`s
+ * this one so a student's visit — batch, appointment, vitals, kiosk answers
+ * and the clinic's record — is built the same way in every test.
  */
 trait StudentRecordFixture
 {

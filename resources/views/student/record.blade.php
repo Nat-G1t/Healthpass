@@ -2,8 +2,9 @@
 
 {{-- ── One clinic visit's full record (FR-STU-07, D-73) ─────────────────────────
      A read-only page, not the old modal: everything the clinic encoded for
-     this visit, in the order the official document lays it out, plus Save as
-     PDF (FR-STU-15) — the SAME document, as one file.
+     this visit, in the order the official document lays it out. There is no
+     download (D-106 removed FR-STU-15's Save as PDF) — the document itself
+     stays with the clinic and the Director.
 
      Only an ENCODED visit reaches this view (FR-STU-08); the controller 404s
      anything else, and anything belonging to another student.
@@ -54,65 +55,42 @@
 
 <div class="space-y-5">
 
-    {{-- ── Result + the document ───────────────────────────────────────────── --}}
+    {{-- ── Result ──────────────────────────────────────────────────────────── --}}
     <x-hp.card>
-        <div class="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-            <div class="min-w-0 space-y-3">
-                <div>
-                    <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Result</p>
-                    {{-- FR-STU-08: visible here and nowhere before encoding —
-                         never on the kiosk. --}}
-                    <p class="mt-1 text-2xl font-bold {{ $record->result === 'Fit' ? 'text-emerald-600' : 'text-hp-orange' }}">
-                        {{ $record->result }}
-                    </p>
-                </div>
-
-                <dl class="grid gap-x-8 gap-y-3 text-sm sm:grid-cols-2">
-                    <div>
-                        <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Purpose</dt>
-                        <dd class="mt-0.5 text-hp-slate">{{ $purpose ?? '—' }}</dd>
-                    </div>
-                    <div>
-                        {{-- D-64: name AND role, so a physician's encode reads as theirs. --}}
-                        <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Encoded by</dt>
-                        <dd class="mt-0.5 text-hp-slate">
-                            {{ $record->encoder?->name ?? '—' }}@if ($record->encoder) ({{ $record->encoder->roleLabel() }})@endif
-                        </dd>
-                    </div>
-                    <div>
-                        <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Encoded on</dt>
-                        <dd class="mt-0.5 text-hp-slate">{{ $record->encoded_at?->format('F j, Y g:i A') ?? '—' }}</dd>
-                    </div>
-                    <div>
-                        <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Student</dt>
-                        <dd class="mt-0.5 text-hp-slate">
-                            {{ $visit->student?->name ?? '—' }}
-                            <span class="block font-mono text-xs text-hp-slate/45">{{ $profile?->student_number ?? '—' }}</span>
-                        </dd>
-                    </div>
-                </dl>
-            </div>
-
-            {{-- FR-STU-15 — Save as PDF: a plain GET link, because the response
-                 is a downloaded file and this page never navigates. ONE file:
-                 the Medical Assessment Form's two Letter pages come down
-                 together, for a print shop to run back-to-back (D-71/D-83). --}}
-            <div class="shrink-0 sm:text-right">
-                <a href="{{ route('student.records.pdf', $visit) }}"
-                   class="inline-flex w-full items-center justify-center gap-2 rounded-full bg-hp-orange
-                          px-6 py-2.5 text-sm font-semibold text-white transition-colors duration-hp-fast
-                          hover:bg-orange-500 focus-visible:outline-none focus-visible:ring-2
-                          focus-visible:ring-hp-orange focus-visible:ring-offset-1 sm:w-auto">
-                    Save as PDF
-                </a>
-                <p class="mt-2 text-xs text-hp-slate/50 sm:max-w-[15rem]">
-                    @if ($isAssessment)
-                        Both pages in one file — print on short bond (US Letter), back-to-back.
-                    @else
-                        One page — US Letter.
-                    @endif
+        <div class="space-y-3">
+            <div>
+                <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Result</p>
+                {{-- FR-STU-08: visible here and nowhere before encoding —
+                     never on the kiosk. --}}
+                <p class="mt-1 text-2xl font-bold {{ $record->result === 'Fit' ? 'text-emerald-600' : 'text-hp-orange' }}">
+                    {{ $record->result }}
                 </p>
             </div>
+
+            <dl class="grid gap-x-8 gap-y-3 text-sm sm:grid-cols-2">
+                <div>
+                    <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Purpose</dt>
+                    <dd class="mt-0.5 text-hp-slate">{{ $purpose ?? '—' }}</dd>
+                </div>
+                <div>
+                    {{-- D-64: name AND role, so a physician's encode reads as theirs. --}}
+                    <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Encoded by</dt>
+                    <dd class="mt-0.5 text-hp-slate">
+                        {{ $record->encoder?->name ?? '—' }}@if ($record->encoder) ({{ $record->encoder->roleLabel() }})@endif
+                    </dd>
+                </div>
+                <div>
+                    <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Encoded on</dt>
+                    <dd class="mt-0.5 text-hp-slate">{{ $record->encoded_at?->format('F j, Y g:i A') ?? '—' }}</dd>
+                </div>
+                <div>
+                    <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Student</dt>
+                    <dd class="mt-0.5 text-hp-slate">
+                        {{ $visit->student?->name ?? '—' }}
+                        <span class="block font-mono text-xs text-hp-slate/45">{{ $profile?->student_number ?? '—' }}</span>
+                    </dd>
+                </div>
+            </dl>
         </div>
     </x-hp.card>
 

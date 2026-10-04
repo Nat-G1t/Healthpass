@@ -6,10 +6,7 @@ namespace App\Http\Controllers\Student;
 
 use App\Http\Controllers\Controller;
 use App\Models\ClinicVisit;
-use App\Support\VisitDocument;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
 use Illuminate\View\View;
 
 /**
@@ -19,12 +16,13 @@ use Illuminate\View\View;
  * Signs rows and, on a Medical Assessment Form visit, that form's own
  * sections.
  *
- * FR-STU-15 — Save as PDF: the SAME document the clinic prints (D-67/D-71),
- * as ONE file the student can take to a print shop.
+ * D-106 — the student reads the record here but cannot download the official
+ * document: the Save as PDF action (FR-STU-15) is removed. The document stays
+ * with the clinic and the Director.
  *
  * FR-STU-08 — nothing clinical before encoding: only an `encoded` visit has a
- * page or a PDF at all. A captured or resting one is a 404, exactly like a
- * visit belonging to somebody else.
+ * page at all. A captured or resting one is a 404, exactly like a visit
+ * belonging to somebody else.
  */
 class RecordsController extends Controller
 {
@@ -76,27 +74,7 @@ class RecordsController extends Controller
     }
 
     /**
-     * FR-STU-15 — the student's own Save as PDF. It goes through
-     * App\Support\VisitDocument, the same builder the clinic's print and PDF
-     * use, so the file a student downloads IS the clinic's document: Letter
-     * and one page for a Medical Clearance, Letter and BOTH pages in one file
-     * for a Medical Assessment Form (D-71/D-83). The student gets no front/back
-     * buttons — a print shop duplexes the one file.
-     *
-     * It never stamps `printed_at`: that column is the CLINIC's record of
-     * when the document was printed (FR-NRS-05), not the student's download.
-     */
-    public function pdf(Request $request, string $visit): Response
-    {
-        $visit = $this->ownedEncodedVisit($request, $visit);
-
-        return Pdf::loadView(VisitDocument::template($visit), VisitDocument::data($visit))
-            ->setPaper(VisitDocument::paper($visit))
-            ->download(VisitDocument::filename($visit));
-    }
-
-    /**
-     * The one ownership rule both routes above obey.
+     * The ownership rule the record page obeys.
      *
      * The lookup runs THROUGH the signed-in student's own relation, so another
      * student's visit id simply is not found — a 404, never a 403. A 403 would
@@ -110,7 +88,7 @@ class RecordsController extends Controller
     {
         return $request->user()->clinicVisits()
             // FR-STU-08: captured (awaiting the clinic) and resting (D-72)
-            // visits have no record to show and no document to print.
+            // visits have no record to show.
             ->where('status', 'encoded')
             ->findOrFail($visitId);
     }
