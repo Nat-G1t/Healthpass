@@ -89,6 +89,9 @@ return [
     // absent too. Decided on the server, never in the browser.
     'absent_cutoff' => env('HEALTHPASS_ABSENT_CUTOFF', '20:00'),
 
+    // BR-26 (D-107): months a Fit result stays valid from its encoded date — display-only (student dashboard card).
+    'clearance_validity_months' => 6,
+
     // §7.4, D-10: Rule-based flag thresholds — screening signals, not diagnoses.
     // All flag logic (kiosk badges, nurse queue, Director anomalies) reads ONLY from here. (NFR-7, BR-13)
     'thresholds' => [

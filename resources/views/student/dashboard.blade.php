@@ -26,14 +26,31 @@
         </p>
 
         @if ($latestClearance)
+            @php
+                // D-107 / BR-26: a Fit result is valid for N months from its
+                // encoded date. Both are null/false for Unfit, so an Unfit
+                // card looks exactly as it did before.
+                $validUntil = $latestClearance->validUntil();
+                $isExpired = $latestClearance->isExpired();
+                $validityMonths = (int) config('healthpass.clearance_validity_months');
+            @endphp
             <div class="mt-4 flex-1">
-                <x-hp.badge :variant="$latestClearance->result === 'Fit' ? 'fit' : 'unfit'">
-                    {{ $latestClearance->result }}
+                <x-hp.badge :variant="$isExpired ? 'danger' : ($latestClearance->result === 'Fit' ? 'fit' : 'unfit')">
+                    {{ $isExpired ? 'Expired' : $latestClearance->result }}
                 </x-hp.badge>
                 <p class="mt-2 text-xs text-hp-slate/50">
                     Last updated
                     {{ ($latestClearance->encoded_at ?? $latestClearance->created_at)->format('M j, Y') }}
                 </p>
+                @if ($validUntil)
+                    <p class="mt-1 text-xs text-hp-slate/50">
+                        @if ($isExpired)
+                            Expired — was valid until {{ $validUntil->format('M j, Y') }}
+                        @else
+                            Valid for {{ $validityMonths }} {{ Str::plural('month', $validityMonths) }} — until {{ $validUntil->format('M j, Y') }}
+                        @endif
+                    </p>
+                @endif
             </div>
         @else
             <div class="mt-4 flex-1 flex flex-col items-center py-4 text-center">

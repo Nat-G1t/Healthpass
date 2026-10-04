@@ -1159,6 +1159,25 @@
 
 ### Changed
 
+* **The student's Clearance Status card shows the six-month validity of a
+  Fit result** (D-107, amends FR-STU-01, adds BR-26, PRD revision 1.91,
+  2026-10-04). No schema change, no new package, no new route.
+  * Under "Last updated" a Fit card reads **"Valid for 6 months — until
+    Apr 4, 2027"**: the encoded date (`encoded_at`, else `created_at`) plus
+    the new config `healthpass.clearance_validity_months` (6), with no month
+    overflow — Aug 31 → Feb 28. Valid through that date.
+  * From the next day (server clock) the badge reads **Expired** in red and
+    the line **"Expired — was valid until Apr 4, 2027"**. The newest result
+    decides, so a new Fit after an expired one is valid again.
+  * Both forms. An Unfit card is unchanged. Display-only: the kiosk, the
+    batches, emails and staff pages are untouched.
+  * New `ClearanceRecord::validUntil()` / `isExpired()`; `<x-hp.badge>` gains
+    one `danger` variant (`bg-red-100 text-red-700`).
+  * Tests: `tests/Feature/Student/ClearanceValidityTest.php` (valid line,
+    last valid day, expired next day, Aug 31 → Feb 28, Unfit, `created_at`
+    fallback, newer Fit decides, config of 3) and
+    `tests/Unit/ClearanceRecordValidityTest.php`.
+
 * **Students no longer download their clearance document** (D-106,
   supersedes FR-STU-15 and the student half of D-73; amends FR-STU-07,
   FR-STU-08, FR-PRT-02 and §6.6; PRD revision 1.90, 2026-10-04). No schema

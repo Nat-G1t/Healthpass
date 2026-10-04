@@ -4,6 +4,7 @@
         Peach group  — bg-hp-peach, text-hp-orange:  positive | approved | fit | flagged
         Live         — bg-hp-orange, text-white:      live
         Slate group  — bg-hp-slate/10, text-hp-slate: neutral | pending | rejected | unfit
+        Red          — bg-red-100, text-red-700:      danger (an Expired clearance, D-107)
     --}}
 ])
 
@@ -13,6 +14,7 @@
                      => 'bg-hp-peach text-hp-orange',
         'flagged'    => 'bg-hp-peach text-hp-orange',
         'live'       => 'bg-hp-orange text-white',
+        'danger'     => 'bg-red-100 text-red-700',
         'rejected', 'unfit'
                      => 'bg-hp-slate/10 text-hp-slate',
         default      => 'bg-hp-slate/10 text-hp-slate', // neutral | pending

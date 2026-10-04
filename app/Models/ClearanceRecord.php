@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Carbon;
 
 class ClearanceRecord extends Model
 {
@@ -174,6 +175,40 @@ class ClearanceRecord extends Model
                 ->all(),
             'bmi' => $kioskReading->bmi,
         ];
+    }
+
+    /**
+     * D-107 / BR-26 — the last day a Fit result is valid: the day it was
+     * encoded (falling back to created_at, like the dashboard's "Last
+     * updated") plus `healthpass.clearance_validity_months`. The result is
+     * valid THROUGH this date and expired from the next day. NULL for Unfit,
+     * which has no validity at all.
+     *
+     * "No overflow" means a month too short for the day is clamped to its
+     * last day instead of spilling into the next month: Aug 31 + 6 months is
+     * Feb 28, never Mar 3. copy() keeps the record's own date untouched.
+     */
+    public function validUntil(): ?Carbon
+    {
+        if ($this->result !== 'Fit') {
+            return null;
+        }
+
+        return ($this->encoded_at ?? $this->created_at)
+            ->copy()
+            ->startOfDay()
+            ->addMonthsNoOverflow((int) config('healthpass.clearance_validity_months'));
+    }
+
+    /**
+     * D-107 / BR-26 — true once today is past validUntil(). Always false for
+     * Unfit. Decided on the server clock (`today()`), never the browser's.
+     */
+    public function isExpired(): bool
+    {
+        $validUntil = $this->validUntil();
+
+        return $validUntil !== null && today()->gt($validUntil);
     }
 
     // ── Relationships ────────────────────────────────────────────────────────
