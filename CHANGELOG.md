@@ -1159,6 +1159,25 @@
 
 ### Changed
 
+* **The Monthly and Yearly reports carry the official PSU letterhead**
+  (D-104, amends FR-ADM-09, FR-ADM-13, FR-ANL-15 and FR-ANL-16, PRD
+  revision 1.88, 2026-10-04). No schema change, no new package, no new route.
+  * The Monthly Clinic Report (College Admin and Director — one template)
+    and both Yearly Report PDFs open with the Medical Assessment form's
+    letterhead: Republic of the Philippines / **PAMPANGA STATE UNIVERSITY** /
+    (former Don Honorio Ventura State University) on the left, the PSU seal
+    and Bagong Pilipinas on the right, a thin black rule underneath.
+  * Top of page 1 only; a multi-year PDF's year pages don't repeat it. Each
+    report's own title block follows unchanged, minus its "Pampanga State
+    University" line (the letterhead already says it).
+  * New `resources/views/reports/partials/letterhead.blade.php` (dompdf-safe,
+    CSS scoped under `.hp-letterhead`) and
+    `ClearanceDocument::letterheadLogos()` (the forms' base64 logo cache).
+    The official forms in `resources/views/forms/` are untouched.
+  * Tests: all four outputs carry the three letterhead lines and both inline
+    logos, name the university once, and put the letterhead above the title
+    block (`tests/Support/AssertsPsuLetterhead.php`).
+
 * **Analytics is called Data Summary; the kiosk says "Confirm?"; Batch
   Tracking's request card is headed "Batch requests"** (D-103, amends
   FR-KSK-03, FR-ADM-05, FR-ADM-08, the §4.9 Director analytics FRs and the

@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Models\VitalSigns;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
+use Tests\Support\AssertsPsuLetterhead;
 use Tests\TestCase;
 
 /**
@@ -31,6 +32,7 @@ use Tests\TestCase;
  */
 class MonthlyReportTest extends TestCase
 {
+    use AssertsPsuLetterhead;
     use RefreshDatabase;
 
     /** Real CCS programs, so config/programs.php (D-42) backs them. */
@@ -378,6 +380,12 @@ class MonthlyReportTest extends TestCase
             ->assertSee('data-hp-print-doc', false)
             ->assertSee('covers data captured by HealthPass only')
             ->assertDontSee('hp-sidebar');  // the app shell's <aside>
+    }
+
+    public function test_the_report_opens_with_the_psu_letterhead(): void
+    {
+        // D-104: the Medical Assessment form's letterhead tops the printout.
+        $this->assertPsuLetterhead($this->report('?month=2026-05')->assertOk()->getContent());
     }
 
     public function test_the_report_renders_with_no_data_at_all(): void

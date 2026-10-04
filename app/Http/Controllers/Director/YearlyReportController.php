@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\YearlyReportRequest;
 use App\Services\DirectorYearlyReport;
 use App\Support\ClearanceCounts;
+use App\Support\ClearanceDocument;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Response;
 
@@ -44,6 +45,7 @@ class YearlyReportController extends Controller
             'spanSummary' => ClearanceCounts::sum(array_column($years, 'summary')),
             'generatedAt' => now(),
             'generatedBy' => $request->user()->name,
+            'logos' => ClearanceDocument::letterheadLogos(),  // D-104 letterhead
         ])
             ->setPaper('letter', 'portrait')
             ->download("HealthPass-Yearly-Report-All-Colleges-{$request->spanLabel()}.pdf");

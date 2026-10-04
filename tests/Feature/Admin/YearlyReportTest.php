@@ -18,6 +18,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Response;
 use Illuminate\Testing\TestResponse;
 use Mockery;
+use Tests\Support\AssertsPsuLetterhead;
 use Tests\TestCase;
 
 /**
@@ -30,6 +31,7 @@ use Tests\TestCase;
  */
 class YearlyReportTest extends TestCase
 {
+    use AssertsPsuLetterhead;
     use RefreshDatabase;
 
     private const BSIT = 'Bachelor of Science in Information Technology';
@@ -303,6 +305,15 @@ class YearlyReportTest extends TestCase
         $this->assertStringContainsString('Santos, Juan', $html);
         // No span page and no page break for a single year.
         $this->assertStringNotContainsString('<div class="year">', $html);
+    }
+
+    public function test_the_pdf_opens_with_the_psu_letterhead_once(): void
+    {
+        // D-104: on page 1 only — a span's year sections start new pages
+        // without repeating it.
+        [$view, $data] = $this->capturePdf('?from=2024&to=2026');
+
+        $this->assertPsuLetterhead(view($view, $data)->render());
     }
 
     // ── Scope (FR-AUTH-06 / FR-ADM-06) ───────────────────────────────────────

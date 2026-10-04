@@ -17,6 +17,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Response;
 use Illuminate\Testing\TestResponse;
 use Mockery;
+use Tests\Support\AssertsPsuLetterhead;
 use Tests\TestCase;
 
 /**
@@ -30,6 +31,7 @@ use Tests\TestCase;
  */
 class YearlyReportTest extends TestCase
 {
+    use AssertsPsuLetterhead;
     use RefreshDatabase;
 
     private College $ccs;
@@ -257,6 +259,14 @@ class YearlyReportTest extends TestCase
         $this->assertSame(2, substr_count($html, '<td class="program">BSCS</td>'));
         // Counts only — no student is ever named.
         $this->assertStringNotContainsString('Student 5', $html);
+    }
+
+    public function test_the_pdf_opens_with_the_psu_letterhead_once(): void
+    {
+        // D-104: on page 1 only, not on each year's page.
+        [$view, $data] = $this->capturePdf('?from=2025&to=2026');
+
+        $this->assertPsuLetterhead(view($view, $data)->render());
     }
 
     // ── The analytics page ───────────────────────────────────────────────────

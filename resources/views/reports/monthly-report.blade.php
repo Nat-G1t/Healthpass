@@ -60,10 +60,6 @@
 
     /* ── Header ─────────────────────────────────────────────────────────── */
     .head { border-bottom: 2px solid #FF8C2A; padding-bottom: 10px; }
-    .univ {
-        font-size: 12pt; font-weight: 700; letter-spacing: 0.04em;
-        text-transform: uppercase;
-    }
     .clinic { font-size: 9pt; color: #4B5563; }
     .title { margin-top: 10px; font-size: 15pt; font-weight: 700; color: #C2410C; }
     .college { margin-top: 2px; font-size: 11pt; font-weight: 600; }
@@ -118,11 +114,14 @@
      the frame holds THIS document — never a redirect or an error page. --}}
 <body data-hp-print-doc>
 
+{{-- ── Letterhead (D-104) — the official PSU letterhead, page 1 only. It
+     names the university, so the header below no longer repeats it. --}}
+@include('reports.partials.letterhead')
+
 {{-- ── Header (FR-ADM-09) ─────────────────────────────────────────────────
      The printout has to stand alone on a desk: whose report, for which month,
      under which filter, produced by whom and when. --}}
 <div class="head">
-    <p class="univ">Pampanga State University</p>
     <p class="clinic">University Clinic &middot; HealthPass</p>
 
     <h1 class="title">Monthly Clinic Report</h1>

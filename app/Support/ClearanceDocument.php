@@ -215,6 +215,22 @@ final class ClearanceDocument
     }
 
     /**
+     * The two letterhead logos for the HealthPass reports (D-104): the PSU
+     * seal and Bagong Pilipinas — the Medical Assessment form's letterhead,
+     * without the Medical Clearance's OSWF block. Same logo() cache as the
+     * forms, so a report never re-encodes a file the request already read.
+     *
+     * @return array{seal: string, bagong: string}
+     */
+    public static function letterheadLogos(): array
+    {
+        return [
+            'seal' => self::logo('pamsu-seal'),
+            'bagong' => self::logo('bagong-pilipinas'),
+        ];
+    }
+
+    /**
      * One vital as the form prints it. The three vitals stored with a decimal
      * keep it — JSON hands back a bare 37 where the form wants 37.0.
      *

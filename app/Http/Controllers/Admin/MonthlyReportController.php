@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Admin\Concerns\ScopedToManagedCollege;
 use App\Http\Controllers\Controller;
 use App\Services\ClinicAnalytics;
+use App\Support\ClearanceDocument;
 use App\Support\Programs;
 use App\Support\VisitMonths;
 use Illuminate\Http\Request;
@@ -56,6 +57,7 @@ class MonthlyReportController extends Controller
             'selectedProgram' => $program,
             'generatedAt' => now(),
             'generatedBy' => $request->user()->name,
+            'logos' => ClearanceDocument::letterheadLogos(),  // D-104 letterhead
             ...$analytics->visitsByProgram(),
             ...$analytics->visitsByPurpose(),
             ...$analytics->vitalSignFlags(),

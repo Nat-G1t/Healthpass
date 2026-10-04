@@ -42,7 +42,6 @@
 
     /* ── Header (same wording as the Monthly Report) ────────────────────── */
     .head { border-bottom: 2px solid #FF8C2A; padding-bottom: 8px; }
-    .univ { font-size: 12pt; font-weight: bold; letter-spacing: 0.04em; text-transform: uppercase; }
     .clinic { font-size: 9pt; color: #4B5563; }
     .title { margin-top: 8px; font-size: 15pt; font-weight: bold; color: #C2410C; }
     .college { margin-top: 2px; font-size: 11pt; font-weight: bold; }
@@ -88,8 +87,11 @@
 </head>
 <body>
 
+{{-- Letterhead (D-104) — page 1 only; it names the university, so the
+     header below no longer repeats it. --}}
+@include('reports.partials.letterhead')
+
 <div class="head">
-    <p class="univ">Pampanga State University</p>
     <p class="clinic">University Clinic &middot; HealthPass</p>
 
     <p class="title">Yearly Clearance Report</p>

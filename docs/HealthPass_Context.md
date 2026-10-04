@@ -80,7 +80,7 @@ Only **students** self-register. `nurse`, `physician` (D-64), `college_admin`, a
 | Enable Kiosk Mode · kiosk staff exit | | | ✓ | ✓ | |
 | View own clearance records | ✓ | | | | |
 | View analytics + flagged anomalies | | | | | ✓ |
-| Download own college's Yearly Clearance Report (PDF — FR-ADM-13, D-81; beside Print Monthly Report on the admin's Data Summary page — "Analytics" before D-103) | | ✓ | | | |
+| Download own college's Yearly Clearance Report (PDF — FR-ADM-13, D-81; beside Print Monthly Report on the admin's Data Summary page — "Analytics" before D-103; both reports open with the PSU letterhead, D-104) | | ✓ | | | |
 | Provision staff accounts (College Admin / Nurse / Physician) and correct a physician's license | | | | | ✓ |
 | Seed colleges / the first Director | (admin seed) | | | | |
 
@@ -550,7 +550,13 @@ then nurse-edited — D-76).
 > D-94/D-97:** the Yearly Report PDF and a **Print Monthly Report** (D-97,
 > FR-ANL-16) — the College Admin's report template with visits by college
 > plus a College Summary table (visits, flagged, abnormal BMI, male, female
-> per college); with one college picked it prints that college only. The approved layout is `docs/prototypes/web/director-analytics-rescope.html`.
+> per college); with one college picked it prints that college only.
+> **Both printouts — and the College Admin's two — open with the official
+> PSU letterhead (D-104):** the Medical Assessment form's (Republic of the
+> Philippines / PAMPANGA STATE UNIVERSITY / (former Don Honorio Ventura State
+> University), the PSU seal and Bagong Pilipinas, a thin black rule) at the
+> top of page 1, above the report's own title block, which no longer repeats
+> the university's name (`reports/partials/letterhead.blade.php`). The approved layout is `docs/prototypes/web/director-analytics-rescope.html`.
 - **Filters** (FR-ANL-13): a **year picker** (2021 → the current year) + a **month picker** listing January–December of that year, months with no visits in scope greyed out (D-99), + a **college dropdown** (default "All colleges"). All three scope every card; the Visits-per-Month trend takes the year and the college but not the month.
 - **Clinic Visits by College** (FR-ANL-09) — horizontal bar chart, one row per college (all 11 since D-43, zero-visit rows included), **a single Visits series in `#FF8C2A` — D-60 dropped the Medical / Dental split and its legend** — sorted by visits descending, total-visits headline, "View as table" toggle (college × visits). Visits = kiosk check-ins (`clinic_visits`, capture-time `college_id` snapshot). Includes a **Visits by Purpose** mini bar chart from the linked appointment's `purpose`/`purpose_other`; visits with no linked appointment or purpose fall into a "Not specified" bucket ("Walk-in / not specified" until D-61).
 - **Vital-Sign Flags** (FR-ANL-10) — **five** stat tiles since D-66 (High BP, Fever, Abnormal BMI, **High Heart Rate**, **Abnormal Respiratory Rate**), each showing count **and rate** (% of the month's captured screenings — the same denominator for all five). Recomputed server-side from `vital_signs` flags; every caption is built from `config('healthpass.thresholds')`, and the respiratory-rate tile's caption says "measured by the clinic at encode" because only encoded visits can contribute to its count. The College Admin's page and the printed monthly report carry the same five.

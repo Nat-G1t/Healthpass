@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Director;
 use App\Http\Controllers\Controller;
 use App\Models\College;
 use App\Services\ClinicAnalytics;
+use App\Support\ClearanceDocument;
 use App\Support\VisitMonths;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -42,6 +43,7 @@ class MonthlyReportController extends Controller
             'selectedProgram' => null,
             'generatedAt' => now(),
             'generatedBy' => $request->user()->name,
+            'logos' => ClearanceDocument::letterheadLogos(),  // D-104 letterhead
             ...($college === null ? $analytics->visitsByCollege() : $analytics->visitsByProgram()),
             ...$analytics->collegeSummary(),
             ...$analytics->visitsByPurpose(),

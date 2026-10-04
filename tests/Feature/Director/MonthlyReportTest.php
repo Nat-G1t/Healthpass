@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Models\VitalSigns;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
+use Tests\Support\AssertsPsuLetterhead;
 use Tests\TestCase;
 
 /**
@@ -23,6 +24,7 @@ use Tests\TestCase;
  */
 class MonthlyReportTest extends TestCase
 {
+    use AssertsPsuLetterhead;
     use RefreshDatabase;
 
     private const BSIT = 'Bachelor of Science in Information Technology';
@@ -144,6 +146,12 @@ class MonthlyReportTest extends TestCase
 
         $this->assertSame(['CCS'], array_keys($this->summaryByCode($response)));
         $this->assertSame(1, $response->viewData('totalVisits'));
+    }
+
+    public function test_the_report_opens_with_the_psu_letterhead(): void
+    {
+        // D-104: the same letterhead as the College Admin's printout (one template, D-97).
+        $this->assertPsuLetterhead($this->report('?month=2026-05')->assertOk()->getContent());
     }
 
     public function test_a_hand_edited_college_falls_back_to_all_colleges(): void
