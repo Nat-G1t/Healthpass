@@ -139,6 +139,20 @@ class AnalyticsPageTest extends TestCase
         $this->actingAs($this->nurse)->get('/director/analytics')->assertRedirect();
     }
 
+    public function test_the_page_and_its_menu_item_are_called_data_summary(): void
+    {
+        // D-103: only the visible name changed; the URL is still /director/analytics.
+        $response = $this->page()->assertOk()
+            ->assertSee('<title>Data Summary — HealthPass</title>', false)
+            ->assertSee('Data Summary</h1>', false);
+
+        // The nav markup only: comments and the route name still say "analytics".
+        preg_match('/<nav\b.*?<\/nav>/s', $response->getContent(), $nav);
+        $this->assertStringContainsString('Batch Approvals', $nav[0]);
+        $this->assertStringContainsString('Data Summary', $nav[0]);
+        $this->assertStringNotContainsString('Analytics', $nav[0]);
+    }
+
     public function test_page_renders_with_no_data_at_all(): void
     {
         $this->page()

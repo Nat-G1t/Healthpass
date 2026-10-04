@@ -56,7 +56,7 @@
                             <strong class="font-semibold text-hp-slate">{{ $transferNotice['from'] }}</strong>
                             to <strong class="font-semibold text-hp-slate">{{ $transferNotice['to'] }}</strong>.
                             Every page now shows {{ $transferNotice['toCode'] }}'s students, batch
-                            requests and analytics. We have emailed you a copy of this notice.
+                            requests and Data Summary. We have emailed you a copy of this notice.
                         </p>
 
                         <div class="mt-6 flex justify-end">

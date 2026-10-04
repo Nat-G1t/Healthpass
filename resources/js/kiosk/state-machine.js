@@ -1238,7 +1238,7 @@ export function kioskMachine() {
         },
 
         /**
-         * "That's me" → schedule check (FR-KSK-03a, D-61). The server already
+         * "Confirm?" → schedule check (FR-KSK-03a, D-61). The server already
          * decided, at identity time, whether this student has a `scheduled`
          * appointment today (`hasAppointmentToday`). With one, we go straight to
          * Privacy Consent; without one, the "No Clinic Schedule Today" screen,

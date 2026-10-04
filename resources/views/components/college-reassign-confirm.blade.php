@@ -112,7 +112,7 @@
                     from now on.
                     @if ($currentCollege)
                         They lose access to {{ $currentCollege }} immediately, including its
-                        batch requests and analytics.
+                        batch requests and Data Summary.
                     @endif
                 </p>
 

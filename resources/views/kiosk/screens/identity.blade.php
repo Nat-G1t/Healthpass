@@ -1,7 +1,7 @@
 ﻿{{-- Identity Confirm (FR-KSK-03): large initials avatar, "Identity Verified ✓",
      greeting with first name, and college/course/year/student number. The
      identity object is set by either QR scan or email login (arriveAtIdentity).
-     "That's me" → consent; "Not you?" → full reset to Welcome (FR-KSK-13). --}}
+     "Confirm?" (D-103) → consent; "Not you?" → full reset to Welcome (FR-KSK-13). --}}
 <section class="kiosk-screen" x-show="state.screen === 'identity'" x-cloak
          x-transition:enter="transition ease-hp-out duration-hp-base"
          x-transition:enter-start="opacity-0 translate-y-1"
@@ -44,7 +44,7 @@
                 type="button"
                 @click="confirmIdentity()"
                 class="rounded-2xl bg-hp-orange px-14 py-5 text-lg font-semibold text-hp-white shadow-sm transition hover:brightness-95 active:scale-[0.98]"
-            >That's me — Continue</button>
+            >Confirm?</button>
             <button
                 type="button"
                 @click="reset()"

@@ -175,6 +175,18 @@ class KioskIdentityTest extends TestCase
         ])->assertStatus(422)->assertJson(['ok' => false]);
     }
 
+    // ── Identity Confirm screen (FR-KSK-03, D-103) ─────────────────────────────
+
+    public function test_the_identity_confirm_button_reads_confirm(): void
+    {
+        // Unescaped checks: an escaped "That's me" (&#039;) could never match.
+        $this->get(route('kiosk.index'))
+            ->assertOk()
+            ->assertSee('>Confirm?</button>', false)
+            ->assertDontSee("That's me", false)
+            ->assertSee('Not you?');
+    }
+
     // ── CSRF self-heal token (long-lived kiosk page) ──────────────────────────
 
     public function test_token_endpoint_returns_a_csrf_token(): void

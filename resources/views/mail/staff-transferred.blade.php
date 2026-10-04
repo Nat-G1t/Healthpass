@@ -55,7 +55,7 @@
 
                         <p style="margin:0 0 24px;color:#6B7280;">
                             From now on you will see {{ $toCode }}'s students, batch requests and
-                            analytics. You no longer have access to {{ $fromCode }}'s records —
+                            Data Summary. You no longer have access to {{ $fromCode }}'s records —
                             anything you submitted for them stays on file with that college.
                         </p>
 

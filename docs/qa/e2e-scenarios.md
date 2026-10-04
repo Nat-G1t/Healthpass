@@ -31,7 +31,7 @@ to use, what to click, and what you should see.
 |---|---|---|
 | Nurse | `nurse@healthpass.test` | Clinic Dashboard (encode history) + Live Queue + Encode |
 | Physician (D-64) | `physician@healthpass.test` | Same pages as the nurse; name + license print on records they encode |
-| Clinic Director | `director@healthpass.test` | Approvals + Analytics |
+| Clinic Director | `director@healthpass.test` | Approvals + Data Summary |
 | CCS College Admin | `admin.ccs@healthpass.test` | Pattern: `admin.<code>@healthpass.test` |
 | CEA College Admin | `admin.cea@healthpass.test` | For cross-college tests |
 | Student — Juan Santos (CCS) | `juan.santos@psu.edu.ph` | Student no. `2021060001` |
@@ -95,7 +95,7 @@ students never book for themselves and never walk in.
    `password` using the on-screen keyboard, press **Enter**. → **Expect:** the
    Identity Confirm screen with Juan's name, college (CCS), course, year, and
    student number.
-10. Click **That's me — Continue**.
+10. Click **Confirm?**.
 11. **Schedule check:** Juan has an appointment today, so the flow goes
     straight to Privacy Consent. (If you see "No Clinic Schedule Today"
     instead, the batch from steps 1–2 is not approved for today — go back and
@@ -127,7 +127,7 @@ students never book for themselves and never walk in.
     **NEXT**, with his vitals summarised and **no flags** (Flags column shows
     "—").
 20a. **Second kiosk login the same day (FR-KSK-03b).** Back on the kiosk tab,
-    log in as Juan again. → **Expect:** after **That's me**, the screen **You're
+    log in as Juan again. → **Expect:** after **Confirm?**, the screen **You're
     all done for today** with the same `HP-…` reference and "Please proceed to
     the clinic and wait to be called." — no Consent, no vitals, **no
     Fit/Unfit**. **Back to start** returns to Welcome. The Live Queue still
@@ -171,7 +171,7 @@ since D-61 there are none.)
    E2E-1 steps 1–2, or run those two steps again for her.
 2. Open `http://127.0.0.1:8080/kiosk`. On Welcome, click **Log in with
    email**, enter `maria.reyes@psu.edu.ph` / `password`, press **Enter**.
-3. Click **That's me — Continue**. → **Expect:** straight to Privacy Consent
+3. Click **Confirm?**. → **Expect:** straight to Privacy Consent
    (she has an appointment today).
 4. Click **I Agree — Proceed** on Privacy Consent.
 5. **Height:** enter `160`. **Weight:** enter `85` → **Expect:** BMI ~`33.2`
@@ -386,14 +386,14 @@ and that a crafted dental request cannot get one into the database.
    there is **no Service Type field** and no "Dental" on the page. Submit a
    small batch and open its confirmation. → **Expect:** it reads **Medical
    Clearance**.
-3. Open **Analytics** as the College Admin, with a month that has visits. →
+3. Open **Data Summary** as the College Admin, with a month that has visits. →
    **Expect:** *Clinic Visits by Program* is **one bar series**, its "View as
    table" toggle has a single **Visits** column, and *Visits per Month* is one
    line. No Medical/Dental legend swatches, no blue `#2563EB` series.
 4. Click **Print Monthly Report**. → **Expect:** the summary line reads
    *"N total visits"* with no medical/dental split, and the program table has
    **Program | Visits** only.
-5. Log in as the Clinic Director, open **Analytics** with **All colleges**, then
+5. Log in as the Clinic Director, open **Data Summary** with **All colleges**, then
    filter to **one college**. → **Expect:** the same — one series, one Visits
    column, no legend, no "Dental" in either view.
 6. Press **Ctrl+F** on each of those four pages and search for `Dental`. →
@@ -474,7 +474,7 @@ shows for the same scope.
 
 **Steps:**
 
-1. Log in as the **CCS admin** and open **Analytics**. Pick a **month that has
+1. Log in as the **CCS admin** and open **Data Summary**. Pick a **month that has
    data**. → **Expect:** the scope banner names your college, and Clinic Visits
    by Program lists **every CCS program**, zero-visit ones included.
 2. Write down, from the screen: the **total visits** headline, each
@@ -482,8 +482,8 @@ shows for the same scope.
    **Vital-Sign Flag** counts and rates, the four **BMI** bucket counts, and the
    **Male / Female** counts and percentages.
 3. Click **Print Monthly Report**. → **Expect:** the browser's **print dialog
-   opens straight away, on the Analytics page itself** — **no new tab**. The
-   dialog's preview pane is the report. Cancel it: you are still on Analytics
+   opens straight away, on the Data Summary page itself** — **no new tab**. The
+   dialog's preview pane is the report. Cancel it: you are still on Data Summary
    with your filters and scroll position untouched.
 4. Compare the preview against step 2. → **Expect:** **every number matches.**
    The header carries the university, **College of Computing Studies (CCS)**,
@@ -764,7 +764,7 @@ today). Nurse `nurse@healthpass.test`.
 
 1. Open `http://127.0.0.1:8080/kiosk`, click **Lost ID? Log in with email**,
    and log in as the student. → **Expect:** Identity Confirm with her name.
-2. Click **That's me — Continue**. → **Expect:** a screen titled **"No Clinic
+2. Click **Confirm?**. → **Expect:** a screen titled **"No Clinic
    Schedule Today"** reading "You don't have a clinic schedule today.
    Clearances are scheduled through your college, so please ask your college
    office to include you in a batch request."
@@ -1064,12 +1064,12 @@ reach the Director's screens. Run it after E2E-2, which already covers the
    and **not** the 100-bpm one; the **Abnormal Respiratory Rate** count
    includes the 21 and the 11 and **not** the 20 or the 12. Each flagged row
    lists the label with its value (`101 bpm`, `21 breaths/min`).
-9. Open **Analytics** for the same month. → **Expect:** the Vital-Sign Flags
+9. Open **Data Summary** for the same month. → **Expect:** the Vital-Sign Flags
    card shows **five** tiles; the High Heart Rate and Abnormal Respiratory Rate
    counts match step 8, and their rates are a % of the month's captured
    screenings. The respiratory tile's caption reads **"measured by the clinic
    at encode"**.
-10. Log in as a **College Admin** for that college, open **Analytics** → the
+10. Log in as a **College Admin** for that college, open **Data Summary** → the
     same five tiles; click **Print monthly report** → the Vital-Sign Flags
     table has **five** rows with the same counts and rates.
 11. As the 101-bpm student, open **My Records** and view the encoded visit.
@@ -1186,7 +1186,7 @@ cannot be talked out of it.
    that batch. Log out.
 3. Open the kiosk at `http://127.0.0.1:8080/kiosk`, click **Lost ID? Log in
    with email**, sign in as `juan.santos@psu.edu.ph` / `password`, click
-   **That's me — Continue**, then **I Agree — Proceed**.
+   **Confirm?**, then **I Agree — Proceed**.
 4. Enter the four vitals manually (e.g. `165`, `60`, `36.8`, `118`/`76`/`72`).
 5. **Questionnaire.** → **Expect:** the heading reads exactly **"Physical Signs
    Disorder of:"** — **no "(Self Assessment)"**. Answer **No** to all twelve
@@ -1208,7 +1208,7 @@ cannot be talked out of it.
    time pick the **Medical Assessment Form** tile, Reason **On-the-job
    Training**, **today**, a **Start time in a later hour that has not ended**,
    tick **Juan Santos**, submit. Log out, approve it as the Director, log out.
-10. Open the kiosk again and take Juan through email login → **That's me** →
+10. Open the kiosk again and take Juan through email login → **Confirm?** →
     **I Agree** → the four vitals, exactly as before.
 11. **Questionnaire.** → **Expect:** the heading now reads **"Physical Signs
     Disorder of: (Self Assessment)"**. The twelve cards and their helper lines
@@ -1509,7 +1509,7 @@ the steps below assume that value.
 6. Sign in as the **Director** and open **Flagged Anomalies** and the
    **Dashboard**. → **Expect:** the 150/95 appears in **neither** — not in the
    table, not in the five stat cards, not in the dashboard preview, and not on
-   the sidebar badge. Open **Analytics**: the month's visit total is unchanged
+   the sidebar badge. Open **Data Summary**: the month's visit total is unchanged
    by this student.
 7. Sign in as the **student** and open **My Records**. → **Expect:** nothing new
    is listed — the visit does not exist as far as they can see.
@@ -1525,7 +1525,7 @@ the steps below assume that value.
 
 9. Wait out the rest (or, for a demo, move it into the past:
    `php artisan tinker --execute="App\Models\ClinicVisit::where('reference_no','HP-...')->update(['resting_until'=>now()->subMinute()]);"`).
-   Scan the ID again. → **Expect:** **Identity Confirm**, then "That's me"
+   Scan the ID again. → **Expect:** **Identity Confirm**, then "Confirm?"
    goes **straight to the vitals screen** — **no consent, no questionnaire, no
    Personal / Social History**, and no "No Clinic Schedule Today".
 10. → **Expect:** **only the Blood Pressure step** is shown, the progress dots
@@ -1704,7 +1704,7 @@ on both forms.
 ### Part A — a male student
 
 1. At the kiosk, log in as `juan.santos@psu.edu.ph` (then, on the second run,
-   `carlo.cruz@psu.edu.ph`), **That's me**, **I Agree**, and enter the four
+   `carlo.cruz@psu.edu.ph`), **Confirm?**, **I Agree**, and enter the four
    vitals by hand.
 2. **Questionnaire.** → **Expect:** the twelve cards and **no "Are you
    Pregnant?" card**; the footer reads **"0 of 12 answered"**.
@@ -1748,7 +1748,7 @@ the nurse (to encode one more visit if needed).
 
 **Steps:**
 
-1. Log in as the **CCS admin** and open **Analytics**. → **Expect:** a
+1. Log in as the **CCS admin** and open **Data Summary**. → **Expect:** a
    **Yearly Report (PDF)** button right beside **Print Monthly Report**, same
    style, with a download icon.
 2. Change the **program filter** to one program first (the page reloads), then
@@ -1759,7 +1759,7 @@ the nurse (to encode one more visit if needed).
    dark backdrop → closes. Open it again and click **Cancel** → closes.
 4. Open it, keep the current year, click **Confirm**. → **Expect:** the file
    `HealthPass-Yearly-Report-CCS-<year>.pdf` downloads, the popup closes, and
-   you are **still on Analytics** — no spinner and no orange loading bar left
+   you are **still on Data Summary** — no spinner and no orange loading bar left
    running, and the cards do not replay their load-up animation.
 5. Open the PDF. → **Expect:** the header (university, **College of Computing
    Studies (CCS)**, "Yearly Clearance Report", the year, "Generated … by
@@ -1782,10 +1782,10 @@ the nurse (to encode one more visit if needed).
    `/admin/analytics/yearly-report?year=<this year>&college=<another college's id>`.
    → **Expect:** the downloaded file is still named **CCS** and holds only CCS
    visits. Try `?year=2020` → **Expect:** refused (you are sent back, no file).
-9. Log in as the **Director** and open **Analytics**. → **Expect:** **no**
+9. Log in as the **Director** and open **Data Summary**. → **Expect:** **no**
    Yearly Report button.
 
-**Pass criteria:** the PDF downloads without leaving Analytics; its five
+**Pass criteria:** the PDF downloads without leaving Data Summary; its five
 numbers equal the hand count and Fit + Unfit = Total; it always covers the whole
 college; an empty year still downloads; `?college=` cannot move the scope.
 

@@ -182,6 +182,21 @@ class AnalyticsPageTest extends TestCase
         $this->actingAs($unassigned)->get('/admin/analytics')->assertForbidden();
     }
 
+    // ── Visible name (D-103) ─────────────────────────────────────────────────
+
+    public function test_the_page_and_its_menu_item_are_called_data_summary(): void
+    {
+        $response = $this->page()->assertOk()
+            ->assertSee('<title>Data Summary — HealthPass</title>', false)
+            ->assertSee('Data Summary</h1>', false);
+
+        // The nav markup only: comments and the route name still say "analytics".
+        preg_match('/<nav\b.*?<\/nav>/s', $response->getContent(), $nav);
+        $this->assertStringContainsString('Batch Tracking', $nav[0]);
+        $this->assertStringContainsString('Data Summary', $nav[0]);
+        $this->assertStringNotContainsString('Analytics', $nav[0]);
+    }
+
     // ── Scope (FR-ADM-06) ────────────────────────────────────────────────────
 
     public function test_the_page_shows_only_the_admins_own_college(): void

@@ -1159,6 +1159,25 @@
 
 ### Changed
 
+* **Analytics is called Data Summary; the kiosk says "Confirm?"; Batch
+  Tracking's request card is headed "Batch requests"** (D-103, amends
+  FR-KSK-03, FR-ADM-05, FR-ADM-08, the §4.9 Director analytics FRs and the
+  §8.3 nav labels, PRD revision 1.87, 2026-10-04). No schema change, no new
+  package, no new route.
+  * College Admin and Director: the sidebar item, the page title and header,
+    and the screen-reader year/month labels read **Data Summary**; so does
+    the prose that names the page in the college-transfer notice, its
+    confirm dialog and its email. URLs, route names (`admin.analytics`,
+    `director.analytics`) and class/file names are unchanged.
+  * Kiosk Identity Confirm: **"That's me — Continue" → "Confirm?"**, same
+    size and colour; "Not you?" is unchanged.
+  * Batch Tracking: the requests card gets a **"Batch requests"** label in
+    the Batch Results card's 11px uppercase style, above the table and the
+    empty state.
+  * Tests: the kiosk page shows `Confirm?` and no "That's me"; both pages'
+    nav reads Data Summary with no "Analytics", and their title says Data
+    Summary; Batch Tracking shows the header with and without batches.
+
 * **Analytics pick a year, then a month** (D-99, amends FR-ANL-11, FR-ANL-13
   and FR-ADM-08, PRD revision 1.83, 2026-09-30). No schema change, no new
   package, no new route.

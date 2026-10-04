@@ -1,4 +1,4 @@
-<x-layout.sidebar title="Analytics">
+<x-layout.sidebar title="Data Summary">
 
     {{-- College Admin Analytics (FR-ADM-08, D-45).
          Deliberately the Director's page one college down: same cards, same
@@ -26,7 +26,7 @@
          the GET form; the overlay shows while reloading. --}}
     <form method="GET" action="{{ route('admin.analytics') }}"
           class="hp-load-card mb-4 flex flex-wrap items-center gap-3" style="--i: 1">
-        <label for="analytics-year" class="sr-only">Analytics year</label>
+        <label for="analytics-year" class="sr-only">Data Summary year</label>
         <select id="analytics-year" name="year" data-filter-select
                 class="rounded-lg border-hp-slate/20 py-1.5 pl-3 pr-8 text-xs font-medium text-hp-slate focus:border-hp-orange focus:ring-hp-orange">
             @foreach ($years as $year)
@@ -39,7 +39,7 @@
              unpickable at a glance — except the one being shown: a disabled
              option is left out of the form submit, so changing another filter
              would lose it. --}}
-        <label for="analytics-month" class="sr-only">Analytics month</label>
+        <label for="analytics-month" class="sr-only">Data Summary month</label>
         <select id="analytics-month" name="month" data-filter-select
                 class="rounded-lg border-hp-slate/20 py-1.5 pl-3 pr-8 text-xs font-medium text-hp-slate focus:border-hp-orange focus:ring-hp-orange">
             @foreach ($monthOptions as $monthOption)

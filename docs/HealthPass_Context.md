@@ -80,7 +80,7 @@ Only **students** self-register. `nurse`, `physician` (D-64), `college_admin`, a
 | Enable Kiosk Mode · kiosk staff exit | | | ✓ | ✓ | |
 | View own clearance records | ✓ | | | | |
 | View analytics + flagged anomalies | | | | | ✓ |
-| Download own college's Yearly Clearance Report (PDF — FR-ADM-13, D-81; beside Print Monthly Report on the admin's Analytics page) | | ✓ | | | |
+| Download own college's Yearly Clearance Report (PDF — FR-ADM-13, D-81; beside Print Monthly Report on the admin's Data Summary page — "Analytics" before D-103) | | ✓ | | | |
 | Provision staff accounts (College Admin / Nurse / Physician) and correct a physician's license | | | | | ✓ |
 | Seed colleges / the first Director | (admin seed) | | | | |
 
@@ -272,9 +272,9 @@ Home, Calendar, FileText, QrCode, Plus, List, Activity, Edit, BarChart, Alert, C
 | Role | Nav items |
 |---|---|
 | Student | Dashboard · My Records (+ the D-73 Clinic Record page) · My ID (D-61 removed Book Appointment and My Appointments) |
-| College Admin | Dashboard · New Batch Request · Batch Tracking |
+| College Admin | Dashboard · New Batch Request · Batch Tracking · Data Summary (FR-ADM-08; "Analytics" before D-103) |
 | Nurse | Live Queue · Encode Result · Enable Kiosk Mode (Kiosk Devices: enroll/revoke trusted terminals, D-27) |
-| Clinic Director | Dashboard · Batch Approvals · Analytics · Flagged Anomalies |
+| Clinic Director | Dashboard · Batch Approvals · Data Summary (D-103; was "Analytics") · Flagged Anomalies |
 
 **Unread badges (D-57, FR-UI-05):** a solid orange badge on a menu item — a dot for 1, the number for 2–9, "9+" from 10, nothing at 0 — at the top-right of the item's label (expanded sidebar, phone drawer) or of its icon (collapsed rail). Orange even on the active item. Refreshed on page load only; no polling.
 
@@ -392,6 +392,7 @@ Students are scheduled only through their college (a batch request the Clinic Di
 
 #### Batch Tracking (`admin-batch-tracking`)
 - **Batch Results card** (D-55, FR-ADM-12), **above** the requests table and rendered only when the college has at least one approved batch: every **approved** batch, newest clinic date first, as **Batch ID · Time of Completion · Status · View** (blank header) (D-86). A batch is done at its **last encode** when every student was encoded before 8:00 PM on the clinic date, otherwise **at 8:00 PM** whether or not everyone came; Time of Completion shows that moment ("—" until then), and **Status** reads **In progress** / **Completed** / **No one attended** (every student Absent). A **Batch ID search** box on the card filters it server-side, across all pages. **View** opens a teleported popup — reference, service, clinic date, hour span, and per student: name, student no., hour, **Status** (Not yet attended / **Re-check** / At the clinic / Completed / Absent / **Did not finish** — **Re-check** is D-72: the student reached the kiosk, a reading was high, and they are resting before re-taking it; **Did not finish** is D-86: at the 8 PM cutoff the student was still resting or not yet encoded. Students withdrawn before D-87 are not listed.) and **Result** (Fit / Unfit / "—"). A student with no clinic visit is **Absent from 8:00 PM on the clinic date** (`healthpass.absent_cutoff`, server clock). **Outcome only** — no vitals, screening answers, nurse notes, physician details or visit reference. The student list scrolls past about six rows. Rebuilt on every page load (no polling).
+- **Requests card header (D-103):** the card holding the table is labelled **"Batch requests"** — the Batch Results card's 11px uppercase label style, no caption — above the table and above the "No batch requests yet" empty state.
 - Table: Batch ID, **Form Type (D-62)**, Reason (truncated with ellipsis), Students, Submitted, Status (Pending shows as "Pending Director Approval"; `cancelled` shows as "Cancelled" — D-52).
 - **Rejection Reason** column (D-36) appears only when the list holds at least one rejected row.
 - **Cancel column** (D-52, FR-ADM-11): a trailing column with a **blank header**, rendered only when at least one row is cancellable, holding a Cancel control on **pending rows only** (every other row gets an em dash). Clicking it opens a confirmation dialog naming the reference, the student count and the requested clinic date. Blank-headed because it holds an action rather than a value — the same shape as the Withdraw column on the batch roster.
@@ -539,7 +540,7 @@ then nurse-edited — D-76).
 - **On Reject** (D-36): a **written reason is required** (10–500 chars, `RejectBatchRequest`). Update `batch_requests.status` → `Rejected` and store `batch_requests.rejection_reason`. No appointments created. This is also the escape hatch when the Director can't take the requested date — "date unavailable, please resubmit for &lt;X&gt;" — since the date can no longer be adjusted at approval. The College Admin reads the reason on Batch Tracking.
 - Approved/rejected rows show "✓ Approved" or "✕ Rejected" static text (no action buttons).
 
-#### Analytics (`director-analytics`) — rescoped by D-32 (v1.11)
+#### Data Summary (`director-analytics`) — called "Analytics" before D-103; rescoped by D-32 (v1.11)
 > The Medical Cases analytics (Medical Cases by College, Summary of Medical
 > Cases matrix, Cases by Medical System) and the case-category concept were
 > **dropped** — HealthPass never sees clinic-wide caseload, only its own
@@ -603,7 +604,7 @@ Review → Complete (12s auto-reset → Welcome)
 
 #### Screen 3 — Identity Confirm
 - Large avatar (circular, initials), "Identity Verified ✓", "Hello, {first name}!", college/course/year/student number.
-- "That's me — Continue" (lg) → schedule check (Screen 3a).
+- **"Confirm?"** (lg; D-103 — was "That's me — Continue") → schedule check (Screen 3a).
 - "Not you?" (ghost lg) → resets to Welcome.
 
 #### Screen 3a — No Clinic Schedule Today (FR-KSK-03a, rewritten by D-61)

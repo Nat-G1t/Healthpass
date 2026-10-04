@@ -182,6 +182,10 @@
 
 {{-- ── Batch requests table (FR-ADM-05) ───────────────────────────────────── --}}
 <x-hp.card>
+    {{-- D-103: the same 11px label as Batch Results, above both the table and
+         the empty state, so the card is labelled either way. --}}
+    <p class="mb-4 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Batch requests</p>
+
     @if ($batchRequests->isEmpty())
         <div class="flex flex-col items-center py-10 text-center">
             <div class="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-hp-bg">

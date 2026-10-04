@@ -67,6 +67,25 @@ class BatchTrackingTest extends TestCase
             ->assertDontSee($foreign->reference_no);
     }
 
+    // D-103: card 2 is headed "Batch requests" whether or not it has rows.
+    public function test_the_requests_card_is_headed_batch_requests_when_empty(): void
+    {
+        $this->actingAs($this->admin)
+            ->get('/admin/batches')
+            ->assertOk()
+            ->assertSeeInOrder(['Batch requests</p>', 'No batch requests yet'], false);
+    }
+
+    public function test_the_requests_card_header_sits_above_the_table(): void
+    {
+        $batch = $this->makeBatch($this->ccs);
+
+        $this->actingAs($this->admin)
+            ->get('/admin/batches')
+            ->assertOk()
+            ->assertSeeInOrder(['Batch requests</p>', 'Form Type', $batch->reference_no], false);
+    }
+
     public function test_pending_status_is_displayed_as_pending_director_approval(): void
     {
         $this->makeBatch($this->ccs);

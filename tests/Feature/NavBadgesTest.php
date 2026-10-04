@@ -188,7 +188,7 @@ class NavBadgesTest extends TestCase
 
     public function test_each_role_gets_only_its_own_badged_items(): void
     {
-        // Dashboards, New Batch Request, Analytics, My ID & Profile, Enable
+        // Dashboards, New Batch Request, Data Summary, My ID & Profile, Enable
         // Kiosk Mode, Staff Accounts and Change Password carry no badge, so
         // they are not in the map at all. (D-61 removed the student's Book
         // Appointment and My Appointments items.)
