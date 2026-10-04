@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Admin;
 
+use App\Http\Requests\Admin\StoreBatchRequestRequest;
 use App\Models\Appointment;
 use App\Models\BatchRequest;
 use App\Models\College;
@@ -46,14 +47,15 @@ class BatchRequestCreateTest extends TestCase
     /** A valid POST body; override individual keys per test. */
     private function validPayload(array $overrides = []): array
     {
-        $student = StudentProfile::factory()->forCollege($this->ccs)->create();
+        // D-105: a batch needs at least two students.
+        $students = StudentProfile::factory()->count(2)->forCollege($this->ccs)->create();
 
         return array_merge([
             'form_type' => 'assessment',
             'reason' => 'ojt',
             'requested_date' => now()->addDays(7)->toDateString(),
             'requested_time' => '07:00:00', // D-37: start hour of the batch span
-            'students' => [$student->id],
+            'students' => $students->pluck('id')->all(),
         ], $overrides);
     }
 
@@ -66,6 +68,19 @@ class BatchRequestCreateTest extends TestCase
             ->assertOk()
             ->assertSee('New Batch Request')
             ->assertSee('Submit Batch Request');
+    }
+
+    public function test_create_page_calls_the_reason_purpose_and_ships_the_minimum(): void
+    {
+        // D-105: the batch's reason is shown as "Purpose"; the browser gets the
+        // minimum from the Form Request instead of typing its own 2.
+        $this->actingAs($this->admin)
+            ->get('/admin/batches/create')
+            ->assertOk()
+            ->assertViewHas('minStudents', StoreBatchRequestRequest::MIN_STUDENTS)
+            ->assertSee('>Purpose</label>', false)
+            ->assertDontSee('>Reason</label>', false)
+            ->assertSee('Select at least 2 students.');
     }
 
     // ── D-62: the form chooser ───────────────────────────────────────────────
@@ -129,7 +144,7 @@ class BatchRequestCreateTest extends TestCase
         // 'fieldtrip' is a Medical Clearance purpose, not an Assessment one.
         $this->actingAs($this->admin)
             ->post('/admin/batches', $this->validPayload(['form_type' => 'assessment', 'reason' => 'fieldtrip']))
-            ->assertSessionHasErrors('reason');
+            ->assertSessionHasErrors(['reason' => 'That purpose is not on the chosen form.']);
 
         $this->actingAs($this->admin)
             ->post('/admin/batches', $this->validPayload(['form_type' => 'clearance', 'reason' => 'ojt']))
@@ -164,7 +179,7 @@ class BatchRequestCreateTest extends TestCase
     {
         $this->actingAs($this->admin)
             ->post('/admin/batches', $this->validPayload(['reason' => 'others', 'reason_detail' => str_repeat('x', 121)]))
-            ->assertSessionHasErrors('reason_detail');
+            ->assertSessionHasErrors(['reason_detail' => 'Please keep the specified purpose to 120 characters — it prints on one line of the form.']);
 
         $this->actingAs($this->admin)
             ->post('/admin/batches', $this->validPayload(['reason' => 'others', 'reason_detail' => str_repeat('x', 120)]))
@@ -307,7 +322,13 @@ class BatchRequestCreateTest extends TestCase
     {
         $this->actingAs($this->admin)
             ->post('/admin/batches', [])
-            ->assertSessionHasErrors(['form_type', 'reason', 'requested_date', 'students']);
+            ->assertSessionHasErrors([
+                'form_type',
+                // D-105: the batch's reason is called its purpose on screen.
+                'reason' => 'Please choose a purpose for this batch request.',
+                'requested_date',
+                'students' => 'Select at least 2 students for this batch.',
+            ]);
     }
 
     // ── D-29: the admin proposes the clinic date ─────────────────────────────
@@ -339,7 +360,7 @@ class BatchRequestCreateTest extends TestCase
     {
         $this->actingAs($this->admin)
             ->post('/admin/batches', $this->validPayload(['reason' => 'others']))
-            ->assertSessionHasErrors('reason_detail');
+            ->assertSessionHasErrors(['reason_detail' => 'Please specify the purpose when choosing "Others".']);
     }
 
     public function test_others_with_specify_text_passes(): void
@@ -385,7 +406,19 @@ class BatchRequestCreateTest extends TestCase
     {
         $this->actingAs($this->admin)
             ->post('/admin/batches', $this->validPayload(['students' => []]))
-            ->assertSessionHasErrors('students');
+            ->assertSessionHasErrors(['students' => 'Select at least 2 students for this batch.']);
+    }
+
+    public function test_a_single_student_is_rejected(): void
+    {
+        // BR-07 (D-105): a batch needs at least two students.
+        $own = StudentProfile::factory()->forCollege($this->ccs)->create();
+
+        $this->actingAs($this->admin)
+            ->post('/admin/batches', $this->validPayload(['students' => [$own->id]]))
+            ->assertSessionHasErrors(['students' => 'Select at least 2 students for this batch.']);
+
+        $this->assertSame(0, BatchRequest::count());
     }
 
     public function test_another_colleges_student_is_rejected(): void

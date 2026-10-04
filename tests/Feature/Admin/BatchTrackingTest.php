@@ -109,16 +109,19 @@ class BatchTrackingTest extends TestCase
             ->assertDontSee('Pending Director Approval');
     }
 
-    public function test_tracking_shows_a_form_type_column_before_reason(): void
+    public function test_tracking_shows_a_form_type_column_before_purpose(): void
     {
-        // D-62
+        // D-62; the batch's reason column is headed "Purpose" since D-105.
         $this->makeBatch($this->ccs, ['form_type' => 'clearance', 'reason' => 'fieldtrip']);
 
-        $this->actingAs($this->admin)
+        $html = $this->actingAs($this->admin)
             ->get('/admin/batches')
             ->assertOk()
-            ->assertSeeInOrder(['Form Type', 'Reason'])
-            ->assertSeeInOrder(['Medical Clearance', 'Field Trip/Educational Tour']);
+            ->assertSeeInOrder(['Medical Clearance', 'Field Trip/Educational Tour'])
+            ->assertDontSee('>Reason</th>', false)
+            ->getContent();
+
+        $this->assertMatchesRegularExpression('~>Form Type</th>\s*<th[^>]*>Purpose</th>~', $html);
     }
 
     public function test_tracking_shows_student_count_and_submitted_date(): void
@@ -181,7 +184,10 @@ class BatchTrackingTest extends TestCase
         $this->actingAs($this->admin)
             ->get('/admin/batches')
             ->assertOk()
-            ->assertSee('Rejection Reason')
+            // D-105 renamed the batch's own reason to Purpose; the Director's
+            // rejection reason keeps its wording.
+            ->assertSee('>Rejection Reason</th>', false)
+            ->assertSee('>Purpose</th>', false)
             ->assertSee('View')
             ->assertSee($reason, false)          // inside the Js::from() payload
             ->assertSee('Dr. Reyes', false)

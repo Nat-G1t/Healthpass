@@ -61,7 +61,11 @@ class CollegeScopeTest extends TestCase
             'service_type' => 'medical',
             'requested_date' => now()->addDays(7)->toDateString(),
             'requested_time' => '07:00:00', // D-37: start hour of the batch span
-            'students' => [$this->ownStudent->id],
+            // D-105: a batch needs two students, so a classmate joins ownStudent.
+            'students' => [
+                $this->ownStudent->id,
+                StudentProfile::factory()->forCollege($this->ccs)->create()->id,
+            ],
         ], $overrides);
     }
 

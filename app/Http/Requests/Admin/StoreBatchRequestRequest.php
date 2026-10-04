@@ -24,6 +24,13 @@ use Illuminate\Validation\Validator;
  */
 class StoreBatchRequestRequest extends FormRequest
 {
+    /**
+     * BR-07 (D-105): a batch needs at least this many students. The New Batch
+     * page reads it too (BatchRequestController::create), so the browser and
+     * the server never disagree on the number.
+     */
+    public const MIN_STUDENTS = 2;
+
     public function authorize(): bool
     {
         // The /admin route group already enforces auth + role + college
@@ -74,8 +81,8 @@ class StoreBatchRequestRequest extends FormRequest
             // never posted — the server computes it from the student count, so
             // a client cannot claim fewer hours than the cohort needs.
             'requested_time' => ['required', Rule::in($this->schedule()->slots())],
-            // BR-07: at least one student per batch.
-            'students' => ['required', 'array', 'min:1'],
+            // BR-07 (D-105): at least MIN_STUDENTS students per batch.
+            'students' => ['required', 'array', 'min:'.self::MIN_STUDENTS],
             'students.*' => [
                 'integer',
                 'distinct',
@@ -89,20 +96,23 @@ class StoreBatchRequestRequest extends FormRequest
 
     public function messages(): array
     {
+        $tooFewStudents = 'Select at least '.self::MIN_STUDENTS.' students for this batch.';
+
+        // D-105: people see the batch's reason as its "Purpose".
         return [
             'form_type.required' => 'Please choose the form the clinic will use.',
             'form_type.in' => 'Invalid form.',
-            'reason.required' => 'Please choose a reason for this batch request.',
-            'reason.in' => 'That reason is not on the chosen form.',
-            'reason_detail.max' => 'Please keep the specified reason to 120 characters — it prints on one line of the form.',
-            'reason_detail.required_if' => 'Please specify the reason when choosing "Others".',
+            'reason.required' => 'Please choose a purpose for this batch request.',
+            'reason.in' => 'That purpose is not on the chosen form.',
+            'reason_detail.max' => 'Please keep the specified purpose to 120 characters — it prints on one line of the form.',
+            'reason_detail.required_if' => 'Please specify the purpose when choosing "Others".',
             'requested_date.required' => 'Please pick the date your students should visit the clinic.',
             'requested_date.date_format' => 'Invalid requested date.',
             'requested_date.after_or_equal' => 'The requested date cannot be in the past.',
             'requested_time.required' => 'Please pick the hour the batch should start.',
             'requested_time.in' => 'That start time is not part of clinic hours.',
-            'students.required' => 'Select at least one student for this batch.',
-            'students.min' => 'Select at least one student for this batch.',
+            'students.required' => $tooFewStudents,
+            'students.min' => $tooFewStudents,
             'students.*.distinct' => 'A student was selected more than once.',
             'students.*.exists' => 'One of the selected students is not an active student in your college.',
             'students.*.integer' => 'One of the selected students is invalid.',

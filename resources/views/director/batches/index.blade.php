@@ -108,9 +108,9 @@
                         <tr class="border-b border-hp-slate/10 text-[11px] uppercase tracking-widest text-hp-slate/40">
                             <th class="py-2.5 pr-4 font-semibold">Batch ID</th>
                             <th class="py-2.5 pr-4 font-semibold">College</th>
-                            {{-- D-62: Form Type immediately before Reason — the reason list is the form's --}}
+                            {{-- D-62: Form Type immediately before Purpose (the batch's `reason`, D-105) — the purpose list is the form's --}}
                             <th class="py-2.5 pr-4 font-semibold">Form Type</th>
-                            <th class="py-2.5 pr-4 font-semibold">Reason</th>
+                            <th class="py-2.5 pr-4 font-semibold">Purpose</th>
                             <th class="py-2.5 pr-4 font-semibold">Students</th>
                             <th class="py-2.5 pr-4 font-semibold">Requested Date</th>
                             <th class="py-2.5 pr-4 font-semibold">Clinic Hours</th>

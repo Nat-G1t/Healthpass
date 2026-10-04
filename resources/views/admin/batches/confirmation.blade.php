@@ -70,9 +70,9 @@
             </dd>
         </div>
 
-        {{-- Reason --}}
+        {{-- Purpose — the batch's `reason` (D-105) --}}
         <div class="flex items-start justify-between gap-4">
-            <dt class="text-sm text-hp-slate/50">Reason</dt>
+            <dt class="text-sm text-hp-slate/50">Purpose</dt>
             <dd class="text-right text-sm font-semibold text-hp-slate">
                 {{ $batch->reasonText() }}
             </dd>

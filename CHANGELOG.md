@@ -1159,6 +1159,31 @@
 
 ### Changed
 
+* **The batch reason is called Purpose; a batch needs at least two
+  students** (D-105, amends FR-ADM-02, FR-ADM-03, FR-ADM-05, FR-DIRA-01,
+  BR-06 and BR-07, PRD revision 1.89, 2026-10-04). No schema change, no new
+  package, no new route.
+  * **Purpose** on the New Batch form (label, "— Select a purpose —", the
+    specify placeholder and the four validation messages), the Request
+    Submitted page, Batch Tracking (column + mobile label) and the Director's
+    Batch Approvals column. The roster page, encode page, student record and
+    scheduling email already said Purpose.
+  * The Director's **rejection reason** and the college's **cancellation
+    reason** keep the word. Code names (`reason`, `reason_detail`,
+    `REASONS_BY_FORM`, `reasonText()`, `reasonLabel()`, `REASON_OTHERS`) are
+    unchanged. The official printed forms have no Reason/Purpose heading, so
+    they are untouched.
+  * **At least 2 students (BR-07):** `StoreBatchRequestRequest::MIN_STUDENTS`
+    drives the server rule ("Select at least 2 students for this batch.",
+    also for an empty selection) and is passed to the page, where Submit
+    stays disabled below it and "Select at least 2 students." shows under
+    the counter while one is ticked. Existing 1-student batches are left alone.
+  * Tests: 1 student refused with the new message, 2 accepted; the create
+    page shows the Purpose label (no Reason) and receives the minimum; the
+    confirmation page, Batch Tracking and the Director list say Purpose; a
+    rejected batch still shows "Rejection Reason" and the reject modal "Reason
+    for rejection". Tests that posted 1-student batches now post 2.
+
 * **The Monthly and Yearly reports carry the official PSU letterhead**
   (D-104, amends FR-ADM-09, FR-ADM-13, FR-ANL-15 and FR-ANL-16, PRD
   revision 1.88, 2026-10-04). No schema change, no new package, no new route.

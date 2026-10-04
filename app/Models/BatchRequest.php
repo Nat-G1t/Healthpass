@@ -29,6 +29,7 @@ class BatchRequest extends Model
      * paper exactly — don't reword them. One source of truth for the form
      * options, the validation rule, the encode copy, the print bubbles and
      * the Visits by Purpose chart.
+     * Shown to people as the batch's **Purpose** (D-105).
      */
     public const REASONS_BY_FORM = [
         'clearance' => ['fieldtrip' => 'Field Trip/Educational Tour', 'outbound' => 'Outbound Activities', 'others' => 'Others, Specify'],

@@ -98,7 +98,7 @@ class BatchApprovalsPageTest extends TestCase
             ->assertSee('CEA');
     }
 
-    public function test_the_form_type_column_sits_immediately_before_reason(): void
+    public function test_the_form_type_column_sits_immediately_before_purpose(): void
     {
         // D-62: the Director sees which form each batch uses.
         $this->makeBatch($this->ccs);
@@ -112,8 +112,11 @@ class BatchApprovalsPageTest extends TestCase
             ->assertSee('Outbound Activities')
             ->getContent();
 
-        // Two adjacent header cells: Form Type, then Reason.
-        $this->assertMatchesRegularExpression('~>Form Type</th>\s*<th[^>]*>Reason</th>~', $html);
+        // Two adjacent header cells: Form Type, then Purpose (D-105).
+        $this->assertMatchesRegularExpression('~>Form Type</th>\s*<th[^>]*>Purpose</th>~', $html);
+        $this->assertStringNotContainsString('>Reason</th>', $html);
+        // …while a rejection keeps its "reason" (D-36).
+        $this->assertStringContainsString('Reason for rejection', $html);
     }
 
     public function test_both_decision_modals_receive_the_form_type(): void

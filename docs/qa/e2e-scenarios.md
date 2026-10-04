@@ -68,10 +68,10 @@ students never book for themselves and never walk in.
 **Steps:**
 
 1. Log in as `admin.ccs@healthpass.test`, open **New Batch Request**. Choose
-   any **Reason**, click **today** on the Requested Clinic Date calendar, pick
-   a **Start time** that has not ended yet, tick **Juan Santos** (and **Maria
-   Reyes** too if you will run E2E-2 today), and click **Submit Batch
-   Request**. → **Expect:** the confirmation screen, "Pending Director
+   any **Purpose**, click **today** on the Requested Clinic Date calendar, pick
+   a **Start time** that has not ended yet, tick **Juan Santos** and **Maria
+   Reyes** (a batch needs at least 2 students — D-105; Maria is E2E-2's
+   student), and click **Submit Batch Request**. → **Expect:** the confirmation screen, "Pending Director
    Approval". Log out.
 2. Log in as `director@healthpass.test`, open **Batch Approvals**, click
    **Approve** on that batch and confirm. → **Expect:** the row reads
@@ -236,7 +236,7 @@ students.
 1. Log in as `admin.ccs@healthpass.test`. → **Expect:** the Admin Dashboard
    with a banner naming **College of Computing Studies** and stat cards.
 2. Go to **New Batch Request**. Pick the **Medical Assessment Form** tile, then
-   the Reason **On-the-job Training** (D-62), and a **Requested Clinic Date**
+   the Purpose **On-the-job Training** (D-62), and a **Requested Clinic Date**
    (defaults to today; past dates disabled — D-29).
 3. In the student picker, use **Select All** (or tick several). → **Expect:**
    only **CCS** students are listed; selected rows highlight peach; a
@@ -382,7 +382,7 @@ and that a crafted dental request cannot get one into the database.
    check any more (D-61 — `/student/appointments` is a 404), and no "Dental"
    anywhere on the dashboard.
 2. Log in as the College Admin, go to **New Batch Request**. → **Expect:** the
-   form asks for Reason, Requested Clinic Date, start hour and students —
+   form asks for Purpose, Requested Clinic Date, start hour and students —
    there is **no Service Type field** and no "Dental" on the page. Submit a
    small batch and open its confirmation. → **Expect:** it reads **Medical
    Clearance**.
@@ -518,8 +518,9 @@ students again** buttons and the mini calendar all work. (Before D-61 this
 scenario also covered a student's own self-booking; self-booking is gone.
 Before D-77 only an overlapping hour clashed.)
 
-**Accounts:** students `juan.santos@psu.edu.ph`, `maria.reyes@psu.edu.ph` and
-`carlo.cruz@psu.edu.ph` (all CCS), and the CCS Admin `admin.ccs@healthpass.test`.
+**Accounts:** students `juan.santos@psu.edu.ph`, `maria.reyes@psu.edu.ph`,
+`carlo.cruz@psu.edu.ph` and `angel.garcia@psu.edu.ph` (all CCS), and the CCS
+Admin `admin.ccs@healthpass.test`.
 
 **Steps:**
 
@@ -529,32 +530,33 @@ Before D-77 only an overlapping hour clashed.)
    current month, the right arrow moves forward and back again, and any FULL
    day is greyed with a "Full" label.
 2. Click a date **at least two days ahead**. → **Expect:** "Selected: <that
-   date>" appears under it. Choose **Form: Medical Clearance**, a **Reason**,
-   **Start time 9:00 AM – 10:00 AM**, tick **Juan Santos only**, and submit.
+   date>" appears under it. Choose **Form: Medical Clearance**, a **Purpose**,
+   **Start time 9:00 AM – 10:00 AM**, tick **Juan Santos** and **Angel Garcia**
+   (a batch needs at least 2 students — D-105), and submit.
    → **Expect:** the confirmation screen with a `BR-` number (call it batch A).
    Write down the date.
 3. Start another **New Batch Request** for the **same date**, **Form: Medical
    Assessment Form**, **Start time 2:00 PM – 3:00 PM** (no hour in common with
-   batch A), and tick **Juan Santos** and **Maria Reyes**. Submit.
+   batch A), and tick **Juan Santos**, **Maria Reyes** and **Carlo Cruz**. Submit.
 4. → **Expect:** the page comes back with a popup titled **"Some students
    already have a clinic schedule that day"**. It lists **Juan Santos**, his
    student number and "Already scheduled for a Medical Clearance that day, on
-   <batch A's BR- number> (9:00 AM – 10:00 AM)". **Maria is not listed.**
-   Behind the popup the form, reason, date, start hour and both ticks are still
-   filled in. Batch Tracking shows **no** new batch.
+   <batch A's BR- number> (9:00 AM – 10:00 AM)". **Maria and Carlo are not
+   listed.** Behind the popup the form, purpose, date, start hour and all three
+   ticks are still filled in. Batch Tracking shows **no** new batch.
 5. Click **Choose students again**. → **Expect:** the popup closes, the page
-   scrolls to the **Select Students** card, **both** students are still ticked,
-   and Juan's row shows an orange **Already scheduled** badge (Maria's does not).
-6. Untick **Juan** and submit. → **Expect:** the confirmation screen with a new
-   `BR-` number (Maria only).
-7. Start another **New Batch Request** for the **same date**, any start time,
-   ticking **Juan** and **Carlo Cruz**. Submit. → **Expect:** the popup lists
-   **Juan only**. Click **Remove these students from the batch**. → **Expect:**
-   the popup closes, **Juan is unticked**, Carlo is still ticked, and the "(N of
-   M selected)" counter drops by one. Submit again. → **Expect:** the
+   scrolls to the **Select Students** card, **all three** students are still
+   ticked, and Juan's row shows an orange **Already scheduled** badge (Maria's
+   and Carlo's do not).
+6. Submit again without changing anything. → **Expect:** the same popup,
+   listing **Juan only**. Click **Remove these students from the batch**. →
+   **Expect:** the popup closes, **Juan is unticked**, Maria and Carlo are
+   still ticked, and the "(N of M selected)" counter drops by one. Submit
+   again. → **Expect:** the confirmation screen with a new `BR-` number (Maria
+   and Carlo).
+7. Start one more **New Batch Request** for the **day after** that date,
+   ticking **Juan** and **Angel**. Submit. → **Expect:** no popup; the
    confirmation screen.
-8. Start one more **New Batch Request** for the **day after** that date,
-   ticking **Juan**. Submit. → **Expect:** no popup; the confirmation screen.
 
 **Pass criteria:** a batch is refused while any ticked student is already held
 by another pending or approved batch **on the same date**, even at different
@@ -592,9 +594,9 @@ Live Queue number and the Director's Batch Approvals number.
 **Steps — College Admin:**
 
 1. Log in as the **CCS admin**. New Batch Request → today's date → any
-   reason → **Medical** → a start hour that has not ended yet → tick **Carlo
-   Cruz** → Submit. (If a clash popup lists Carlo, Close it and pick another
-   hour.) → **Expect:** the confirmation screen. **Activity Log shows no
+   purpose → **Medical** → a start hour that has not ended yet → tick **Carlo
+   Cruz** and **Angel Garcia** (at least 2 — D-105) → Submit. (If a clash
+   popup lists either, Close it and pick another hour.) → **Expect:** the confirmation screen. **Activity Log shows no
    badge** — your own submission is not news to you. Log out.
 
 **Steps — Director:**
@@ -822,7 +824,7 @@ removed URLs are 404; the Next Appointment card stays visible and read-only.
 ## E2E-14 — The College Admin chooses the clinic form (D-62)
 
 **Goal:** the New Batch Request page makes the admin pick one of the two
-official forms first, and the Reason list follows that choice.
+official forms first, and the Purpose list follows that choice.
 
 **Account:** CCS Admin `admin.ccs@healthpass.test`.
 
@@ -831,18 +833,18 @@ official forms first, and the Reason list follows that choice.
 1. Open **New Batch Request**. → **Expect:** a card on top titled **"Choose
    the form the clinic will use"** with two tiles — **Medical Assessment Form**
    on the left, **Medical Clearance** on the right — each with a picture of the
-   form and a short description. The **Reason** dropdown is greyed out and
+   form and a short description. The **Purpose** dropdown is greyed out and
    reads "— Choose a form first —".
 2. Press **Tab** until a tile is focused, then use the **arrow keys**. →
    **Expect:** a visible orange focus ring; the arrow keys move the selection
    between the two tiles (they are radio buttons).
 3. Click **Medical Clearance**. → **Expect:** the tile gets an orange border
-   and a check mark; the Reason dropdown turns on and lists exactly **Field
+   and a check mark; the Purpose dropdown turns on and lists exactly **Field
    Trip/Educational Tour, Outbound Activities, Others, Specify**.
 4. Pick **Others, Specify** and type an event in "Please specify". → **Expect:**
    the box stops accepting text at 120 characters.
-5. Click **Medical Assessment Form**. → **Expect:** the Reason resets to
-   "— Select a reason —", the specify box disappears (and is empty if you pick
+5. Click **Medical Assessment Form**. → **Expect:** the Purpose resets to
+   "— Select a purpose —", the specify box disappears (and is empty if you pick
    Others again), and the list is exactly **Off Campus Procedure, Sports
    Activities, On-the-job Training, Related Learning Experience, Others,
    Specify**.
@@ -851,15 +853,18 @@ official forms first, and the Reason list follows that choice.
    attribute in devtools and click it. → **Expect:** the page comes back with
    an error, **Medical Assessment Form** still chosen and **On-the-job
    Training** still selected.
-7. Select a student and **Submit**. → **Expect:** the confirmation screen shows
-   **Form: Medical Assessment Form** and **Reason: On-the-job Training**. Batch
-   Tracking shows a **Form Type** column just before **Reason**.
+7. Tick **one** student. → **Expect:** Submit stays greyed out and **"Select at
+   least 2 students."** appears under the "(N of M selected)" counter (D-105).
+   Tick a **second** student. → **Expect:** the hint goes away and Submit turns
+   on. **Submit**. → **Expect:** the confirmation screen shows **Form: Medical
+   Assessment Form** and **Purpose: On-the-job Training**. Batch Tracking shows
+   a **Form Type** column just before **Purpose**.
 8. Repeat step 1–3 at phone width (~390 px). → **Expect:** the two tiles stack
    one above the other, nothing is cut off.
 
-**Pass criteria:** no reason can be picked before a form; each form offers only
-its own reasons, worded exactly as on the paper; switching forms clears the
-reason; the choice survives a failed submit and appears on the confirmation and
+**Pass criteria:** no purpose can be picked before a form; each form offers only
+its own purposes, worded exactly as on the paper; switching forms clears the
+purpose; one student cannot be submitted (D-105); the choice survives a failed submit and appears on the confirmation and
 tracking pages.
 
 ---
@@ -875,7 +880,7 @@ which seeds pending batches on both forms).
 **Steps:**
 
 1. Open **Batch Approvals**. → **Expect:** a **Form Type** column placed
-   **immediately before Reason**; the seeded pending batches show **Medical
+   **immediately before Purpose**; the seeded pending batches show **Medical
    Assessment Form** (BR-2026-901, "On-the-job Training") and **Medical
    Clearance** (BR-2026-902, "Field Trip/Educational Tour").
 2. Click **Approve** on BR-2026-902. → **Expect:** the modal carries a line
@@ -883,13 +888,13 @@ which seeds pending batches on both forms).
 3. Click **Reject** on BR-2026-901. → **Expect:** the modal carries **Form:
    Medical Assessment Form**. Cancel.
 4. Narrow the window to phone width. → **Expect:** the table scrolls sideways
-   and the Form Type column is still there, before Reason.
+   and the Form Type column is still there, before Purpose.
 5. Log in as the nurse and open the **Live Queue** with a visit captured on
    each form. → **Expect:** each row shows a small **Clearance** or
    **Assessment** badge next to the student's name, and the encode page header
    shows the form name and the purpose read-only (no purpose dropdown).
 
-**Pass criteria:** the Form Type column sits right before Reason, both modals
+**Pass criteria:** the Form Type column sits right before Purpose, both modals
 name the form, and the nurse sees the same form on the queue and encode page.
 
 ---
@@ -1179,9 +1184,10 @@ cannot be talked out of it.
 ### Part A — a Medical Clearance batch: nothing changes
 
 1. Log in as `admin.ccs@healthpass.test` → **New Batch Request**. Pick the
-   **Medical Clearance** tile, Reason **Field Trip/Educational Tour**, click
+   **Medical Clearance** tile, Purpose **Field Trip/Educational Tour**, click
    **today** on the calendar, pick a **Start time** that has not ended yet,
-   tick **Juan Santos**, and submit. Log out.
+   tick **Juan Santos** and **Carlo Cruz** (a batch needs at least 2 — D-105),
+   and submit. Log out.
 2. Log in as `director@healthpass.test` → **Batch Approvals** → **Approve**
    that batch. Log out.
 3. Open the kiosk at `http://127.0.0.1:8080/kiosk`, click **Lost ID? Log in
@@ -1205,9 +1211,9 @@ cannot be talked out of it.
 ### Part B — a Medical Assessment Form batch: four extra questions
 
 9. Log back in as `admin.ccs@healthpass.test` → **New Batch Request**. This
-   time pick the **Medical Assessment Form** tile, Reason **On-the-job
+   time pick the **Medical Assessment Form** tile, Purpose **On-the-job
    Training**, **today**, a **Start time in a later hour that has not ended**,
-   tick **Juan Santos**, submit. Log out, approve it as the Director, log out.
+   tick **Juan Santos** and **Angel Garcia**, submit. Log out, approve it as the Director, log out.
 10. Open the kiosk again and take Juan through email login → **Confirm?** →
     **I Agree** → the four vitals, exactly as before.
 11. **Questionnaire.** → **Expect:** the heading now reads **"Physical Signs

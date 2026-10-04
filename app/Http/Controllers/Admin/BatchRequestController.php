@@ -198,6 +198,9 @@ class BatchRequestController extends Controller
             ], $this->schedule->slots()),
             'hourlyCapacity' => $this->schedule->hourlyCapacity(),
             'maxBatchSize' => $this->schedule->maxBatchSize(),
+            // BR-07 (D-105): the Form Request's minimum, so Submit enables at
+            // exactly the count the server accepts.
+            'minStudents' => StoreBatchRequestRequest::MIN_STUDENTS,
             // BR-23: hours that have already ended TODAY, computed on the
             // SERVER clock. The browser only compares the picked date against
             // `today` — it never decides what "now" is (same rule as BR-20).

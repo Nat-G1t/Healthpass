@@ -75,6 +75,8 @@ function batchForm() {
         elapsedSlotsToday:  @js($elapsedSlotsToday),
         hourlyCapacity: {{ $hourlyCapacity }},
         maxBatchSize:   {{ $maxBatchSize }},
+        // BR-07 (D-105): the Form Request's minimum, shipped from the server.
+        minStudents:    {{ $minStudents }},
         reasonOthers:  @js(\App\Models\BatchRequest::REASON_OTHERS),
 
         // ── D-54 mini calendar ──────────────────────────────────────────────
@@ -348,6 +350,11 @@ function batchForm() {
             return this.selected.length > this.maxBatchSize;
         },
 
+        /** Some students picked, but fewer than a batch needs (D-105). */
+        get tooFewStudents() {
+            return this.selected.length > 0 && this.selected.length < this.minStudents;
+        },
+
         get spanOverflows() {
             return !this.tooManyStudents && this.requestedTime !== ''
                 && this.selected.length > 0 && this.spanSlots.length === 0;
@@ -368,7 +375,7 @@ function batchForm() {
                 && this.requestedDate !== ''
                 && this.requestedTime !== ''
                 && !this.isSlotElapsed(this.requestedTime)
-                && this.selected.length > 0
+                && this.selected.length >= this.minStudents
                 && !this.tooManyStudents
                 && !this.spanOverflows;
         },
@@ -382,7 +389,7 @@ function batchForm() {
     {{-- ── D-62: the form the clinic will use ───────────────────────────────
          Two radio buttons styled as tiles (the input is visually hidden but
          still focusable, so arrow keys / Space pick a tile). The choice drives
-         the Reason list below and, later, the kiosk questions, the encode
+         the Purpose list below and, later, the kiosk questions, the encode
          fields and the printed document. --}}
     @php
         // Each tile shows the REAL form's front page, blank, in an iframe
@@ -467,15 +474,16 @@ function batchForm() {
                 <h3 class="mb-4 text-sm font-semibold text-hp-slate">Request Details</h3>
 
                 <div class="space-y-4">
-                    {{-- Reason (FR-ADM-02 / BR-06) — D-62: the chosen form's
+                    {{-- Purpose (FR-ADM-02 / BR-06; the `reason` field, labelled
+                         "Purpose" since D-105) — D-62: the chosen form's
                          purposes, so it stays disabled until a form is picked.
                          `disabled` is rendered server-side too, so the page
                          never flashes an enabled, empty select. :selected keeps
                          an old() reason picked once x-for builds the options. --}}
                     <div>
-                        <x-hp.select label="Reason" name="reason" x-model="reason"
+                        <x-hp.select label="Purpose" name="reason" x-model="reason"
                                      :disabled="! old('form_type')" x-bind:disabled="!formType">
-                            <option value="" x-text="formType ? '— Select a reason —' : '— Choose a form first —'">— Choose a form first —</option>
+                            <option value="" x-text="formType ? '— Select a purpose —' : '— Choose a form first —'">— Choose a form first —</option>
                             <template x-for="(label, key) in reasonsForForm" :key="key">
                                 <option :value="key" x-text="label" :selected="key === reason"></option>
                             </template>
@@ -489,7 +497,7 @@ function batchForm() {
                     <div x-show="reason === reasonOthers" x-cloak>
                         <x-hp.textarea label="Please specify" name="reason_detail"
                                        x-model="reasonDetail" rows="3" maxlength="120"
-                                       placeholder="Describe the reason for this batch request" />
+                                       placeholder="Describe the purpose of this batch request" />
                         @error('reason_detail')
                             <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
                         @enderror
@@ -658,14 +666,14 @@ function batchForm() {
                 </div>
             </x-hp.card>
 
-            {{-- Submit — disabled until reason valid + ≥1 student (FR-ADM-03) --}}
+            {{-- Submit — disabled until purpose valid + ≥ minStudents students (FR-ADM-03, D-105) --}}
             <x-hp.card>
                 <x-hp.button type="submit" class="w-full" x-bind:disabled="!canSubmit" data-pending-label="Submitting…">
                     Submit Batch Request
                 </x-hp.button>
                 <p class="mt-2 text-center text-xs text-hp-slate/50"
                    x-show="!canSubmit" x-cloak>
-                    Choose a reason, a date, a start hour and at least one student to submit.
+                    Choose a purpose, a date, a start hour and at least {{ $minStudents }} students to submit.
                 </p>
             </x-hp.card>
 
@@ -690,6 +698,12 @@ function batchForm() {
                         </x-hp.button>
                     </div>
                 </div>
+
+                {{-- BR-07 (D-105): one student is not a batch — say so beside
+                     the counter instead of leaving Submit greyed out unexplained. --}}
+                <p x-show="tooFewStudents" x-cloak class="-mt-2 mb-3 text-xs text-hp-slate/50">
+                    Select at least {{ $minStudents }} students.
+                </p>
 
                 @error('students')
                     <p class="mb-3 text-xs text-red-600">{{ $message }}</p>

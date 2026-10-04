@@ -52,8 +52,8 @@ class BatchRequestSubmitTest extends TestCase
         ]);
     }
 
-    /** Submit a valid batch for $count CCS students; returns the response. */
-    private function submitBatch(int $count = 1, array $overrides = [])
+    /** Submit a valid batch for $count CCS students (2 = the D-105 minimum); returns the response. */
+    private function submitBatch(int $count = 2, array $overrides = [])
     {
         $students = StudentProfile::factory()->count($count)->forCollege($this->ccs)->create();
 
@@ -125,6 +125,26 @@ class BatchRequestSubmitTest extends TestCase
             ["BR-{$year}-001", "BR-{$year}-002"],
             BatchRequest::orderBy('id')->pluck('reference_no')->all(),
         );
+    }
+
+    // ── BR-07 (D-105): a batch needs at least two students ──────────────────
+
+    public function test_a_one_student_batch_is_refused(): void
+    {
+        $this->submitBatch(1)->assertSessionHasErrors([
+            'students' => 'Select at least 2 students for this batch.',
+        ]);
+
+        $this->assertDatabaseCount('batch_requests', 0);
+        $this->assertDatabaseCount('batch_request_students', 0);
+    }
+
+    public function test_a_two_student_batch_is_created(): void
+    {
+        $this->submitBatch(2)->assertSessionHasNoErrors();
+
+        $this->assertDatabaseCount('batch_requests', 1);
+        $this->assertDatabaseCount('batch_request_students', 2);
     }
 
     // ── D-37: the batch's hour span (FR-ADM-04) ─────────────────────────────
@@ -313,7 +333,7 @@ class BatchRequestSubmitTest extends TestCase
 
     public function test_a_start_time_outside_clinic_hours_is_rejected(): void
     {
-        $this->submitBatch(1, ['requested_time' => '18:00:00'])
+        $this->submitBatch(overrides: ['requested_time' => '18:00:00'])
             ->assertSessionHasErrors('requested_time');
     }
 
@@ -344,6 +364,15 @@ class BatchRequestSubmitTest extends TestCase
                 'requested_time' => '09:00:00',
                 'students' => array_map(fn (StudentProfile $profile): int => $profile->id, $profiles),
             ], $overrides));
+    }
+
+    /**
+     * D-105: a batch needs two students, so the one-student clash cases post a
+     * classmate beside the student under test — with no schedule that day.
+     */
+    private function classmate(): StudentProfile
+    {
+        return StudentProfile::factory()->forCollege($this->ccs)->create();
     }
 
     /** A pre-D-61 self-booking, as an old database may still hold one. */
@@ -404,7 +433,7 @@ class BatchRequestSubmitTest extends TestCase
         $profile = StudentProfile::factory()->forCollege($this->ccs)->create();
         $this->existingBatch('BR-2026-004', [$profile], 'pending', '09:00:00', 2);
 
-        $this->postBatch([$profile], ['requested_time' => '10:00:00'])
+        $this->postBatch([$profile, $this->classmate()], ['requested_time' => '10:00:00'])
             ->assertSessionHasErrors(["clashes.{$profile->id}" => 'Already scheduled for a Medical Assessment Form that day, on BR-2026-004 (9:00 AM – 11:00 AM)']);
 
         // Only the batch that was there first.
@@ -419,7 +448,7 @@ class BatchRequestSubmitTest extends TestCase
         $profile = StudentProfile::factory()->forCollege($this->ccs)->create();
         $this->legacySelfBooking($profile, '09:00:00');
 
-        $this->postBatch([$profile])->assertSessionHasNoErrors();
+        $this->postBatch([$profile, $this->classmate()])->assertSessionHasNoErrors();
 
         $this->assertDatabaseCount('batch_requests', 1);
     }
@@ -433,7 +462,7 @@ class BatchRequestSubmitTest extends TestCase
         $profile = StudentProfile::factory()->forCollege($this->ccs)->create();
         $this->existingBatch('BR-2026-003', [$profile], 'pending', '07:00:00', 1, 'clearance');
 
-        $this->postBatch([$profile], ['requested_time' => '14:00:00'])
+        $this->postBatch([$profile, $this->classmate()], ['requested_time' => '14:00:00'])
             ->assertSessionHasErrors(["clashes.{$profile->id}" => 'Already scheduled for a Medical Clearance that day, on BR-2026-003 (7:00 AM – 8:00 AM)']);
 
         $this->assertDatabaseCount('batch_requests', 1);
@@ -446,7 +475,7 @@ class BatchRequestSubmitTest extends TestCase
         $profile = StudentProfile::factory()->forCollege($this->ccs)->create();
         $this->existingBatch('BR-2026-003', [$profile], 'pending', '09:00:00', 1, 'assessment', '2026-09-11');
 
-        $this->postBatch([$profile])->assertSessionHasNoErrors();
+        $this->postBatch([$profile, $this->classmate()])->assertSessionHasNoErrors();
 
         $this->assertDatabaseCount('batch_requests', 2);
     }
@@ -455,17 +484,20 @@ class BatchRequestSubmitTest extends TestCase
     {
         Carbon::setTestNow(Carbon::parse('2026-09-01 08:00', 'Asia/Manila'));
 
-        [$held, $free] = StudentProfile::factory()->count(2)->forCollege($this->ccs)->create()->all();
+        [$held, $free, $alsoFree] = StudentProfile::factory()->count(3)->forCollege($this->ccs)->create()->all();
         $this->existingBatch('BR-2026-003', [$held], 'pending', '09:00:00', 1);
 
-        $this->postBatch([$held, $free])->assertSessionHasErrors("clashes.{$held->id}");
+        $this->postBatch([$held, $free, $alsoFree])->assertSessionHasErrors("clashes.{$held->id}");
 
         // What the popup's "Remove these students from the batch" button does.
-        $this->postBatch([$free])->assertSessionHasNoErrors();
+        $this->postBatch([$free, $alsoFree])->assertSessionHasNoErrors();
 
         $this->assertDatabaseCount('batch_requests', 2);
         $newBatch = BatchRequest::where('reference_no', '!=', 'BR-2026-003')->sole();
-        $this->assertSame([$free->user_id], $newBatch->batchRequestStudents()->pluck('student_id')->all());
+        $this->assertEqualsCanonicalizing(
+            [$free->user_id, $alsoFree->user_id],
+            $newBatch->batchRequestStudents()->pluck('student_id')->all(),
+        );
     }
 
     public function test_a_student_withdrawn_from_an_approved_batch_raises_no_clash(): void
@@ -485,7 +517,7 @@ class BatchRequestSubmitTest extends TestCase
         ]);
         $batch->batchRequestStudents()->update(['appointment_id' => $appointment->id]);
 
-        $this->postBatch([$profile])->assertSessionHasNoErrors();
+        $this->postBatch([$profile, $this->classmate()])->assertSessionHasNoErrors();
 
         $this->assertDatabaseCount('batch_requests', 2);
     }
@@ -522,6 +554,7 @@ class BatchRequestSubmitTest extends TestCase
         Carbon::setTestNow(Carbon::parse('2026-09-01 08:00', 'Asia/Manila'));
 
         $profile = StudentProfile::factory()->forCollege($this->ccs)->create();
+        $classmate = $this->classmate(); // created before the listener below
         $competitorInjected = false;
 
         DB::listen(function ($query) use (&$competitorInjected, $profile): void {
@@ -533,7 +566,7 @@ class BatchRequestSubmitTest extends TestCase
             $this->existingBatch('BR-2026-003', [$profile], 'pending', '09:00:00', 1);
         });
 
-        $this->postBatch([$profile])->assertSessionHasErrors("clashes.{$profile->id}");
+        $this->postBatch([$profile, $classmate])->assertSessionHasErrors("clashes.{$profile->id}");
 
         $this->assertTrue($competitorInjected, 'The competing batch was never injected — the test no longer models the race.');
         // Only the competitor; the submission itself wrote nothing.
@@ -603,6 +636,9 @@ class BatchRequestSubmitTest extends TestCase
             ->assertOk()
             ->assertSee($batch->reference_no)
             ->assertSee('Pending Director Approval')
+            // D-105: the batch's reason is shown as its Purpose.
+            ->assertSee('>Purpose</dt>', false)
+            ->assertDontSee('>Reason</dt>', false)
             ->assertSee($batch->requested_date->format('l, F j, Y'))
             ->assertSee($batch->created_at->format('l, F j, Y'))
             ->assertSee('View Tracking')

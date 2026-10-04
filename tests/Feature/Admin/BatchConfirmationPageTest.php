@@ -144,7 +144,7 @@ class BatchConfirmationPageTest extends TestCase
 
     public function test_the_page_no_longer_says_the_director_may_move_the_date(): void
     {
-        $batch = $this->submitBatch(1);
+        $batch = $this->submitBatch(2);
 
         $this->confirmationPage($batch)
             ->assertDontSee('may adjust')

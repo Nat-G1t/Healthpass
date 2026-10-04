@@ -1,15 +1,15 @@
 <x-layout.sidebar title="Batch Tracking">
 
 @php
-    // D-36: the Reason column only exists once something has been rejected —
-    // an all-approved list shouldn't carry a column of em dashes.
+    // D-36: the Rejection Reason column only exists once something has been
+    // rejected — an all-approved list shouldn't carry a column of em dashes.
     $hasRejected = $batchRequests->contains(fn ($batch) => $batch->status === 'rejected');
-    // D-62: Form Type sits immediately before Reason — the reason list is the form's.
-    $headers = ['Batch ID', 'Form Type', 'Reason', 'Students', 'Submitted', 'Status'];
+    // D-62: Form Type sits immediately before Purpose — the purpose list is the
+    // form's. "Purpose" is the batch's `reason` column, renamed on screen by D-105.
+    $headers = ['Batch ID', 'Form Type', 'Purpose', 'Students', 'Submitted', 'Status'];
 
-    // Named "Rejection Reason", not "Reason": the list already has a Reason
-    // column (the batch's own reason) and two identical headers would be
-    // ambiguous on desktop and in the mobile cards' labels alike.
+    // The Director's written reason for rejecting (D-36) keeps the word
+    // "reason" — it really is one; the batch's own reason reads "Purpose".
     if ($hasRejected) {
         $headers[] = 'Rejection Reason';
     }
@@ -213,7 +213,7 @@
                         </a>
                     </x-hp.table-cell>
                     <x-hp.table-cell label="Form Type">{{ $batch->formTypeLabel() }}</x-hp.table-cell>
-                    <x-hp.table-cell label="Reason">{{ Str::limit($batch->reasonText(), 60) }}</x-hp.table-cell>
+                    <x-hp.table-cell label="Purpose">{{ Str::limit($batch->reasonText(), 60) }}</x-hp.table-cell>
                     <x-hp.table-cell label="Students">{{ $batch->batch_request_students_count }}</x-hp.table-cell>
                     <x-hp.table-cell label="Submitted" class="text-hp-slate/60">{{ $batch->created_at->format('M j, Y') }}</x-hp.table-cell>
                     <x-hp.table-cell label="Status">
