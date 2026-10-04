@@ -226,24 +226,27 @@ npm run dev                       # terminal 2
   It is emailed, so it is stored and never recomputed. Pre-D-96 rows are
   NULL — never backfill them.
 - **On today, an hour stops being bookable once it has ENDED (BR-23)** — at
-  12:00 the 11–12 slot is gone, 12–1 is not. Binds the College Admin's
-  batch start hour *and* Director approval (any elapsed hour
-  in the span refuses it — D-36 still allows same-day batches, so their hours
-  can lapse while pending; `BatchRequest::elapsedSpanHours()` is the one
-  definition the page and the endpoint share). Always decided on the **server**
+  12:00 the 11–12 slot is gone, 12–1 is not. Binds the Director's chosen
+  hours (D-108 — same-day batches are allowed, so any elapsed hour in the
+  picked span refuses approval; the hour picker greys it out first, and
+  `ClinicScheduleService::elapsedSlotsIn()` is the one definition the picker
+  and the endpoint share). Always decided on the **server**
   clock and shipped to the page as data; never compute "now" in the browser
   (same rule as BR-20). Not re-checked under lock — elapsed-ness can't race.
-- Batch clinic dates are admin-requested and **confirm-only** at approval —
-  **the Director cannot adjust the date (D-36, supersedes that clause of
-  D-29)** and since D-37 confirms the hour span read-only too. Approval reads
-  `requested_date` off the locked row, never the request body. A batch can't
-  be approved at all when `requested_date` is NULL, **has already passed**
-  (`BatchRequest::hasStaleRequestedDate()` — today still counts as valid),
-  it has **no hour span** (pre-D-37), or **any hour in its span is at the
-  hourly cap** — that last one is a **hard block since D-37, replacing
-  FR-DIRA-06's old warn-but-allow**. The pushback path is
-  **reject with a written reason** (required, 10–500 chars), which the
-  College Admin reads on Batch Tracking.
+- Batch clinic dates are **scheduled by the Director (D-108, supersedes
+  D-29/D-36)**: the College Admin sends the form, purpose and students only,
+  and the Director picks the clinic **date and start hour** on the batch's
+  Review page (`/director/batches/{batch}/review`), reached from a
+  first-come queue. Approval takes `scheduled_date` + `start_time` from the
+  request but derives the span length from the roster, and re-checks every
+  rule on the **locked** row: the span fits the clinic day, no hour has
+  ended (BR-23), **every hour has room for its seats — a hard block since
+  D-37, replacing FR-DIRA-06's old warn-but-allow** — and the day stays
+  within `daily_capacity`, and no student already has a schedule that day
+  (BR-25). It writes `scheduled_date` / `scheduled_time` /
+  `scheduled_blocks`; `requested_*` are legacy columns nothing decides on.
+  The pushback path is still **reject with a written reason** (required,
+  10–500 chars), which the College Admin reads on Batch Tracking.
 - The printed Medical Clearance must match official form
   **PSU-QSP-OSS-004-FO002-R04** (D-67), and the printed Medical Assessment
   Form must match **PSU-QSP-OSS-004-FO010-R00** (D-71): US Letter since D-83, two pages

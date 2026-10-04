@@ -170,26 +170,6 @@ class ClinicScheduleService
         ));
     }
 
-    /** Is there any hour left on $date that is neither elapsed nor full? */
-    public function hasAvailableSlot(string $date): bool
-    {
-        $capacity = $this->hourlyCapacity();
-
-        foreach ($this->bookedBySlot($date) as $slot => $booked) {
-            if ($booked < $capacity && ! $this->isSlotElapsed($date, $slot)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /** The one "that hour has gone by" wording, shared by both Form Requests. */
-    public function slotElapsedMessage(string $slot): string
-    {
-        return 'The '.$this->label($slot).' slot has already passed. Please pick a later time today.';
-    }
-
     /**
      * The one "this hour is full" wording, used by the Form Request's read and
      * by the locked re-check inside the transaction so the student sees the
@@ -423,13 +403,34 @@ class ClinicScheduleService
      */
     public function fullSlotsIn(string $date, array $span, int $studentCount, bool $lock = false): array
     {
+        $booked = [];
+
+        foreach ($span as $slot) {
+            $booked[$slot] = $this->bookedInSlot($date, $slot, $lock);
+        }
+
+        return $this->slotsWithoutRoom($span, $studentCount, $booked);
+    }
+
+    /**
+     * The D-91 room rule on counts the caller already has: the slots of $span
+     * where booked + this batch's seats there goes over the hourly cap. Shared
+     * by fullSlotsIn() (fresh, optionally locked counts) and startBlocker()
+     * (the month calendar's one-query counts), so both apply the same rule.
+     *
+     * @param  list<string>  $span
+     * @param  array<string, int>  $bookedBySlot
+     * @return list<string>
+     */
+    public function slotsWithoutRoom(array $span, int $studentCount, array $bookedBySlot): array
+    {
         $capacity = $this->hourlyCapacity();
         $seats = $this->seatsBySlot($span, $studentCount);
 
         return array_values(array_filter(
             $span,
             fn (string $slot): bool => $seats[$slot] > 0
-                && $this->bookedInSlot($date, $slot, $lock) + $seats[$slot] > $capacity,
+                && ($bookedBySlot[$slot] ?? 0) + $seats[$slot] > $capacity,
         ));
     }
 
@@ -447,81 +448,133 @@ class ClinicScheduleService
             : 'has only '.$left.' '.Str::plural('seat', $left).' left';
     }
 
-    // ── Month calendar (FR-STU-03, FR-ADM-04) ────────────────────────────────
-    // Moved here from the student booking controller by D-54, so both calendars
-    // greyed out the same days. Since D-61 the College Admin's New Batch mini
-    // calendar is the only one left.
+    // ── Director scheduling (D-108) ──────────────────────────────────────────
+    // Since D-108 the Director picks each batch's date and start hour. These
+    // feed the Review page's calendar and hour picker; approve() re-checks the
+    // same rules under a lock, so the page only ever helps.
+
+    /** BR-02: would $studentCount more students keep the day within daily_capacity? */
+    public function dayHasRoomFor(int $bookedOnDay, int $studentCount): bool
+    {
+        return $bookedOnDay + $studentCount <= $this->dailyCapacity();
+    }
 
     /**
-     * Day numbers (1–31) the calendar greys out as FULL. FR-STU-03 / BR-02 / D-37.
+     * Why a batch of $studentCount students cannot START at $startSlot on
+     * $date, or null when it can (D-108, Q17). In approve()'s order:
      *
-     * Since D-37 a day is full when EVERY one of its slots is at the hourly cap —
-     * a day with one free hour left is still bookable. The outer daily cap is
-     * kept as a second condition because it is the only one that sees legacy
-     * pre-D-37 rows (scheduled_time NULL), which sit in no slot.
+     *   'overrun'  the span would run past the last clinic hour
+     *   'elapsed'  one of its hours has already ended today (BR-23)
+     *   'full'     one of its hours lacks room for this batch's seats (D-91)
      *
-     * Portability (CLAUDE.md): one grouped query over the raw
-     * (scheduled_date, scheduled_time) pair — no DAY()/MONTH()/HOUR() in
-     * selectRaw or havingRaw — and the per-day roll-up is done in PHP.
-     * whereYear/whereMonth are compiled per-driver by Laravel, so they're safe.
+     * Counts come in as $bookedBySlot (bookedBySlot()'s shape), so the month
+     * calendar can try every start hour of every day from one query.
      *
-     * @return int[]
+     * @param  array<string, int>  $bookedBySlot
      */
-    public function fullDaysForMonth(int $year, int $month): array
+    public function startBlocker(string $date, string $startSlot, int $studentCount, array $bookedBySlot): ?string
     {
-        $hourlyCapacity = $this->hourlyCapacity();
-        $dailyCapacity = $this->dailyCapacity();
-        $slotCount = count($this->slots());
+        $span = $this->spanForStudents($startSlot, $studentCount);
+
+        return match (true) {
+            $span === [] => 'overrun',
+            $this->elapsedSlotsIn($date, $span) !== [] => 'elapsed',
+            $this->slotsWithoutRoom($span, $studentCount, $bookedBySlot) !== [] => 'full',
+            default => null,
+        };
+    }
+
+    /**
+     * The start hours on $date from which the whole batch fits — none means
+     * the day is greyed out on the Director's calendar.
+     *
+     * @param  array<string, int>  $bookedBySlot
+     * @return list<string>
+     */
+    public function fittingStarts(string $date, int $studentCount, array $bookedBySlot): array
+    {
+        return array_values(array_filter(
+            $this->slots(),
+            fn (string $slot): bool => $this->startBlocker($date, $slot, $studentCount, $bookedBySlot) === null,
+        ));
+    }
+
+    /**
+     * One month of bookings for the Director's calendar: per day ('Y-m-d'),
+     * the non-cancelled appointments in total — legacy NULL-time rows included,
+     * the same count as bookedOnDate() (BR-02) — and per slot. Days with no
+     * booking are left out.
+     *
+     * One grouped query over a DATE RANGE (whereDate is compiled per driver;
+     * no DAY()/MONTH() in raw SQL), rolled up per day in PHP — portable to the
+     * SQLite test suite (CLAUDE.md).
+     *
+     * @return array<string, array{total: int, bySlot: array<string, int>}>
+     */
+    public function bookingsForMonth(int $year, int $month): array
+    {
+        $first = Carbon::create($year, $month, 1);
 
         $rows = Appointment::query()
-            ->whereYear('scheduled_date', $year)
-            ->whereMonth('scheduled_date', $month)
+            ->whereDate('scheduled_date', '>=', $first->toDateString())
+            ->whereDate('scheduled_date', '<=', $first->copy()->endOfMonth()->toDateString())
             ->where('status', '!=', 'cancelled')
             ->select('scheduled_date', 'scheduled_time', DB::raw('COUNT(*) as cnt'))
             ->groupBy('scheduled_date', 'scheduled_time')
             ->get();
 
-        $fullSlotsPerDay = [];
-        $totalPerDay = [];
+        $days = [];
 
         foreach ($rows as $row) {
-            $day = Carbon::parse($row->scheduled_date)->day;
+            $date = Carbon::parse($row->scheduled_date)->toDateString();
             $count = (int) $row->cnt;
 
-            $totalPerDay[$day] = ($totalPerDay[$day] ?? 0) + $count;
+            $days[$date] ??= ['total' => 0, 'bySlot' => []];
+            $days[$date]['total'] += $count;
 
-            if ($row->scheduled_time !== null && $count >= $hourlyCapacity) {
-                $fullSlotsPerDay[$day] = ($fullSlotsPerDay[$day] ?? 0) + 1;
+            if ($row->scheduled_time !== null) {
+                $days[$date]['bySlot'][$row->scheduled_time] = ($days[$date]['bySlot'][$row->scheduled_time] ?? 0) + $count;
             }
         }
 
-        $fullDays = [];
-
-        foreach ($totalPerDay as $day => $total) {
-            $everySlotFull = $slotCount > 0 && ($fullSlotsPerDay[$day] ?? 0) >= $slotCount;
-
-            if ($everySlotFull || $total >= $dailyCapacity) {
-                $fullDays[] = $day;
-            }
-        }
-
-        // BR-23: TODAY is also unavailable once no hour is left to book — every
-        // slot has either filled up or already ended. Only today can have
-        // elapsed hours, so no other day needs this check (and a day with zero
-        // appointments never reaches the loop above, which is exactly the
-        // late-afternoon case that matters here).
-        $today = today();
-
-        if ($year === $today->year && $month === $today->month
-            && ! in_array($today->day, $fullDays, true)
-            && ! $this->hasAvailableSlot($today->toDateString())) {
-            $fullDays[] = $today->day;
-        }
-
-        sort($fullDays);
-
-        return $fullDays;
+        return $days;
     }
+
+    /**
+     * Who already holds seats in each hour on $date, for the hour picker's
+     * "~ scheduled for CCS (8/20)": slot => [{code, count}], colleges by code.
+     * Read through each appointment's batch, so it names the college that
+     * booked it. Every column is table-qualified: batch_requests has its own
+     * scheduled_date, scheduled_time and status.
+     *
+     * @return array<string, list<array{code: string, count: int}>>
+     */
+    public function collegesBySlot(string $date): array
+    {
+        $rows = Appointment::query()
+            ->join('batch_requests', 'batch_requests.id', '=', 'appointments.batch_request_id')
+            ->join('colleges', 'colleges.id', '=', 'batch_requests.college_id')
+            ->whereDate('appointments.scheduled_date', $date)
+            ->whereNotNull('appointments.scheduled_time')
+            ->where('appointments.status', '!=', 'cancelled')
+            ->select('appointments.scheduled_time', 'colleges.code', DB::raw('COUNT(*) as cnt'))
+            ->groupBy('appointments.scheduled_time', 'colleges.code')
+            ->orderBy('colleges.code')
+            ->get();
+
+        $bySlot = [];
+
+        foreach ($rows as $row) {
+            $bySlot[$row->scheduled_time][] = ['code' => $row->code, 'count' => (int) $row->cnt];
+        }
+
+        return $bySlot;
+    }
+
+    // ── Month calendar (BR-20) ───────────────────────────────────────────────
+    // Moved here from the student booking controller by D-54. The College
+    // Admin's mini calendar went with D-108; the Director's Review-page
+    // calendar (BatchApprovalController::calendarDays) reads this one.
 
     /**
      * Day numbers unavailable because of the same-day closing cutoff (BR-20).
@@ -530,6 +583,8 @@ class ClinicScheduleService
      * the local clock has reached closing_hour — i.e. at most one entry, and only for
      * the current month. The cutoff is decided here (server-side), never trusted from
      * the browser clock; the calendar just greys out whatever this returns.
+     *
+     * D-108: the Director's calendar shows such a day as "Closed for today".
      *
      * @return int[]
      */

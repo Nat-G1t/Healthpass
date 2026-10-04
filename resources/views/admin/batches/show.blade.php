@@ -54,20 +54,28 @@
 {{-- ── Batch summary ────────────────────────────────────────────────────────── --}}
 <x-hp.card class="mb-6">
     <dl class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {{-- D-108: the date and hours the Director scheduled; while pending,
+             who will decide them. "—" for a batch that was never scheduled. --}}
         <div>
             <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
                 Clinic date
             </dt>
             <dd class="mt-1 text-sm font-semibold text-hp-slate">
-                {{ $batch->requested_date?->format('l, F j, Y') ?? '—' }}
+                @if ($batch->scheduled_date !== null)
+                    {{ $batch->scheduled_date->format('l, F j, Y') }}
+                @elseif ($batch->status === 'pending')
+                    To be scheduled by the Director
+                @else
+                    &mdash;
+                @endif
             </dd>
         </div>
         <div>
             <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
-                Hour span
+                Hours
             </dt>
-            {{-- "—" on pre-D-37 batches, which have no span --}}
-            <dd class="mt-1 text-sm font-semibold text-hp-slate">{{ $batch->requestedSpanLabel() }}</dd>
+            {{-- "—" until scheduled, and on pre-D-37 batches, which have no span --}}
+            <dd class="mt-1 text-sm font-semibold text-hp-slate">{{ $batch->scheduledSpanLabel() }}</dd>
         </div>
         <div>
             <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">

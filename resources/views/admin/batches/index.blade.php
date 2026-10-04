@@ -6,7 +6,8 @@
     $hasRejected = $batchRequests->contains(fn ($batch) => $batch->status === 'rejected');
     // D-62: Form Type sits immediately before Purpose — the purpose list is the
     // form's. "Purpose" is the batch's `reason` column, renamed on screen by D-105.
-    $headers = ['Batch ID', 'Form Type', 'Purpose', 'Students', 'Submitted', 'Status'];
+    // D-108: Clinic Date is the Director's schedule — the college no longer picks it.
+    $headers = ['Batch ID', 'Form Type', 'Purpose', 'Students', 'Submitted', 'Clinic Date', 'Status'];
 
     // The Director's written reason for rejecting (D-36) keeps the word
     // "reason" — it really is one; the batch's own reason reads "Purpose".
@@ -216,6 +217,18 @@
                     <x-hp.table-cell label="Purpose">{{ Str::limit($batch->reasonText(), 60) }}</x-hp.table-cell>
                     <x-hp.table-cell label="Students">{{ $batch->batch_request_students_count }}</x-hp.table-cell>
                     <x-hp.table-cell label="Submitted" class="text-hp-slate/60">{{ $batch->created_at->format('M j, Y') }}</x-hp.table-cell>
+                    {{-- D-108: the date and hours the Director scheduled; while
+                         pending, who will decide them; "—" if never scheduled. --}}
+                    <x-hp.table-cell label="Clinic Date">
+                        @if ($batch->scheduled_date !== null)
+                            <span class="whitespace-nowrap">{{ $batch->scheduled_date->format('M j, Y') }}</span>
+                            <span class="block whitespace-nowrap text-xs text-hp-slate/60">{{ $batch->scheduledSpanLabel() }}</span>
+                        @elseif ($batch->status === 'pending')
+                            <span class="text-xs text-hp-slate/60">To be scheduled by the Director</span>
+                        @else
+                            <span class="text-hp-slate/50">&mdash;</span>
+                        @endif
+                    </x-hp.table-cell>
                     <x-hp.table-cell label="Status">
                         <x-hp.badge :variant="$batch->status">{{ $batch->statusLabel() }}</x-hp.badge>
                     </x-hp.table-cell>
@@ -269,7 +282,7 @@
                                         'id' => $batch->id,
                                         'ref' => $batch->reference_no,
                                         'students' => (int) $batch->batch_request_students_count,
-                                        'date' => $batch->requested_date?->format('M j, Y'),
+                                        'date' => $batch->scheduled_date?->format('M j, Y'),
                                         // D-92: approved batches are cancellable too, and the dialog warns that students are emailed.
                                         'approved' => $batch->status === 'approved',
                                     ]) }}"

@@ -4,18 +4,17 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Director;
 
-use App\Models\Appointment;
 use App\Models\BatchRequest;
 use App\Models\College;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Carbon;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 /**
- * Director Batch Approvals page (FR-DIRA-01/05/06): every college's requests
- * on one screen, Approve/Reject only on pending rows, and the JSON capacity
- * feed behind the approve modal's warning line.
+ * Director Batch Approvals — the queue (FR-DIRA-01/05, D-108): every college's
+ * PENDING requests, oldest first, the oldest highlighted as Next like the
+ * clinic's Live Queue, and a Review button per row. Decided batches leave.
  */
 class BatchApprovalsPageTest extends TestCase
 {
@@ -33,343 +32,186 @@ class BatchApprovalsPageTest extends TestCase
     {
         parent::setUp();
 
-        // Written around D-37's 12 an hour and 120 a day, which these tests'
-        // numbers (13 → 12 + 1, a full hour of 12, a 121-student batch …)
-        // still exercise. The D-95 default of 20 is asserted in
-        // the unit test ClinicScheduleServiceTest.
-        config(['healthpass.hourly_capacity' => 12, 'healthpass.daily_capacity' => 120]);
-
         $this->ccs = College::create(['code' => 'CCS', 'name' => 'College of Computing Studies']);
         $this->cea = College::create(['code' => 'CEA', 'name' => 'College of Engineering and Architecture']);
 
         $this->director = User::factory()->create(['role' => 'director']);
-        $this->admin = User::factory()->create([
-            'role' => 'college_admin',
-            'managed_college_id' => $this->ccs->id,
-        ]);
+        $this->admin = User::factory()->create(['role' => 'college_admin', 'managed_college_id' => $this->ccs->id]);
     }
 
-    /** Persist a batch directly (bypassing the admin form) for rendering tests. */
-    private function makeBatch(College $college, array $overrides = []): BatchRequest
+    /** A batch submitted $daysAgo days ago (the queue orders on created_at). */
+    private function makeBatch(College $college, int $daysAgo = 0, array $overrides = []): BatchRequest
     {
         static $seq = 500;
 
-        return BatchRequest::create(array_merge([
+        $batch = BatchRequest::create(array_merge([
             'reference_no' => 'BR-'.now()->year.'-'.$seq++,
             'college_id' => $college->id,
             'requested_by' => $this->admin->id,
-            'form_type' => 'assessment',   // D-62: 'ojt' is an Assessment reason
+            'form_type' => 'assessment',   // D-62: 'ojt' is an Assessment purpose
             'reason' => 'ojt',
             'service_type' => 'medical',
-            // D-37: a batch needs an hour span to be approvable, exactly as
-            // D-36 made requested_date necessary. Overridden to null by the
-            // tests that model a pre-D-37 batch.
-            'requested_time' => '07:00:00',
-            'requested_blocks' => 1,
+            'status' => 'pending',
         ], $overrides));
+
+        $batch->created_at = now()->subDays($daysAgo);
+        $batch->save();
+
+        return $batch;
     }
 
+    private function queue(string $query = ''): TestResponse
+    {
+        return $this->actingAs($this->director)->get('/director/batches'.$query)->assertOk();
+    }
 
-    public function test_the_approvals_list_pages_at_ten(): void
+    /**
+     * The table's rows as HTML, in order — so a test can ask which row
+     * carries the Next marker without matching the page's own CSS.
+     *
+     * @return list<string>
+     */
+    private function rows(TestResponse $response): array
+    {
+        preg_match('/<tbody>(.*?)<\/tbody>/s', $response->getContent(), $body);
+        preg_match_all('/<tr\b[^>]*>.*?<\/tr>/s', $body[1] ?? '', $rows);
+
+        return $rows[0];
+    }
+
+    /** @return list<string> the rows holding the Next marker */
+    private function nextRows(TestResponse $response): array
+    {
+        return array_values(array_filter($this->rows($response), fn (string $row) => str_contains($row, 'data-next')));
+    }
+
+    public function test_only_pending_requests_are_listed_oldest_first(): void
+    {
+        $newer = $this->makeBatch($this->ccs, daysAgo: 1);
+        $oldest = $this->makeBatch($this->cea, daysAgo: 3);
+        $approved = $this->makeBatch($this->ccs, daysAgo: 5, overrides: ['status' => 'approved']);
+        $rejected = $this->makeBatch($this->ccs, daysAgo: 5, overrides: ['status' => 'rejected']);
+        $cancelled = $this->makeBatch($this->ccs, daysAgo: 5, overrides: ['status' => 'cancelled']);
+
+        $this->queue()
+            ->assertSeeInOrder([$oldest->reference_no, $newer->reference_no])
+            ->assertDontSee($approved->reference_no)
+            ->assertDontSee($rejected->reference_no)
+            ->assertDontSee($cancelled->reference_no);
+    }
+
+    public function test_a_same_second_tie_goes_to_the_lower_id(): void
+    {
+        $first = $this->makeBatch($this->ccs, daysAgo: 2);
+        $second = $this->makeBatch($this->cea, daysAgo: 2);
+        $second->created_at = $first->created_at;
+        $second->save();
+
+        $this->queue()->assertSeeInOrder([$first->reference_no, $second->reference_no]);
+    }
+
+    public function test_the_first_row_is_marked_next(): void
+    {
+        $this->makeBatch($this->ccs, daysAgo: 1);
+        $oldest = $this->makeBatch($this->cea, daysAgo: 4);
+
+        $response = $this->queue();
+        $next = $this->nextRows($response);
+
+        $this->assertCount(1, $next);
+        $this->assertStringContainsString($oldest->reference_no, $next[0]);
+        $this->assertStringContainsString('Next', $next[0]);
+        $this->assertSame($next[0], $this->rows($response)[0]);
+    }
+
+    public function test_only_the_first_row_of_page_one_is_next(): void
     {
         foreach (range(1, 12) as $i) {
-            $this->makeBatch($i % 2 ? $this->ccs : $this->cea);
+            $this->makeBatch($i % 2 ? $this->ccs : $this->cea, daysAgo: 20 - $i);
         }
 
-        $page1 = $this->actingAs($this->director)->get('/director/batches')->assertOk();
-        $page1->assertSee('Showing 1&ndash;10 of 12', false);
-        $this->assertCount(10, $page1->viewData('batchRequests')->items());
-
-        $page2 = $this->actingAs($this->director)->get('/director/batches?page=2')->assertOk();
-        $this->assertCount(2, $page2->viewData('batchRequests')->items());
+        $this->assertCount(1, $this->nextRows($this->queue()));
+        $this->assertCount(0, $this->nextRows($this->queue('?page=2')));
     }
 
-    public function test_director_sees_batches_from_all_colleges(): void
+    /** The highlight belongs to the oldest in the whole queue, not in a search. */
+    public function test_a_search_that_skips_the_oldest_shows_no_next(): void
     {
-        $ccsBatch = $this->makeBatch($this->ccs);
-        $ceaBatch = $this->makeBatch($this->cea);
+        $this->makeBatch($this->ccs, daysAgo: 5, overrides: ['reference_no' => 'BR-2026-111']);
+        $this->makeBatch($this->cea, daysAgo: 1, overrides: ['reference_no' => 'BR-2026-777']);
 
-        $this->actingAs($this->director)
-            ->get('/director/batches')
-            ->assertOk()
-            ->assertSee($ccsBatch->reference_no)
-            ->assertSee($ceaBatch->reference_no)
-            ->assertSee('CCS')
-            ->assertSee('CEA');
+        $response = $this->queue('?q=777');
+
+        $response->assertSee('BR-2026-777')->assertDontSee('BR-2026-111');
+        $this->assertCount(0, $this->nextRows($response));
     }
 
-    public function test_the_form_type_column_sits_immediately_before_purpose(): void
+    public function test_the_queue_pages_at_ten_and_keeps_its_order_across_pages(): void
     {
-        // D-62: the Director sees which form each batch uses.
+        $batches = collect(range(1, 12))->map(fn (int $i) => $this->makeBatch($this->ccs, daysAgo: 30 - $i));
+
+        $this->queue()->assertSee('Showing 1&ndash;10 of 12', false)
+            ->assertSee($batches[9]->reference_no)
+            ->assertDontSee($batches[10]->reference_no);
+
+        $this->queue('?page=2')
+            ->assertSeeInOrder([$batches[10]->reference_no, $batches[11]->reference_no])
+            ->assertDontSee($batches[0]->reference_no);
+    }
+
+    public function test_the_columns_are_batch_id_college_form_type_purpose(): void
+    {
         $this->makeBatch($this->ccs);
-        $this->makeBatch($this->cea, ['form_type' => 'clearance', 'reason' => 'outbound']);
 
-        $html = $this->actingAs($this->director)
-            ->get('/director/batches')
-            ->assertOk()
+        $this->queue()
+            ->assertSeeInOrder(['Batch ID', 'College', 'Form Type', 'Purpose'])
             ->assertSee('Medical Assessment Form')
-            ->assertSee('Medical Clearance')
-            ->assertSee('Outbound Activities')
-            ->getContent();
-
-        // Two adjacent header cells: Form Type, then Purpose (D-105).
-        $this->assertMatchesRegularExpression('~>Form Type</th>\s*<th[^>]*>Purpose</th>~', $html);
-        $this->assertStringNotContainsString('>Reason</th>', $html);
-        // …while a rejection keeps its "reason" (D-36).
-        $this->assertStringContainsString('Reason for rejection', $html);
+            ->assertSee('On-the-job Training')
+            ->assertDontSee('Requested Date')
+            ->assertDontSee('Clinic Hours')
+            ->assertDontSee('>Submitted<', false)
+            ->assertDontSee('>Students<', false);
     }
 
-    public function test_both_decision_modals_receive_the_form_type(): void
+    public function test_every_row_links_to_its_review_page(): void
     {
-        $this->makeBatch($this->ccs, ['requested_date' => now()->addDays(3)->toDateString()]);
+        $batch = $this->makeBatch($this->ccs);
 
-        $html = $this->actingAs($this->director)
-            ->get('/director/batches')
-            ->assertOk()
-            ->assertSee('Form: <strong x-text="batch?.form"></strong>', false)
-            ->assertSee('Form: <strong x-text="rejectTarget?.form"></strong>', false)
-            ->getContent();
-
-        // Js::from() payloads for Approve and Reject both carry the label.
-        // Js::from() writes every quote as a backslash-u0022 escape; undo it
-        // (the escape is built from pieces to keep it readable here).
-        $decoded = str_replace(chr(92).'u0022', '"', $html);   // chr(92) = backslash
-        $this->assertSame(2, substr_count($decoded, '"form":"Medical Assessment Form"'));
+        $this->queue()->assertSee(route('director.batches.review', $batch));
     }
 
-    public function test_pending_rows_have_decision_buttons_and_decided_rows_are_static(): void
+    public function test_no_decision_controls_live_on_the_queue(): void
     {
-        $this->makeBatch($this->ccs, ['requested_date' => now()->addDays(5)->toDateString()]);
-        $this->makeBatch($this->ccs, ['status' => 'approved']);
-        $this->makeBatch($this->cea, ['status' => 'rejected']);
+        $batch = $this->makeBatch($this->ccs);
 
-        $response = $this->actingAs($this->director)
-            ->get('/director/batches')
-            ->assertOk()
-            // Decided rows show static text (FR-DIRA-05)…
-            ->assertSee('✓ Approved')
-            ->assertSee('✕ Rejected');
-
-        // …and expose NO decision trigger: each appears exactly ONCE, for the
-        // single pending row. (Both URLs sit inside Js::from() payloads whose
-        // slash escaping is an implementation detail, so we count trigger
-        // CALLS — the 'openX(JSON.parse' shape — not the plain function names,
-        // which also occur in the page's Alpine component definition.)
-        $content = $response->getContent();
-        $this->assertSame(1, substr_count($content, 'openApprove(JSON.parse'));
-        $this->assertSame(1, substr_count($content, 'openReject(JSON.parse'));
+        $this->queue()
+            ->assertDontSee(route('director.batches.approve', $batch))
+            ->assertDontSee(route('director.batches.reject', $batch));
     }
 
-    /**
-     * D-36: a pre-D-29 batch has no requested_date, so there is nothing to
-     * confirm — Approve is disabled and the Director is told to reject with
-     * a resubmit reason. Reject stays available.
-     */
-    public function test_a_batch_without_a_requested_date_cannot_be_approved_from_the_page(): void
+    public function test_the_batch_id_search_filters_on_the_server(): void
     {
-        $this->makeBatch($this->ccs); // no requested_date
+        $this->makeBatch($this->ccs, overrides: ['reference_no' => 'BR-2026-111']);
+        $this->makeBatch($this->cea, overrides: ['reference_no' => 'BR-2026-222']);
 
-        $response = $this->actingAs($this->director)
-            ->get('/director/batches')
-            ->assertOk()
-            ->assertSee('predates the requested-date field');
-
-        $content = $response->getContent();
-        $this->assertSame(0, substr_count($content, 'openApprove(JSON.parse'));
-        $this->assertSame(1, substr_count($content, 'openReject(JSON.parse'));
+        $this->queue('?q=222')->assertSee('BR-2026-222')->assertDontSee('BR-2026-111');
+        $this->queue('?q=999')->assertSee('No waiting batch request matches');
     }
 
-    /**
-     * D-36: same treatment for a batch whose requested date passed while it
-     * sat pending — confirm-only can't move it, so Approve is disabled and
-     * the notice points at reject-and-resubmit.
-     */
-    public function test_a_batch_with_a_stale_requested_date_cannot_be_approved_from_the_page(): void
+    public function test_an_empty_queue_says_so(): void
     {
-        $this->makeBatch($this->ccs, ['requested_date' => now()->subDay()->toDateString()]);
+        $this->makeBatch($this->ccs, overrides: ['status' => 'approved']);
 
-        $response = $this->actingAs($this->director)
-            ->get('/director/batches')
-            ->assertOk()
-            ->assertSee('The requested date has already passed');
-
-        $content = $response->getContent();
-        $this->assertSame(0, substr_count($content, 'openApprove(JSON.parse'));
-        $this->assertSame(1, substr_count($content, 'openReject(JSON.parse'));
+        $this->queue()->assertSee('No batch requests are waiting.');
     }
 
-    /**
-     * D-37: a batch submitted before the hourly-slot change has no hour span,
-     * which is the same "nothing to confirm" situation as a missing date.
-     */
-    public function test_a_batch_without_a_requested_time_cannot_be_approved_from_the_page(): void
+    public function test_the_queue_is_refused_for_other_roles_and_guests(): void
     {
-        $this->makeBatch($this->ccs, [
-            'requested_date' => now()->addDays(5)->toDateString(),
-            'requested_time' => null,
-            'requested_blocks' => null,
-        ]);
-
-        $response = $this->actingAs($this->director)
-            ->get('/director/batches')
-            ->assertOk()
-            ->assertSee('predates the hourly-slot change');
-
-        $content = $response->getContent();
-        $this->assertSame(0, substr_count($content, 'openApprove(JSON.parse'));
-        $this->assertSame(1, substr_count($content, 'openReject(JSON.parse'));
-    }
-
-    /** BR-23: the page mirrors the endpoint's refusal for a lapsed same-day span. */
-    public function test_a_batch_whose_hours_have_passed_cannot_be_approved_from_the_page(): void
-    {
-        Carbon::setTestNow(Carbon::parse('2026-07-27 12:00', 'Asia/Manila'));
-
-        $this->makeBatch($this->ccs, [
-            'requested_date' => today()->toDateString(),
-            'requested_time' => '07:00:00',
-            'requested_blocks' => 2,
-        ]);
-
-        $response = $this->actingAs($this->director)
-            ->get('/director/batches')
-            ->assertOk()
-            ->assertSee('has already passed today');
-
-        $content = $response->getContent();
-        $this->assertSame(0, substr_count($content, 'openApprove(JSON.parse'));
-        $this->assertSame(1, substr_count($content, 'openReject(JSON.parse'));
-    }
-
-    public function test_a_same_day_batch_still_ahead_keeps_its_approve_button(): void
-    {
-        Carbon::setTestNow(Carbon::parse('2026-07-27 12:00', 'Asia/Manila'));
-
-        $this->makeBatch($this->ccs, [
-            'requested_date' => today()->toDateString(),
-            'requested_time' => '14:00:00',
-            'requested_blocks' => 2,
-        ]);
-
-        $content = $this->actingAs($this->director)
-            ->get('/director/batches')->assertOk()->getContent();
-
-        $this->assertSame(1, substr_count($content, 'openApprove(JSON.parse'));
-    }
-
-    public function test_capacity_feed_reports_elapsed_hours_inside_a_span(): void
-    {
-        Carbon::setTestNow(Carbon::parse('2026-07-27 12:00', 'Asia/Manila'));
-
-        $this->actingAs($this->director)
-            ->getJson('/director/batches/capacity?date='.today()->toDateString().'&time=11:00:00&blocks=3&students=30')
-            ->assertOk()
-            ->assertJsonPath('elapsed_slots', ['11:00 AM – 12:00 PM'])
-            ->assertJsonPath('full_slots', []);
-    }
-
-    public function test_rows_show_the_batchs_clinic_hour_span(): void
-    {
-        $this->makeBatch($this->ccs, [
-            'requested_date' => now()->addDays(5)->toDateString(),
-            'requested_time' => '07:00:00',
-            'requested_blocks' => 3,
-        ]);
-
-        $this->actingAs($this->director)
-            ->get('/director/batches')
-            ->assertOk()
-            ->assertSee('7:00 AM – 10:00 AM (3 slots)');
-    }
-
-    public function test_capacity_feed_reports_full_hours_inside_a_span(): void
-    {
-        $date = now()->addDays(3)->toDateString();
-
-        Appointment::factory()->count(12)->inSlot('08:00:00')->create([
-            'scheduled_date' => $date,
-            'status' => 'scheduled',
-        ]);
-
-        $this->actingAs($this->director)
-            ->getJson("/director/batches/capacity?date={$date}&time=07:00:00&blocks=3&students=25")
-            ->assertOk()
-            ->assertJsonPath('full_slots', ['8:00 AM – 9:00 AM'])
-            ->assertJsonPath('span_label', '7:00 AM – 10:00 AM (3 slots)');
-    }
-
-    public function test_capacity_feed_counts_the_students_the_batch_would_add(): void
-    {
-        // D-91: 7 AM holds 8 — room for 4 more, not for 5.
-        $date = now()->addDays(3)->toDateString();
-
-        Appointment::factory()->count(8)->inSlot('07:00:00')->create([
-            'scheduled_date' => $date,
-            'status' => 'scheduled',
-        ]);
-
-        $this->actingAs($this->director)
-            ->getJson("/director/batches/capacity?date={$date}&time=07:00:00&blocks=1&students=4")
-            ->assertOk()
-            ->assertJsonPath('full_slots', []);
-
-        $this->actingAs($this->director)
-            ->getJson("/director/batches/capacity?date={$date}&time=07:00:00&blocks=1&students=5")
-            ->assertOk()
-            ->assertJsonPath('full_slots', ['7:00 AM – 8:00 AM']);
-    }
-
-    public function test_rows_show_the_admins_requested_date_or_a_dash(): void
-    {
-        $requestedDate = now()->addDays(5);
-        $this->makeBatch($this->ccs, ['requested_date' => $requestedDate->toDateString()]);
-        $this->makeBatch($this->cea); // pre-D-29 batch: no requested date
-
-        $this->actingAs($this->director)
-            ->get('/director/batches')
-            ->assertOk()
-            ->assertSee($requestedDate->format('M j, Y'))
-            ->assertSee('—');
-    }
-
-    public function test_capacity_feed_counts_only_non_cancelled_appointments(): void
-    {
-        config(['healthpass.daily_capacity' => 3]);
-        $date = now()->addDays(3)->toDateString();
-
-        Appointment::factory()->count(3)->onDate($date)->create();
-        Appointment::factory()->cancelled()->onDate($date)->create();
-        Appointment::factory()->onDate(now()->addDays(9)->toDateString())->create(); // other day
-
-        $this->actingAs($this->director)
-            ->getJson('/director/batches/capacity?date='.$date)
-            ->assertOk()
-            ->assertJsonPath('booked', 3)
-            ->assertJsonPath('capacity', 3)
-            // D-37: no span asked for → nothing to report as full.
-            ->assertJsonPath('full_slots', []);
-    }
-
-    public function test_capacity_feed_rejects_a_malformed_date(): void
-    {
-        $this->actingAs($this->director)
-            ->getJson('/director/batches/capacity?date=not-a-date')
-            ->assertUnprocessable();
-
-        $this->actingAs($this->director)
-            ->getJson('/director/batches/capacity')
-            ->assertUnprocessable();
-    }
-
-    public function test_page_and_feed_are_refused_for_other_roles_and_guests(): void
-    {
-        $this->get('/director/batches')->assertRedirect('/login');
-
-        foreach (['student', 'nurse', 'college_admin'] as $role) {
-            $user = User::factory()->create(['role' => $role]);
-
-            $this->actingAs($user)->get('/director/batches')->assertRedirect();
-            $this->actingAs($user)->get('/director/batches/capacity?date='.now()->toDateString())->assertRedirect();
+        foreach (['student', 'nurse', 'physician', 'college_admin'] as $role) {
+            $this->actingAs(User::factory()->create(['role' => $role]))->get('/director/batches')->assertRedirect();
         }
+
+        auth()->logout();
+        $this->get('/director/batches')->assertRedirect('/login');
     }
 }

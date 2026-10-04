@@ -731,7 +731,7 @@ class DemoClinicVisitSeeder extends Seeder
         bool $isCaptured,
     ): void {
         $checkedIn = $batch->scheduled_date->copy()
-            ->setTimeFromTimeString($batch->requested_time)
+            ->setTimeFromTimeString($batch->scheduled_time)
             ->addMinutes(($visitSeq % 12) * 5);
 
         // The kiosk links the visit but leaves the appointment `scheduled`;
@@ -809,7 +809,8 @@ class DemoClinicVisitSeeder extends Seeder
     /**
      * A batch the way a Director's approval leaves it (FR-DIRA-02, BR-08):
      * requested by the college's admin five days before the clinic date,
-     * approved two days before, `scheduled_date` = `requested_date` (D-36).
+     * approved two days before on the date and hour span the Director chose
+     * (D-108: `scheduled_*`; nothing new is written to the legacy requested_*).
      *
      * The timestamps are set by hand so the Activity Log and Batch Tracking
      * show these as history rather than as today's submissions. Eloquent
@@ -834,10 +835,9 @@ class DemoClinicVisitSeeder extends Seeder
             'form_type' => $reason[0],
             'reason' => $reason[1],
             'service_type' => 'medical',
-            'requested_date' => $date->toDateString(),
-            'requested_time' => $slot,
-            'requested_blocks' => app(ClinicScheduleService::class)->blocksFor($studentCount),
             'scheduled_date' => $date->toDateString(),
+            'scheduled_time' => $slot,
+            'scheduled_blocks' => app(ClinicScheduleService::class)->blocksFor($studentCount),
             'status' => 'approved',
             'reviewed_by' => $this->director->id,
             'reviewed_at' => $approvedAt,
@@ -861,7 +861,7 @@ class DemoClinicVisitSeeder extends Seeder
             'student_id' => $student->id,
             'service_type' => 'medical',
             'scheduled_date' => $batch->scheduled_date->toDateString(),
-            'scheduled_time' => $batch->requested_time,
+            'scheduled_time' => $batch->scheduled_time,
             'status' => $status,
             'source' => 'batch',
             'batch_request_id' => $batch->id,

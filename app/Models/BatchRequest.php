@@ -71,10 +71,15 @@ class BatchRequest extends Model
         'reason',
         'reason_detail',
         'service_type',
+        // Legacy since D-108: what a college asked for before the Director
+        // started choosing the schedule. New batches leave all three NULL.
         'requested_date',
         'requested_time',
         'requested_blocks',
+        // D-108: the date and hour span the Director scheduled at approval.
         'scheduled_date',
+        'scheduled_time',
+        'scheduled_blocks',
         'status',
         'rejection_reason',
         'reviewed_by',
@@ -135,7 +140,7 @@ class BatchRequest extends Model
      */
     public function hasFirstHourStarted(): bool
     {
-        $span = $this->requestedSpan();
+        $span = $this->scheduledSpan();
 
         if ($this->scheduled_date === null || $span === []) {
             return true;
@@ -161,105 +166,59 @@ class BatchRequest extends Model
     }
 
     /**
-     * D-36: the requested clinic date sat unreviewed until it passed.
+     * D-108: the contiguous clinic slots the Director scheduled this batch
+     * into, or [] while it has none — every pending, rejected or
+     * never-approved batch, and an approved batch from before D-37.
      *
-     * Approval is confirm-only, so there is no date left to confirm — the
-     * Director must reject and ask the college to resubmit. One rule, called
-     * from both the approve endpoint (on the locked row) and the Approvals
-     * page (to disable the button), so the two can never disagree.
-     */
-    public function hasStaleRequestedDate(): bool
-    {
-        return $this->requested_date !== null && $this->requested_date->lt(today());
-    }
-
-    /**
-     * D-37: the batch has no clinic-hour span to confirm.
-     *
-     * True for batches submitted before D-37 (`requested_time` NULL). Exactly
-     * like D-36's NULL `requested_date`, approval is confirm-only and there is
-     * nothing here to confirm, so those batches must be rejected and
-     * resubmitted. One rule, called by both the Approvals page and the approve
-     * endpoint, so the button and the server can never disagree.
-     */
-    public function hasNoRequestedTime(): bool
-    {
-        return $this->requested_time === null || $this->requested_blocks === null;
-    }
-
-    /**
-     * The contiguous clinic slots this batch occupies, or [] when it has none
-     * (pre-D-37) or its stored span no longer fits the configured clinic day.
+     * Every "which hours does this batch hold?" question reads this: the
+     * D-92 first-hour rule, the BR-25 clash description and the college's
+     * pages. The legacy requested_* span is never read for it.
      *
      * @return list<string>
      */
-    public function requestedSpan(): array
+    public function scheduledSpan(): array
     {
-        if ($this->hasNoRequestedTime()) {
+        if ($this->scheduled_time === null || $this->scheduled_blocks === null) {
             return [];
         }
 
         return app(ClinicScheduleService::class)
-            ->span($this->requested_time, (int) $this->requested_blocks);
+            ->span($this->scheduled_time, (int) $this->scheduled_blocks);
     }
 
-    /** "7:00 AM – 10:00 AM (3 slots)", or "—" for a batch with no span. */
-    public function requestedSpanLabel(): string
+    /** "7:00 AM – 10:00 AM (3 slots)", or "—" for a batch with no scheduled span. */
+    public function scheduledSpanLabel(): string
     {
-        return app(ClinicScheduleService::class)->spanLabel($this->requestedSpan());
+        return app(ClinicScheduleService::class)->spanLabel($this->scheduledSpan());
     }
 
     /**
-     * BR-23: hours of this batch's span that have already gone by.
-     *
-     * Only ever non-empty for a batch requested for TODAY — a future date has
-     * no elapsed hours, and a strictly past one is already refused by
-     * [[hasStaleRequestedDate]]. Approving into these would create appointments
-     * at times that have been and gone, so it is refused; one rule called by
-     * both the Approvals page and the approve endpoint, so the disabled button
-     * and the server can never disagree.
-     *
-     * @return list<string>
+     * "Wed, Oct 7, 2026 · 9:00 AM" — what the college asked for BEFORE D-108,
+     * or null for a batch submitted since (no requested date). Shown on the
+     * Director's Review page as information only; nothing decides on it.
      */
-    public function elapsedSpanHours(): array
+    public function requestedLabel(): ?string
     {
         if ($this->requested_date === null) {
-            return [];
+            return null;
         }
 
-        return app(ClinicScheduleService::class)
-            ->elapsedSlotsIn($this->requested_date->toDateString(), $this->requestedSpan());
+        $schedule = app(ClinicScheduleService::class);
+        $time = $schedule->isSlot($this->requested_time) ? ' · '.$schedule->startLabel($this->requested_time) : '';
+
+        return $this->requested_date->format('D, M j, Y').$time;
     }
 
     /**
-     * Can the Director approve this batch at all? Pending, with a requested
-     * date that hasn't passed (D-36), an hour span (D-37) and no hour of it
-     * already over (BR-23).
-     *
-     * The Approvals page greys out Approve on this rule, and D-90's conflict
-     * check skips a batch that fails it — advising the Director to approve a
-     * batch that cannot be approved would be no advice at all. Capacity is not
-     * part of it: that needs the booked counts, and approve() checks it under
-     * a lock.
+     * Can the Director still decide this batch? Since D-108 the Director
+     * picks the date and the hour, so there is no requested date that can go
+     * stale and no requested span to confirm — a pending batch can always be
+     * scheduled. Whether a CHOSEN day and hour fit is decided by approve()
+     * under a lock.
      */
     public function isApprovable(): bool
     {
-        return $this->status === 'pending'
-            && $this->requested_date !== null
-            && ! $this->hasStaleRequestedDate()
-            && $this->requestedSpan() !== []
-            && $this->elapsedSpanHours() === [];
-    }
-
-    /**
-     * D-90: was this batch submitted before $other? First come is the batch
-     * the Director is advised to approve. Two batches submitted in the same
-     * second go to the lower id, the row that was written first.
-     */
-    public function submittedBefore(BatchRequest $other): bool
-    {
-        return $this->created_at->lt($other->created_at)
-            || ($this->created_at->eq($other->created_at) && $this->id < $other->id);
+        return $this->status === 'pending';
     }
 
     /** "Medical Clearance" / "Medical Assessment Form" (D-62). */

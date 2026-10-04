@@ -14,8 +14,9 @@ use Illuminate\Support\Collection;
  * D-54 began with a double-booking Nat found — a self-booking and a batch in
  * the same hour for one student. Self-booking is gone (D-61); what remains is
  * one student on two batches on the same day. This class is the ONE
- * definition of a clash, read by the batch submission and the Director's
- * approval, so the two can never disagree. (Like ClinicScheduleService, it is
+ * definition of a clash. Since D-108 only the Director's approval reads it (the
+ * college no longer picks a date, so there is nothing to clash on when it
+ * submits) — and the Review page, to warn before Approve is pressed. (Like ClinicScheduleService, it is
  * a plain *service class*: Laravel builds it and hands it to any controller or
  * Form Request that type-hints it.)
  *
@@ -25,14 +26,16 @@ use Illuminate\Support\Collection;
  *      same student is on that day, whatever the form (Medical Clearance or
  *      Medical Assessment Form). D-54 made it an hour overlap; D-77 widened it
  *      to the whole day.
- *   2. A batch holds its date, for every student on it, from the moment it is
- *      submitted: status `pending` or `approved`. Rejected and cancelled
- *      batches hold nothing, and neither does a batch a student was WITHDRAWN
- *      from (FR-ADM-07 — their appointment on it is cancelled, the pivot row
- *      is kept).
- *   3. One kind of clash: a batch vs another pending/approved batch the student
- *      is on, same date — hours don't matter, so a pre-D-37 batch with no hour
- *      span clashes too. (D-54 had a second kind, a batch vs the student's own
+ *   2. Only an APPROVED batch holds a day, for every student on it, on its
+ *      `scheduled_date` (D-108). Until D-108 a batch held its requested date
+ *      from the moment it was submitted; now a pending batch has no date at
+ *      all — the Director picks one at approval — so it holds nothing.
+ *      Rejected and cancelled batches hold nothing, and neither does a batch a
+ *      student was WITHDRAWN from (FR-ADM-07 — their appointment on it is
+ *      cancelled, the pivot row is kept).
+ *   3. One kind of clash: a batch vs another approved batch the student is on,
+ *      same date — hours don't matter, so a pre-D-37 batch with no hour span
+ *      clashes too. (D-54 had a second kind, a batch vs the student's own
  *      self-booking; D-61 removed self-booking, so it went.)
  *
  * The query is plain Eloquent — no raw SQL, so the SQLite test suite runs the
@@ -45,8 +48,8 @@ use Illuminate\Support\Collection;
  */
 class ScheduleClashService
 {
-    /** A batch in one of these states holds its date (decision 2). */
-    private const HOLDING_STATUSES = ['pending', 'approved'];
+    /** Only an approved batch holds its date (decision 2, D-108). */
+    private const HOLDING_STATUS = 'approved';
 
     public function __construct(private readonly ClinicScheduleService $schedule) {}
 
@@ -88,7 +91,7 @@ class ScheduleClashService
     private function describe(BatchRequest $batch): string
     {
         $form = BatchRequest::FORM_TYPES[$batch->form_type];
-        $span = $batch->requestedSpan();
+        $span = $batch->scheduledSpan();
         $hours = $span === [] ? '' : ' ('.$this->schedule->rangeLabel($span).')';
 
         return "Already scheduled for a {$form} that day, on {$batch->reference_no}{$hours}";
@@ -111,10 +114,9 @@ class ScheduleClashService
         return BatchRequestStudent::query()
             ->whereIn('student_id', $studentUserIds)
             ->whereHas('batchRequest', fn ($batch) => $batch
-                ->whereIn('status', self::HOLDING_STATUSES)
-                // Approval copies requested_date into scheduled_date unchanged
-                // (D-36), so the two agree for every batch that can be approved.
-                ->whereDate('requested_date', $date)
+                ->where('status', self::HOLDING_STATUS)
+                // D-108: the day the Director scheduled. A pending batch has none.
+                ->whereDate('scheduled_date', $date)
                 ->when($exceptBatchId !== null, fn ($batch) => $batch->whereKeyNot($exceptBatchId)))
             ->with(['batchRequest', 'appointment:id,status'])
             ->when($lock, fn ($query) => $query->lockForUpdate())

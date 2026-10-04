@@ -130,13 +130,8 @@ Route::middleware(['auth', 'role:college_admin', 'college.scope'])
         // ONLY the managed college's roster; store re-checks every student id
         // against that college server-side.
         Route::get('/batches/create', [AdminBatchRequestController::class, 'create'])->name('batches.create');
-        // The New Batch mini calendar's month data (D-54): the same full and
-        // cutoff days the student calendar gets. Declared before any
-        // /batches/{batch} route, with its own throttle bucket — an authed
-        // throttle keys on the user id with no path, so it would otherwise
-        // share one counter with batch-store.
-        Route::get('/batches/availability', [AdminBatchRequestController::class, 'availability'])
-            ->middleware('throttle:60,1,batch-availability')->name('batches.availability');
+        // (D-108 removed the New Batch mini calendar's /batches/availability
+        // feed: the college no longer picks a date — the Director does.)
         // Card 1's live form tiles: the official form's front page, blank.
         // Only the two form types match; anything else is a 404.
         Route::get('/batches/form-preview/{formType}', [AdminBatchRequestController::class, 'formPreview'])
@@ -283,15 +278,24 @@ Route::middleware(['auth', 'role:director'])
         // Read-only record detail behind each table row's "View" link.
         Route::get('/anomalies/{visit}', [DirectorAnomaliesController::class, 'show'])
             ->whereNumber('visit')->name('anomalies.show');
-        // Batch Approvals (FR-DIRA-01/05/06): ALL colleges' requests — no
-        // college scope, the Director reviews everything.
+        // Batch Approvals (FR-DIRA-01, D-108): the queue of ALL colleges'
+        // pending requests, oldest first — no college scope.
         Route::get('/batches', [DirectorBatchApprovalController::class, 'index'])->name('batches.index');
-        // JSON for the approve modal's capacity warning (FR-DIRA-06). Must be
-        // declared BEFORE /batches/{batch}-style routes would ever match it.
-        Route::get('/batches/capacity', [DirectorBatchApprovalController::class, 'capacity'])->name('batches.capacity');
+        // One request's Review page (FR-DIRA-07, D-108): details, students and
+        // the calendar + hour picker the Director schedules it with.
+        Route::get('/batches/{batch}/review', [DirectorBatchApprovalController::class, 'review'])
+            ->whereNumber('batch')->name('batches.review');
+        // The Review page's JSON feeds (FR-DIRA-08). Each has its own throttle
+        // bucket — an authed throttle keys on the user id with no path, so
+        // without the 3rd arg these would share one counter with the decision
+        // endpoints below.
+        Route::get('/batches/{batch}/calendar', [DirectorBatchApprovalController::class, 'calendar'])
+            ->whereNumber('batch')->middleware('throttle:60,1,director-calendar')->name('batches.calendar');
+        Route::get('/batches/{batch}/hours', [DirectorBatchApprovalController::class, 'hours'])
+            ->whereNumber('batch')->middleware('throttle:60,1,director-hours')->name('batches.hours');
         // Decision endpoints — both terminal (FR-DIRA-05). Approve: FR-DIRA-02,
-        // BR-08 (transaction + appointment fan-out). Reject: FR-DIRA-04
-        // (reviewer stamps, zero appointments).
+        // BR-08 (the Director's date + start hour, transaction + appointment
+        // fan-out). Reject: FR-DIRA-04 (reviewer stamps, zero appointments).
         Route::post('/batches/{batch}/approve', [DirectorBatchApprovalController::class, 'approve'])
             ->whereNumber('batch')->middleware('throttle:20,1,batch-approve')->name('batches.approve');
         Route::post('/batches/{batch}/reject', [DirectorBatchApprovalController::class, 'reject'])

@@ -5,14 +5,12 @@ declare(strict_types=1);
 namespace Tests\Feature\Admin;
 
 use App\Http\Requests\Admin\StoreBatchRequestRequest;
-use App\Models\Appointment;
 use App\Models\BatchRequest;
 use App\Models\College;
 use App\Models\StudentProfile;
 use App\Models\User;
 use App\Support\Programs;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 /**
@@ -53,8 +51,7 @@ class BatchRequestCreateTest extends TestCase
         return array_merge([
             'form_type' => 'assessment',
             'reason' => 'ojt',
-            'requested_date' => now()->addDays(7)->toDateString(),
-            'requested_time' => '07:00:00', // D-37: start hour of the batch span
+            // D-108: no clinic date and no start hour — the Director picks both.
             'students' => $students->pluck('id')->all(),
         ], $overrides);
     }
@@ -265,60 +262,33 @@ class BatchRequestCreateTest extends TestCase
         $this->actingAs($orphan)->get('/admin/batches/create')->assertForbidden();
     }
 
-    // ── D-54: the requested clinic date is a mini calendar ──────────────────
+    // ── D-108: the Director schedules the batch, not the college ────────────
 
-    public function test_create_page_carries_the_mini_calendar_data(): void
+    public function test_create_page_has_no_date_or_hour_inputs(): void
     {
-        Carbon::setTestNow(Carbon::parse('2026-09-01 08:00', 'Asia/Manila'));
-
-        $this->actingAs($this->admin)
+        $response = $this->actingAs($this->admin)
             ->get('/admin/batches/create')
             ->assertOk()
-            ->assertSee('Requested clinic date')
-            // Still submitted under the same name, now from a hidden input.
-            ->assertSee('name="requested_date"', false)
-            ->assertViewHas('year', 2026)
-            ->assertViewHas('month', 9)
-            ->assertViewHas('fullDays', [])
-            ->assertViewHas('cutoffDays', [])
-            ->assertViewHas('bookingDays', config('healthpass.booking_days'));
+            ->assertDontSee('Requested clinic date')
+            ->assertDontSee('Start time')
+            ->assertDontSee('name="requested_date"', false)
+            ->assertDontSee('name="requested_time"', false)
+            ->assertSee('The Clinic Director picks the clinic date and hours');
+
+        $response->assertViewMissing('fullDays');
+        $response->assertViewMissing('slots');
     }
 
-    public function test_availability_endpoint_reports_full_and_cutoff_days(): void
+    public function test_the_mini_calendar_feed_is_gone(): void
     {
-        // 6 PM on Sep 8: today is past closing (BR-20) and has no hour left
-        // (BR-23); Sep 15 is at the daily cap. (This used to be compared with
-        // the student booking calendar's endpoint, which D-61 removed.)
-        Carbon::setTestNow(Carbon::parse('2026-09-08 18:00', 'Asia/Manila'));
-        config(['healthpass.daily_capacity' => 2]);
-
-        Appointment::factory()->count(2)->create(['scheduled_date' => '2026-09-15', 'status' => 'scheduled']);
-
-        $query = ['year' => 2026, 'month' => 9];
-
         $this->actingAs($this->admin)
-            ->getJson(route('admin.batches.availability', $query))
-            ->assertOk()
-            ->assertExactJson(['full_days' => [8, 15], 'cutoff_days' => [8]]);
-    }
-
-    public function test_availability_endpoint_is_refused_for_other_roles_and_guests(): void
-    {
-        $url = route('admin.batches.availability', ['year' => 2026, 'month' => 9]);
-
-        $this->get($url)->assertRedirect('/login');
-
-        foreach (['student', 'nurse', 'director'] as $role) {
-            $this->actingAs(User::factory()->create(['role' => $role]))
-                ->get($url)
-                ->assertRedirect()
-                ->assertSessionHas('error');
-        }
+            ->getJson('/admin/batches/availability?year=2026&month=9')
+            ->assertNotFound();
     }
 
     // ── BR-06: reason + conditional reason_detail ───────────────────────────
 
-    public function test_reason_and_date_and_students_are_required(): void
+    public function test_form_purpose_and_students_are_required_and_nothing_else(): void
     {
         $this->actingAs($this->admin)
             ->post('/admin/batches', [])
@@ -326,27 +296,29 @@ class BatchRequestCreateTest extends TestCase
                 'form_type',
                 // D-105: the batch's reason is called its purpose on screen.
                 'reason' => 'Please choose a purpose for this batch request.',
-                'requested_date',
                 'students' => 'Select at least 2 students for this batch.',
-            ]);
+            ])
+            // D-108: the college no longer picks a date or an hour.
+            ->assertSessionDoesntHaveErrors(['requested_date', 'requested_time']);
     }
 
-    // ── D-29: the admin proposes the clinic date ─────────────────────────────
-
-    public function test_a_past_requested_date_is_rejected(): void
+    /** D-108: a posted date or hour is never read — the batch is stored without one. */
+    public function test_a_posted_date_and_hour_are_ignored(): void
     {
         $this->actingAs($this->admin)
             ->post('/admin/batches', $this->validPayload([
-                'requested_date' => now()->subDay()->toDateString(),
+                'requested_date' => now()->subDay()->toDateString(),   // would have failed D-29
+                'requested_time' => '25:00:00',
+                'scheduled_date' => now()->addDays(3)->toDateString(),
             ]))
-            ->assertSessionHasErrors('requested_date');
-    }
+            ->assertSessionHasNoErrors();
 
-    public function test_a_malformed_requested_date_is_rejected(): void
-    {
-        $this->actingAs($this->admin)
-            ->post('/admin/batches', $this->validPayload(['requested_date' => 'next tuesday']))
-            ->assertSessionHasErrors('requested_date');
+        $batch = BatchRequest::sole();
+        $this->assertNull($batch->requested_date);
+        $this->assertNull($batch->requested_time);
+        $this->assertNull($batch->requested_blocks);
+        $this->assertNull($batch->scheduled_date);
+        $this->assertNull($batch->scheduled_time);
     }
 
     public function test_unknown_reason_is_rejected(): void
@@ -478,8 +450,6 @@ class BatchRequestCreateTest extends TestCase
             ->post('/admin/batches', [
                 'form_type' => 'clearance',
                 'reason' => 'fieldtrip',
-                'requested_date' => now()->addDays(7)->toDateString(),
-                'requested_time' => '07:00:00',
                 'students' => $students->pluck('id')->all(),
             ])
             ->assertSessionHasNoErrors()

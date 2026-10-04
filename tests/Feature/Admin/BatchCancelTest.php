@@ -88,11 +88,11 @@ class BatchCancelTest extends TestCase
             'requested_by' => ($requestedBy ?? $this->admin)->id,
             'reason' => 'graduation',
             'service_type' => 'medical',
-            'requested_date' => $date,
-            'requested_time' => '09:00:00',
-            'requested_blocks' => app(ClinicScheduleService::class)->blocksFor($studentCount),
             'status' => $status,
+            // D-108: only an approved batch has a schedule — the Director's.
             'scheduled_date' => $status === 'approved' ? $date : null,
+            'scheduled_time' => $status === 'approved' ? '09:00:00' : null,
+            'scheduled_blocks' => $status === 'approved' ? app(ClinicScheduleService::class)->blocksFor($studentCount) : null,
             'rejection_reason' => $status === 'rejected' ? 'The clinic is closed that week.' : null,
             'reviewed_by' => in_array($status, ['approved', 'rejected'], true) ? $this->director->id : null,
             'reviewed_at' => in_array($status, ['approved', 'rejected'], true) ? now() : null,
@@ -141,7 +141,7 @@ class BatchCancelTest extends TestCase
     /** Move the clock to the start of the batch's first clinic hour. */
     private function startFirstHour(BatchRequest $batch): void
     {
-        $this->travelTo(Carbon::parse($batch->requested_date->toDateString().' 09:00:00'));
+        $this->travelTo(Carbon::parse($batch->scheduled_date->toDateString().' 09:00:00'));
     }
 
     /** One of the batch's students reaches the kiosk (a resting first pass is enough). */
@@ -316,7 +316,7 @@ class BatchCancelTest extends TestCase
     public function test_an_approved_batch_can_still_be_cancelled_a_minute_before_its_first_hour(): void
     {
         $batch = $this->makeBatch('approved');
-        $this->travelTo(Carbon::parse($batch->requested_date->toDateString().' 08:59:00'));
+        $this->travelTo(Carbon::parse($batch->scheduled_date->toDateString().' 08:59:00'));
 
         $this->cancel($batch)->assertSessionHas('status');
 
@@ -481,7 +481,10 @@ class BatchCancelTest extends TestCase
         $batch = $this->makeBatch('pending');
         $this->cancel($batch);
 
-        $response = $this->actingAs($this->director)->post("/director/batches/{$batch->id}/approve");
+        $response = $this->actingAs($this->director)->post("/director/batches/{$batch->id}/approve", [
+            'scheduled_date' => now()->addDays(5)->toDateString(),
+            'start_time' => '09:00:00',
+        ]);
 
         $response->assertSessionHas('error');
         $this->assertSame('cancelled', $batch->refresh()->status);
@@ -505,29 +508,25 @@ class BatchCancelTest extends TestCase
         $this->assertNull($batch->rejection_reason);
     }
 
-    public function test_the_approvals_page_labels_it_cancelled_not_rejected(): void
+    /**
+     * D-108: the approvals page is a queue of PENDING requests, so a cancelled
+     * one leaves it, and its Review page says the college withdrew it — never
+     * that the Director decided it. (The D-92 reason popup that sat on the
+     * old list goes to the Director's Batch Tracking page, D-112.)
+     */
+    public function test_a_cancelled_request_leaves_the_queue_credited_to_the_college(): void
     {
         $batch = $this->makeBatch('pending');
         $this->cancel($batch);
-
-        $response = $this->actingAs($this->director)->get('/director/batches');
-
-        $response->assertOk();
-        $response->assertSee('Cancelled by college');
-        $response->assertDontSee('✕ Rejected');
-    }
-
-    public function test_the_director_can_read_the_reason(): void
-    {
-        $batch = $this->makeBatch('approved');
-        $this->cancel($batch, as: $this->otherAdmin);
+        $this->flushSession();   // drop the admin's "has been cancelled" flash
 
         $this->actingAs($this->director)->get('/director/batches')
             ->assertOk()
-            ->assertSee('View reason')
-            ->assertSee('after you approved it')
-            ->assertSee(self::REASON)
-            ->assertSee($this->otherAdmin->name);
+            ->assertDontSee($batch->reference_no);
+
+        $this->actingAs($this->director)->get("/director/batches/{$batch->id}/review")
+            ->assertRedirect('/director/batches')
+            ->assertSessionHas('error', "{$batch->reference_no} was cancelled by the college — nothing was changed.");
     }
 
     // ── The Activity Log (FR-ADM-10, D-49 — derived, not logged) ─────────────

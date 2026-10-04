@@ -1159,6 +1159,49 @@
 
 ### Changed
 
+* **The Clinic Director schedules every batch from a first-come queue; the
+  College Admin no longer picks a date or an hour** (D-108, supersedes D-29,
+  D-36, D-37's admin clause, D-54's admin side and D-90; amends FR-ADM-02/04/05,
+  FR-DIRA-01/02/05/06, BR-02/20/21/22/23/25; adds FR-DIRA-07 and FR-DIRA-08;
+  PRD revision 1.92, 2026-10-05). **Flagged schema change**, no new package.
+  * **Schema:** `batch_requests.scheduled_time` (TIME, `'H:i:s'`) and
+    `scheduled_blocks` (TINYINT UNSIGNED), both NULL — the span the Director
+    scheduled. `requested_date/time/blocks` stay as legacy columns, NULL on
+    new batches. The migration copies the requested span into the scheduled
+    one **only** for batches that were approved (approved, or cancelled after
+    approval), which is what they were scheduled on under D-36.
+  * **New Batch Request:** the date calendar, the start-hour select, the
+    span preview and the clash popup are gone; a posted date or hour is
+    ignored. Only the one-day size limit (200) and the minimum of 2 remain.
+    `GET /admin/batches/availability` is removed. Request Submitted, the
+    roster and Batch Tracking (new **Clinic Date** column) show the
+    Director's date and hours, or "To be scheduled by the Director".
+  * **Batch Approvals** is a queue: pending only, oldest first, columns
+    Batch ID / College / Form Type / Purpose, a **Review** button, and the
+    oldest highlighted **Next** like the Live Queue. Batch ID search kept.
+  * **Review page** (`/director/batches/{batch}/review`): batch details
+    (with "Originally requested … (before D-108)" on legacy rows), a students
+    card ten rows tall that scrolls, and a Schedule card — a calendar whose
+    day numbers sit in a ring filling with the day's bookings out of 200, and
+    a native select of start hours that greys out the hours this batch can't
+    start at and names the colleges in each. New JSON feeds
+    `…/calendar` and `…/hours`, each with its own throttle bucket.
+  * **Approve** now requires `scheduled_date` + `start_time` and checks,
+    under the row lock: the span fits the day, no hour has ended, every hour
+    and the day have room, no student already scheduled that day. Refusals
+    return to the Review page. Fan-out, arrival times and emails unchanged.
+  * Removed: `BatchConflictService` (D-90), `BatchApprovalController::capacity()`
+    and its route, `BatchRequest::requestedSpan()/hasStaleRequestedDate()/
+    hasNoRequestedTime()/elapsedSpanHours()/submittedBefore()`,
+    `StoreBatchRequestRequest::clashErrors()`,
+    `ClinicScheduleService::fullDaysForMonth()/hasAvailableSlot()/slotElapsedMessage()`.
+    `ScheduleClashService` counts approved batches on their `scheduled_date` only.
+  * Tests: `ScheduledTimeMigrationTest`, `BatchApprovalsPageTest` (queue),
+    `BatchReviewPageTest`, `BatchScheduleFeedTest`; `BatchApprovalDecisionTest`,
+    `BatchRejectDecisionTest`, `ArrivalTimeTest`, `AppointmentEmailTest`,
+    `BatchCancelTest`, the admin create/submit tests and
+    `ScheduleClashServiceTest` rewritten for D-108; the D-90 tests deleted.
+
 * **The student's Clearance Status card shows the six-month validity of a
   Fit result** (D-107, amends FR-STU-01, adds BR-26, PRD revision 1.91,
   2026-10-04). No schema change, no new package, no new route.

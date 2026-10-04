@@ -118,10 +118,10 @@ class DemoBatchSeeder extends Seeder
     /** Two pending batches — the only state D-52 lets the admin cancel. */
     private function seedPending(): void
     {
-        $batch = $this->makeBatch('901', 'pending', 'assessment', 'ojt', 4, days: 5, slot: '09:00:00');
+        $batch = $this->makeBatch('901', 'pending', 'assessment', 'ojt');
         $this->attach($batch, $this->students->take(4));
 
-        $batch = $this->makeBatch('902', 'pending', 'clearance', 'fieldtrip', 2, days: 7, slot: '13:00:00');
+        $batch = $this->makeBatch('902', 'pending', 'clearance', 'fieldtrip');
         $this->attach($batch, $this->students->take(2));
     }
 
@@ -132,7 +132,7 @@ class DemoBatchSeeder extends Seeder
     private function seedApprovedWithResults(): void
     {
         $date = now()->subDays(4)->toDateString();
-        $batch = $this->makeBatch('903', 'approved', 'assessment', 'rle', 4, days: -4, slot: '08:00:00');
+        $batch = $this->makeBatch('903', 'approved', 'assessment', 'rle', $date, '08:00:00', studentCount: 4);
 
         [$juan, $maria, $carlo, $angel] = $this->students->take(4)->all();
 
@@ -159,7 +159,7 @@ class DemoBatchSeeder extends Seeder
     private function seedApprovedUpcoming(): void
     {
         $date = now()->addDays(3)->toDateString();
-        $batch = $this->makeBatch('904', 'approved', 'clearance', 'outbound', 3, days: 3, slot: '10:00:00');
+        $batch = $this->makeBatch('904', 'approved', 'clearance', 'outbound', $date, '10:00:00', studentCount: 3);
 
         [$juan, $maria, $carlo] = $this->students->take(3)->all();
 
@@ -171,34 +171,35 @@ class DemoBatchSeeder extends Seeder
     /** A Director rejection, so the Reason column renders beside Cancel. */
     private function seedRejected(): void
     {
-        $batch = $this->makeBatch('905', 'rejected', 'assessment', 'sports', 3, days: 9, slot: '11:00:00');
+        $batch = $this->makeBatch('905', 'rejected', 'assessment', 'sports');
         $this->attach($batch, $this->students->take(3));
     }
 
     /** Already cancelled by the college (D-52) — the end state of FR-ADM-11. */
     private function seedCancelled(): void
     {
-        $batch = $this->makeBatch('906', 'cancelled', 'clearance', 'fieldtrip', 2, days: 6, slot: '14:00:00');
+        $batch = $this->makeBatch('906', 'cancelled', 'clearance', 'fieldtrip');
         $this->attach($batch, $this->students->take(2));
     }
 
     // ── Builders ─────────────────────────────────────────────────────────────
 
     /**
-     * One batch_requests row. `$days` is an offset from today so the demo data
-     * stays meaningful whenever it is seeded — a hardcoded date would drift
-     * into the past and turn every pending batch stale (D-36).
+     * One batch_requests row. Since D-108 the college proposes no date or
+     * hour, so only an APPROVED batch carries one — the date and start hour
+     * the Director scheduled (`$date` is relative to today, so the demo stays
+     * meaningful whenever it is seeded). The legacy requested_* columns stay
+     * NULL, as on every batch submitted since D-108.
      */
     private function makeBatch(
         string $seq,
         string $status,
         string $formType,   // D-62
         string $reason,
-        int $studentCount,
-        int $days,
-        string $slot,
+        ?string $date = null,
+        ?string $slot = null,
+        int $studentCount = 0,
     ): BatchRequest {
-        $date = now()->addDays($days)->toDateString();
         $decided = in_array($status, ['approved', 'rejected'], true);
 
         return BatchRequest::create([
@@ -208,10 +209,9 @@ class DemoBatchSeeder extends Seeder
             'form_type' => $formType,
             'reason' => $reason,
             'service_type' => 'medical',
-            'requested_date' => $date,
-            'requested_time' => $slot,
-            'requested_blocks' => $this->schedule->blocksFor($studentCount),
-            'scheduled_date' => $status === 'approved' ? $date : null,
+            'scheduled_date' => $date,
+            'scheduled_time' => $slot,
+            'scheduled_blocks' => $slot === null ? null : $this->schedule->blocksFor($studentCount),
             'status' => $status,
             'rejection_reason' => $status === 'rejected'
                 ? 'The clinic is running the nursing licensure medicals that whole week. Please resubmit for any date after the 20th and we will take the full cohort in one morning.'

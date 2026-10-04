@@ -11,8 +11,6 @@ use App\Models\College;
 use App\Models\StudentProfile;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -60,8 +58,7 @@ class BatchRequestSubmitTest extends TestCase
         return $this->actingAs($this->admin)->post('/admin/batches', array_merge([
             'form_type' => 'assessment',
             'reason' => 'ojt',
-            'requested_date' => now()->addDays(7)->toDateString(),
-            'requested_time' => '07:00:00', // D-37: start hour of the batch span
+            // D-108: no clinic date and no start hour — the Director picks both.
             'students' => $students->pluck('id')->all(),
         ], $overrides));
     }
@@ -72,14 +69,10 @@ class BatchRequestSubmitTest extends TestCase
     {
         $students = StudentProfile::factory()->count(30)->forCollege($this->ccs)->create();
 
-        $requestedDate = now()->addDays(10)->toDateString();
-
         $this->actingAs($this->admin)
             ->post('/admin/batches', [
                 'form_type' => 'clearance',
                 'reason' => 'fieldtrip',
-                'requested_date' => $requestedDate,
-                'requested_time' => '08:00:00',
                 'students' => $students->pluck('id')->all(),
             ])
             ->assertSessionHasNoErrors();
@@ -94,14 +87,14 @@ class BatchRequestSubmitTest extends TestCase
         $this->assertSame('clearance', $batch->form_type);   // D-62
         $this->assertSame('fieldtrip', $batch->reason);
         $this->assertSame('medical', $batch->service_type);
-        // D-29: the admin's proposed date is stored at submission…
-        $this->assertSame($requestedDate, $batch->requested_date->toDateString());
-        // D-37: …together with the span — start hour as posted, LENGTH derived
-        // server-side from the roster (30 students ÷ 12 per hour → 3 hours).
-        $this->assertSame('08:00:00', $batch->requested_time);
-        $this->assertSame(3, (int) $batch->requested_blocks);
-        // …while the FINAL date stays empty until the Director approves.
+        // D-108: no date and no hours — the Director schedules it at approval.
+        // The legacy requested_* columns stay empty on every new batch.
+        $this->assertNull($batch->requested_date);
+        $this->assertNull($batch->requested_time);
+        $this->assertNull($batch->requested_blocks);
         $this->assertNull($batch->scheduled_date);
+        $this->assertNull($batch->scheduled_time);
+        $this->assertNull($batch->scheduled_blocks);
 
         // The pivot stores USER ids (data dictionary: student_id → users),
         // not the student_profile ids the form posts.
@@ -147,431 +140,68 @@ class BatchRequestSubmitTest extends TestCase
         $this->assertDatabaseCount('batch_request_students', 2);
     }
 
-    // ── D-37: the batch's hour span (FR-ADM-04) ─────────────────────────────
-
-    public function test_a_batch_of_25_spans_three_hours(): void
-    {
-        // 25 ÷ 12 per hour → 3 contiguous blocks: 7–8, 8–9, 9–10.
-        $this->submitBatch(25, ['requested_time' => '07:00:00'])->assertSessionHasNoErrors();
-
-        $batch = BatchRequest::sole();
-        $this->assertSame(3, (int) $batch->requested_blocks);
-        $this->assertSame(
-            ['07:00:00', '08:00:00', '09:00:00'],
-            $batch->requestedSpan(),
-        );
-        $this->assertSame('7:00 AM – 10:00 AM (3 slots)', $batch->requestedSpanLabel());
-    }
-
-    public function test_a_batch_of_24_spans_two_hours(): void
-    {
-        $this->submitBatch(24, ['requested_time' => '07:00:00'])->assertSessionHasNoErrors();
-
-        $this->assertSame(2, (int) BatchRequest::sole()->requested_blocks);
-    }
+    // ── The one schedule rule left at submission: one clinic day ────────────
 
     public function test_a_batch_of_121_students_is_rejected(): void
     {
-        // 121 > 12 × 10 — no start hour can fit it in one clinic day.
+        // 121 > 12 × 10 — no start hour the Director could pick fits it in one day.
         $this->submitBatch(121)->assertSessionHasErrors('students');
 
         $this->assertDatabaseCount('batch_requests', 0);
         $this->assertDatabaseCount('batch_request_students', 0);
     }
 
-    public function test_a_batch_of_exactly_120_students_fills_the_whole_day(): void
+    public function test_a_batch_of_exactly_120_students_is_accepted(): void
     {
-        $this->submitBatch(120, ['requested_time' => '07:00:00'])->assertSessionHasNoErrors();
+        $this->submitBatch(120)->assertSessionHasNoErrors();
 
-        $this->assertSame(10, (int) BatchRequest::sole()->requested_blocks);
+        $this->assertDatabaseCount('batch_request_students', 120);
     }
 
-    public function test_a_span_that_would_run_past_closing_time_is_rejected(): void
+    // ── D-108: capacity and clashes are the Director's to check ─────────────
+
+    /** A full clinic day is no reason to refuse a request that has no day yet. */
+    public function test_a_full_clinic_day_does_not_block_a_submission(): void
     {
-        // 25 students need 3 hours; starting at 3 PM would end at 6 PM.
-        $this->submitBatch(25, ['requested_time' => '15:00:00'])
-            ->assertSessionHasErrors('requested_time');
-
-        $this->assertDatabaseCount('batch_requests', 0);
-    }
-
-    public function test_a_span_ending_exactly_at_closing_time_is_accepted(): void
-    {
-        $this->submitBatch(25, ['requested_time' => '14:00:00'])->assertSessionHasNoErrors();
-
-        $this->assertDatabaseCount('batch_requests', 1);
-    }
-
-    public function test_a_full_hour_inside_the_span_is_rejected_naming_that_hour(): void
-    {
-        $date = now()->addDays(7)->toDateString();
-
-        // The batch would run 7–10 AM; the middle hour is already full.
-        Appointment::factory()->count(12)->inSlot('08:00:00')->create([
-            'scheduled_date' => $date,
+        Appointment::factory()->count(120)->inSlot('07:00:00')->create([
+            'scheduled_date' => now()->addDays(7)->toDateString(),
             'status' => 'scheduled',
         ]);
 
-        $response = $this->submitBatch(25, [
-            'requested_date' => $date,
-            'requested_time' => '07:00:00',
-        ]);
+        $this->submitBatch(12)->assertSessionHasNoErrors();
 
-        $response->assertSessionHasErrors('requested_time');
-
-        $message = session('errors')->first('requested_time');
-        $this->assertStringContainsString('8:00 AM – 9:00 AM', $message);
-
-        $this->assertDatabaseCount('batch_requests', 0);
+        $this->assertSame('pending', BatchRequest::sole()->status);
     }
 
-    public function test_an_hour_without_room_for_the_batchs_students_is_rejected(): void
+    /** BR-25 moved wholly to approval: there is no date to clash on yet. */
+    public function test_a_student_already_on_another_batch_can_still_be_submitted(): void
     {
-        // D-91: 7 AM is not full (8 of 12), but 12 more students won't fit.
-        $date = now()->addDays(7)->toDateString();
+        $students = StudentProfile::factory()->count(2)->forCollege($this->ccs)->create();
 
-        Appointment::factory()->count(8)->inSlot('07:00:00')->create([
-            'scheduled_date' => $date,
-            'status' => 'scheduled',
-        ]);
-
-        $this->submitBatch(12, [
-            'requested_date' => $date,
-            'requested_time' => '07:00:00',
-        ])->assertSessionHasErrors('requested_time');
-
-        $this->assertStringContainsString(
-            'the 7:00 AM – 8:00 AM slot has only 4 seats left',
-            session('errors')->first('requested_time'),
-        );
-        $this->assertDatabaseCount('batch_requests', 0);
-    }
-
-    public function test_a_batch_that_exactly_fills_the_seats_left_is_accepted(): void
-    {
-        $date = now()->addDays(7)->toDateString();
-
-        Appointment::factory()->count(8)->inSlot('07:00:00')->create([
-            'scheduled_date' => $date,
-            'status' => 'scheduled',
-        ]);
-
-        $this->submitBatch(4, [
-            'requested_date' => $date,
-            'requested_time' => '07:00:00',
-        ])->assertSessionHasNoErrors();
-    }
-
-    public function test_a_full_hour_outside_the_span_does_not_block_the_batch(): void
-    {
-        $date = now()->addDays(7)->toDateString();
-
-        // The batch runs 7–9 AM; 2 PM being full is irrelevant.
-        Appointment::factory()->count(12)->inSlot('14:00:00')->create([
-            'scheduled_date' => $date,
-            'status' => 'scheduled',
-        ]);
-
-        $this->submitBatch(13, [
-            'requested_date' => $date,
-            'requested_time' => '07:00:00',
-        ])->assertSessionHasNoErrors();
-    }
-
-    // ── BR-23: an hour that has already passed today ────────────────────────
-
-    public function test_a_start_hour_that_already_passed_today_is_rejected(): void
-    {
-        Carbon::setTestNow(Carbon::parse('2026-07-27 12:00', 'Asia/Manila'));
-
-        $this->submitBatch(5, [
-            'requested_date' => today()->toDateString(),
-            'requested_time' => '11:00:00',
-        ])->assertSessionHasErrors([
-            'requested_time' => 'The 11:00 AM – 12:00 PM slot has already passed. Please pick a later time today.',
-        ]);
-
-        $this->assertDatabaseCount('batch_requests', 0);
-        $this->assertDatabaseCount('batch_request_students', 0);
-    }
-
-    public function test_the_current_hour_is_still_a_valid_batch_start_today(): void
-    {
-        Carbon::setTestNow(Carbon::parse('2026-07-27 12:00', 'Asia/Manila'));
-
-        $this->submitBatch(5, [
-            'requested_date' => today()->toDateString(),
-            'requested_time' => '12:00:00',
-        ])->assertSessionHasNoErrors();
-
-        $this->assertSame('12:00:00', BatchRequest::sole()->requested_time);
-    }
-
-    public function test_a_passed_hour_is_still_a_valid_batch_start_on_a_later_date(): void
-    {
-        Carbon::setTestNow(Carbon::parse('2026-07-27 12:00', 'Asia/Manila'));
-
-        $this->submitBatch(5, [
-            'requested_date' => today()->addDay()->toDateString(),
-            'requested_time' => '07:00:00',
-        ])->assertSessionHasNoErrors();
-    }
-
-    public function test_the_create_page_ships_todays_elapsed_hours_from_the_server(): void
-    {
-        // The browser is never asked what time it is (same rule as BR-20).
-        Carbon::setTestNow(Carbon::parse('2026-07-27 12:00', 'Asia/Manila'));
-
-        $this->actingAs($this->admin)
-            ->get('/admin/batches/create')
-            ->assertOk()
-            ->assertViewHas('today', '2026-07-27')
-            ->assertViewHas('elapsedSlotsToday', [
-                '07:00:00', '08:00:00', '09:00:00', '10:00:00', '11:00:00',
-            ]);
-    }
-
-    public function test_a_start_time_outside_clinic_hours_is_rejected(): void
-    {
-        $this->submitBatch(overrides: ['requested_time' => '18:00:00'])
-            ->assertSessionHasErrors('requested_time');
-    }
-
-    public function test_the_span_length_is_derived_not_taken_from_the_request(): void
-    {
-        // A crafted POST claiming a 1-hour span for 25 students must not shrink
-        // the batch's footprint — the server computes blocks from the roster.
-        $this->submitBatch(25, [
-            'requested_time' => '07:00:00',
-            'requested_blocks' => 1,
-        ])->assertSessionHasNoErrors();
-
-        $this->assertSame(3, (int) BatchRequest::sole()->requested_blocks);
-    }
-
-    // ── D-54 / D-77 / BR-25: students already scheduled that day ────────────
-    // Every case runs on Nat's reported date, Thu Sep 10, from Sep 1.
-
-    /** @param  list<StudentProfile>  $profiles */
-    private function postBatch(array $profiles, array $overrides = [])
-    {
-        return $this->actingAs($this->admin)
-            ->from('/admin/batches/create')
-            ->post('/admin/batches', array_merge([
-                'form_type' => 'assessment',
-                'reason' => 'ojt',
-                'requested_date' => '2026-09-10',
-                'requested_time' => '09:00:00',
-                'students' => array_map(fn (StudentProfile $profile): int => $profile->id, $profiles),
-            ], $overrides));
-    }
-
-    /**
-     * D-105: a batch needs two students, so the one-student clash cases post a
-     * classmate beside the student under test — with no schedule that day.
-     */
-    private function classmate(): StudentProfile
-    {
-        return StudentProfile::factory()->forCollege($this->ccs)->create();
-    }
-
-    /** A pre-D-61 self-booking, as an old database may still hold one. */
-    private function legacySelfBooking(StudentProfile $profile, string $slot): Appointment
-    {
-        return Appointment::factory()->inSlot($slot)->create([
-            'student_id' => $profile->user_id,
-            'scheduled_date' => '2026-09-10',
-            'source' => 'self',
-        ]);
-    }
-
-    /** @param  list<StudentProfile>  $profiles */
-    private function existingBatch(string $reference, array $profiles, string $status, string $start, int $blocks, string $formType = 'assessment', string $date = '2026-09-10'): BatchRequest
-    {
-        $batch = BatchRequest::create([
-            'reference_no' => $reference,
+        $other = BatchRequest::create([
+            'reference_no' => 'BR-'.now()->year.'-950',
             'college_id' => $this->ccs->id,
             'requested_by' => $this->admin->id,
-            'form_type' => $formType,
-            'reason' => 'ojt',
+            'form_type' => 'clearance',
+            'reason' => 'fieldtrip',
             'service_type' => 'medical',
-            'requested_date' => $date,
-            'scheduled_date' => $status === 'approved' ? $date : null,
-            'requested_time' => $start,
-            'requested_blocks' => $blocks,
-            'status' => $status,
+            'status' => 'approved',
+            'scheduled_date' => now()->addDays(7)->toDateString(),
+            'scheduled_time' => '07:00:00',
+            'scheduled_blocks' => 1,
         ]);
+        BatchRequestStudent::create(['batch_request_id' => $other->id, 'student_id' => $students[0]->user_id]);
 
-        foreach ($profiles as $profile) {
-            $batch->batchRequestStudents()->create(['student_id' => $profile->user_id]);
-        }
-
-        return $batch;
-    }
-
-    public function test_a_student_on_another_batch_that_day_is_refused_with_one_error_per_clashing_student(): void
-    {
-        Carbon::setTestNow(Carbon::parse('2026-09-01 08:00', 'Asia/Manila'));
-
-        [$held, $free] = StudentProfile::factory()->count(2)->forCollege($this->ccs)->create()->all();
-        $this->existingBatch('BR-2026-003', [$held], 'pending', '09:00:00', 1);
-
-        $this->postBatch([$held, $free])
-            ->assertRedirect('/admin/batches/create')
-            ->assertSessionHasErrors(["clashes.{$held->id}" => 'Already scheduled for a Medical Assessment Form that day, on BR-2026-003 (9:00 AM – 10:00 AM)'])
-            ->assertSessionDoesntHaveErrors("clashes.{$free->id}");
-
-        // Only the batch that was there first.
-        $this->assertDatabaseCount('batch_requests', 1);
-        $this->assertDatabaseCount('batch_request_students', 1);
-    }
-
-    public function test_a_student_on_an_overlapping_pending_batch_is_refused(): void
-    {
-        Carbon::setTestNow(Carbon::parse('2026-09-01 08:00', 'Asia/Manila'));
-
-        $profile = StudentProfile::factory()->forCollege($this->ccs)->create();
-        $this->existingBatch('BR-2026-004', [$profile], 'pending', '09:00:00', 2);
-
-        $this->postBatch([$profile, $this->classmate()], ['requested_time' => '10:00:00'])
-            ->assertSessionHasErrors(["clashes.{$profile->id}" => 'Already scheduled for a Medical Assessment Form that day, on BR-2026-004 (9:00 AM – 11:00 AM)']);
-
-        // Only the batch that was there first.
-        $this->assertDatabaseCount('batch_requests', 1);
-    }
-
-    public function test_a_legacy_self_booking_inside_the_span_no_longer_blocks_a_batch(): void
-    {
-        // D-61 removed self-booking and with it D-54's self-booking clash.
-        Carbon::setTestNow(Carbon::parse('2026-09-01 08:00', 'Asia/Manila'));
-
-        $profile = StudentProfile::factory()->forCollege($this->ccs)->create();
-        $this->legacySelfBooking($profile, '09:00:00');
-
-        $this->postBatch([$profile, $this->classmate()])->assertSessionHasNoErrors();
-
-        $this->assertDatabaseCount('batch_requests', 1);
-    }
-
-    public function test_a_different_hour_the_same_day_is_refused_whatever_the_form(): void
-    {
-        // D-77: one clinic schedule per student per day. A 2 PM Assessment
-        // batch clashes with the 7 AM Clearance batch the student is already on.
-        Carbon::setTestNow(Carbon::parse('2026-09-01 08:00', 'Asia/Manila'));
-
-        $profile = StudentProfile::factory()->forCollege($this->ccs)->create();
-        $this->existingBatch('BR-2026-003', [$profile], 'pending', '07:00:00', 1, 'clearance');
-
-        $this->postBatch([$profile, $this->classmate()], ['requested_time' => '14:00:00'])
-            ->assertSessionHasErrors(["clashes.{$profile->id}" => 'Already scheduled for a Medical Clearance that day, on BR-2026-003 (7:00 AM – 8:00 AM)']);
-
-        $this->assertDatabaseCount('batch_requests', 1);
-    }
-
-    public function test_a_batch_on_another_date_is_created(): void
-    {
-        Carbon::setTestNow(Carbon::parse('2026-09-01 08:00', 'Asia/Manila'));
-
-        $profile = StudentProfile::factory()->forCollege($this->ccs)->create();
-        $this->existingBatch('BR-2026-003', [$profile], 'pending', '09:00:00', 1, 'assessment', '2026-09-11');
-
-        $this->postBatch([$profile, $this->classmate()])->assertSessionHasNoErrors();
-
-        $this->assertDatabaseCount('batch_requests', 2);
-    }
-
-    public function test_removing_the_clashing_student_lets_the_batch_submit(): void
-    {
-        Carbon::setTestNow(Carbon::parse('2026-09-01 08:00', 'Asia/Manila'));
-
-        [$held, $free, $alsoFree] = StudentProfile::factory()->count(3)->forCollege($this->ccs)->create()->all();
-        $this->existingBatch('BR-2026-003', [$held], 'pending', '09:00:00', 1);
-
-        $this->postBatch([$held, $free, $alsoFree])->assertSessionHasErrors("clashes.{$held->id}");
-
-        // What the popup's "Remove these students from the batch" button does.
-        $this->postBatch([$free, $alsoFree])->assertSessionHasNoErrors();
-
-        $this->assertDatabaseCount('batch_requests', 2);
-        $newBatch = BatchRequest::where('reference_no', '!=', 'BR-2026-003')->sole();
-        $this->assertEqualsCanonicalizing(
-            [$free->user_id, $alsoFree->user_id],
-            $newBatch->batchRequestStudents()->pluck('student_id')->all(),
-        );
-    }
-
-    public function test_a_student_withdrawn_from_an_approved_batch_raises_no_clash(): void
-    {
-        Carbon::setTestNow(Carbon::parse('2026-09-01 08:00', 'Asia/Manila'));
-
-        $profile = StudentProfile::factory()->forCollege($this->ccs)->create();
-        $batch = $this->existingBatch('BR-2026-004', [$profile], 'approved', '09:00:00', 2);
-
-        // FR-ADM-07: withdrawn = their appointment cancelled, the pivot row kept.
-        $appointment = Appointment::factory()->inSlot('09:00:00')->create([
-            'student_id' => $profile->user_id,
-            'scheduled_date' => '2026-09-10',
-            'source' => 'batch',
-            'batch_request_id' => $batch->id,
-            'status' => 'cancelled',
-        ]);
-        $batch->batchRequestStudents()->update(['appointment_id' => $appointment->id]);
-
-        $this->postBatch([$profile, $this->classmate()])->assertSessionHasNoErrors();
-
-        $this->assertDatabaseCount('batch_requests', 2);
-    }
-
-    public function test_the_new_batch_page_opens_a_popup_listing_every_clashing_student(): void
-    {
-        Carbon::setTestNow(Carbon::parse('2026-09-01 08:00', 'Asia/Manila'));
-
-        [$early, $onBatch, $free] = StudentProfile::factory()->count(3)->forCollege($this->ccs)->create()->all();
-        $this->existingBatch('BR-2026-003', [$early], 'approved', '09:00:00', 1);
-        $this->existingBatch('BR-2026-004', [$onBatch], 'pending', '09:00:00', 2);
-
-        $this->postBatch([$early, $onBatch, $free]);
-
-        // The redirect flashed the errors and old input; the page reads both.
         $this->actingAs($this->admin)
-            ->get('/admin/batches/create')
-            ->assertOk()
-            ->assertSee('Some students already have a clinic schedule that day')
-            ->assertSee('Already scheduled for a Medical Assessment Form that day, on BR-2026-003 (9:00 AM – 10:00 AM)')
-            ->assertSee('Already scheduled for a Medical Assessment Form that day, on BR-2026-004 (9:00 AM – 11:00 AM)')
-            ->assertSee('Remove these students from the batch')
-            ->assertSee('Choose students again')
-            ->assertViewHas('students', fn ($students) => $students->contains('id', $free->id));
-    }
+            ->post('/admin/batches', [
+                'form_type' => 'assessment',
+                'reason' => 'ojt',
+                'students' => $students->pluck('id')->all(),
+            ])
+            ->assertSessionHasNoErrors()
+            ->assertSessionDoesntHaveErrors('clashes.'.$students[0]->id);
 
-    /**
-     * The race the Form Request's unlocked read cannot see: another batch
-     * holding the student at 9 AM lands the moment the Form Request's clash
-     * query returns. Only the locked re-check inside store() can catch it.
-     */
-    public function test_a_batch_submitted_mid_submit_is_caught_by_the_locked_recheck(): void
-    {
-        Carbon::setTestNow(Carbon::parse('2026-09-01 08:00', 'Asia/Manila'));
-
-        $profile = StudentProfile::factory()->forCollege($this->ccs)->create();
-        $classmate = $this->classmate(); // created before the listener below
-        $competitorInjected = false;
-
-        DB::listen(function ($query) use (&$competitorInjected, $profile): void {
-            if ($competitorInjected || ! str_contains($query->sql, 'from "batch_request_students"')) {
-                return;
-            }
-
-            $competitorInjected = true; // set FIRST — the inserts below re-enter this listener
-            $this->existingBatch('BR-2026-003', [$profile], 'pending', '09:00:00', 1);
-        });
-
-        $this->postBatch([$profile, $classmate])->assertSessionHasErrors("clashes.{$profile->id}");
-
-        $this->assertTrue($competitorInjected, 'The competing batch was never injected — the test no longer models the race.');
-        // Only the competitor; the submission itself wrote nothing.
-        $this->assertDatabaseCount('batch_requests', 1);
-        $this->assertDatabaseCount('batch_request_students', 1);
+        $this->assertDatabaseCount('batch_requests', 2);
     }
 
     // ── BR-05 / FR-ADM-06: server-side scope, never the request ─────────────
@@ -639,7 +269,10 @@ class BatchRequestSubmitTest extends TestCase
             // D-105: the batch's reason is shown as its Purpose.
             ->assertSee('>Purpose</dt>', false)
             ->assertDontSee('>Reason</dt>', false)
-            ->assertSee($batch->requested_date->format('l, F j, Y'))
+            // D-108: nothing is scheduled yet, and the page says who will do it.
+            ->assertSee('>Clinic date</dt>', false)
+            ->assertSee('To be scheduled by the Director')
+            ->assertDontSee('Requested Date')
             ->assertSee($batch->created_at->format('l, F j, Y'))
             ->assertSee('View Tracking')
             ->assertSee('Back to Dashboard');

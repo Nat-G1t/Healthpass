@@ -4,28 +4,32 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Director;
 
+use App\Jobs\SendAppointmentScheduledMail;
 use App\Models\Appointment;
 use App\Models\BatchRequest;
 use App\Models\BatchRequestStudent;
 use App\Models\College;
 use App\Models\User;
-use App\Services\ClinicScheduleService;
 use App\Services\ReferenceNumberService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Testing\TestResponse;
 use Mockery\MockInterface;
 use RuntimeException;
 use Tests\TestCase;
 
 /**
- * Director batch Approve (FR-DIRA-02/03/05/06, BR-08, D-36): one transaction
- * that flips the batch to approved, stamps the reviewer fields +
- * scheduled_date, fans out one appointment per listed student, and
- * back-writes each new appointment_id onto its batch_request_students row.
+ * Director batch Approve (FR-DIRA-02/03/05/06, BR-08, D-108): one transaction
+ * that flips the batch to approved, stamps the reviewer fields and the
+ * schedule the Director picked (scheduled_date / _time / _blocks), fans out
+ * one appointment per listed student, and back-writes each new
+ * appointment_id onto its batch_request_students row.
  *
- * D-36 made approval confirm-only: the date is always the College Admin's
- * `requested_date`, read off the locked row — never the request body.
+ * D-108: the Director posts the clinic date and the start hour. Every rule —
+ * span within the day, no ended hour, room in every hour and in the day, no
+ * BR-25 clash — is re-checked under the row lock; a refusal sends the Director
+ * back to the Review page.
  */
 class BatchApprovalDecisionTest extends TestCase
 {
@@ -42,9 +46,8 @@ class BatchApprovalDecisionTest extends TestCase
         parent::setUp();
 
         // Written around D-37's 12 an hour and 120 a day, which these tests'
-        // numbers (13 → 12 + 1, a full hour of 12, a 121-student batch …)
-        // still exercise. The D-95 default of 20 is asserted in
-        // the unit test ClinicScheduleServiceTest.
+        // numbers (13 → 12 + 1, a full hour of 12 …) still exercise. The D-95
+        // default of 20 is asserted in the unit test ClinicScheduleServiceTest.
         config(['healthpass.hourly_capacity' => 12, 'healthpass.daily_capacity' => 120]);
 
         $this->ccs = College::create(['code' => 'CCS', 'name' => 'College of Computing Studies']);
@@ -56,13 +59,7 @@ class BatchApprovalDecisionTest extends TestCase
         ]);
     }
 
-    /**
-     * A pending batch with $studentCount student pivot rows attached.
-     * `requested_date` is set by default — since D-36 it is what approval
-     * confirms, so a batch without one is the exception, not the norm — and
-     * since D-37 the same is true of the hour span (`requested_time` +
-     * `requested_blocks`, the latter derived from the roster size).
-     */
+    /** A pending batch with $studentCount student pivot rows — no date, no hour (D-108). */
     private function makeBatchWithStudents(int $studentCount, array $overrides = []): BatchRequest
     {
         static $seq = 700;
@@ -73,9 +70,6 @@ class BatchApprovalDecisionTest extends TestCase
             'requested_by' => $this->admin->id,
             'reason' => 'ojt',
             'service_type' => 'medical',
-            'requested_date' => now()->addDays(7)->toDateString(),
-            'requested_time' => '07:00:00',
-            'requested_blocks' => app(ClinicScheduleService::class)->blocksFor($studentCount),
         ], $overrides));
 
         User::factory()->count($studentCount)->create()->each(
@@ -88,25 +82,54 @@ class BatchApprovalDecisionTest extends TestCase
         return $batch;
     }
 
-    /** D-36: the approve endpoint takes no input; $body only exists to prove it. */
-    private function approve(BatchRequest $batch, array $body = []): TestResponse
+    /** The default pick: a week ahead, from 7 AM. */
+    private function inAWeek(): string
     {
-        return $this->actingAs($this->director)->post("/director/batches/{$batch->id}/approve", $body);
+        return now()->addDays(7)->toDateString();
+    }
+
+    private function approve(BatchRequest $batch, ?string $date = null, ?string $start = '07:00:00', array $extra = []): TestResponse
+    {
+        return $this->actingAs($this->director)->post(
+            "/director/batches/{$batch->id}/approve",
+            array_filter(['scheduled_date' => $date ?? $this->inAWeek(), 'start_time' => $start]) + $extra,
+        );
+    }
+
+    private function reviewUrl(BatchRequest $batch): string
+    {
+        return "/director/batches/{$batch->id}/review";
+    }
+
+    /** Refused: still pending, nothing scheduled, nothing created. */
+    private function assertNotApproved(BatchRequest $batch, int $appointmentsBefore = 0): void
+    {
+        $batch->refresh();
+        $this->assertSame('pending', $batch->status);
+        $this->assertNull($batch->scheduled_date);
+        $this->assertNull($batch->scheduled_time);
+        $this->assertNull($batch->scheduled_blocks);
+        $this->assertNull($batch->reviewed_by);
+        $this->assertDatabaseCount('appointments', $appointmentsBefore);
     }
 
     public function test_approving_a_25_student_batch_creates_exactly_25_linked_appointments(): void
     {
-        $date = now()->addDays(7)->toDateString();
-        $batch = $this->makeBatchWithStudents(25, ['requested_date' => $date]);
+        $date = $this->inAWeek();
+        $batch = $this->makeBatchWithStudents(25);
 
-        $this->approve($batch)->assertRedirect('/director/batches');
+        $this->approve($batch, $date, '09:00:00')->assertRedirect('/director/batches');
 
-        // Batch flipped + reviewer stamps + the requested date (FR-DIRA-02, D-36).
+        // Batch flipped + reviewer stamps + the Director's schedule (D-108).
         $batch->refresh();
         $this->assertSame('approved', $batch->status);
         $this->assertSame($this->director->id, $batch->reviewed_by);
         $this->assertNotNull($batch->reviewed_at);
         $this->assertSame($date, $batch->scheduled_date->toDateString());
+        $this->assertSame('09:00:00', $batch->scheduled_time);
+        $this->assertSame(3, (int) $batch->scheduled_blocks);   // 25 → 12 + 12 + 1
+        // The legacy columns stay empty on a D-108 batch.
+        $this->assertNull($batch->requested_date);
 
         // Exactly one appointment per listed student (BR-08).
         $this->assertDatabaseCount('appointments', 25);
@@ -132,6 +155,74 @@ class BatchApprovalDecisionTest extends TestCase
         $this->assertCount(25, $pivots->pluck('appointment.reference_no')->unique());
     }
 
+    public function test_the_success_flash_names_the_date_and_hours(): void
+    {
+        $batch = $this->makeBatchWithStudents(13);
+
+        $this->approve($batch, '2030-03-05', '09:00:00')->assertSessionHas(
+            'status',
+            "{$batch->reference_no} approved for Tue, Mar 5, 2030, 9:00 AM – 11:00 AM — 13 appointments created.",
+        );
+    }
+
+    public function test_one_mail_job_per_student_is_queued_after_the_commit(): void
+    {
+        Queue::fake();
+        $batch = $this->makeBatchWithStudents(4);
+
+        $this->approve($batch)->assertRedirect('/director/batches');
+
+        Queue::assertPushed(SendAppointmentScheduledMail::class, 4);
+    }
+
+    // ── The two inputs (ApproveBatchRequest) ────────────────────────────────
+
+    public function test_both_the_date_and_the_start_hour_are_required(): void
+    {
+        $batch = $this->makeBatchWithStudents(3);
+
+        $this->actingAs($this->director)
+            ->from($this->reviewUrl($batch))
+            ->post("/director/batches/{$batch->id}/approve", [])
+            ->assertRedirect($this->reviewUrl($batch))
+            ->assertSessionHasErrors(['scheduled_date', 'start_time']);
+
+        $this->assertNotApproved($batch);
+    }
+
+    public function test_a_past_date_is_refused(): void
+    {
+        $batch = $this->makeBatchWithStudents(3);
+
+        $this->approve($batch, now()->subDay()->toDateString())
+            ->assertSessionHasErrors('scheduled_date');
+
+        $this->assertNotApproved($batch);
+    }
+
+    public function test_a_start_hour_outside_the_clinic_slots_is_refused(): void
+    {
+        $batch = $this->makeBatchWithStudents(3);
+
+        foreach (['07:00', '06:00:00', '17:00:00', '07:30:00'] as $start) {
+            $this->approve($batch, null, $start)->assertSessionHasErrors('start_time');
+        }
+
+        $this->assertNotApproved($batch);
+    }
+
+    /** The span length is the roster's — a posted block count is never read. */
+    public function test_a_posted_block_count_is_ignored(): void
+    {
+        $batch = $this->makeBatchWithStudents(13);
+
+        $this->approve($batch, null, '07:00:00', ['scheduled_blocks' => 1])->assertRedirect('/director/batches');
+
+        $this->assertSame(2, (int) $batch->fresh()->scheduled_blocks);
+    }
+
+    // ── Atomicity and replays (FR-DIRA-02/05) ───────────────────────────────
+
     public function test_a_mid_loop_failure_rolls_back_the_entire_approval(): void
     {
         $batch = $this->makeBatchWithStudents(5);
@@ -153,14 +244,8 @@ class BatchApprovalDecisionTest extends TestCase
 
         // Full rollback: no partial appointments, no back-written pivot ids,
         // batch untouched and still decidable (AC for FR-DIRA-02).
-        $this->assertDatabaseCount('appointments', 0);
         $this->assertSame(0, $batch->batchRequestStudents()->whereNotNull('appointment_id')->count());
-
-        $batch->refresh();
-        $this->assertSame('pending', $batch->status);
-        $this->assertNull($batch->reviewed_by);
-        $this->assertNull($batch->reviewed_at);
-        $this->assertNull($batch->scheduled_date);
+        $this->assertNotApproved($batch);
     }
 
     public function test_a_duplicate_approve_post_does_not_double_generate(): void
@@ -170,14 +255,18 @@ class BatchApprovalDecisionTest extends TestCase
         $this->approve($batch)->assertRedirect('/director/batches');
         $firstReviewedAt = $batch->fresh()->reviewed_at;
 
-        // Double-click / replayed POST: the in-transaction status re-check
-        // must make the second request a no-op (FR-DIRA-05).
-        $this->approve($batch)->assertRedirect('/director/batches');
+        // Double-click / replayed POST — even one naming another day: the
+        // in-transaction status re-check makes it a no-op (FR-DIRA-05).
+        $this->approve($batch, now()->addDays(20)->toDateString(), '13:00:00')
+            ->assertRedirect('/director/batches')
+            ->assertSessionHas('error', "{$batch->reference_no} has already been decided — nothing was changed.");
 
         $this->assertDatabaseCount('appointments', 3);
 
         $batch->refresh();
         $this->assertSame('approved', $batch->status);
+        $this->assertSame($this->inAWeek(), $batch->scheduled_date->toDateString());
+        $this->assertSame('07:00:00', $batch->scheduled_time);
         $this->assertEquals($firstReviewedAt, $batch->reviewed_at);
     }
 
@@ -192,6 +281,18 @@ class BatchApprovalDecisionTest extends TestCase
             $this->assertSame(0, $batch->batchRequestStudents()->whereNotNull('appointment_id')->count());
         }
 
+        $this->assertDatabaseCount('appointments', 0);
+    }
+
+    public function test_a_batch_the_college_cancelled_cannot_be_approved(): void
+    {
+        $batch = $this->makeBatchWithStudents(2, ['status' => 'cancelled', 'cancelled_at' => now()]);
+
+        $this->approve($batch)
+            ->assertRedirect('/director/batches')
+            ->assertSessionHas('error', "{$batch->reference_no} was cancelled by the college — nothing was changed.");
+
+        $this->assertSame('cancelled', $batch->fresh()->status);
         $this->assertDatabaseCount('appointments', 0);
     }
 
@@ -212,142 +313,31 @@ class BatchApprovalDecisionTest extends TestCase
         }
     }
 
-    /**
-     * D-36: approval is confirm-only. A client that posts its own
-     * `scheduled_date` — the field the pre-D-36 modal used to send — must not
-     * be able to move the cohort off the date the college asked for.
-     */
-    public function test_an_injected_scheduled_date_is_ignored(): void
+    /** A legacy batch's old requested date is information only (D-108). */
+    public function test_a_legacy_requested_date_does_not_decide_the_schedule(): void
     {
-        $requested = now()->addDays(7)->toDateString();
-        $injected = now()->addDays(40)->toDateString();
+        $batch = $this->makeBatchWithStudents(2, [
+            'requested_date' => now()->subWeek()->toDateString(),   // stale under D-36
+            'requested_time' => '15:00:00',
+            'requested_blocks' => 1,
+        ]);
 
-        $batch = $this->makeBatchWithStudents(3, ['requested_date' => $requested]);
-
-        $this->approve($batch, ['scheduled_date' => $injected])
-            ->assertRedirect('/director/batches');
+        $this->approve($batch, $this->inAWeek(), '10:00:00')->assertRedirect('/director/batches');
 
         $batch->refresh();
         $this->assertSame('approved', $batch->status);
-        $this->assertSame($requested, $batch->scheduled_date->toDateString());
-
-        foreach ($batch->batchRequestStudents()->with('appointment')->get() as $pivot) {
-            $this->assertSame($requested, $pivot->appointment->scheduled_date->toDateString());
-        }
+        $this->assertSame($this->inAWeek(), $batch->scheduled_date->toDateString());
+        $this->assertSame('10:00:00', $batch->scheduled_time);
     }
 
-    /**
-     * D-36: a batch submitted before D-29 has no requested_date, so there is
-     * nothing to confirm — approval is refused outright and the Director is
-     * pointed at reject-with-a-reason instead.
-     */
-    public function test_a_batch_without_a_requested_date_cannot_be_approved(): void
-    {
-        $batch = $this->makeBatchWithStudents(4, ['requested_date' => null]);
-
-        $this->approve($batch)
-            ->assertRedirect('/director/batches')
-            ->assertSessionHas('error');
-
-        $batch->refresh();
-        $this->assertSame('pending', $batch->status);
-        $this->assertNull($batch->scheduled_date);
-        $this->assertNull($batch->reviewed_by);
-        $this->assertNull($batch->reviewed_at);
-        $this->assertDatabaseCount('appointments', 0);
-    }
-
-    /**
-     * D-36: a batch can sit pending until its requested date passes. Approval
-     * is confirm-only, so there is no date left to confirm and approving would
-     * schedule the cohort in the past — refused, reject-and-resubmit instead.
-     */
-    public function test_a_batch_whose_requested_date_has_passed_cannot_be_approved(): void
-    {
-        $batch = $this->makeBatchWithStudents(3, [
-            'requested_date' => now()->subDay()->toDateString(),
-        ]);
-
-        $this->approve($batch)
-            ->assertRedirect('/director/batches')
-            ->assertSessionHas('error');
-
-        $batch->refresh();
-        $this->assertSame('pending', $batch->status);
-        $this->assertNull($batch->scheduled_date);
-        $this->assertNull($batch->reviewed_by);
-        $this->assertNull($batch->reviewed_at);
-        $this->assertDatabaseCount('appointments', 0);
-    }
-
-    /**
-     * The boundary: TODAY is still confirmable — only past dates are stale.
-     *
-     * The clock is pinned and the span put in the afternoon so this tests
-     * D-36's date rule alone; a same-day span whose hours have already ended
-     * is BR-23's business and is covered separately below.
-     */
-    public function test_a_batch_requested_for_today_can_still_be_approved(): void
-    {
-        Carbon::setTestNow(Carbon::parse('2026-07-27 08:00', 'Asia/Manila'));
-
-        $today = now()->toDateString();
-        $batch = $this->makeBatchWithStudents(2, [
-            'requested_date' => $today,
-            'requested_time' => '14:00:00',
-        ]);
-
-        $this->approve($batch)->assertRedirect('/director/batches');
-
-        $batch->refresh();
-        $this->assertSame('approved', $batch->status);
-        $this->assertSame($today, $batch->scheduled_date->toDateString());
-        $this->assertDatabaseCount('appointments', 2);
-    }
-
-    /** A posted date cannot rescue a batch that has no requested date (D-36). */
-    public function test_a_batch_without_a_requested_date_cannot_be_approved_by_posting_one(): void
-    {
-        $batch = $this->makeBatchWithStudents(2, ['requested_date' => null]);
-
-        $this->approve($batch, ['scheduled_date' => now()->addDays(7)->toDateString()])
-            ->assertRedirect('/director/batches')
-            ->assertSessionHas('error');
-
-        $this->assertSame('pending', $batch->fresh()->status);
-        $this->assertNull($batch->fresh()->scheduled_date);
-        $this->assertDatabaseCount('appointments', 0);
-    }
-
-    /** …and it cannot rescue a stale one either (D-36). */
-    public function test_a_stale_batch_cannot_be_approved_by_posting_a_future_date(): void
-    {
-        $batch = $this->makeBatchWithStudents(2, [
-            'requested_date' => now()->subWeek()->toDateString(),
-        ]);
-
-        $this->approve($batch, ['scheduled_date' => now()->addDays(7)->toDateString()])
-            ->assertRedirect('/director/batches')
-            ->assertSessionHas('error');
-
-        $this->assertSame('pending', $batch->fresh()->status);
-        $this->assertNull($batch->fresh()->scheduled_date);
-        $this->assertDatabaseCount('appointments', 0);
-    }
-
-    // ── D-37: hour span, hard capacity block, and the timed fan-out ──────────
+    // ── D-37: the timed fan-out ─────────────────────────────────────────────
 
     public function test_the_fan_out_puts_twelve_students_in_each_hour_and_the_remainder_last(): void
     {
-        $date = now()->addDays(7)->toDateString();
-
         // 25 students → 3 hours from 7 AM: 12 + 12 + 1.
-        $batch = $this->makeBatchWithStudents(25, [
-            'requested_date' => $date,
-            'requested_time' => '07:00:00',
-        ]);
+        $batch = $this->makeBatchWithStudents(25);
 
-        $this->approve($batch)->assertRedirect('/director/batches');
+        $this->approve($batch, null, '07:00:00')->assertRedirect('/director/batches');
 
         $perSlot = Appointment::where('batch_request_id', $batch->id)
             ->get()
@@ -363,9 +353,9 @@ class BatchApprovalDecisionTest extends TestCase
 
     public function test_the_fan_out_assignment_is_deterministic_by_pivot_order(): void
     {
-        $batch = $this->makeBatchWithStudents(13, ['requested_time' => '10:00:00']);
+        $batch = $this->makeBatchWithStudents(13);
 
-        $this->approve($batch)->assertRedirect('/director/batches');
+        $this->approve($batch, null, '10:00:00')->assertRedirect('/director/batches');
 
         // Pivot rows in id order: the first 12 land in 10 AM, the 13th in 11 AM.
         $times = $batch->batchRequestStudents()
@@ -379,235 +369,276 @@ class BatchApprovalDecisionTest extends TestCase
         $this->assertSame('11:00:00', $times[12]);
     }
 
-    /**
-     * FR-DIRA-06 as amended by D-37: capacity is a HARD BLOCK, not a warning.
-     * With D-36's confirm-only approval this batch has exactly one outcome —
-     * rejection and resubmission. That is the intended workflow.
-     */
-    public function test_approval_is_refused_when_an_hour_in_the_span_is_full(): void
+    // ── (1) the span must end by closing time ───────────────────────────────
+
+    public function test_a_start_hour_whose_span_runs_past_closing_is_refused(): void
     {
-        $date = now()->addDays(7)->toDateString();
+        // 25 students need 3 hours; from 3 PM that runs to 6 PM.
+        $batch = $this->makeBatchWithStudents(25);
 
-        $batch = $this->makeBatchWithStudents(25, [
-            'requested_date' => $date,
-            'requested_time' => '07:00:00',
-        ]);
+        $this->approve($batch, null, '15:00:00')
+            ->assertRedirect($this->reviewUrl($batch))
+            ->assertSessionHas('error', "{$batch->reference_no} needs 3 clinic hours for 25 students — starting at 3:00 PM it would run past 5:00 PM. Pick an earlier start hour.");
 
-        // 8–9 AM sits inside the batch's 7–10 AM span and is already at 12.
-        Appointment::factory()->count(12)->inSlot('08:00:00')->create([
-            'scheduled_date' => $date,
-            'status' => 'scheduled',
-        ]);
-
-        $this->approve($batch)
-            ->assertRedirect('/director/batches')
-            ->assertSessionHas('error', fn (string $error) => str_contains($error, '8:00 AM – 9:00 AM'));
-
-        $this->assertSame('pending', $batch->fresh()->status);
-        $this->assertNull($batch->fresh()->scheduled_date);
-        // Only the 12 pre-existing appointments — none from the batch.
-        $this->assertDatabaseCount('appointments', 12);
+        $this->assertNotApproved($batch);
     }
 
-    /**
-     * D-91: an hour that isn't full yet can still be too full for THIS batch.
-     * Before D-91 an hour holding 8 took all 8 of these students and ended at 16.
-     */
-    public function test_approval_is_refused_when_an_hour_lacks_room_for_the_batchs_students(): void
+    public function test_the_last_hour_that_still_fits_is_accepted(): void
     {
-        $date = now()->addDays(7)->toDateString();
-        $batch = $this->makeBatchWithStudents(8, ['requested_date' => $date]);
+        $batch = $this->makeBatchWithStudents(25);
 
-        Appointment::factory()->count(8)->inSlot('07:00:00')->create([
-            'scheduled_date' => $date,
-            'status' => 'scheduled',
-        ]);
+        $this->approve($batch, null, '14:00:00')->assertRedirect('/director/batches');
 
-        $this->approve($batch)
-            ->assertRedirect('/director/batches')
-            ->assertSessionHas('error', fn (string $error) => str_contains($error, '7:00 AM – 8:00 AM slot in its span has only 4 seats left'));
+        $this->assertSame('approved', $batch->fresh()->status);
+    }
 
-        $this->assertSame('pending', $batch->fresh()->status);
-        $this->assertDatabaseCount('appointments', 8);
+    // ── (2) BR-23: hours that have already ended ────────────────────────────
+
+    public function test_an_hour_that_has_already_passed_today_is_refused(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-27 12:00', 'Asia/Manila'));
+
+        $batch = $this->makeBatchWithStudents(25);
+
+        $this->approve($batch, today()->toDateString(), '07:00:00')
+            ->assertRedirect($this->reviewUrl($batch))
+            ->assertSessionHas('error', fn (string $e) => str_contains($e, '7:00 AM – 8:00 AM')
+                && str_contains($e, 'already passed'));
+
+        $this->assertNotApproved($batch);
+    }
+
+    public function test_a_span_only_partly_passed_is_refused(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-27 12:00', 'Asia/Manila'));
+
+        // 11 AM–2 PM: the first hour has ended, the other two have not.
+        $batch = $this->makeBatchWithStudents(25);
+
+        $this->approve($batch, today()->toDateString(), '11:00:00')
+            ->assertSessionHas('error', fn (string $e) => str_contains($e, '11:00 AM – 12:00 PM'));
+
+        $this->assertNotApproved($batch);
+    }
+
+    public function test_same_day_scheduling_takes_hours_still_to_come(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-27 12:00', 'Asia/Manila'));
+
+        $batch = $this->makeBatchWithStudents(5);
+
+        $this->approve($batch, today()->toDateString(), '13:00:00')->assertRedirect('/director/batches');
+
+        $this->assertSame('approved', $batch->fresh()->status);
+        $this->assertSame(
+            ['13:00:00'],
+            Appointment::where('batch_request_id', $batch->id)->pluck('scheduled_time')->unique()->values()->all(),
+        );
+    }
+
+    public function test_a_future_date_is_never_blocked_by_elapsed_hours(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-07-27 16:45', 'Asia/Manila'));
+
+        $batch = $this->makeBatchWithStudents(5);
+
+        $this->approve($batch, today()->addDay()->toDateString(), '07:00:00')->assertRedirect('/director/batches');
+
+        $this->assertSame('approved', $batch->fresh()->status);
+    }
+
+    // ── (3) room in every hour (D-91) and in the day (BR-02) ────────────────
+
+    public function test_an_hour_in_the_span_that_is_full_is_refused(): void
+    {
+        $date = $this->inAWeek();
+        $batch = $this->makeBatchWithStudents(25);
+
+        // 8–9 AM sits inside the 7–10 AM span and is already at 12.
+        Appointment::factory()->count(12)->inSlot('08:00:00')->create(['scheduled_date' => $date, 'status' => 'scheduled']);
+
+        $this->approve($batch, $date, '07:00:00')
+            ->assertRedirect($this->reviewUrl($batch))
+            ->assertSessionHas('error', fn (string $error) => str_contains($error, '8:00 AM – 9:00 AM slot in its span')
+                && str_contains($error, 'is already fully booked'));
+
+        $this->assertNotApproved($batch, appointmentsBefore: 12);
+    }
+
+    public function test_an_hour_without_room_for_the_batchs_seats_is_refused(): void
+    {
+        $date = $this->inAWeek();
+        $batch = $this->makeBatchWithStudents(8);
+
+        Appointment::factory()->count(8)->inSlot('07:00:00')->create(['scheduled_date' => $date, 'status' => 'scheduled']);
+
+        $this->approve($batch, $date, '07:00:00')
+            ->assertSessionHas('error', fn (string $error) => str_contains($error, '7:00 AM – 8:00 AM slot in its span')
+                && str_contains($error, 'has only 4 seats left'));
+
+        $this->assertNotApproved($batch, appointmentsBefore: 8);
     }
 
     public function test_a_batch_that_exactly_fills_the_seats_left_is_approved(): void
     {
-        $date = now()->addDays(7)->toDateString();
-        $batch = $this->makeBatchWithStudents(4, ['requested_date' => $date]);
+        $date = $this->inAWeek();
+        $batch = $this->makeBatchWithStudents(4);
 
-        Appointment::factory()->count(8)->inSlot('07:00:00')->create([
-            'scheduled_date' => $date,
-            'status' => 'scheduled',
-        ]);
+        Appointment::factory()->count(8)->inSlot('07:00:00')->create(['scheduled_date' => $date, 'status' => 'scheduled']);
 
-        $this->approve($batch)->assertSessionHas('status');
+        $this->approve($batch, $date, '07:00:00')->assertSessionHas('status');
 
         $this->assertSame(12, Appointment::whereDate('scheduled_date', $date)->where('scheduled_time', '07:00:00')->count());
     }
 
+    public function test_an_hour_other_colleges_use_still_takes_a_batch_that_fits(): void
+    {
+        $date = $this->inAWeek();
+        $batch = $this->makeBatchWithStudents(5);
+
+        // 6 already there + this batch's 5 = 11 of 12.
+        Appointment::factory()->count(6)->inSlot('09:00:00')->create(['scheduled_date' => $date, 'status' => 'scheduled']);
+
+        $this->approve($batch, $date, '09:00:00')->assertRedirect('/director/batches');
+
+        $this->assertSame(11, Appointment::whereDate('scheduled_date', $date)->where('scheduled_time', '09:00:00')->count());
+    }
+
     public function test_a_full_hour_outside_the_span_does_not_block_approval(): void
     {
-        $date = now()->addDays(7)->toDateString();
+        $date = $this->inAWeek();
+        $batch = $this->makeBatchWithStudents(5);
 
-        $batch = $this->makeBatchWithStudents(5, [
-            'requested_date' => $date,
-            'requested_time' => '07:00:00',
-        ]);
+        Appointment::factory()->count(12)->inSlot('15:00:00')->create(['scheduled_date' => $date, 'status' => 'scheduled']);
 
-        Appointment::factory()->count(12)->inSlot('15:00:00')->create([
+        $this->approve($batch, $date, '07:00:00')->assertRedirect('/director/batches');
+
+        $this->assertSame('approved', $batch->fresh()->status);
+    }
+
+    public function test_cancelled_appointments_free_their_seats(): void
+    {
+        $date = $this->inAWeek();
+        $batch = $this->makeBatchWithStudents(12);
+
+        Appointment::factory()->count(12)->inSlot('07:00:00')->create(['scheduled_date' => $date, 'status' => 'cancelled']);
+
+        $this->approve($batch, $date, '07:00:00')->assertRedirect('/director/batches');
+
+        $this->assertSame('approved', $batch->fresh()->status);
+    }
+
+    public function test_a_day_already_at_daily_capacity_is_refused(): void
+    {
+        $date = $this->inAWeek();
+        $batch = $this->makeBatchWithStudents(2);
+
+        // 119 legacy rows with no hour — invisible to every hourly counter,
+        // seen only by the daily cap (BR-02).
+        Appointment::factory()->count(119)->create(['scheduled_date' => $date, 'scheduled_time' => null, 'status' => 'scheduled']);
+
+        $this->approve($batch, $date, '07:00:00')
+            ->assertRedirect($this->reviewUrl($batch))
+            ->assertSessionHas('error', fn (string $error) => str_contains($error, 'the day has only 1 places left for its 2 students'));
+
+        $this->assertNotApproved($batch, appointmentsBefore: 119);
+    }
+
+    // ── (4) BR-25: students already scheduled that day ──────────────────────
+
+    /** An approved batch on $date holding the given students. */
+    private function approvedBatchOn(string $date, array $studentIds, string $start = '07:00:00', string $form = 'clearance'): BatchRequest
+    {
+        static $seq = 900;
+
+        $other = BatchRequest::create([
+            'reference_no' => 'BR-'.now()->year.'-'.$seq++,
+            'college_id' => $this->ccs->id,
+            'requested_by' => $this->admin->id,
+            'form_type' => $form,
+            'reason' => $form === 'clearance' ? 'fieldtrip' : 'ojt',
+            'service_type' => 'medical',
             'scheduled_date' => $date,
-            'status' => 'scheduled',
+            'scheduled_time' => $start,
+            'scheduled_blocks' => 1,
+            'status' => 'approved',
         ]);
 
-        $this->approve($batch)->assertRedirect('/director/batches');
+        foreach ($studentIds as $studentId) {
+            BatchRequestStudent::create(['batch_request_id' => $other->id, 'student_id' => $studentId]);
+        }
 
-        $this->assertSame('approved', $batch->fresh()->status);
+        return $other;
     }
-
-    // ── BR-23: hours that ended while the batch sat pending ─────────────────
-
-    /**
-     * D-36 still lets a batch requested for TODAY be approved. BR-23 closes
-     * the hole that opens when the review happens after those hours end —
-     * approving would mint appointments for a time already gone.
-     */
-    public function test_approval_is_refused_when_an_hour_in_the_span_has_already_passed(): void
-    {
-        Carbon::setTestNow(Carbon::parse('2026-07-27 12:00', 'Asia/Manila'));
-
-        // Requested for today 7–10 AM; it is now noon, so all three have ended.
-        $batch = $this->makeBatchWithStudents(25, [
-            'requested_date' => today()->toDateString(),
-            'requested_time' => '07:00:00',
-        ]);
-
-        $this->approve($batch)
-            ->assertRedirect('/director/batches')
-            ->assertSessionHas('error', fn (string $e) => str_contains($e, '7:00 AM – 8:00 AM')
-                && str_contains($e, 'already passed'));
-
-        $this->assertSame('pending', $batch->fresh()->status);
-        $this->assertNull($batch->fresh()->scheduled_date);
-        $this->assertDatabaseCount('appointments', 0);
-    }
-
-    public function test_approval_is_refused_when_only_part_of_the_span_has_passed(): void
-    {
-        Carbon::setTestNow(Carbon::parse('2026-07-27 12:00', 'Asia/Manila'));
-
-        // 11 AM–2 PM: the first hour has ended, the other two have not. A
-        // partially-elapsed span is still refused — some students would be
-        // scheduled into the past.
-        $batch = $this->makeBatchWithStudents(25, [
-            'requested_date' => today()->toDateString(),
-            'requested_time' => '11:00:00',
-        ]);
-
-        $this->approve($batch)
-            ->assertRedirect('/director/batches')
-            ->assertSessionHas('error', fn (string $e) => str_contains($e, '11:00 AM – 12:00 PM'));
-
-        $this->assertSame('pending', $batch->fresh()->status);
-        $this->assertDatabaseCount('appointments', 0);
-    }
-
-    public function test_a_batch_for_today_is_still_approvable_while_its_span_is_ahead(): void
-    {
-        Carbon::setTestNow(Carbon::parse('2026-07-27 12:00', 'Asia/Manila'));
-
-        // Noon onwards is still to come, so D-36's same-day approval survives.
-        $batch = $this->makeBatchWithStudents(5, [
-            'requested_date' => today()->toDateString(),
-            'requested_time' => '13:00:00',
-        ]);
-
-        $this->approve($batch)->assertRedirect('/director/batches');
-
-        $this->assertSame('approved', $batch->fresh()->status);
-        $this->assertDatabaseCount('appointments', 5);
-        $this->assertSame(
-            ['13:00:00'],
-            Appointment::where('batch_request_id', $batch->id)
-                ->pluck('scheduled_time')->unique()->values()->all(),
-        );
-    }
-
-    public function test_a_future_dated_batch_is_never_blocked_by_elapsed_hours(): void
-    {
-        // Late in the day, but the batch is for tomorrow — nothing has elapsed.
-        Carbon::setTestNow(Carbon::parse('2026-07-27 16:45', 'Asia/Manila'));
-
-        $batch = $this->makeBatchWithStudents(5, [
-            'requested_date' => today()->addDay()->toDateString(),
-            'requested_time' => '07:00:00',
-        ]);
-
-        $this->approve($batch)->assertRedirect('/director/batches');
-
-        $this->assertSame('approved', $batch->fresh()->status);
-    }
-
-    public function test_a_batch_without_a_requested_time_cannot_be_approved(): void
-    {
-        // Pre-D-37 batch: a date but no hour span — nothing to confirm, so it
-        // follows the same reject-and-resubmit path as a pre-D-29 batch (D-36).
-        $batch = $this->makeBatchWithStudents(3, [
-            'requested_time' => null,
-            'requested_blocks' => null,
-        ]);
-
-        $this->approve($batch)
-            ->assertRedirect('/director/batches')
-            ->assertSessionHas('error');
-
-        $this->assertSame('pending', $batch->fresh()->status);
-        $this->assertDatabaseCount('appointments', 0);
-    }
-
-    // ── D-54 / D-77 / BR-25: students already scheduled that day ────────────
-    // Submission refuses a clashing batch, so these mostly arise for a batch
-    // submitted before the rule, or one that raced a booking. Built directly in
-    // the database for exactly that reason.
 
     public function test_approval_is_refused_when_students_are_already_scheduled_that_day(): void
     {
-        $date = now()->addDays(7)->toDateString();
-        $batch = $this->makeBatchWithStudents(5, ['requested_date' => $date, 'requested_time' => '07:00:00']);
+        $date = '2030-03-05';
+        $batch = $this->makeBatchWithStudents(5);
 
-        // Four of the five students are already held at 7 AM that day by
-        // another pending batch — the only kind of clash since D-61.
-        $clashing = $batch->batchRequestStudents()->orderBy('id')->take(4)->get();
-        $other = $this->makeBatchWithStudents(0, ['requested_date' => $date, 'requested_time' => '07:00:00', 'requested_blocks' => 1]);
+        // Four of the five are already on an approved batch that day — at a
+        // different hour, which doesn't matter since D-77.
+        $clashing = $batch->batchRequestStudents()->orderBy('id')->take(4)->pluck('student_id');
+        $this->approvedBatchOn($date, $clashing->all(), '14:00:00', 'assessment');
 
-        foreach ($clashing as $row) {
-            BatchRequestStudent::create(['batch_request_id' => $other->id, 'student_id' => $row->student_id]);
-        }
+        $names = User::whereIn('id', $clashing)->orderBy('name')->pluck('name');
 
-        $names = User::whereIn('id', $clashing->pluck('student_id'))->orderBy('name')->pluck('name');
-
-        $this->approve($batch)
-            ->assertRedirect('/director/batches')
+        $this->approve($batch, $date, '07:00:00')
+            ->assertRedirect($this->reviewUrl($batch))
             ->assertSessionHas(
                 'error',
-                "{$batch->reference_no} cannot be approved — 4 student(s) are already scheduled that day: "
-                ."{$names[0]}, {$names[1]}, {$names[2]} and 1 more. Reject it with a reason so the college can resubmit.",
+                "{$batch->reference_no} cannot be scheduled on Tue, Mar 5, 2030 — 4 student(s) already have a clinic schedule that day: "
+                ."{$names[0]}, {$names[1]}, {$names[2]} and 1 more. Pick another day.",
             );
 
-        $batch->refresh();
-        $this->assertSame('pending', $batch->status);
-        $this->assertNull($batch->scheduled_date);
-        $this->assertNull($batch->reviewed_by);
-        // Nothing fanned out.
-        $this->assertDatabaseCount('appointments', 0);
+        $this->assertNotApproved($batch);
+    }
+
+    public function test_the_same_students_can_be_scheduled_on_another_day(): void
+    {
+        $batch = $this->makeBatchWithStudents(2);
+        $this->approvedBatchOn('2030-03-05', $batch->batchRequestStudents()->pluck('student_id')->all());
+
+        $this->approve($batch, '2030-03-06', '07:00:00')->assertRedirect('/director/batches')->assertSessionMissing('error');
+
+        $this->assertSame('approved', $batch->fresh()->status);
+    }
+
+    /** D-108: a pending batch has no day, so it holds nobody. */
+    public function test_a_pending_batch_sharing_a_student_no_longer_blocks_approval(): void
+    {
+        $first = $this->makeBatchWithStudents(1);
+        $second = $this->makeBatchWithStudents(0);
+        BatchRequestStudent::create(['batch_request_id' => $second->id, 'student_id' => $first->batchRequestStudents()->value('student_id')]);
+
+        $this->approve($first)->assertRedirect('/director/batches')->assertSessionMissing('error');
+        $this->assertSame('approved', $first->fresh()->status);
+
+        // …but once the first is approved, the second can't take that day.
+        $this->approve($second)->assertRedirect($this->reviewUrl($second))->assertSessionHas('error');
+        $this->assertSame('pending', $second->fresh()->status);
+    }
+
+    public function test_a_withdrawn_student_holds_nothing(): void
+    {
+        $date = $this->inAWeek();
+        $batch = $this->makeBatchWithStudents(1);
+        $studentId = $batch->batchRequestStudents()->value('student_id');
+
+        $other = $this->approvedBatchOn($date, [$studentId]);
+        $appointment = Appointment::factory()->inSlot('07:00:00')->create([
+            'student_id' => $studentId, 'scheduled_date' => $date, 'status' => 'cancelled', 'batch_request_id' => $other->id,
+        ]);
+        $other->batchRequestStudents()->update(['appointment_id' => $appointment->id]);
+
+        $this->approve($batch, $date, '09:00:00')->assertRedirect('/director/batches')->assertSessionMissing('error');
     }
 
     public function test_a_legacy_self_booking_no_longer_blocks_approval(): void
     {
-        // D-61 removed self-booking and with it D-54's self-booking clash; a
-        // pre-D-61 row in an old database holds nothing against a batch.
-        $date = now()->addDays(7)->toDateString();
-        $batch = $this->makeBatchWithStudents(1, ['requested_date' => $date, 'requested_time' => '07:00:00']);
+        // D-61 removed self-booking and with it D-54's self-booking clash.
+        $date = $this->inAWeek();
+        $batch = $this->makeBatchWithStudents(1);
 
         Appointment::factory()->inSlot('07:00:00')->create([
             'student_id' => $batch->batchRequestStudents()->value('student_id'),
@@ -615,87 +646,24 @@ class BatchApprovalDecisionTest extends TestCase
             'source' => 'self',
         ]);
 
-        $this->approve($batch)->assertRedirect('/director/batches')->assertSessionMissing('error');
+        $this->approve($batch, $date, '08:00:00')->assertRedirect('/director/batches')->assertSessionMissing('error');
 
-        $this->assertSame('approved', $batch->fresh()->status);
         $this->assertSame(1, Appointment::where('batch_request_id', $batch->id)->count());
-    }
-
-    public function test_approval_is_refused_when_a_student_is_on_an_overlapping_batch(): void
-    {
-        $date = now()->addDays(7)->toDateString();
-        $batch = $this->makeBatchWithStudents(2, ['requested_date' => $date, 'requested_time' => '09:00:00']);
-        $studentId = $batch->batchRequestStudents()->orderBy('id')->value('student_id');
-
-        // An approved 8–10 AM batch already holds that student.
-        $other = BatchRequest::create([
-            'reference_no' => 'BR-'.now()->year.'-999',
-            'college_id' => $this->ccs->id,
-            'requested_by' => $this->admin->id,
-            'reason' => 'ojt',
-            'service_type' => 'medical',
-            'requested_date' => $date,
-            'scheduled_date' => $date,
-            'requested_time' => '08:00:00',
-            'requested_blocks' => 2,
-            'status' => 'approved',
-        ]);
-        BatchRequestStudent::create(['batch_request_id' => $other->id, 'student_id' => $studentId]);
-
-        $name = User::findOrFail($studentId)->name;
-
-        $this->approve($batch)
-            ->assertRedirect('/director/batches')
-            ->assertSessionHas('error', fn (string $error) => str_contains(
-                $error,
-                "1 student(s) are already scheduled that day: {$name}. Reject it with a reason",
-            ));
-
-        $this->assertSame('pending', $batch->fresh()->status);
-        $this->assertSame(0, Appointment::where('batch_request_id', $batch->id)->count());
-    }
-
-    public function test_two_pending_same_day_batches_sharing_a_student_block_each_other_until_one_is_rejected(): void
-    {
-        // D-77: hours and form don't matter — a 7 AM Clearance and a 2 PM
-        // Assessment on the same date both hold the shared student. A pending
-        // batch holds its date (rule 2), so each refuses the other; the
-        // Director rejects one, and the other then goes through.
-        $date = now()->addDays(7)->toDateString();
-        $first = $this->makeBatchWithStudents(1, ['requested_date' => $date, 'requested_time' => '07:00:00', 'form_type' => 'clearance']);
-        $second = $this->makeBatchWithStudents(0, ['requested_date' => $date, 'requested_time' => '14:00:00', 'requested_blocks' => 1, 'form_type' => 'assessment']);
-        $studentId = $first->batchRequestStudents()->value('student_id');
-        BatchRequestStudent::create(['batch_request_id' => $second->id, 'student_id' => $studentId]);
-
-        $name = User::findOrFail($studentId)->name;
-
-        foreach ([$first, $second] as $batch) {
-            $this->approve($batch)
-                ->assertRedirect('/director/batches')
-                ->assertSessionHas('error', fn (string $error) => str_contains(
-                    $error,
-                    "1 student(s) are already scheduled that day: {$name}.",
-                ));
-        }
-
-        $second->update(['status' => 'rejected']);
-
-        $this->approve($first)->assertRedirect('/director/batches')->assertSessionMissing('error');
-        $this->assertSame('approved', $first->fresh()->status);
-        $this->assertSame(0, Appointment::where('batch_request_id', $second->id)->count());
     }
 
     public function test_non_directors_cannot_approve(): void
     {
         $batch = $this->makeBatchWithStudents(2);
 
-        foreach (['student', 'nurse', 'college_admin'] as $role) {
+        foreach (['student', 'nurse', 'physician', 'college_admin'] as $role) {
             $this->actingAs(User::factory()->create(['role' => $role]))
-                ->post("/director/batches/{$batch->id}/approve")
+                ->post("/director/batches/{$batch->id}/approve", [
+                    'scheduled_date' => $this->inAWeek(),
+                    'start_time' => '07:00:00',
+                ])
                 ->assertRedirect();
         }
 
-        $this->assertSame('pending', $batch->fresh()->status);
-        $this->assertDatabaseCount('appointments', 0);
+        $this->assertNotApproved($batch);
     }
 }

@@ -102,10 +102,10 @@ class BatchResultsTest extends TestCase
             'form_type' => 'clearance',    // D-62
             'reason' => 'fieldtrip',
             'service_type' => 'medical',   // D-60: the only service
-            'requested_date' => $date,
-            'requested_time' => '09:00:00',
-            'requested_blocks' => 1,
+            // D-108: the date and hour span the Director scheduled.
             'scheduled_date' => $status === 'approved' ? $date : null,
+            'scheduled_time' => $status === 'approved' ? '09:00:00' : null,
+            'scheduled_blocks' => $status === 'approved' ? 1 : null,
             'status' => $status,
             'reviewed_by' => $isDecided ? $this->director->id : null,
             'reviewed_at' => $isDecided ? now() : null,
@@ -693,7 +693,7 @@ class BatchResultsTest extends TestCase
         $response->assertOk();
         $response->assertSee('Clinic date');
         $response->assertSee('Thursday, September 10, 2026');
-        $response->assertSee('Hour span');
+        $response->assertSee('Hours');   // "Hour span" before D-108
         $response->assertSee('9:00 AM');
         $response->assertSee('Form');
         $response->assertSee('Medical Clearance');   // D-62 form type

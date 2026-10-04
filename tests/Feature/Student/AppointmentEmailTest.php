@@ -74,9 +74,6 @@ class AppointmentEmailTest extends TestCase
             'form_type' => 'assessment',   // D-62: 'ojt' is an Assessment reason
             'reason' => 'ojt',
             'service_type' => 'medical',
-            'requested_date' => now()->addDays(7)->toDateString(),
-            'requested_time' => '07:00:00',
-            'requested_blocks' => app(ClinicScheduleService::class)->blocksFor($studentCount),
         ], $overrides));
 
         User::factory()->count($studentCount)->create(['role' => 'student'])->each(
@@ -89,9 +86,13 @@ class AppointmentEmailTest extends TestCase
         return $batch;
     }
 
-    private function approve(BatchRequest $batch): TestResponse
+    /** D-108: the Director picks the date and the start hour. */
+    private function approve(BatchRequest $batch, ?string $date = null, string $start = '07:00:00'): TestResponse
     {
-        return $this->actingAs($this->director)->post("/director/batches/{$batch->id}/approve");
+        return $this->actingAs($this->director)->post("/director/batches/{$batch->id}/approve", [
+            'scheduled_date' => $date ?? now()->addDays(7)->toDateString(),
+            'start_time' => $start,
+        ]);
     }
 
     // ── Batch approval ───────────────────────────────────────────────────────
@@ -126,9 +127,9 @@ class AppointmentEmailTest extends TestCase
         // 13 students at 12/hour spans two hours: 12 at 07:00, 1 at 08:00 —
         // so this also proves each student gets THEIR OWN slot, not the batch's
         // start hour pasted onto everyone.
-        $batch = $this->makeBatchWithStudents(13, ['requested_date' => $date]);
+        $batch = $this->makeBatchWithStudents(13);
 
-        $this->approve($batch);
+        $this->approve($batch, $date);
 
         Mail::assertSent(AppointmentScheduledMail::class, 13);
 
@@ -215,11 +216,7 @@ class AppointmentEmailTest extends TestCase
         Queue::fake();
 
         $date = now()->addDays(3)->toDateString();
-        $batch = $this->makeBatchWithStudents(2, [
-            'requested_date' => $date,
-            'requested_time' => '07:00:00',
-            'requested_blocks' => 1,
-        ]);
+        $batch = $this->makeBatchWithStudents(2);
 
         // Fill the batch's only hour to the cap (D-37 hard block).
         Appointment::factory()
@@ -228,7 +225,7 @@ class AppointmentEmailTest extends TestCase
             ->inSlot('07:00:00')
             ->create();
 
-        $this->approve($batch)->assertRedirect('/director/batches');
+        $this->approve($batch, $date)->assertRedirect("/director/batches/{$batch->id}/review");
 
         $this->assertSame('pending', $batch->fresh()->status);
         Queue::assertNothingPushed();

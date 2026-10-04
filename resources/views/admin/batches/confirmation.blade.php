@@ -86,21 +86,29 @@
             </dd>
         </div>
 
-        {{-- Requested clinic date (D-29) --}}
+        {{-- D-108: the clinic date and hours are the Director's to pick. Shown
+             once the batch is scheduled; until then, who will decide them. --}}
         <div class="flex items-center justify-between gap-4">
-            <dt class="text-sm text-hp-slate/50">Requested Date</dt>
-            <dd class="text-sm font-semibold text-hp-slate">
-                {{ $batch->requested_date?->format('l, F j, Y') ?? '—' }}
+            <dt class="text-sm text-hp-slate/50">Clinic date</dt>
+            <dd class="text-right text-sm font-semibold text-hp-slate">
+                @if ($batch->scheduled_date !== null)
+                    {{ $batch->scheduled_date->format('l, F j, Y') }}
+                @elseif ($batch->status === 'pending')
+                    To be scheduled by the Director
+                @else
+                    &mdash;
+                @endif
             </dd>
         </div>
 
-        {{-- Requested clinic hours (D-37) --}}
-        <div class="flex items-center justify-between gap-4">
-            <dt class="text-sm text-hp-slate/50">Requested Time</dt>
-            <dd class="text-sm font-semibold text-hp-slate">
-                {{ $batch->requestedSpanLabel() }}
-            </dd>
-        </div>
+        @if ($batch->scheduled_date !== null)
+            <div class="flex items-center justify-between gap-4">
+                <dt class="text-sm text-hp-slate/50">Hours</dt>
+                <dd class="text-sm font-semibold text-hp-slate">
+                    {{ $batch->scheduledSpanLabel() }}
+                </dd>
+            </div>
+        @endif
 
         {{-- Submitted date --}}
         <div class="flex items-center justify-between gap-4">
@@ -113,36 +121,6 @@
     </dl>
 </x-hp.card>
 
-{{-- ── Heads-up: an earlier request wants the same hours (D-90) ─────────────── --}}
-{{-- $freeStarts is null when there is nothing to warn about. It never says
-     whose request came first — only what that means for this one. --}}
-@if ($freeStarts !== null)
-    <div class="mb-6 flex items-start gap-3 rounded-xl border border-hp-orange/40 bg-hp-peach/30 px-4 py-3.5">
-        <svg class="mt-0.5 h-4 w-4 shrink-0 text-hp-orange" fill="none" viewBox="0 0 24 24"
-             stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round"
-                  d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
-        </svg>
-        <div class="text-xs leading-relaxed text-hp-slate">
-            <p class="text-sm font-semibold">Another request is waiting for these hours</p>
-            <p class="mt-1">
-                It was submitted before yours, and the clinic can't fit both. If the
-                Clinic Director approves it first, this request will be rejected.
-            </p>
-            <p class="mt-1">
-                @if ($freeStarts === [])
-                    No other start time is free that day. To be safe, cancel this request
-                    and submit it again for another date.
-                @else
-                    To be safe, cancel this request and submit it again starting at
-                    <strong class="font-semibold">{{ Illuminate\Support\Arr::join($freeStarts, ', ', ' or ') }}</strong>,
-                    which still have room that day.
-                @endif
-            </p>
-        </div>
-    </div>
-@endif
-
 {{-- ── Students on this batch (D-88) ────────────────────────────────────────── --}}
 <x-hp.card class="mb-6">
     <p class="mb-5 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
@@ -153,8 +131,8 @@
 </x-hp.card>
 
 {{-- ── What happens next --}}
-{{-- D-88: since D-36 the Director confirms the requested date and time as they
-     are (or rejects with a reason) — they can no longer move them. --}}
+{{-- D-108: the Director picks the clinic date and hours (or rejects with a
+     reason) — the college no longer proposes them. --}}
 <x-hp.card class="mb-6 bg-hp-bg">
     <div class="flex gap-3">
         <svg class="mt-0.5 h-4 w-4 shrink-0 text-hp-orange" fill="none" viewBox="0 0 24 24"
@@ -165,8 +143,8 @@
         <div>
             <p class="text-sm font-semibold text-hp-slate">What happens next</p>
             <p class="mt-1 text-xs leading-relaxed text-hp-slate/60">
-                The Clinic Director reviews the request and either approves your
-                requested date and time or rejects it with a reason you can read in
+                The Clinic Director reviews the request, picks the clinic date and
+                hours, and approves it — or rejects it with a reason you can read in
                 Batch Tracking. Once approved, an appointment is created automatically
                 for every listed student, and each student is emailed their schedule.
                 Until then, you can still cancel this request.
@@ -204,7 +182,7 @@
                 'id' => $batch->id,
                 'ref' => $batch->reference_no,
                 'students' => (int) $batch->batch_request_students_count,
-                'date' => $batch->requested_date?->format('M j, Y'),
+                'date' => $batch->scheduled_date?->format('M j, Y'),
                 // D-92: this page can be reopened after the Director approved it.
                 'approved' => $batch->status === 'approved',
             ]) }}"

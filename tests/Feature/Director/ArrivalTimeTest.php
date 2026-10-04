@@ -32,6 +32,9 @@ class ArrivalTimeTest extends TestCase
 
     private string $date;
 
+    /** batch id => the start hour the Director picks for it (D-108). @var array<int, string> */
+    private array $startSlots = [];
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -46,6 +49,7 @@ class ArrivalTimeTest extends TestCase
         $this->date = now()->addDays(7)->toDateString();
     }
 
+    /** A pending batch; $startSlot is the hour the Director will pick (D-108). */
     private function makeBatch(int $studentCount, string $startSlot = '07:00:00'): BatchRequest
     {
         static $seq = 500;
@@ -56,10 +60,8 @@ class ArrivalTimeTest extends TestCase
             'requested_by' => $this->admin->id,
             'reason' => 'ojt',
             'service_type' => 'medical',
-            'requested_date' => $this->date,
-            'requested_time' => $startSlot,
-            'requested_blocks' => app(ClinicScheduleService::class)->blocksFor($studentCount),
         ]);
+        $this->startSlots[$batch->id] = $startSlot;
 
         User::factory()->count($studentCount)->create(['role' => 'student'])->each(
             fn (User $student) => BatchRequestStudent::create([
@@ -74,7 +76,10 @@ class ArrivalTimeTest extends TestCase
     private function approve(BatchRequest $batch): void
     {
         $this->actingAs($this->director)
-            ->post("/director/batches/{$batch->id}/approve")
+            ->post("/director/batches/{$batch->id}/approve", [
+                'scheduled_date' => $this->date,
+                'start_time' => $this->startSlots[$batch->id],
+            ])
             ->assertSessionHas('status');
     }
 

@@ -216,7 +216,7 @@ class HistoricalClearanceSeeder extends DemoClinicVisitSeeder
         int $n,
     ): void {
         $checkedIn = $batch->scheduled_date->copy()
-            ->setTimeFromTimeString($batch->requested_time)
+            ->setTimeFromTimeString($batch->scheduled_time)
             ->addMinutes($seat * 5);
 
         $appointment = $this->seat(

@@ -115,7 +115,12 @@ class LegacyAppointmentTimeTest extends TestCase
             'status' => 'scheduled',
         ]);
 
-        $this->assertContains($date->day, $this->schedule()->fullDaysForMonth($date->year, $date->month));
+        // D-108: the Director's calendar counts them in the day's total, and a
+        // batch of even one more student no longer fits that day.
+        $booked = $this->schedule()->bookingsForMonth($date->year, $date->month)[$date->toDateString()]['total'];
+
+        $this->assertSame(3, $booked);
+        $this->assertFalse($this->schedule()->dayHasRoomFor($booked, 1));
     }
 
     // ── Nurse queue (FR-NRS-01) ──────────────────────────────────────────────

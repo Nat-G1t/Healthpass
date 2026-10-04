@@ -68,14 +68,16 @@ students never book for themselves and never walk in.
 **Steps:**
 
 1. Log in as `admin.ccs@healthpass.test`, open **New Batch Request**. Choose
-   any **Purpose**, click **today** on the Requested Clinic Date calendar, pick
-   a **Start time** that has not ended yet, tick **Juan Santos** and **Maria
-   Reyes** (a batch needs at least 2 students — D-105; Maria is E2E-2's
-   student), and click **Submit Batch Request**. → **Expect:** the confirmation screen, "Pending Director
-   Approval". Log out.
+   a form and any **Purpose**, tick **Juan Santos** and **Maria Reyes** (a
+   batch needs at least 2 students — D-105; Maria is E2E-2's student), and
+   click **Submit Batch Request**. There is **no date or hour to pick**
+   (D-108). → **Expect:** the confirmation screen, "Pending Director
+   Approval", Clinic date "To be scheduled by the Director". Log out.
 2. Log in as `director@healthpass.test`, open **Batch Approvals**, click
-   **Approve** on that batch and confirm. → **Expect:** the row reads
-   "✓ Approved". Log out.
+   **Review** on that batch, click **today** on the calendar, pick a **Start
+   hour** that has not ended yet, click **Approve** and confirm (E2E-31 checks
+   this page in full). → **Expect:** back on the queue with "BR-… approved
+   for …", and the batch is no longer listed. Log out.
 3. Log in as `juan.santos@psu.edu.ph` / `password`. → **Expect:** the Student
    Dashboard. **Next Appointment** shows today's date and hour with a
    **"Booked by College of Computing Studies"** badge and **no Cancel
@@ -224,8 +226,8 @@ encoding.)
 
 ## E2E-3 — Batch cohort (College Admin → Director → students)
 
-**Goal:** a College Admin submits a batch for a group of students with a
-requested clinic date, the Director confirms the date and approves, one
+**Goal:** a College Admin submits a batch for a group of students (no date
+since D-108), the Director picks the date and hour and approves, one
 appointment per student is created, and sampled students complete the loop.
 
 **Account:** CCS Admin `admin.ccs@healthpass.test`, then Director, then two
@@ -236,8 +238,8 @@ students.
 1. Log in as `admin.ccs@healthpass.test`. → **Expect:** the Admin Dashboard
    with a banner naming **College of Computing Studies** and stat cards.
 2. Go to **New Batch Request**. Pick the **Medical Assessment Form** tile, then
-   the Purpose **On-the-job Training** (D-62), and a **Requested Clinic Date**
-   (defaults to today; past dates disabled — D-29).
+   the Purpose **On-the-job Training** (D-62). → **Expect:** no date calendar
+   and no start-hour field (D-108 — the Director schedules the batch).
 3. In the student picker, use **Select All** (or tick several). → **Expect:**
    only **CCS** students are listed; selected rows highlight peach; a
    "(N of M selected)" counter updates. **You must not be able to find a CEA
@@ -245,11 +247,12 @@ students.
 4. Click **Submit**. → **Expect:** a confirmation screen with a Batch ID like
    `BR-2026-001`, status "Pending Director Approval". Note the Batch ID.
 5. Log out; log in as `director@healthpass.test`. Open **Batch Approvals**. →
-   **Expect:** the CCS batch row with **Approve / Reject** buttons.
-6. Click **Approve**. → **Expect:** the date picker is **pre-filled with the
-   admin's requested date** (falls back to today if it passed; past dates
-   disabled — D-29). Confirm. → **Expect:** the row flips to "✓ Approved" and
-   can no longer be re-approved.
+   **Expect:** the CCS batch row with a **Review** button (no Approve / Reject
+   on the row).
+6. Click **Review**, pick a day and a start hour, and **Approve** → **Confirm &
+   Approve**. → **Expect:** back on the queue with "BR-… approved for <date>,
+   <hours> — N appointments created"; the batch has left the queue, and its
+   Review page now sends you back with "has already been decided".
 7. Log in as one of the batch students (e.g. `carlo.cruz@psu.edu.ph`), open the
    Dashboard. → **Expect:** the generated appointment appears under Next
    Appointment on the approved date, with a **"Booked by College of Computing
@@ -509,62 +512,44 @@ and `?college=` cannot move the scope.
 
 ---
 
-## E2E-9 — One clinic schedule per student per day (D-54, D-61, D-77)
+## E2E-9 — One clinic schedule per student per day (D-54, D-61, D-77, D-108)
 
-**Goal:** confirm a College Admin cannot put a student into a batch on a date
-another batch already holds for them, **whatever the hours or form** (D-77),
-and that the New Batch page's clash popup, its **Remove** and **Choose
-students again** buttons and the mini calendar all work. (Before D-61 this
-scenario also covered a student's own self-booking; self-booking is gone.
-Before D-77 only an overlapping hour clashed.)
+**Goal:** confirm the Director cannot schedule a student twice on one day,
+**whatever the hours or form** (D-77), and that since **D-108** the check
+happens on the Director's Review page — the College Admin's New Batch form
+no longer asks for a date, so it has nothing to clash on and no clash popup.
 
 **Accounts:** students `juan.santos@psu.edu.ph`, `maria.reyes@psu.edu.ph`,
-`carlo.cruz@psu.edu.ph` and `angel.garcia@psu.edu.ph` (all CCS), and the CCS
-Admin `admin.ccs@healthpass.test`.
+`carlo.cruz@psu.edu.ph` and `angel.garcia@psu.edu.ph` (all CCS), the CCS
+Admin `admin.ccs@healthpass.test` and the Director `director@healthpass.test`.
 
 **Steps:**
 
-1. Log in as the **CCS admin** and open **New Batch Request**. → **Expect:**
-   "Requested clinic date" is a **small month calendar**, not a date box. Past
-   days are faded and cannot be clicked, the left arrow is disabled on the
-   current month, the right arrow moves forward and back again, and any FULL
-   day is greyed with a "Full" label.
-2. Click a date **at least two days ahead**. → **Expect:** "Selected: <that
-   date>" appears under it. Choose **Form: Medical Clearance**, a **Purpose**,
-   **Start time 9:00 AM – 10:00 AM**, tick **Juan Santos** and **Angel Garcia**
-   (a batch needs at least 2 students — D-105), and submit.
-   → **Expect:** the confirmation screen with a `BR-` number (call it batch A).
-   Write down the date.
-3. Start another **New Batch Request** for the **same date**, **Form: Medical
-   Assessment Form**, **Start time 2:00 PM – 3:00 PM** (no hour in common with
-   batch A), and tick **Juan Santos**, **Maria Reyes** and **Carlo Cruz**. Submit.
-4. → **Expect:** the page comes back with a popup titled **"Some students
-   already have a clinic schedule that day"**. It lists **Juan Santos**, his
-   student number and "Already scheduled for a Medical Clearance that day, on
-   <batch A's BR- number> (9:00 AM – 10:00 AM)". **Maria and Carlo are not
-   listed.** Behind the popup the form, purpose, date, start hour and all three
-   ticks are still filled in. Batch Tracking shows **no** new batch.
-5. Click **Choose students again**. → **Expect:** the popup closes, the page
-   scrolls to the **Select Students** card, **all three** students are still
-   ticked, and Juan's row shows an orange **Already scheduled** badge (Maria's
-   and Carlo's do not).
-6. Submit again without changing anything. → **Expect:** the same popup,
-   listing **Juan only**. Click **Remove these students from the batch**. →
-   **Expect:** the popup closes, **Juan is unticked**, Maria and Carlo are
-   still ticked, and the "(N of M selected)" counter drops by one. Submit
-   again. → **Expect:** the confirmation screen with a new `BR-` number (Maria
-   and Carlo).
-7. Start one more **New Batch Request** for the **day after** that date,
-   ticking **Juan** and **Angel**. Submit. → **Expect:** no popup; the
-   confirmation screen.
+1. As the **CCS admin**, submit batch A: **Form: Medical Clearance**, any
+   purpose, **Juan Santos** and **Angel Garcia**. → **Expect:** no date or
+   hour fields; the confirmation screen.
+2. Submit batch B: **Form: Medical Assessment Form**, any purpose, **Juan
+   Santos**, **Maria Reyes** and **Carlo Cruz**. → **Expect:** it is accepted
+   too — no popup, no "Already scheduled" badge (Juan is on two **pending**
+   batches, and a pending batch holds no day).
+3. As the **Director**, review batch A and approve it for a day **at least two
+   days ahead**, **9:00 AM**. Write down the day.
+4. Review batch B and click **the same day**. → **Expect:** a red note under
+   the hour list: "1 student already has a schedule that day: Juan Santos.
+   Pick another day." **Approve** stays disabled, whichever hour you pick —
+   even **2:00 PM**, which shares no hour with batch A.
+5. Click **the next day** instead and pick any open hour. → **Expect:** the
+   note is gone and **Approve** is enabled. Approve it.
+6. *(Optional, server check.)* With batch C (Juan + Angel, pending) open on
+   the Review page in one tab, approve another batch holding Juan for that
+   same day in a second tab, then press Approve in the first. → **Expect:**
+   back on the Review page with "… 1 student(s) already have a clinic schedule
+   that day: Juan Santos. Pick another day." and nothing created.
 
-**Pass criteria:** a batch is refused while any ticked student is already held
-by another pending or approved batch **on the same date**, even at different
-hours and on the other form; the popup lists exactly those students and names
-the other batch's form and number; **Choose students again** keeps the
-selection, scrolls to the picker and badges the listed rows; **Remove**
-deselects only the listed students; a different date submits; the mini
-calendar disables past and FULL days and its month arrows work.
+**Pass criteria:** the New Batch form never refuses a student for a clash; the
+Review page names every student already scheduled on the picked day and keeps
+Approve disabled; the server refuses a clash that slipped past the page; a
+different day goes through.
 
 ---
 
@@ -1829,6 +1814,66 @@ bridge running, or a tester who can POST to `/api/kiosk/bp-reading` with the
 **Pass criteria:** the five checks show only for a monitor reading; irregular
 pulse never triggers the retake hint, a flag or Fit/Unfit; the nurse page is
 unchanged.
+
+---
+
+## E2E-31 — The Director schedules a batch from the queue (D-108)
+
+**Goal:** confirm Batch Approvals is a first-come queue, and that the Review
+page's calendar, hour picker and Approve schedule the batch and email its
+students.
+
+**Accounts:** the CCS Admin `admin.ccs@healthpass.test`, the CEA Admin
+`admin.cea@healthpass.test`, the Director `director@healthpass.test`, and one
+CCS student's mailbox (Resend test address or the log mailer).
+
+**Steps:**
+
+1. As the **CCS admin**, submit a batch of **25** students (no date or hour
+   fields). Then, as the **CEA admin**, submit a batch of **3**.
+2. As the **Director**, open **Batch Approvals**. → **Expect:** only pending
+   requests, **oldest first**; columns **Batch ID / College / Form Type /
+   Purpose** and a **Review** button; the **first** row has a peach band and
+   an orange **Next** tag. Search the CEA batch's ID → **Expect:** only that
+   row, without the Next tag.
+3. Click **Review** on the CCS batch. → **Expect:** **Batch details** (college,
+   form, purpose, 25 students, "2 hours — 25 students, 20 per hour", submitted,
+   submitted by), **Students in this batch** listing all 25 in a box that
+   scrolls after ten rows, and a **Schedule** card.
+4. Look at the calendar. → **Expect:** past days greyed and not clickable; a
+   day that already has bookings shows its number inside a **ring** that
+   fills clockwise with how full the day is (e.g. 100 of 200 = half a ring);
+   a day with no bookings has no ring; the legend "Ring = how full the day is
+   (out of 200 students)". Hover a greyed day → its reason ("Past", "No hour
+   can fit 25 students").
+5. Click a day at least two days ahead. → **Expect:** it turns solid orange
+   with a white number, and its ring (if any) stays visible in white. The
+   **Start hour** list appears.
+6. Open the list. → **Expect:** each hour reads like "9:00 AM – 10:00 AM ·
+   open" or "… ~ scheduled for CEA (5/20)"; hours this batch **can't** start
+   at are greyed out and say why ("— runs past 5:00 PM" for 4:00 PM). Pick
+   **9:00 AM**. → **Expect:** "25 students → 9:00 AM – 11:00 AM (2 hours)".
+7. Click **Approve**. → **Expect:** "Approve BR-… for <day>, 9:00 AM – 11:00
+   AM?". Click **Confirm & Approve**. → **Expect:** back on the queue with
+   "BR-… approved for …, 9:00 AM – 11:00 AM — 25 appointments created"; the
+   CCS batch has left the queue and the **Next** highlight moved to the CEA
+   batch.
+8. Review the CEA batch and click **the same day**. → **Expect:** the day's
+   ring now shows 25 of 200; in the list **9:00 AM** reads "~ scheduled for
+   CCS (20/20)" and is greyed out, while **11:00 AM** and the other open hours
+   are selectable. **10:00 AM** ("CCS (5/20)") is selectable too — the 3 CEA
+   students still fit there.
+9. Check one CCS student's mailbox. → **Expect:** the scheduling email with
+   the date, hour and their own arrival time.
+10. As the **CCS admin**, open Batch Tracking. → **Expect:** the batch's
+    **Clinic Date** column shows the day and "9:00 AM – 11:00 AM (2 slots)";
+    the CEA admin's pending batch reads "To be scheduled by the Director".
+
+**Pass criteria:** the queue lists pending requests oldest first with one Next
+row; the calendar rings match each day's bookings and disable days no hour
+can take; the hour list greys out exactly the hours the batch can't start at
+and names the colleges in each; approval creates the appointments, emails the
+students and moves the queue on.
 
 ---
 

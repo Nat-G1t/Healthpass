@@ -13,20 +13,16 @@ use App\Models\Appointment;
 use App\Models\BatchRequest;
 use App\Models\BatchRequestStudent;
 use App\Models\StudentProfile;
-use App\Services\BatchConflictService;
 use App\Services\ClinicScheduleService;
 use App\Services\ReferenceNumberService;
-use App\Services\ScheduleClashService;
 use App\Support\AssessmentDocument;
 use App\Support\ClearanceDocument;
 use App\Support\Programs;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 /**
@@ -44,8 +40,6 @@ class BatchRequestController extends Controller
 
     public function __construct(
         private readonly ClinicScheduleService $schedule,
-        private readonly ScheduleClashService $clashes,
-        private readonly BatchConflictService $conflicts,
     ) {}
 
     /**
@@ -144,7 +138,7 @@ class BatchRequestController extends Controller
             'ref' => $batch->reference_no,
             'form' => $batch->formTypeLabel(),   // D-62
             'date' => $batch->scheduled_date?->format('l, F j, Y') ?? '—',
-            'span' => $batch->requestedSpanLabel(),
+            'span' => $batch->scheduledSpanLabel(),   // D-108: the Director's hours
             'students' => $batch->batchRequestStudents
                 ->map(fn (BatchRequestStudent $row): array => [
                     'name' => $row->student?->name ?? 'Unknown student',
@@ -190,49 +184,13 @@ class BatchRequestController extends Controller
             // (the same list registration uses), not just programs that
             // already have students — so an empty program can be chosen too.
             'programs' => Programs::forCollege($college->id),
-            // D-37: the start-hour options and the numbers the live span
-            // preview needs — all derived from config, never typed in the view.
-            'slots' => array_map(fn (string $slot): array => [
-                'value' => $slot,
-                'label' => $this->schedule->label($slot),
-            ], $this->schedule->slots()),
-            'hourlyCapacity' => $this->schedule->hourlyCapacity(),
+            // D-108: no date and no start hour on this page any more — the
+            // Director picks both. The one schedule number left is the largest
+            // batch one clinic day can hold, from config.
             'maxBatchSize' => $this->schedule->maxBatchSize(),
             // BR-07 (D-105): the Form Request's minimum, so Submit enables at
             // exactly the count the server accepts.
             'minStudents' => StoreBatchRequestRequest::MIN_STUDENTS,
-            // BR-23: hours that have already ended TODAY, computed on the
-            // SERVER clock. The browser only compares the picked date against
-            // `today` — it never decides what "now" is (same rule as BR-20).
-            'today' => today()->toDateString(),
-            'elapsedSlotsToday' => $this->schedule->elapsedSlots(today()->toDateString()),
-            // D-54: the mini calendar's first month and its greyed-out days —
-            // the same rules, from the same service, as the student calendar.
-            'year' => today()->year,
-            'month' => today()->month,
-            'fullDays' => $this->schedule->fullDaysForMonth(today()->year, today()->month),
-            'cutoffDays' => $this->schedule->cutoffDaysForMonth(today()->year, today()->month),
-            'bookingDays' => config('healthpass.booking_days'),
-        ]);
-    }
-
-    /**
-     * JSON for the New Batch mini calendar (FR-ADM-04, D-54): the month's FULL
-     * days and the BR-20 cutoff day, fetched when the admin changes month.
-     *
-     * Exactly the two lists the student booking calendar gets, from the same
-     * ClinicScheduleService methods, so the two calendars can never disagree
-     * about which days are open. It reads no college data, so there is nothing
-     * here to scope.
-     */
-    public function availability(Request $request): JsonResponse
-    {
-        $year = max(now()->year, min((int) $request->query('year', now()->year), now()->year + 2));
-        $month = max(1, min((int) $request->query('month', now()->month), 12));
-
-        return response()->json([
-            'full_days' => $this->schedule->fullDaysForMonth($year, $month),
-            'cutoff_days' => $this->schedule->cutoffDaysForMonth($year, $month),
         ]);
     }
 
@@ -258,6 +216,11 @@ class BatchRequestController extends Controller
      * batch_request_students row per student, atomically. Validation (BR-06/07
      * + the college-scope check on EVERY student id) has already run in the
      * Form Request by the time we get here.
+     *
+     * D-108: the batch is stored with NO date and NO hours — the Director
+     * schedules it. So there is nothing here to check against the clinic's
+     * capacity or other batches: approval does that, under a lock, on the date
+     * the Director picks. The legacy requested_* columns are left NULL.
      */
     public function store(StoreBatchRequestRequest $request, ReferenceNumberService $refs): RedirectResponse
     {
@@ -266,51 +229,13 @@ class BatchRequestController extends Controller
         // The form posts student_profile ids (that's what the roster picker
         // knows), but the pivot stores USER ids (data dictionary:
         // batch_request_students.student_id → users) — translate here.
-        // Keyed user id => profile id: a D-54 clash is found by user id but
-        // reported back to the form under the profile id it posted.
-        $profileIdsByUserId = StudentProfile::whereIn('id', $request->validated('students'))
-            ->pluck('id', 'user_id');
-        $studentUserIds = $profileIdsByUserId->keys();
-
-        // D-37: the span is DERIVED from the roster size, never posted.
-        $startSlot = $request->validated('requested_time');
-        $requestedDate = $request->validated('requested_date');
-        $blocks = $this->schedule->blocksFor($studentUserIds->count());
+        $studentUserIds = StudentProfile::whereIn('id', $request->validated('students'))->pluck('user_id');
 
         // One transaction: the reference number, the batch row and all pivot
         // rows commit together or not at all. generateBatchRef() is called
         // INSIDE so its sequence lock holds until this commit (see the
         // service's concurrency notes).
-        $batch = DB::transaction(function () use ($request, $refs, $college, $studentUserIds, $profileIdsByUserId, $startSlot, $requestedDate, $blocks): BatchRequest {
-            // The Form Request already checked that every hour in the span has
-            // room, but that read is unlocked and races with another batch
-            // being approved into the last seats of one of those hours.
-            // Re-check HERE under a row lock.
-            $span = $this->schedule->span($startSlot, $blocks);
-            $fullSlots = $this->schedule->fullSlotsIn($requestedDate, $span, $studentUserIds->count(), lock: true);
-
-            if ($fullSlots !== []) {
-                throw ValidationException::withMessages([
-                    'requested_time' => sprintf(
-                        'The %s slot no longer has room for this batch — it filled up while you were submitting. Please choose a different start time or date.',
-                        $this->schedule->label($fullSlots[0]),
-                    ),
-                ]);
-            }
-
-            // D-54 / D-77 / BR-25: the same race for the clash rule — another batch
-            // holding one of these students may be submitted between the Form
-            // Request's read and this insert. Re-read under the lock, and
-            // report it with the same `clashes.*` keys, so the New Batch popup
-            // opens either way.
-            $clashes = $this->clashes->clashesForBatch($studentUserIds->all(), $requestedDate, lock: true);
-
-            if ($clashes !== []) {
-                throw ValidationException::withMessages(
-                    StoreBatchRequestRequest::clashErrors($clashes, $profileIdsByUserId->all()),
-                );
-            }
-
+        $batch = DB::transaction(function () use ($request, $refs, $college, $studentUserIds): BatchRequest {
             $batch = BatchRequest::create([
                 'reference_no' => $refs->generateBatchRef(),
                 'college_id' => $college->id, // from the session scope — never the request (BR-05)
@@ -321,9 +246,6 @@ class BatchRequestController extends Controller
                 // D-60: dental is gone. The server always writes 'medical' and
                 // never reads a service type from the request body.
                 'service_type' => 'medical',
-                'requested_date' => $requestedDate,   // D-29
-                'requested_time' => $startSlot,        // D-37 span start
-                'requested_blocks' => $blocks,         // D-37 span length, in hours
                 'status' => 'pending',
             ]);
 
@@ -347,11 +269,8 @@ class BatchRequestController extends Controller
      * pending, so the admin can check everything they sent and withdraw it on
      * the spot if something is wrong.
      *
-     * D-90: while pending, a heads-up when another request for the same hours
-     * was submitted FIRST and the clinic can't fit both — if the Director
-     * approves that one first, this one will be refused. It never says whose
-     * request it is; `freeStarts` are the start hours that would still fit, so
-     * the admin can cancel and resubmit for one of them.
+     * (D-108 removed D-90's "another request is waiting for these hours"
+     * heads-up: a pending batch holds no hours, so it cannot conflict.)
      */
     public function confirmation(int $batchId): View
     {
@@ -359,19 +278,9 @@ class BatchRequestController extends Controller
             ->withCount('batchRequestStudents')
             ->findOrFail($batchId);
 
-        $earlier = $this->conflicts->conflictsWith($batch)
-            ->filter(fn (BatchRequest $other): bool => $other->submittedBefore($batch))
-            ->values();
-
-        $freeStarts = $earlier->isEmpty() ? null : array_map(
-            fn (string $slot): string => $this->schedule->startLabel($slot),
-            $this->conflicts->freeStartsAfter($batch, $earlier),
-        );
-
         return view('admin.batches.confirmation', [
             'batch' => $batch,
             'rows' => $this->rosterPage($batch),
-            'freeStarts' => $freeStarts,
         ]);
     }
 

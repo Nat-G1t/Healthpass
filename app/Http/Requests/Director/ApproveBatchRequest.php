@@ -4,23 +4,26 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Director;
 
+use App\Services\ClinicScheduleService;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 /**
- * Director's Approve confirmation (FR-DIRA-02, D-36).
+ * Director's Approve decision (FR-DIRA-02, D-108).
  *
- * D-36 made approval **confirm-only**: the batch is approved on the date the
- * College Admin already requested, so this request carries NO input at all —
- * `rules()` is deliberately empty. The date is re-read from the locked
- * `batch_requests` row inside the controller's transaction; a `scheduled_date`
- * posted by a client is simply never looked at.
+ * Since D-108 the Director SCHEDULES the batch: the Review page posts the
+ * clinic date and the start hour the Director picked. D-36's confirm-only
+ * approval, which took no input at all, is gone — the college no longer
+ * proposes a date or an hour.
  *
- * A Form Request with no rules still earns its keep: it is the one place that
- * documents "this endpoint takes nothing", and it keeps the controller
- * signature honest if a rule is ever needed again.
- *
- * NOTE: capacity is deliberately NOT validated here (FR-DIRA-06) — an
- * approved cohort may exceed the self-booking daily cap; the UI only warns.
+ * This class only checks the two values are well-formed: a real date, not in
+ * the past, and a start hour that is one of the clinic's slots
+ * (ClinicScheduleService::slots(), canonical 'H:i:s'). Whether the batch FITS
+ * there — the span ends by closing time, no hour has ended (BR-23), every hour
+ * has room (D-91), the day stays within daily_capacity, no student already has
+ * a schedule that day (BR-25) — is decided by approve() under a row lock,
+ * because those answers can change between this read and the write. The span
+ * LENGTH is never posted: it is always derived from the batch's own roster.
  */
 class ApproveBatchRequest extends FormRequest
 {
@@ -30,10 +33,24 @@ class ApproveBatchRequest extends FormRequest
         return true;
     }
 
-    /** @return array<string, list<string>> */
+    /** @return array<string, list<mixed>> */
     public function rules(): array
     {
-        // D-36: nothing is accepted from the client on approve.
-        return [];
+        return [
+            'scheduled_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:today'],
+            'start_time' => ['required', 'string', Rule::in(app(ClinicScheduleService::class)->slots())],
+        ];
+    }
+
+    /** @return array<string, string> */
+    public function messages(): array
+    {
+        return [
+            'scheduled_date.required' => 'Pick the clinic date for this batch.',
+            'scheduled_date.date_format' => 'That clinic date is not a valid date.',
+            'scheduled_date.after_or_equal' => 'The clinic date cannot be in the past.',
+            'start_time.required' => 'Pick the hour this batch starts.',
+            'start_time.in' => 'That start hour is not one of the clinic hours.',
+        ];
     }
 }

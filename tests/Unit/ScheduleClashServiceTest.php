@@ -16,10 +16,12 @@ use Tests\TestCase;
 /**
  * D-54 / D-77 / BR-25 — does a student already have a clinic schedule that day?
  *
- * The one definition read by the batch submission and the Director's
- * approval. Since D-61 the only clash is batch vs batch — self-booking, and
- * with it D-54's kind (a), is gone. Nothing here depends on the clock: a clash
- * is a fact about two bookings, not about "now".
+ * The one definition, read by the Director's approval and the Review page.
+ * Since D-61 the only clash is batch vs batch — self-booking, and with it
+ * D-54's kind (a), is gone. Since D-108 only an APPROVED batch holds a day, on
+ * its scheduled_date: a pending batch has no date until the Director picks
+ * one. Nothing here depends on the clock: a clash is a fact about two
+ * bookings, not about "now".
  */
 class ScheduleClashServiceTest extends TestCase
 {
@@ -54,8 +56,9 @@ class ScheduleClashServiceTest extends TestCase
     }
 
     /**
-     * A batch holding $students for $blocks hours from $start on DATE
-     * (a Medical Assessment Form batch unless $overrides says otherwise).
+     * A batch with $students on it, scheduled for $blocks hours from $start
+     * on DATE (D-108's scheduled_* — what approval writes). A Medical
+     * Assessment Form batch unless $overrides says otherwise.
      *
      * @param  list<User>  $students
      */
@@ -70,9 +73,9 @@ class ScheduleClashServiceTest extends TestCase
             'form_type' => 'assessment',
             'reason' => 'ojt',
             'service_type' => 'medical',
-            'requested_date' => self::DATE,
-            'requested_time' => $start,
-            'requested_blocks' => $blocks,
+            'scheduled_date' => self::DATE,
+            'scheduled_time' => $start,
+            'scheduled_blocks' => $blocks,
             'status' => $status,
         ], $overrides));
 
@@ -91,7 +94,7 @@ class ScheduleClashServiceTest extends TestCase
      */
     private function approvedBatch(array $students, string $start = '09:00:00', int $blocks = 2): BatchRequest
     {
-        $batch = $this->batch('approved', $students, $start, $blocks, ['scheduled_date' => self::DATE]);
+        $batch = $this->batch('approved', $students, $start, $blocks);
 
         foreach ($batch->batchRequestStudents as $row) {
             $appointment = Appointment::factory()->medical()->inSlot($start)->create([
@@ -126,14 +129,30 @@ class ScheduleClashServiceTest extends TestCase
 
     // ── What a batch holds (decision 2) ──────────────────────────────────────
 
-    public function test_a_pending_batch_holds_its_date(): void
+    /** D-108: a pending batch has no date yet — even an old one that asked for one. */
+    public function test_a_pending_batch_holds_nothing(): void
     {
         $student = $this->student();
-        $held = $this->batch('pending', [$student], '09:00:00', 2);
+        $this->batch('pending', [$student], '09:00:00', 2, [
+            'scheduled_date' => null, 'scheduled_time' => null, 'scheduled_blocks' => null,
+            'requested_date' => self::DATE, 'requested_time' => '09:00:00', 'requested_blocks' => 2,
+        ]);
 
+        $this->assertSame([], $this->service()->clashesForBatch([$student->id], self::DATE));
+    }
+
+    public function test_an_approved_batch_holds_its_scheduled_date_not_its_old_requested_date(): void
+    {
+        $student = $this->student();
+        $held = $this->batch('approved', [$student], '13:00:00', 1, [
+            'scheduled_date' => '2026-09-12',
+            'requested_date' => self::DATE, 'requested_time' => '09:00:00', 'requested_blocks' => 2,
+        ]);
+
+        $this->assertSame([], $this->service()->clashesForBatch([$student->id], self::DATE));
         $this->assertSame(
-            [$student->id => [$this->message($held, 'Medical Assessment Form', '9:00 AM – 11:00 AM')]],
-            $this->service()->clashesForBatch([$student->id], self::DATE),
+            [$student->id => [$this->message($held, 'Medical Assessment Form', '1:00 PM – 2:00 PM')]],
+            $this->service()->clashesForBatch([$student->id], '2026-09-12'),
         );
     }
 
@@ -167,9 +186,10 @@ class ScheduleClashServiceTest extends TestCase
 
     public function test_rejected_and_cancelled_batches_never_hold(): void
     {
+        // Even a batch cancelled AFTER approval (D-92), which still carries its schedule.
         $student = $this->student();
         $this->batch('rejected', [$student], '09:00:00', 2);
-        $this->batch('cancelled', [$student], '13:00:00', 2);
+        $this->batch('cancelled', [$student], '13:00:00', 2, ['reviewed_at' => now()]);
 
         $this->assertSame([], $this->service()->clashesForBatch([$student->id], self::DATE));
     }
@@ -178,7 +198,7 @@ class ScheduleClashServiceTest extends TestCase
     {
         $onBatch = $this->student();
         $notOnBatch = $this->student();
-        $this->batch('pending', [$onBatch]);
+        $this->batch('approved', [$onBatch]);
 
         $this->assertSame([], $this->service()->clashesForBatch([$notOnBatch->id], self::DATE));
         $this->assertSame([], $this->service()->clashesForBatch([$onBatch->id], '2026-09-11'));
@@ -186,9 +206,9 @@ class ScheduleClashServiceTest extends TestCase
 
     public function test_a_batch_without_an_hour_span_holds_its_date_and_names_no_hours(): void
     {
-        // Pre-D-37 batch: no requested_time. A day rule needs no hour (D-77).
+        // Approved before D-37: a date but no hours. A day rule needs no hour (D-77).
         $student = $this->student();
-        $held = $this->batch('pending', [$student], '09:00:00', 2, ['requested_time' => null, 'requested_blocks' => null]);
+        $held = $this->batch('approved', [$student], '09:00:00', 2, ['scheduled_time' => null, 'scheduled_blocks' => null]);
 
         $this->assertSame(
             [$student->id => [$this->message($held, 'Medical Assessment Form', null)]],
@@ -214,7 +234,7 @@ class ScheduleClashServiceTest extends TestCase
     {
         // The case Nat hit: 7–8 AM and 2–3 PM share no hour, but it is one day.
         $student = $this->student();
-        $morning = $this->batch('pending', [$student], '07:00:00', 1);
+        $morning = $this->batch('approved', [$student], '07:00:00', 1);
 
         $this->assertSame(
             [$student->id => [$this->message($morning, 'Medical Assessment Form', '7:00 AM – 8:00 AM')]],
@@ -225,7 +245,7 @@ class ScheduleClashServiceTest extends TestCase
     public function test_the_other_form_on_the_same_date_clashes_and_is_named(): void
     {
         $student = $this->student();
-        $clearance = $this->batch('pending', [$student], '09:00:00', 1, ['form_type' => 'clearance']);
+        $clearance = $this->batch('approved', [$student], '09:00:00', 1, ['form_type' => 'clearance']);
 
         $this->assertSame(
             [$student->id => [$this->message($clearance, 'Medical Clearance', '9:00 AM – 10:00 AM')]],
@@ -233,10 +253,10 @@ class ScheduleClashServiceTest extends TestCase
         );
     }
 
-    public function test_the_batch_being_approved_is_not_counted_against_itself(): void
+    public function test_the_excepted_batch_is_not_counted(): void
     {
         $student = $this->student();
-        $batch = $this->batch('pending', [$student], '09:00:00', 2);
+        $batch = $this->batch('approved', [$student], '09:00:00', 2);
 
         $this->assertSame(
             [],
@@ -248,8 +268,8 @@ class ScheduleClashServiceTest extends TestCase
     {
         $twice = $this->student();
         $clear = $this->student();
-        $first = $this->batch('pending', [$twice], '07:00:00', 1);
-        $second = $this->batch('pending', [$twice], '14:00:00', 1, ['form_type' => 'clearance']);
+        $first = $this->batch('approved', [$twice], '07:00:00', 1);
+        $second = $this->batch('approved', [$twice], '14:00:00', 1, ['form_type' => 'clearance']);
 
         $clashes = $this->service()->clashesForBatch([$twice->id, $clear->id], self::DATE);
 

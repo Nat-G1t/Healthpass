@@ -5,12 +5,11 @@ declare(strict_types=1);
 namespace Tests\Feature\Admin;
 
 use App\Models\BatchRequest;
-use App\Models\BatchRequestStudent;
 use App\Models\College;
 use App\Models\StudentProfile;
 use App\Models\User;
-use App\Services\ClinicScheduleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 /**
@@ -18,16 +17,16 @@ use Tests\TestCase;
  *
  * D-88: it lists the students on the batch and offers the D-52 Cancel while the
  * batch is pending, so the admin can check what they sent and withdraw it on
- * the spot. D-90: while pending, a heads-up when another request for the same
- * hours came in FIRST and the clinic can't fit both.
+ * the spot. D-108: it shows the clinic date and hours the Director scheduled —
+ * "To be scheduled by the Director" while pending — and D-90's "another
+ * request is waiting for these hours" heads-up is gone (a pending batch holds
+ * no hours).
  */
 class BatchConfirmationPageTest extends TestCase
 {
     use RefreshDatabase;
 
     private College $ccs;
-
-    private College $cit;
 
     private User $admin;
 
@@ -44,47 +43,22 @@ class BatchConfirmationPageTest extends TestCase
         config(['healthpass.hourly_capacity' => 12, 'healthpass.daily_capacity' => 120]);
 
         $this->ccs = College::create(['code' => 'CCS', 'name' => 'College of Computing Studies']);
-        $this->cit = College::create(['code' => 'CIT', 'name' => 'College of Industrial Technology']);
         $this->admin = User::factory()->create(['role' => 'college_admin', 'managed_college_id' => $this->ccs->id]);
         $this->date = now()->addDays(7)->toDateString();
     }
 
-    /** Submit $count CCS students through the real form; returns the new batch. */
-    private function submitBatch(int $count, string $start = '07:00:00'): BatchRequest
+    /** Submit $count CCS students through the real form (no date or hour — D-108); returns the new batch. */
+    private function submitBatch(int $count): BatchRequest
     {
         $students = StudentProfile::factory()->count($count)->forCollege($this->ccs)->create();
 
         $this->actingAs($this->admin)->post('/admin/batches', [
             'form_type' => 'clearance',
             'reason' => 'fieldtrip',
-            'requested_date' => $this->date,
-            'requested_time' => $start,
             'students' => $students->pluck('id')->all(),
         ])->assertSessionHasNoErrors();
 
         return BatchRequest::latest('id')->first();
-    }
-
-    /** Another college's pending batch, written directly. */
-    private function citBatch(int $students, string $start = '07:00:00'): BatchRequest
-    {
-        $batch = BatchRequest::create([
-            'reference_no' => 'BR-'.now()->year.'-777',
-            'college_id' => $this->cit->id,
-            'requested_by' => User::factory()->create(['role' => 'college_admin', 'managed_college_id' => $this->cit->id])->id,
-            'form_type' => 'clearance',
-            'reason' => 'fieldtrip',
-            'service_type' => 'medical',
-            'requested_date' => $this->date,
-            'requested_time' => $start,
-            'requested_blocks' => app(ClinicScheduleService::class)->blocksFor($students),
-        ]);
-
-        User::factory()->count($students)->create()->each(
-            fn (User $student) => BatchRequestStudent::create(['batch_request_id' => $batch->id, 'student_id' => $student->id])
-        );
-
-        return $batch;
     }
 
     private function confirmationPage(BatchRequest $batch)
@@ -153,36 +127,44 @@ class BatchConfirmationPageTest extends TestCase
             ->assertSee('rejects it with a reason');
     }
 
-    public function test_a_heads_up_when_an_earlier_request_takes_the_hours(): void
+    public function test_a_pending_batch_is_to_be_scheduled_by_the_director(): void
     {
-        // CIT's 10 students asked for 7 AM first; CCS's 8 won't fit beside them.
-        $cit = $this->citBatch(10);
-        $this->travel(5)->minutes();
-        $batch = $this->submitBatch(8);
+        $batch = $this->submitBatch(2);
 
         $this->confirmationPage($batch)
-            ->assertSee('Another request is waiting for these hours')
-            ->assertSee('8:00 AM')
-            // It never says whose request it is.
-            ->assertDontSee($cit->reference_no)
-            ->assertDontSee('CIT');
+            ->assertSee('>Clinic date</dt>', false)
+            ->assertSee('To be scheduled by the Director')
+            ->assertSee('picks the clinic date and')
+            ->assertDontSee('Requested Date')
+            ->assertDontSee('Requested Time')
+            ->assertDontSee('>Hours</dt>', false)
+            // D-90's heads-up is gone with the hours a pending batch used to hold.
+            ->assertDontSee('Another request is waiting for these hours');
     }
 
-    public function test_no_heads_up_for_the_request_that_came_first(): void
+    public function test_an_approved_batch_shows_the_directors_date_and_hours(): void
     {
-        $batch = $this->submitBatch(8);
-        $this->travel(5)->minutes();
-        $this->citBatch(10);
+        $batch = $this->submitBatch(13);
+        $batch->update([
+            'status' => 'approved',
+            'scheduled_date' => $this->date,
+            'scheduled_time' => '09:00:00',
+            'scheduled_blocks' => 2,
+            'reviewed_at' => now(),
+        ]);
 
-        $this->confirmationPage($batch)->assertDontSee('Another request is waiting for these hours');
+        $this->confirmationPage($batch)
+            ->assertSee(Carbon::parse($this->date)->format('l, F j, Y'))
+            ->assertSee('>Hours</dt>', false)
+            ->assertSee('9:00 AM – 11:00 AM (2 slots)')
+            ->assertDontSee('To be scheduled by the Director');
     }
 
-    public function test_no_heads_up_when_both_requests_fit(): void
+    public function test_a_rejected_batch_has_no_clinic_date(): void
     {
-        $this->citBatch(4);
-        $this->travel(5)->minutes();
-        $batch = $this->submitBatch(8);
+        $batch = $this->submitBatch(2);
+        $batch->update(['status' => 'rejected', 'rejection_reason' => 'Roster includes graduates.', 'reviewed_at' => now()]);
 
-        $this->confirmationPage($batch)->assertDontSee('Another request is waiting for these hours');
+        $this->confirmationPage($batch)->assertDontSee('To be scheduled by the Director');
     }
 }

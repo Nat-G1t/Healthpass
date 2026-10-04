@@ -137,10 +137,10 @@ class KioskTestStudent extends Command
                 // The form's first printed purpose — never 'others', which needs a detail.
                 'reason' => array_key_first(BatchRequest::REASONS_BY_FORM[$form]),
                 'service_type' => 'medical',
-                'requested_date' => today()->toDateString(),
-                'requested_time' => $slot,
-                'requested_blocks' => 1,
+                // D-108: the span the Director scheduled — today, this hour.
                 'scheduled_date' => today()->toDateString(),
+                'scheduled_time' => $slot,
+                'scheduled_blocks' => 1,
                 'status' => 'approved',
                 'reviewed_by' => $director->id,
                 'reviewed_at' => now(),

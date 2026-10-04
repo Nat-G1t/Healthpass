@@ -17,6 +17,9 @@ use Tests\TestCase;
  * stamps + a mandatory written reason, ZERO appointments created, and the
  * decision is terminal — a decided batch can never be re-decided in either
  * direction (which also means a replayed POST cannot overwrite the reason).
+ *
+ * D-108: the reject dialog sits on the Review page, so a reason that fails
+ * validation goes back there; a decision goes back to the queue.
  */
 class BatchRejectDecisionTest extends TestCase
 {
@@ -55,9 +58,6 @@ class BatchRejectDecisionTest extends TestCase
             'requested_by' => $this->admin->id,
             'reason' => 'ojt',
             'service_type' => 'medical',
-            'requested_date' => now()->addDays(7)->toDateString(),
-            'requested_time' => '07:00:00',  // D-37
-            'requested_blocks' => 1,
         ], $overrides));
 
         User::factory()->count($studentCount)->create()->each(
@@ -73,11 +73,25 @@ class BatchRejectDecisionTest extends TestCase
     private function reject(BatchRequest $batch, ?string $reason = self::REASON): TestResponse
     {
         return $this->actingAs($this->director)
-            ->from('/director/batches')
+            ->from($this->reviewUrl($batch))
             ->post(
                 "/director/batches/{$batch->id}/reject",
                 $reason === null ? [] : ['rejection_reason' => $reason],
             );
+    }
+
+    private function reviewUrl(BatchRequest $batch): string
+    {
+        return "/director/batches/{$batch->id}/review";
+    }
+
+    /** D-108: the Director's date and start hour. */
+    private function approve(BatchRequest $batch): TestResponse
+    {
+        return $this->actingAs($this->director)->post("/director/batches/{$batch->id}/approve", [
+            'scheduled_date' => now()->addDays(7)->toDateString(),
+            'start_time' => '07:00:00',
+        ]);
     }
 
     public function test_rejecting_stamps_reviewer_fields_and_the_reason_and_creates_zero_appointments(): void
@@ -106,7 +120,7 @@ class BatchRejectDecisionTest extends TestCase
             $batch = $this->makeBatchWithStudents(2);
 
             $this->reject($batch, $badReason)
-                ->assertRedirect('/director/batches')
+                ->assertRedirect($this->reviewUrl($batch))
                 ->assertSessionHasErrors('rejection_reason');
 
             $batch->refresh();
@@ -122,7 +136,7 @@ class BatchRejectDecisionTest extends TestCase
         $batch = $this->makeBatchWithStudents(2);
 
         $this->reject($batch, str_repeat('a', 501))
-            ->assertRedirect('/director/batches')
+            ->assertRedirect($this->reviewUrl($batch))
             ->assertSessionHasErrors('rejection_reason');
 
         $this->assertSame('pending', $batch->fresh()->status);
@@ -155,9 +169,7 @@ class BatchRejectDecisionTest extends TestCase
         $batch = $this->makeBatchWithStudents(4);
 
         // Real approval first — appointments exist and must survive.
-        $this->actingAs($this->director)
-            ->post("/director/batches/{$batch->id}/approve")
-            ->assertRedirect('/director/batches');
+        $this->approve($batch)->assertRedirect('/director/batches');
         $this->assertDatabaseCount('appointments', 4);
 
         $approvedReviewedAt = $batch->fresh()->reviewed_at;
@@ -180,9 +192,7 @@ class BatchRejectDecisionTest extends TestCase
 
         $this->reject($batch)->assertRedirect('/director/batches');
 
-        $this->actingAs($this->director)
-            ->post("/director/batches/{$batch->id}/approve")
-            ->assertRedirect('/director/batches');
+        $this->approve($batch)->assertRedirect('/director/batches');
 
         // Still rejected, still zero appointments (FR-DIRA-05).
         $batch->refresh();
@@ -191,24 +201,30 @@ class BatchRejectDecisionTest extends TestCase
         $this->assertDatabaseCount('appointments', 0);
     }
 
-    public function test_rejected_rows_show_static_text_with_no_action_buttons(): void
+    public function test_a_rejected_batch_leaves_the_queue_and_its_review_page(): void
     {
         $batch = $this->makeBatchWithStudents(2);
         $this->reject($batch);
+        $this->flushSession();   // drop the "BR-… rejected" flash
 
-        // FR-DIRA-05: decided rows render static text, not buttons.
+        // FR-DIRA-05 (D-108): decided batches are no longer listed here.
         $this->actingAs($this->director)
             ->get('/director/batches')
             ->assertOk()
-            ->assertSee('✕ Rejected')
-            ->assertDontSee(route('director.batches.reject', $batch));
+            ->assertDontSee($batch->reference_no)
+            ->assertDontSee(route('director.batches.review', $batch));
+
+        $this->actingAs($this->director)
+            ->get($this->reviewUrl($batch))
+            ->assertRedirect('/director/batches')
+            ->assertSessionHas('error', "{$batch->reference_no} has already been decided — nothing was changed.");
     }
 
     public function test_non_directors_cannot_reject(): void
     {
         $batch = $this->makeBatchWithStudents(2);
 
-        foreach (['student', 'nurse', 'college_admin'] as $role) {
+        foreach (['student', 'nurse', 'physician', 'college_admin'] as $role) {
             $this->actingAs(User::factory()->create(['role' => $role]))
                 ->post("/director/batches/{$batch->id}/reject", ['rejection_reason' => self::REASON])
                 ->assertRedirect();
