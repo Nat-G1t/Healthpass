@@ -9,6 +9,9 @@
       $status    — its BatchRequest::resultsStatus() key
       $backUrl   — where the back link goes (each role has its own list page)
       $backLabel — that page's name, e.g. "Batch Tracking"
+      $showCollege — optional, default false: name the batch's college under
+                   the Batch ID, for the roles that see every college (D-112).
+                   The batch must then have `college` loaded.
 --}}
 @php
     $secondChance = $batch->secondChanceStart();
@@ -27,6 +30,11 @@
     <div class="mt-3 flex flex-wrap items-start justify-between gap-3">
         <div class="min-w-0">
             <h2 class="text-xl font-semibold text-hp-slate">Batch {{ $batch->reference_no }}</h2>
+            @if ($showCollege ?? false)
+                <p class="mt-0.5 text-sm font-semibold text-hp-slate/80" data-results-college>
+                    {{ $batch->college->name }} <span class="font-normal text-hp-slate/50">({{ $batch->college->code }})</span>
+                </p>
+            @endif
             <p class="mt-1 text-sm text-hp-slate/60">
                 {{ $batch->formTypeLabel() }}
                 · {{ $batch->reasonText() }}

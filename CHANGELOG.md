@@ -1159,6 +1159,41 @@
 
 ### Changed
 
+* **The Director tracks approved and rejected batches on a Batch Tracking
+  page** (D-112, adds FR-DIRA-09 and FR-DIRA-10; amends FR-DIRA-01,
+  FR-DIRA-05, FR-UI-06 and §8.3; PRD revision 1.96, 2026-10-05). No schema
+  change, no new package; three new routes and one sidebar item.
+  * **Sidebar:** **Batch Tracking** right after Batch Approvals, with the
+    College Admin's Batch Tracking icon. No badge yet (D-113).
+  * **`GET /director/batch-tracking`** (`director.tracking.index`), every
+    college: **Batch Results** — approved batches, newest clinic date first,
+    Batch ID · College · Form Type · Purpose · Date scheduled · Status (D-111)
+    · View, with a server-side Batch ID search, paged at ten
+    (`results_page`); **Rejected batches** — rejected plus college-cancelled
+    batches (tagged **Cancelled by college**, "after approval" when it was),
+    newest decision first, paged at ten (`rejected_page`).
+  * **`GET /director/batch-tracking/{batch}/results`**
+    (`director.tracking.results`): an approved batch's results — the same
+    D-111 partials and `App\Support\BatchResults` as the College Admin's
+    page, so both read the same numbers; the header also names the college
+    (`_header` gains an optional `showCollege`). 404 for anything not
+    approved.
+  * **`GET /director/batch-tracking/{batch}`** (`director.tracking.show`): a
+    rejected or cancelled batch — details (with the signed-memo link when
+    there is one), the students, and the rejection reason or the college's
+    cancellation reason with who and when. 404 for approved or pending.
+  * The Review page's students card is now
+    `director/batches/partials/students-card.blade.php`, shared with the
+    details page; its output is unchanged. The Director's Dashboard needed no
+    change (its panel previews pending requests and links to Batch Approvals).
+  * Tests: new `tests/Feature/Director/BatchTrackingPageTest.php` (26) — the
+    nav for the Director only, both cards' contents, tags, order, search and
+    separate paging, the results page (404s, college named, the same payload
+    as the admin's page, no per-student queries), the details page (reason
+    and reviewer, cancellation reason and canceller, after approval, no
+    recorded reason, memo link only with a memo, 404s), and every other role
+    turned away.
+
 * **Batch statuses follow the clinic days, and View opens a full results
   page** (D-111, rewrites FR-ADM-12; amends FR-UI-06, FR-ADM-07, FR-ADM-10
   and §6.6; supersedes D-86's completion rule and D-55's popup; PRD revision

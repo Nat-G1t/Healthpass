@@ -12,6 +12,7 @@ use App\Http\Controllers\Director\AnalyticsController as DirectorAnalyticsContro
 use App\Http\Controllers\Director\AnomaliesController as DirectorAnomaliesController;
 use App\Http\Controllers\Director\BatchApprovalController as DirectorBatchApprovalController;
 use App\Http\Controllers\Director\BatchMemoController as DirectorBatchMemoController;
+use App\Http\Controllers\Director\BatchTrackingController as DirectorBatchTrackingController;
 use App\Http\Controllers\Director\DashboardController as DirectorDashboardController;
 use App\Http\Controllers\Director\MonthlyReportController as DirectorMonthlyReportController;
 use App\Http\Controllers\Director\StaffAccountController as DirectorStaffAccountController;
@@ -317,6 +318,14 @@ Route::middleware(['auth', 'role:director'])
             ->whereNumber('batch')->middleware('throttle:20,1,batch-approve')->name('batches.approve');
         Route::post('/batches/{batch}/reject', [DirectorBatchApprovalController::class, 'reject'])
             ->whereNumber('batch')->middleware('throttle:20,1,batch-reject')->name('batches.reject');
+        // Batch Tracking (FR-DIRA-09/10, D-112): decided batches, every college.
+        // Approved ones open the same results page the college sees (D-111);
+        // rejected and college-cancelled ones open their details and reason.
+        Route::get('/batch-tracking', [DirectorBatchTrackingController::class, 'index'])->name('tracking.index');
+        Route::get('/batch-tracking/{batch}/results', [DirectorBatchTrackingController::class, 'results'])
+            ->whereNumber('batch')->name('tracking.results');
+        Route::get('/batch-tracking/{batch}', [DirectorBatchTrackingController::class, 'show'])
+            ->whereNumber('batch')->name('tracking.show');
         // Staff Accounts (FR-AUTH-10, D-47): the Director provisions the
         // college_admin, nurse and physician (D-64) accounts that used to need a
         // developer running StaffSeeder on the server. A capability layer on

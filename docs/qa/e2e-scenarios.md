@@ -2110,6 +2110,94 @@ phone; nothing clinical beyond Fit / Unfit reaches the page.
 
 ---
 
+## E2E-35 — The Director tracks approved, rejected and cancelled batches (D-112)
+
+**Goal:** confirm that the Director's **Batch Tracking** page lists every
+college's approved batches with their status and results page, and the
+rejected and college-cancelled batches with their reason.
+
+**Accounts:** the Director `director@healthpass.test`, the CCS Admin
+`admin.ccs@healthpass.test`, the nurse `nurse@healthpass.test` (passwords
+`password`).
+
+**Preconditions:** at least one **approved** batch with students in mixed
+states (E2E-34's batch will do), one batch the Director **rejected** with a
+reason, and one batch a college **cancelled** with a reason — ideally one
+cancelled while pending and one cancelled after it was approved. Never run
+`migrate:fresh`.
+
+**Steps:**
+
+**Part A — the menu and the two cards**
+
+1. Sign in as the Director. → **Expect:** the sidebar reads **Dashboard ·
+   Batch Approvals · Batch Tracking · Data Summary · …**, with Batch Tracking
+   right after Batch Approvals and the same icon as the College Admin's
+   Batch Tracking.
+2. Open **Batch Tracking**. → **Expect:** two cards. **Batch Results** lists
+   approved batches from **every** college, newest clinic date first, with
+   columns **Batch ID · College · Form Type · Purpose · Date scheduled ·
+   Status** and a **View** button. Its Status reads the same as on that
+   college's own Batch Tracking.
+3. Read the **Rejected batches** card. → **Expect:** the same columns. A
+   rejected batch reads **Rejected** with Date scheduled "—"; a cancelled one
+   reads **Cancelled by college** (never "Rejected"), with **"after
+   approval"** under it only if the college cancelled it after it was
+   approved — that one still shows the date it was scheduled for. The newest
+   decision is at the top.
+4. Type part of an approved Batch ID into the search and press **Search**. →
+   **Expect:** only that batch in Batch Results; the Rejected card is
+   unchanged. **Clear** brings everything back.
+5. If either card has more than ten rows: page it. → **Expect:** ten rows per
+   page, and paging one card does not move the other.
+
+**Part B — an approved batch's results**
+
+6. Click **View** on an approved batch. → **Expect:** "← Batch Tracking",
+   **Batch BR-…**, the college's name, the form · purpose · clinic date and
+   hours line, the status badge, the three summary cards and the filterable
+   student table — the same page the College Admin sees.
+7. In another browser, sign in as that college's admin and open the same
+   batch's results page. → **Expect:** the same status, the same three
+   numbers and the same rows.
+8. Try the filters and scroll the table (as E2E-34 Part C). → **Expect:** they
+   behave exactly as on the admin's page.
+
+**Part C — a rejected batch and a cancelled batch**
+
+9. Back on Batch Tracking, click **View** on a **rejected** batch. →
+   **Expect:** **Batch Details** (Batch ID, College, Form, Purpose, Students,
+   Submitted, Submitted by — and **Signed memo → View** if the college
+   attached one), **Students in this batch** (scrolls after ten rows), and
+   **Rejection reason** with the reason you wrote, who rejected it and when.
+10. If the batch has a memo, click its **View**. → **Expect:** the memo opens
+    in a new tab.
+11. Go back and click **View** on a **cancelled** batch. → **Expect:** the
+    third card reads **Cancelled by college** with the college's reason, the
+    admin who cancelled it and when. For one cancelled after approval, it
+    also says who approved it and when, and the details show the date it was
+    scheduled for.
+
+**Part D — who can open it, and wrong addresses**
+
+12. Change the address of a rejected batch's page to `/results` on the end. →
+    **Expect:** **404**. Open an approved batch's details address
+    (`/director/batch-tracking/{id}` without `/results`). → **Expect:** **404**.
+13. Sign in as the CCS Admin and open `/director/batch-tracking`. → **Expect:**
+    you are sent back to the Admin Dashboard with "You do not have permission
+    to access that area." Same for the nurse.
+14. Narrow the Director's browser to about **390 px**. → **Expect:** each row
+    of both cards becomes a small stacked card and the page never slides
+    sideways.
+
+**Pass criteria:** Batch Tracking sits after Batch Approvals; approved
+batches from every college show with their status and open the same results
+page the college sees; rejected and college-cancelled batches show with the
+right tag and open a page with their details, students and reason; the cards
+page separately; only the Director gets in.
+
+---
+
 ## Recording results
 
 For each scenario, record: **Pass / Fail / Blocked (not built)**, the tester

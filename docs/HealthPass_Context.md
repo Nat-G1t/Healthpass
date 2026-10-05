@@ -287,7 +287,7 @@ Home, Calendar, FileText, QrCode, Plus, List, Activity, Edit, BarChart, Alert, C
 | Student | Dashboard · My Records (+ the D-73 Clinic Record page) · My ID (D-61 removed Book Appointment and My Appointments) |
 | College Admin | Dashboard · New Batch Request · Batch Tracking · Data Summary (FR-ADM-08; "Analytics" before D-103) |
 | Nurse | Live Queue · Encode Result · Enable Kiosk Mode (Kiosk Devices: enroll/revoke trusted terminals, D-27) |
-| Clinic Director | Dashboard · Batch Approvals · Data Summary (D-103; was "Analytics") · Flagged Anomalies |
+| Clinic Director | Dashboard · Batch Approvals · Batch Tracking (D-112) · Data Summary (D-103; was "Analytics") · Flagged Anomalies |
 
 **Unread badges (D-57, FR-UI-05):** a solid orange badge on a menu item — a dot for 1, the number for 2–9, "9+" from 10, nothing at 0 — at the top-right of the item's label (expanded sidebar, phone drawer) or of its icon (collapsed rail). Orange even on the active item. Refreshed on page load only; no polling.
 
@@ -420,7 +420,7 @@ Students are scheduled only through their college (a batch request the Clinic Di
 - **Three summary cards** (side by side; stacked on a phone): **Completed** "21 out of 40 students completed" · **Fit** "14 out of 21 completed students are fit" · **Rescheduled** "3 out of 40 students were rescheduled" — everyone ever given a 2nd chance, still counted after they complete (`resultsSummary()`).
 - **Main card:** a **Result** filter (All results / Fit / Unfit), a **Completion status** filter (All / Scheduled / At the clinic / Rest / Retake / Rescheduled / Completed / Unattended) and a **search** by name or student ID — all three together, in the browser (the whole roster is on the page). Below them a table of **Name · Student ID · Completion status · Result**, in last-name order, **ten rows tall, then it scrolls inside the card** with its header pinned — no pager (FR-UI-06's exception). No match → "No students match these filters." Student statuses as D-110: **Scheduled** / **Rescheduled** (red — on their 2nd-chance day, not yet seen) / **Rest / Retake** / **At the clinic** (captured, not yet encoded — also after the cutoff) / **Completed** / **Unattended**. Each row reads the student's CURRENT appointment. Students withdrawn before D-87 are not listed or counted. Below `md` each student re-flows into a small card.
 - **Outcome only** — name, student number, status and Fit / Unfit; no vitals, screening answers, clinic notes, physician details or visit reference.
-- Built from shared partials (`resources/views/batches/results/` — header, status badge, summary, table) and one payload builder (`App\Support\BatchResults`), so the other roles' results pages can show the same body. A marked spot under the main card is reserved for the document-release button (D-113).
+- Built from shared partials (`resources/views/batches/results/` — header, status badge, summary, table) and one payload builder (`App\Support\BatchResults`), so the other roles' results pages can show the same body (the Director's, since D-112). A marked spot under the main card is reserved for the document-release button (D-113).
 
 ---
 
@@ -557,7 +557,7 @@ then nurse-edited — D-76).
 - The oldest pending request in the whole queue is highlighted as **Next**, styled like the clinic's Live Queue (peach band, orange "Next" tag, primary Review button) — only ever the first row of page 1. **Any** row can be reviewed; the highlight is a guide.
 - **Phones (below `md`, 2026-10-05 fix):** each request is a stacked card — Batch ID (+ Next tag), College, Form Type, Purpose, full-width Review button; the Next card is peach. The table shows from `md` up. The page never scrolls sideways.
 - **Batch ID search (D-90)** at the top of the card — server-side, across all pages. Empty state: "No batch requests are waiting."
-- Decided and college-cancelled batches **leave** the queue (the Director's Batch Tracking page, D-112, will list them). The row Approve/Reject buttons and modals, D-90's conflict lines and Schedule-conflict modal, and D-92's cancel-reason popup are removed.
+- Decided and college-cancelled batches **leave** the queue — the Director's **Batch Tracking** page lists them (D-112). The row Approve/Reject buttons and modals, D-90's conflict lines and Schedule-conflict modal, and D-92's cancel-reason popup are removed.
 
 #### Review page (`director-review`, `/director/batches/{batch}/review`) — D-108
 - Opened by a queue row's **Review** button. A request that is no longer pending redirects to the queue with "BR-… has already been decided — nothing was changed." or "BR-… was cancelled by the college — nothing was changed."
@@ -571,6 +571,21 @@ then nurse-edited — D-76).
   - **Approve** (disabled until a fitting day + hour and no clash) opens "Approve BR-2026-014 for Tue, Oct 6, 2026, 9:00 AM – 11:00 AM?" → **Confirm & Approve** posts `scheduled_date` + `start_time` (double-click safe). **Reject** opens the reason dialog (10–500 chars, `RejectBatchRequest`).
 - **On Approve** (D-108): one transaction on the **locked** row, refusing a row no longer pending. In order: the span `span(start_time, ceil(students ÷ 20))` ends by closing; no hour of it has ended (BR-23); every hour has room for the seats this batch puts there (D-91) and the day stays within 200 (BR-02); no student already has a schedule that day (BR-25). A refusal returns to the Review page naming the hour or day to change (the picked day and hour are restored). Success sets `status` → `approved`, stamps `reviewed_by`/`reviewed_at` and `scheduled_date` / `scheduled_time` / `scheduled_blocks`, creates **one appointment per student** (`medical`, `source` = `batch`, 20 per hour in pivot order, each with its D-96 **arrival time**, 3 minutes apart), back-writes each `batch_request_students.appointment_id`, and queues one email per student **after the commit**. The span length is never posted — it comes from the roster.
 - **On Reject** (D-36): a **written reason is required** (10–500 chars). Status → `rejected`, `rejection_reason` stored, no appointments. The College Admin reads it on Batch Tracking.
+
+#### Batch Tracking (`director-tracking`, `/director/batch-tracking`) — D-112
+- In the sidebar right after **Batch Approvals**, with the College Admin's Batch Tracking icon. No badge yet (D-113 adds one). Every college — no college scope.
+- **Card 1 — Batch Results:** every **approved** batch, **newest clinic date first**, ten per page (`results_page`). Columns: **Batch ID / College** (code) **/ Form Type / Purpose** (cut to 60 characters) **/ Date scheduled** (date, hours beneath) **/ Status / [View]**. Status is D-111's (Scheduled / In progress / Still in progress / Completed / Finished incomplete / No one attended), worded by the same partial as the college's card. **Batch ID search** on the card — server-side, all pages, this card only; no match → "No approved batch matches …". Empty: "No approved batches yet."
+- **Card 2 — Rejected batches:** batches the Director **rejected** plus batches a **college cancelled** (Q20), **newest decision first** (the cancellation, else the rejection), ten per page under its own `rejected_page`. Same columns. Date scheduled is "—" unless the batch was cancelled after approval. Status: **Rejected**, or **Cancelled by college** (never "Rejected") with "after approval" beneath when the college cancelled an approved batch (D-92). Empty: "No rejected or cancelled batches."
+- Both tables re-flow into stacked cards below `md`; the page never scrolls sideways.
+
+#### Batch Results page — Director (`director-tracking-results`, `/director/batch-tracking/{batch}/results`) — D-112
+- An approved batch's **View**. The **same page body** as the College Admin's Batch Results page (header, three summary cards, filters, ten-row scrolling table) from the same partials and `App\Support\BatchResults`, so both roles see the same numbers. The header's back link reads "← Batch Tracking" and the header also **names the college**. Outcome only, as for the admin. A pending, rejected or cancelled batch → 404. A marked spot under the main card is reserved for the Director's document tools (D-113).
+
+#### Rejected / cancelled batch (`director-tracking-show`, `/director/batch-tracking/{batch}`) — D-112
+- A rejected or cancelled batch's **View**. An approved or pending batch → 404.
+- **Card 1 — Batch details** (as on the Review page): Batch ID, College (name + code), Form, Purpose, Students, Submitted (date · time), Submitted by; **Date scheduled** + hours only for a batch cancelled after approval; **Signed memo → View** (new tab) only when the batch has one (D-109); the "Originally requested" line for a pre-D-108 batch.
+- **Card 2 — Students in this batch:** the Review page's card (a shared partial) — Name, Student No., Program, Year, ten rows tall then scrolling. A cancelled batch keeps its students.
+- **Card 3 — the reason:** **Rejection reason** — the Director's written reason, "Rejected by *name* on *date · time*"; or **Cancelled by college** — the college's written reason, "Cancelled by *name* (*code* College Admin) on *date · time*", plus "This was after approval — *name* approved it on *date · time*." when it was. Rejections before D-36 and cancellations before D-92 read "No reason was recorded — … before written reasons were required."
 
 #### Data Summary (`director-analytics`) — called "Analytics" before D-103; rescoped by D-32 (v1.11)
 > The Medical Cases analytics (Medical Cases by College, Summary of Medical

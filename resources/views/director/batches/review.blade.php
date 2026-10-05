@@ -124,35 +124,7 @@
         </x-hp.card>
 
         {{-- ── Card 2: students — ten rows tall, then scrolls (Q13) ──────── --}}
-        <x-hp.card>
-            <p class="mb-5 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
-                Students in this batch <span class="ml-1 normal-case tracking-normal text-hp-slate/50">({{ $studentCount }})</span>
-            </p>
-
-            {{-- 2.75rem rows: the header plus ten rows is 30.25rem. --}}
-            <div class="max-h-[30.25rem] overflow-auto rounded-lg border border-hp-slate/10">
-                <table class="w-full text-left text-sm">
-                    <thead class="sticky top-0 z-10 bg-hp-white">
-                        <tr class="h-11 border-b border-hp-slate/10 text-[11px] uppercase tracking-widest text-hp-slate/40">
-                            <th class="whitespace-nowrap px-4 font-semibold">Name</th>
-                            <th class="whitespace-nowrap pr-4 font-semibold">Student No.</th>
-                            <th class="whitespace-nowrap pr-4 font-semibold">Program</th>
-                            <th class="whitespace-nowrap pr-4 font-semibold">Year</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-hp-slate/10">
-                        @foreach ($students as $row)
-                            <tr class="h-11 text-hp-slate">
-                                <td class="whitespace-nowrap px-4 font-medium">{{ $row->student?->name ?? 'Unknown student' }}</td>
-                                <td class="whitespace-nowrap pr-4 text-hp-slate/70">{{ $row->student?->studentProfile?->student_number ?? '—' }}</td>
-                                <td class="whitespace-nowrap pr-4 text-hp-slate/70">{{ $row->student?->studentProfile?->course ?? '—' }}</td>
-                                <td class="whitespace-nowrap pr-4 text-hp-slate/70">{{ $row->student?->studentProfile?->year_level ?? '—' }}</td>
-                            </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-            </div>
-        </x-hp.card>
+        @include('director.batches.partials.students-card')
     </div>
 
     {{-- ── Card 3: the signed memo (D-109) ──────────────────────────────── --}}
