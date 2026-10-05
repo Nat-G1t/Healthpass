@@ -20,6 +20,11 @@ use App\Models\BatchRequestStudent;
  * status key and Fit / Unfit — nothing else. No vital sign, screening answer,
  * clinic note, physician detail or clinic-visit reference goes into it, and
  * the eager-loads below never even select them.
+ *
+ * D-113: an ENCODED row also carries its visit's database id (`visit_id`,
+ * null on every other row) — the handle the document download's checkboxes
+ * post. It is an id, not clinical data: the server still decides, by
+ * BatchDocumentZip's rule, whether that visit may be downloaded.
  */
 final class BatchResults
 {
@@ -75,7 +80,7 @@ final class BatchResults
      * @return array{
      *     status: string,
      *     summary: array{total: int, completed: int, fit: int, rescheduled: int},
-     *     rows: list<array{name: string, number: string, status: string, result: ?string}>,
+     *     rows: list<array{name: string, number: string, status: string, result: ?string, visit_id: ?int}>,
      * }
      */
     public static function page(BatchRequest $batch): array
@@ -88,6 +93,7 @@ final class BatchResults
                 'number' => $row->student?->studentProfile?->student_number ?? '—',
                 'status' => $row->appointment->clearanceProgress(),
                 'result' => $row->appointment->clearanceResult(),
+                'visit_id' => self::encodedVisitId($row),
             ])
             ->values()
             ->all();
@@ -97,6 +103,17 @@ final class BatchResults
             'summary' => $batch->resultsSummary(),
             'rows' => $rows,
         ];
+    }
+
+    /**
+     * D-113: the visit's id when the clinic has encoded it (the same two facts
+     * BatchDocumentZip::downloadableVisits() checks), otherwise null.
+     */
+    private static function encodedVisitId(BatchRequestStudent $row): ?int
+    {
+        $visit = $row->appointment->clinicVisit;
+
+        return $visit?->status === 'encoded' && $visit->clearanceRecord !== null ? $visit->id : null;
     }
 
     /**

@@ -193,7 +193,7 @@ class BatchMemoViewTest extends TestCase
             ->assertSee('src="'.$this->directorUrl($batch).'"', false)
             ->assertSee('signed-memo.png')
             // The full-screen viewer and its controls.
-            ->assertSee('data-memo-viewer', false)
+            ->assertSee('data-file-viewer', false)
             ->assertSee('aria-label="Zoom in"', false)
             ->assertSee('aria-label="Zoom out"', false)
             ->assertSee('aria-label="Reset zoom"', false)
@@ -222,7 +222,7 @@ class BatchMemoViewTest extends TestCase
         $this->actingAs($this->director)->get(route('director.batches.review', $batch))
             ->assertOk()
             ->assertSee('No memo attached — submitted before signed memos were required.')
-            ->assertDontSee('data-memo-viewer', false);
+            ->assertDontSee('data-file-viewer', false);
     }
 
     // ── The College Admin's pages ────────────────────────────────────────────

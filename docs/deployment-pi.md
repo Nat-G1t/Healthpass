@@ -74,6 +74,11 @@ That installs **PHP 8.2+** (+ the extensions Laravel 12 needs: mbstring, xml,
 curl, zip, bcmath, intl, mysql, sqlite3, gd), **Composer**, **MariaDB**,
 **Node.js 20 LTS**, **nginx**, and **Chromium**.
 
+> **`zip` is required since D-113** (the batch document download builds a ZIP).
+> `php-zip` is in the installer's list; on a Pi set up before D-113, check it is
+> loaded with `php -m | grep zip`, and if nothing prints run
+> `sudo apt install php-zip && sudo systemctl restart php8.2-fpm`.
+
 > Pi OS Bookworm ships PHP 8.2, which satisfies `"php": "^8.2"`. On an older Pi
 > OS, upgrade the OS (or add the `ondrej/php` repo) rather than pinning an old
 > PHP — Laravel 12 requires 8.2+.
@@ -782,12 +787,14 @@ Two things to know before you rely on it:
   `http://localhost` — do it once *before* defense day, not during the failure.
 - **The local database is separate.** Restore a fresh dump from the hosted server
   or the fallback demos stale data.
-- **So are the uploaded files (D-109).** Each batch's signed memo lives in
-  `storage/app/private` (never `public/`), not in the database. Copy the hosted
+- **So are the uploaded files (D-109, D-113).** Each batch's signed memo and
+  each document release request's attachment live in `storage/app/private`
+  (never `public/`), not in the database. Copy the hosted
   server's latest archive with the dump — `docs/deployment-hosted.md` §8, "Back
   up the uploaded files too" — and unpack it into the Pi's checkout
   (`tar -xzf storage-<date>.tar.gz -C /var/www/healthpass`), or the Director's
-  Review page shows broken memos. `storage/app/private` must be **writable by
+  Review page shows broken memos (and the release review popup a broken
+  attachment). `storage/app/private` must be **writable by
   `www-data`** (the `storage/` ownership fix in §2 covers it), or submitting a
   batch fails with "The memo could not be saved." If the Pi ever takes real
   submissions while it is the live app, back that folder up daily too, next to

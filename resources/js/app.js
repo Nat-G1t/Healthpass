@@ -4,6 +4,7 @@ import Alpine from 'alpinejs';
 import { registerQrLinkId } from './qr-link-id';
 import { registerBatchSchedule } from './director/batch-schedule';
 import { registerFileCapture } from './shared/file-capture';
+import { registerBatchResults } from './shared/batch-results';
 import { initPageMotion } from './shared/page-motion';
 
 window.Alpine = Alpine;
@@ -16,6 +17,7 @@ document.addEventListener('DOMContentLoaded', initPageMotion);
 // so they are available when Alpine walks the DOM on load.
 registerQrLinkId(Alpine);
 registerBatchSchedule(Alpine);   // the Director's Review page (D-108)
-registerFileCapture(Alpine);     // <x-hp.file-capture> — the New Batch signed memo (D-109)
+registerFileCapture(Alpine);     // <x-hp.file-capture> — the New Batch signed memo (D-109), the release attachment (D-113)
+registerBatchResults(Alpine);    // a batch results page's table: filters + document selection (D-111, D-113)
 
 Alpine.start();

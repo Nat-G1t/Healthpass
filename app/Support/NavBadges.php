@@ -7,6 +7,7 @@ namespace App\Support;
 use App\Models\BatchRequest;
 use App\Models\ClearanceRecord;
 use App\Models\ClinicVisit;
+use App\Models\DocumentReleaseRequest;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -23,7 +24,8 @@ use Illuminate\Support\Facades\DB;
  *  - SINCE LAST SEEN — events after the user last opened that page. Opening it
  *    stamps users.nav_seen_at[<route name>] (App\Http\Middleware\MarkNavSeen);
  *    a page never opened falls back to the account's created_at.
- *  - WORK COUNTS — Live Queue and Batch Approvals show what is waiting right
+ *  - WORK COUNTS — Live Queue, Batch Approvals and the Director's Batch
+ *    Tracking (D-113: release requests to review) show what is waiting right
  *    now. Opening the page does not clear them; doing the work does.
  *
  * Each badge reuses its page's own definition (liveQueue(), flagged(), the
@@ -209,6 +211,9 @@ final class NavBadges
         return [
             // Work count: every request still waiting for a decision.
             'director.batches.index' => BatchRequest::query()->where('status', 'pending')->count(),
+            // D-113 work count: document release requests waiting for a review
+            // (each also tags its row "Release requested" on Batch Tracking).
+            'director.tracking.index' => DocumentReleaseRequest::query()->where('status', 'pending')->count(),
             // The Flagged Anomalies page's own definition, captured since last seen.
             'director.anomalies' => ClinicVisit::flagged()
                 ->where('checked_in_at', '>', self::lastSeen($user, 'director.anomalies'))

@@ -1159,6 +1159,60 @@
 
 ### Changed
 
+* **Colleges request the release of a finished batch's documents, the
+  Director reviews it, and staff download the batch's official forms as a
+  ZIP** (D-113, adds FR-ADM-15 and FR-DIRA-11; amends FR-ADM-12, FR-DIRA-09,
+  FR-DIRA-10, §6.1 – §6.4, §6.6 and §17; PRD revision 1.97, 2026-10-05).
+  **FLAGGED SCHEMA CHANGE: new table #12 `document_release_requests`**
+  (migration `2026_10_05_000004`). No new package — PHP's built-in `zip`
+  extension, now switched on in XAMPP's `php.ini` (already on the droplet).
+  * **College Admin** (results page): under the main card a large **Request
+    release of documents** button — disabled until the batch is Completed or
+    Finished incomplete; a popup takes a reason (10–500, counter) and one
+    attachment (`<x-hp.file-capture>`, JPG/PNG/PDF ≤ 5 MB, private disk under
+    `release-requests/`); then "waiting for the Director", the Director's
+    rejection message with **Request again**, or "Documents released by the
+    Director on {date}". `POST /admin/batches/{batch}/release-requests`
+    (`Admin\DocumentReleaseController@store`, `StoreReleaseRequest`) checks on
+    the locked batch row: one pending at a time, nothing after approval.
+  * **Select & download** in the shared results table: **Select students**
+    (select mode lists only encoded students, checkbox at the left of each
+    row, filters still work), **Clear**, **Select all** (what is shown) and
+    **Download documents (N)** — one ZIP `{Batch ID}-documents.zip`, one PDF per
+    student `{Batch ID}-{Student No}-{Last name}.pdf`, rendered by
+    `VisitDocument` like the clinic's PDF. Greyed out for the College Admin
+    until released (`POST /admin/batches/{batch}/documents` → 403); always on
+    for the Director (`POST /director/batch-tracking/{batch}/documents`).
+  * **One rule** — `App\Services\BatchDocumentZip`: each posted id must be the
+    encoded visit of a held roster row of this batch, else 422; capped by
+    `healthpass.documents.max_per_download` = **20** (50 Medical Assessment
+    forms took 103 s on the dev laptop, 20 took 35 s). The temporary ZIP in
+    `storage/app/private/tmp` is deleted after sending. Built so D-114's
+    clinic route can call the same `download()`.
+  * **Director** (results page): **Review request of documents** — a popup with
+    who asked, when, the reason and the attachment (thumbnail / PDF tile →
+    full-screen viewer), **Approve** / **Reject** (message 10–500,
+    `RejectReleaseRequest`), both locked no-ops once decided; the request
+    history under the button. `GET /director/release-requests/{id}/attachment`
+    serves the file inline with `nosniff` — the Director's route only.
+  * **Badge + tag:** the Director's Batch Tracking menu item counts pending
+    release requests (`NavBadges`); such a row carries **Release requested**.
+  * **Refactors:** the D-109 memo viewer became `<x-hp.file-viewer>` (shared by
+    the memo card and the release popup; Esc now closes only the viewer, not
+    a popup under it); the results table's inline Alpine object became the
+    registered `batchResults` component (`resources/js/shared/batch-results.js`);
+    memo serving and file-name cleaning moved to `App\Support\PrivateUpload`
+    (`SignedMemo` delegates). `BatchResults` rows carry `visit_id` on encoded
+    rows only.
+  * **Privacy (§6.6):** after a Director approval, a batch's own College Admin
+    can download the full official forms of its encoded students; on screen
+    they still see only the outcome.
+  * Tests: new `tests/Feature/DocumentRelease/` — `ReleaseRequestStoreTest`
+    (12), `ReleaseReviewTest` (10), `DocumentDownloadTest` (13, opens each ZIP),
+    `ReleasePagesTest` (14) — and `tests/Support/DocumentReleaseFixture.php`;
+    `BatchResultsTest`, `NavBadgesTest` and `BatchMemoViewTest` updated for the
+    `visit_id` key, the new badge and the viewer's marker.
+
 * **The Director tracks approved and rejected batches on a Batch Tracking
   page** (D-112, adds FR-DIRA-09 and FR-DIRA-10; amends FR-DIRA-01,
   FR-DIRA-05, FR-UI-06 and §8.3; PRD revision 1.96, 2026-10-05). No schema

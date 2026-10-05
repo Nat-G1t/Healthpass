@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\AnalyticsController as AdminAnalyticsController;
 use App\Http\Controllers\Admin\BatchMemoController as AdminBatchMemoController;
 use App\Http\Controllers\Admin\BatchRequestController as AdminBatchRequestController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
+use App\Http\Controllers\Admin\DocumentReleaseController as AdminDocumentReleaseController;
 use App\Http\Controllers\Admin\MonthlyReportController as AdminMonthlyReportController;
 use App\Http\Controllers\Admin\YearlyReportController as AdminYearlyReportController;
 use App\Http\Controllers\Auth\PasswordChangeController;
@@ -14,6 +15,7 @@ use App\Http\Controllers\Director\BatchApprovalController as DirectorBatchApprov
 use App\Http\Controllers\Director\BatchMemoController as DirectorBatchMemoController;
 use App\Http\Controllers\Director\BatchTrackingController as DirectorBatchTrackingController;
 use App\Http\Controllers\Director\DashboardController as DirectorDashboardController;
+use App\Http\Controllers\Director\DocumentReleaseController as DirectorDocumentReleaseController;
 use App\Http\Controllers\Director\MonthlyReportController as DirectorMonthlyReportController;
 use App\Http\Controllers\Director\StaffAccountController as DirectorStaffAccountController;
 use App\Http\Controllers\Director\YearlyReportController as DirectorYearlyReportController;
@@ -163,6 +165,16 @@ Route::middleware(['auth', 'role:college_admin', 'college.scope'])
         // throttle bucket (3rd arg), like every authed throttle here.
         Route::get('/batches/{batch}/memo', AdminBatchMemoController::class)
             ->whereNumber('batch')->middleware('throttle:60,1,admin-memo')->name('batches.memo');
+        // Document release (FR-ADM-15, D-113), from the batch's results page.
+        // Ask the Director to release a finished batch's documents (a reason +
+        // one attached file), and — once released — download the selected
+        // encoded students' forms as one ZIP. Both through managedCollege()
+        // (another college's batch 404s), each with its own throttle bucket;
+        // the ZIP renders PDFs, so it is kept tight.
+        Route::post('/batches/{batch}/release-requests', [AdminDocumentReleaseController::class, 'store'])
+            ->whereNumber('batch')->middleware('throttle:10,1,release-store')->name('batches.release-requests.store');
+        Route::post('/batches/{batch}/documents', [AdminDocumentReleaseController::class, 'download'])
+            ->whereNumber('batch')->middleware('throttle:10,1,admin-documents')->name('batches.documents');
         // Cancel a whole batch (FR-ADM-11): pending (D-52), or approved until
         // its first clinic hour starts, with a written reason (D-92). Its own throttle
         // bucket: an authed throttle keys on the user id with no path, so
@@ -326,6 +338,19 @@ Route::middleware(['auth', 'role:director'])
             ->whereNumber('batch')->name('tracking.results');
         Route::get('/batch-tracking/{batch}', [DirectorBatchTrackingController::class, 'show'])
             ->whereNumber('batch')->name('tracking.show');
+        // Document release (FR-DIRA-11, D-113). The Director downloads any
+        // approved batch's encoded forms as a ZIP (no request needed), opens
+        // the file a college attached to its release request (the Director
+        // only), and approves or rejects the request — both terminal, both
+        // locked. Each has its own throttle bucket.
+        Route::post('/batch-tracking/{batch}/documents', [DirectorBatchTrackingController::class, 'documents'])
+            ->whereNumber('batch')->middleware('throttle:10,1,director-documents')->name('tracking.documents');
+        Route::get('/release-requests/{releaseRequest}/attachment', [DirectorDocumentReleaseController::class, 'attachment'])
+            ->whereNumber('releaseRequest')->middleware('throttle:60,1,release-attachment')->name('release-requests.attachment');
+        Route::post('/release-requests/{releaseRequest}/approve', [DirectorDocumentReleaseController::class, 'approve'])
+            ->whereNumber('releaseRequest')->middleware('throttle:20,1,release-approve')->name('release-requests.approve');
+        Route::post('/release-requests/{releaseRequest}/reject', [DirectorDocumentReleaseController::class, 'reject'])
+            ->whereNumber('releaseRequest')->middleware('throttle:20,1,release-reject')->name('release-requests.reject');
         // Staff Accounts (FR-AUTH-10, D-47): the Director provisions the
         // college_admin, nurse and physician (D-64) accounts that used to need a
         // developer running StaffSeeder on the server. A capability layer on

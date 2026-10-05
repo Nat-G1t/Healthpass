@@ -2198,6 +2198,116 @@ page separately; only the Director gets in.
 
 ---
 
+## E2E-36 — A college asks for its documents; the Director reviews; the forms download as a ZIP (D-113)
+
+**Goal:** confirm that a College Admin can ask the Director to release a
+finished batch's documents, that the Director can reject (with a message) or
+approve the request, and that after approval the admin downloads the chosen
+students' official forms as one ZIP — while before approval the tools are
+greyed out.
+
+**Accounts:** the CCS Admin `admin.ccs@healthpass.test`, the Director
+`director@healthpass.test` (passwords `password`). A **phone** (any camera
+phone) signed in as the CCS Admin for Part A.
+
+**Preconditions:** a CCS batch whose status is **Completed** or **Finished
+incomplete**, with **at least 3 encoded students** (Fit or Unfit) — and
+ideally one Unattended student, so you can see select mode hide them. Keep a
+sheet of paper to photograph (any "request letter"). Never run
+`migrate:fresh`.
+
+**Steps:**
+
+**Part A — before release, and the request (phone)**
+
+1. On a computer, sign in as the CCS Admin → **Batch Tracking** → **View** on
+   the batch. → **Expect:** in the student card, **Select students**, **Select
+   all** and **Download documents (0)** are shown but **greyed out**, with
+   "Available after the Director releases the documents." Under the card, a
+   large **Request release of documents** button.
+2. Open the same page on the **phone**. Tap **Request release of documents**.
+   → **Expect:** a popup with a **Reason** box (counter "0/500 — at least 10
+   characters") and **Take photo** / **Upload file**. **Send request** is
+   disabled.
+3. Type a reason (e.g. "Our OJT partner companies need the official forms.")
+   and tap **Take photo** — photograph the paper. → **Expect:** a thumbnail of
+   the photo with its name and size; **Send request** turns on.
+4. Tap **Send request**. → **Expect:** "Release requested — the Director will
+   review it." The button is now greyed with "Release requested on {today} —
+   waiting for the Director."
+
+**Part B — the Director rejects**
+
+5. Sign in as the Director. → **Expect:** a badge on **Batch Tracking** in the
+   sidebar. Open it. → **Expect:** the batch's row carries a peach **Release
+   requested** tag under its Batch ID.
+6. Click **View** on that batch. → **Expect:** the same results page the
+   college sees, with **Select students / Select all / Download documents**
+   already working, and a large **Review request of documents** button under
+   the card ("CCS admin's name asked on {date}").
+7. Click **Review request of documents**. → **Expect:** a popup with who asked
+   and when, the reason, and the photo as a thumbnail.
+8. Click the thumbnail. → **Expect:** the photo full screen on a dark
+   background; **Zoom in** / **Zoom out** / **Reset** work; **X** (or Esc)
+   closes the viewer and leaves the popup open.
+9. Click **Reject**. → **Expect:** a **Message to the college** box with a
+   counter; **Reject request** stays disabled under 10 characters. Type "Please
+   attach the memo signed by the dean." and click **Reject request**. →
+   **Expect:** "Request rejected — the college sees your message on its
+   results page." The button is greyed again ("No release request from the
+   college."), the badge is gone, and the history under it lists the request
+   as **Rejected**.
+
+**Part C — the college asks again; the Director approves**
+
+10. As the CCS Admin, reload the batch's results page. → **Expect:** a red
+    box "Not released: Please attach the memo signed by the dean." and a
+    **Request again** button.
+11. Click **Request again**, type a new reason and **Upload file** a PDF. Send
+    it. → **Expect:** "waiting for the Director" again.
+12. As the Director, open the batch → **Review request of documents** → the PDF
+    tile opens in the browser's PDF viewer; close it → **Approve**. →
+    **Expect:** "Documents released — the college can now download its
+    students' forms." The history lists **Rejected** then **Approved**.
+
+**Part D — select and download**
+
+13. As the CCS Admin, reload the page. → **Expect:** "Documents released by
+    the Director on {date}." in place of the button; the tools are no longer
+    greyed.
+14. Click **Select students**. → **Expect:** only **encoded** students stay in
+    the table (Unattended / Scheduled / At the clinic rows disappear), each
+    with a checkbox at the left.
+15. Set **Result** to **Unfit** (if there are Unfit students) → click **Select
+    all**. → **Expect:** only the shown students are ticked; **Clear** appears
+    beside Select students; the button reads **Download documents (N)**.
+    Click **Clear**. → **Expect:** nothing ticked, Clear disappears.
+16. Set **Result** back to **All results** and tick exactly **3** students.
+    Click **Download documents (3)**. → **Expect:** "Preparing…" for a moment,
+    then a file **BR-…-documents.zip** downloads.
+17. Open the ZIP. → **Expect:** exactly **3 PDFs**, named
+    **BR-…-{student no.}-{last name}.pdf**. Open one and compare it with the
+    clinic's **Save as PDF** for the same student (nurse → encode history →
+    PDF). → **Expect:** the same official form.
+18. As the Director, tick a student on any approved batch (no request needed)
+    and download. → **Expect:** the ZIP downloads.
+
+**Part E — limits**
+
+19. On a batch with more than 20 encoded students, **Select all**. → **Expect:**
+    "Select up to 20 students per download." and the download button stays
+    off until you untick some.
+20. Sign in as a College Admin of **another** college and open
+    `/admin/batches/{this batch's id}/results`. → **Expect:** **404**.
+
+**Pass criteria:** the request needs a reason and a file; the Director sees
+it (badge, tag, popup, zoomable attachment) and can reject with a message the
+college reads, then approve a new request; before approval the college's
+tools are greyed out and after it they download a ZIP with one official form
+per selected encoded student; the Director can always download.
+
+---
+
 ## Recording results
 
 For each scenario, record: **Pass / Fail / Blocked (not built)**, the tester

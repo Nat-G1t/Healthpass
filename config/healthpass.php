@@ -115,6 +115,17 @@ return [
         'mimes' => ['jpg', 'jpeg', 'png', 'pdf'],
     ],
 
+    // D-113: the batch document download (one ZIP, one official-form PDF per
+    // student). Every PDF is rendered on request, so a download is capped to
+    // keep it inside the live server's time and memory limits (1 GB droplet).
+    // Measured 2026-10-05 on Nat's laptop (i5-13450HX, which slows to about a
+    // tenth of its speed after ~3 s of full load): 50 Medical Assessment forms
+    // took 103 s — over the ~45 s budget — and 20 took 35 s (0.42 s each at
+    // full speed), peak memory ~60 MB. 20 is also one clinic hour's students.
+    'documents' => [
+        'max_per_download' => 20,
+    ],
+
     // §7.4, D-10: Rule-based flag thresholds — screening signals, not diagnoses.
     // All flag logic (kiosk badges, nurse queue, Director anomalies) reads ONLY from here. (NFR-7, BR-13)
     'thresholds' => [

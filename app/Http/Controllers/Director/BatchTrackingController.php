@@ -6,9 +6,12 @@ namespace App\Http\Controllers\Director;
 
 use App\Http\Controllers\Controller;
 use App\Models\BatchRequest;
+use App\Services\BatchDocumentZip;
 use App\Support\BatchResults;
+use App\Support\PrivateUpload;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
  * The Director's Batch Tracking page (FR-DIRA-09/10, D-112).
@@ -22,6 +25,8 @@ use Illuminate\View\View;
  *   results()  an approved batch's results page — the same body the college
  *              sees (D-111), built by the same App\Support\BatchResults
  *   show()     a rejected or cancelled batch's details, students and reason
+ *   documents() an approved batch's encoded students' forms as one ZIP —
+ *              the Director needs no release request (D-113)
  */
 class BatchTrackingController extends Controller
 {
@@ -46,6 +51,9 @@ class BatchTrackingController extends Controller
             ->when($search !== '', fn ($query) => $query->where('reference_no', 'like', '%'.$search.'%'))
             ->with('college:id,code')
             ->with(BatchResults::statusRelations())
+            // D-113: the "Release requested" tag — a college is waiting for
+            // the Director to review its document release request.
+            ->withExists(['releaseRequests as release_requested' => fn ($query) => $query->where('status', 'pending')])
             ->orderByDesc('scheduled_date')
             ->orderByDesc('id')
             ->paginate($perPage, pageName: 'results_page')
@@ -72,18 +80,42 @@ class BatchTrackingController extends Controller
      *
      * OUTCOME ONLY (PRD §6.6): BatchResults::page() builds each row from the
      * student's name, number, status and Fit / Unfit, and the eager-loads
-     * select nothing else of the clinical record.
+     * select nothing else of the clinical record. (An encoded row also
+     * carries its visit's id, for D-113's document download.)
+     *
+     * D-113: the college's document release requests come along too, oldest
+     * first — the pending one is what "Review request of documents" opens,
+     * and all of them are the small history under the button.
      */
     public function results(BatchRequest $batch): View
     {
         abort_unless($batch->status === 'approved', 404);
 
-        $batch->load('college:id,code,name')->load(BatchResults::pageRelations());
+        $batch->load('college:id,code,name')
+            ->load(BatchResults::pageRelations())
+            ->load(['releaseRequests' => fn ($query) => $query->orderBy('id'), 'releaseRequests.requester:id,name']);
+
+        $pendingRelease = $batch->releaseRequests->firstWhere('status', 'pending');
 
         return view('director.tracking.results', [
             'batch' => $batch,
             'results' => BatchResults::page($batch),
+            'pendingRelease' => $pendingRelease,
+            'attachmentSize' => PrivateUpload::sizeLabel($pendingRelease?->attachment_path),
         ]);
+    }
+
+    /**
+     * D-113: the Director downloads the selected students' official forms —
+     * always allowed for an approved batch, no release request needed (the
+     * Director already sees every record). Which students may be in the ZIP is
+     * BatchDocumentZip's one shared rule.
+     */
+    public function documents(Request $request, BatchRequest $batch, BatchDocumentZip $zip): BinaryFileResponse
+    {
+        abort_unless($batch->status === 'approved', 404);
+
+        return $zip->download($batch, $request->input('visits'));
     }
 
     /**

@@ -749,8 +749,11 @@ class BatchResultsTest extends TestCase
         $row = $response->viewData('results')['rows'][0];
 
         // §6.6 (D-53, moved here by D-55 and D-111): the OUTCOME, and only the outcome.
+        // D-113 adds the encoded visit's database id — the handle the document
+        // download posts — which is an id, not its HP- reference or any record.
         $this->assertSame('Unfit', $row['result']);
-        $this->assertSame(['name', 'number', 'status', 'result'], array_keys($row));
+        $this->assertSame(['name', 'number', 'status', 'result', 'visit_id'], array_keys($row));
+        $this->assertSame($appointment->clinicVisit->id, $row['visit_id']);
 
         $response->assertDontSee('Borderline blood pressure');
         $response->assertDontSee('93.4');
@@ -783,7 +786,7 @@ class BatchResultsTest extends TestCase
         $response->assertDontSee('Fina Pulled');
         $response->assertDontSee('Withdrawn');
         // Embedded for Alpine to filter — through Js::from().
-        $response->assertSee('rows: JSON.parse', false);
+        $response->assertSee('batchResults(JSON.parse', false);
     }
 
     public function test_the_table_has_the_filters_and_scrolls_instead_of_paging(): void

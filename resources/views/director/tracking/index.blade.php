@@ -78,7 +78,13 @@
         <x-hp.table :headers="$headers" data-tracking-results>
             @foreach ($approvedBatches as $batch)
                 <x-hp.table-row>
-                    <x-hp.table-cell label="Batch ID" class="whitespace-nowrap font-semibold">{{ $batch->reference_no }}</x-hp.table-cell>
+                    <x-hp.table-cell label="Batch ID" class="whitespace-nowrap font-semibold">
+                        {{ $batch->reference_no }}
+                        {{-- D-113 (Q18): the college asked for this batch's documents — review it from View. --}}
+                        @if ($batch->release_requested)
+                            <span class="mt-1 block"><x-hp.badge variant="flagged" data-release-requested>Release requested</x-hp.badge></span>
+                        @endif
+                    </x-hp.table-cell>
                     <x-hp.table-cell label="College">{{ $batch->college->code }}</x-hp.table-cell>
                     <x-hp.table-cell label="Form Type">{{ $batch->formTypeLabel() }}</x-hp.table-cell>
                     <x-hp.table-cell label="Purpose">{{ Str::limit($batch->reasonText(), 60) }}</x-hp.table-cell>

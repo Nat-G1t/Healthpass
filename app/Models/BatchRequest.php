@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -330,6 +331,31 @@ class BatchRequest extends Model
     }
 
     /**
+     * D-113: the batch statuses at which its college may ask the Director to
+     * release the documents — every student is final. Not `no_one_attended`:
+     * nobody was encoded, so there is nothing to release.
+     */
+    public const RELEASABLE_STATUSES = ['completed', 'finished_incomplete'];
+
+    /**
+     * D-113: may the college ask for this batch's documents yet? Reads
+     * resultsStatus(), so callers eager-load BatchResults::statusRelations().
+     */
+    public function isReadyForRelease(): bool
+    {
+        return in_array($this->resultsStatus(), self::RELEASABLE_STATUSES, true);
+    }
+
+    /**
+     * D-113: has the Director released this batch's documents to its college?
+     * True once ANY request was approved — an approval never expires.
+     */
+    public function hasReleasedDocuments(): bool
+    {
+        return $this->releaseRequests()->where('status', 'approved')->exists();
+    }
+
+    /**
      * D-111: the numbers on the results page's three summary cards — how many
      * students the batch holds, how many are encoded, how many of those are
      * Fit, and how many were EVER given a 2nd chance (D-110). That last count
@@ -443,5 +469,20 @@ class BatchRequest extends Model
     public function appointments(): HasMany
     {
         return $this->hasMany(Appointment::class);
+    }
+
+    /** D-113: every document release request the college made for this batch. */
+    public function releaseRequests(): HasMany
+    {
+        return $this->hasMany(DocumentReleaseRequest::class);
+    }
+
+    /**
+     * D-113: the college's most recent release request — the one the results
+     * page's button state follows (pending / rejected / approved).
+     */
+    public function latestReleaseRequest(): HasOne
+    {
+        return $this->hasOne(DocumentReleaseRequest::class)->latestOfMany();
     }
 }

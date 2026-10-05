@@ -45,7 +45,11 @@ Two things make this safe for the kiosk, both non-obvious:
 ## 1. Server requirements
 
 - PHP **8.2+** with the Laravel 12 extensions (mbstring, xml, curl, zip, bcmath,
-  intl, pdo_mysql, gd), Composer
+  intl, pdo_mysql, gd), Composer. **`zip` is required since D-113** — the batch
+  document download builds a ZIP with PHP's `ZipArchive`; check with
+  `php -m | grep zip` (it is already on the droplet). Each download renders up to
+  `healthpass.documents.max_per_download` (20) PDFs in one request, so keep
+  PHP-FPM's `max_execution_time` at its default 30 s or higher.
 - MySQL/MariaDB
 - nginx (or Apache) as the TLS terminator / reverse proxy
 - Node.js 20 LTS **for the build only** — you can build assets elsewhere and
@@ -459,8 +463,10 @@ mysqldump -u healthpass -p healthpass > ~/healthpass-$(date +%F).sql
 ### Back up the uploaded files too (D-109)
 
 Since D-109 the app stores **files** as well as rows: every batch's signed memo
-(and, from D-113, release attachments) lives in `storage/app/private` — never
-under `public/`. A database dump alone no longer restores HealthPass: a restored
+(`memos/`) and, since D-113, every document release request's attachment
+(`release-requests/`) lives in `storage/app/private` — never under `public/`.
+(`storage/app/private/tmp/` only ever holds a document ZIP for the seconds it
+takes to send; it is deleted after sending and needs no backup.) A database dump alone no longer restores HealthPass: a restored
 batch would point at a memo that isn't there. Archive the folder **daily, next to
 the DB dump**, and keep the last 7:
 
@@ -478,7 +484,8 @@ then `chown -R www-data:www-data storage/app/private`.
 
 `storage/app/private` must be **writable by `www-data`** (the `chown` in §2 covers
 it) — if it isn't, submitting a batch fails with "The memo could not be saved.
-Please try again." and the error is in `storage/logs/laravel.log`.
+Please try again.", a release request with "The attachment could not be saved.
+Please try again.", and the error is in `storage/logs/laravel.log`.
 
 ---
 
@@ -511,8 +518,10 @@ Please try again." and the error is in `storage/logs/laravel.log`.
       in every appointment email
 - [ ] `php artisan queue:failed` is empty
 - [ ] Database backup taken and restore tested
-- [ ] `storage/app/private` (signed memos, D-109) archived daily next to the DB
-      dump (§8), and writable by `www-data`
+- [ ] `storage/app/private` (signed memos, D-109; release attachments, D-113)
+      archived daily next to the DB dump (§8), and writable by `www-data`
+- [ ] PHP `zip` enabled (`php -m | grep zip`) — the D-113 document download
+      needs it
 
 ---
 

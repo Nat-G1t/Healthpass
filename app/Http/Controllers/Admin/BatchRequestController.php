@@ -17,6 +17,7 @@ use App\Services\ReferenceNumberService;
 use App\Support\AssessmentDocument;
 use App\Support\BatchResults;
 use App\Support\ClearanceDocument;
+use App\Support\PrivateUpload;
 use App\Support\Programs;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\RedirectResponse;
@@ -120,18 +121,26 @@ class BatchRequestController extends Controller
      *
      * OUTCOME ONLY (PRD §6.6): BatchResults::page() builds each row from the
      * student's name, number, status and Fit / Unfit, and nothing else of the
-     * clinical record is loaded.
+     * clinical record is loaded. (An encoded row also carries its visit's id,
+     * for D-113's document download.)
+     *
+     * D-113: the page also carries the document release — the college's
+     * latest request (pending / rejected / approved) decides the button under
+     * the main card, and an approved one switches the download tools on.
      */
     public function results(int $batchId): View
     {
         $batch = $this->managedCollege()->batchRequests()
             ->where('status', 'approved')
             ->with(BatchResults::pageRelations())
+            ->with('latestReleaseRequest')
             ->findOrFail($batchId);
 
         return view('admin.batches.results', [
             'batch' => $batch,
             'results' => BatchResults::page($batch),
+            'latestRelease' => $batch->latestReleaseRequest,
+            'isReleased' => $batch->hasReleasedDocuments(),
         ]);
     }
 
@@ -247,7 +256,7 @@ class BatchRequestController extends Controller
                     // D-109. The type is the one the SERVER detected from the
                     // file's content — never the browser's claim.
                     'memo_path' => $memoPath,
-                    'memo_original_name' => $this->memoDisplayName($memo->getClientOriginalName()),
+                    'memo_original_name' => PrivateUpload::displayName($memo->getClientOriginalName(), 'signed-memo'),
                     'memo_mime' => $memo->getMimeType(),
                     // D-60: dental is gone. The server always writes 'medical' and
                     // never reads a service type from the request body.
@@ -270,19 +279,6 @@ class BatchRequestController extends Controller
         }
 
         return redirect()->route('admin.batches.confirmation', $batch);
-    }
-
-    /**
-     * D-109: the memo's original file name, made safe to keep and to send back
-     * in a Content-Disposition header — control characters dropped, cut to the
-     * column's 255 characters. The browser sent it, so it is never trusted as
-     * is (it is only ever shown, escaped, and never used as a path).
-     */
-    private function memoDisplayName(string $clientName): string
-    {
-        $name = mb_substr(trim((string) preg_replace('/[\x00-\x1F\x7F]/u', '', $clientName)), 0, 255);
-
-        return $name !== '' ? $name : 'signed-memo';
     }
 
     /**

@@ -258,15 +258,20 @@ npm run dev                       # terminal 2
   carries no headers/footers.
   Print and PDF share one template per form (`resources/views/forms/`),
   written in dompdf-safe CSS (tables, no flex/grid, no JS).
+- Documents leave the clinic only through the clinic itself, the Director, or
+  a Director-approved release to the batch's own college (D-113); students
+  never download (D-106).
 
 ## Database
 
-11 tables, canonical in `HealthPass_Context.md` / PRD data dictionary:
+12 tables, canonical in `HealthPass_Context.md` / PRD data dictionary:
 `colleges`, `users`, `student_profiles`, `appointments`, `batch_requests`,
 `batch_request_students`, `clinic_visits`, `vital_signs`,
 `screening_responses`, `clearance_records`, `medical_assessments` (D-69 —
 the Medical Assessment Form's own sections, one row per ENCODED `assessment`
-visit, none for a Medical Clearance).
+visit, none for a Medical Clearance), `document_release_requests` (D-113 —
+a College Admin's request that the Director release a finished batch's
+documents; many per batch, at most one pending).
 (`clearance_case_categories`, added as table #11 by D-23, was **removed by
 D-32** with the case-category concept. The `kiosk_devices` device-auth
 table, D-27, is a flagged extension tracked in the PRD data dictionary.)

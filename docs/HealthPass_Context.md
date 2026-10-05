@@ -296,7 +296,7 @@ Home, Calendar, FileText, QrCode, Plus, List, Activity, Edit, BarChart, Alert, C
 | Student | My Records → results encoded since last seen · Kiosk Tutorial → a dot until the walkthrough reaches its last step (opening the page doesn't clear it) |
 | College Admin | Batch Tracking → Director decisions + results encoded for the college's batch students, since last seen · Activity Log → entries since last seen, minus the viewer's own submissions and cancellations |
 | Nurse | Live Queue → visits waiting right now (a work count — opening the page doesn't clear it, encoding does) |
-| Clinic Director | Batch Approvals → pending requests (a work count) · Flagged Anomalies → flagged visits captured since last seen |
+| Clinic Director | Batch Approvals → pending requests (a work count) · Batch Tracking → document release requests waiting for review (a work count, D-113) · Flagged Anomalies → flagged visits captured since last seen |
 
 "Last seen" = when the user last opened that page: stamped in `users.nav_seen_at` before the page renders (so the page you're on shows no badge); a page never opened counts from the account's `created_at`. Every other item has no badge. Counts come from `App\Support\NavBadges`, handed to the sidebar by a view composer.
 
@@ -419,8 +419,10 @@ Students are scheduled only through their college (a batch request the Clinic Di
 - **Header:** "← Batch Tracking", **Batch BR-2026-012**, one line of form · purpose · clinic date and hours (plus **"2nd chance: Oct 7, 2026, 7:00 AM"** when the batch has one), and the batch status badge.
 - **Three summary cards** (side by side; stacked on a phone): **Completed** "21 out of 40 students completed" · **Fit** "14 out of 21 completed students are fit" · **Rescheduled** "3 out of 40 students were rescheduled" — everyone ever given a 2nd chance, still counted after they complete (`resultsSummary()`).
 - **Main card:** a **Result** filter (All results / Fit / Unfit), a **Completion status** filter (All / Scheduled / At the clinic / Rest / Retake / Rescheduled / Completed / Unattended) and a **search** by name or student ID — all three together, in the browser (the whole roster is on the page). Below them a table of **Name · Student ID · Completion status · Result**, in last-name order, **ten rows tall, then it scrolls inside the card** with its header pinned — no pager (FR-UI-06's exception). No match → "No students match these filters." Student statuses as D-110: **Scheduled** / **Rescheduled** (red — on their 2nd-chance day, not yet seen) / **Rest / Retake** / **At the clinic** (captured, not yet encoded — also after the cutoff) / **Completed** / **Unattended**. Each row reads the student's CURRENT appointment. Students withdrawn before D-87 are not listed or counted. Below `md` each student re-flows into a small card.
-- **Outcome only** — name, student number, status and Fit / Unfit; no vitals, screening answers, clinic notes, physician details or visit reference.
-- Built from shared partials (`resources/views/batches/results/` — header, status badge, summary, table) and one payload builder (`App\Support\BatchResults`), so the other roles' results pages can show the same body (the Director's, since D-112). A marked spot under the main card is reserved for the document-release button (D-113).
+- **Outcome only** — name, student number, status and Fit / Unfit; no vitals, screening answers, clinic notes, physician details or visit reference. (D-113: an encoded row also carries its visit's database id — not its HP- reference — which the document download posts.)
+- Built from shared partials (`resources/views/batches/results/` — header, status badge, summary, table) and one payload builder (`App\Support\BatchResults`), so the other roles' results pages can show the same body (the Director's, since D-112). The table's filters and selection are one Alpine component, `batchResults` (`resources/js/shared/batch-results.js`), shared by every role's page.
+- **Document release (D-113, FR-ADM-15)** — under the main card, full width, a large button: **Request release of documents** — disabled with "Available when the batch is completed." until the batch is **Completed** or **Finished incomplete**; enabled → a popup with a **reason** (10–500 characters, live counter) and **one attachment** (Take photo / Upload file — JPG, PNG or PDF up to 5 MB, the D-109 `<x-hp.file-capture>`). While pending: disabled, "Release requested on {date} — waiting for the Director." Rejected: the Director's message ("Not released: …") and **Request again**. Released: "Documents released by the Director on {date}." One pending request per batch; an approval never expires; no emails.
+- **Select & download (D-113)** — the filters row gains **Select students** (select mode: only encoded students stay, each with a checkbox at the left of its row; the filters keep working), **Clear** (once something is ticked) and **Select all** (ticks every student shown), and the card's lower right **Download documents (N)** — one ZIP `{Batch ID}-documents.zip`, one PDF per student `{Batch ID}-{Student No}-{Last name}.pdf`, each the official form exactly as the clinic's PDF; at most **20** per download ("Select up to 20 students per download."). Until the Director releases the batch every tool is drawn **greyed out** with "Available after the Director releases the documents." (the server refuses the download with a 403 too).
 
 ---
 
@@ -573,13 +575,14 @@ then nurse-edited — D-76).
 - **On Reject** (D-36): a **written reason is required** (10–500 chars). Status → `rejected`, `rejection_reason` stored, no appointments. The College Admin reads it on Batch Tracking.
 
 #### Batch Tracking (`director-tracking`, `/director/batch-tracking`) — D-112
-- In the sidebar right after **Batch Approvals**, with the College Admin's Batch Tracking icon. No badge yet (D-113 adds one). Every college — no college scope.
-- **Card 1 — Batch Results:** every **approved** batch, **newest clinic date first**, ten per page (`results_page`). Columns: **Batch ID / College** (code) **/ Form Type / Purpose** (cut to 60 characters) **/ Date scheduled** (date, hours beneath) **/ Status / [View]**. Status is D-111's (Scheduled / In progress / Still in progress / Completed / Finished incomplete / No one attended), worded by the same partial as the college's card. **Batch ID search** on the card — server-side, all pages, this card only; no match → "No approved batch matches …". Empty: "No approved batches yet."
+- In the sidebar right after **Batch Approvals**, with the College Admin's Batch Tracking icon. **Badge (D-113):** a work count of the document release requests waiting for review. Every college — no college scope.
+- **Card 1 — Batch Results:** every **approved** batch, **newest clinic date first**, ten per page (`results_page`). Columns: **Batch ID / College** (code) **/ Form Type / Purpose** (cut to 60 characters) **/ Date scheduled** (date, hours beneath) **/ Status / [View]**. Status is D-111's (Scheduled / In progress / Still in progress / Completed / Finished incomplete / No one attended), worded by the same partial as the college's card. **Batch ID search** on the card — server-side, all pages, this card only; no match → "No approved batch matches …". Empty: "No approved batches yet." A row whose college has a pending document release request carries a peach **Release requested** tag under its Batch ID (D-113, Q18).
 - **Card 2 — Rejected batches:** batches the Director **rejected** plus batches a **college cancelled** (Q20), **newest decision first** (the cancellation, else the rejection), ten per page under its own `rejected_page`. Same columns. Date scheduled is "—" unless the batch was cancelled after approval. Status: **Rejected**, or **Cancelled by college** (never "Rejected") with "after approval" beneath when the college cancelled an approved batch (D-92). Empty: "No rejected or cancelled batches."
 - Both tables re-flow into stacked cards below `md`; the page never scrolls sideways.
 
 #### Batch Results page — Director (`director-tracking-results`, `/director/batch-tracking/{batch}/results`) — D-112
-- An approved batch's **View**. The **same page body** as the College Admin's Batch Results page (header, three summary cards, filters, ten-row scrolling table) from the same partials and `App\Support\BatchResults`, so both roles see the same numbers. The header's back link reads "← Batch Tracking" and the header also **names the college**. Outcome only, as for the admin. A pending, rejected or cancelled batch → 404. A marked spot under the main card is reserved for the Director's document tools (D-113).
+- An approved batch's **View**. The **same page body** as the College Admin's Batch Results page (header, three summary cards, filters, ten-row scrolling table) from the same partials and `App\Support\BatchResults`, so both roles see the same numbers. The header's back link reads "← Batch Tracking" and the header also **names the college**. Outcome only, as for the admin. A pending, rejected or cancelled batch → 404.
+- **Document tools (D-113, FR-DIRA-11):** the same **Select students / Clear / Select all / Download documents (N)** as the College Admin's page, **always enabled** — the Director needs no release request. Under the main card, full width, **Review request of documents** — enabled only while the college has a **pending** release request (otherwise greyed, "No release request from the college."). It opens a popup: who asked and when, the reason, the attachment (an image thumbnail or a PDF tile opening the shared full-screen viewer `<x-hp.file-viewer>` — zoom for images, the browser's PDF viewer for PDFs; only the Director's route serves the file), and **Approve** / **Reject** — Reject reveals a required message (10–500 characters, live counter) the college reads on its page. Both decisions are locked and terminal. Under the button, small: every request this batch has had, with its date and outcome.
 
 #### Rejected / cancelled batch (`director-tracking-show`, `/director/batch-tracking/{batch}`) — D-112
 - A rejected or cancelled batch's **View**. An approved or pending batch → 404.
@@ -726,13 +729,16 @@ Each vital screen has:
 
 ---
 
-## 8. Database schema (11 tables)
+## 8. Database schema (12 tables)
 
 > Was locked at 10 tables; **D-69 (September 20, 2026) adds `medical_assessments`**
 > as table #11 — the Medical Assessment Form's own sections, written only for
 > visits that use that form. `clearance_case_categories` (added as table #11 on
 > July 9, 2026 by D-23) was **removed by D-32** (July 18, 2026) when the
 > Medical Cases analytics and the case-category concept were dropped.
+> **D-113 (October 5, 2026) adds `document_release_requests`** as table #12 —
+> a College Admin's request that the Director release a finished batch's
+> official documents (FLAGGED SCHEMA CHANGE).
 > (The `kiosk_devices` device-auth table, D-27, is documented in the PRD
 > data dictionary as a flagged extension and is not shown in this section.)
 
@@ -969,6 +975,28 @@ physical_exam          json NULL
 created_at, updated_at
 ```
 
+### `document_release_requests`
+```sql
+-- D-113 — table #12. A College Admin asks the Director to release a finished
+-- (Completed / Finished incomplete) batch's official documents. Many per
+-- batch: a rejected request stays as history and the college may ask again,
+-- but at most ONE is pending at a time (checked under a lock on the batch
+-- row, not by the schema). Released = any request approved; never expires.
+id                        bigint PK
+batch_request_id          bigint FK → batch_requests.id   -- cascade on delete
+requested_by              bigint FK → users.id            -- the College Admin who asked
+reason                    text                            -- 10–500 chars (Admin\StoreReleaseRequest)
+attachment_path           varchar(255)                    -- PRIVATE `local` disk, release-requests/<random name>
+attachment_original_name  varchar(255)                    -- shown; the browser's save-as name
+attachment_mime           varchar(255)                    -- detected by the SERVER at upload; the Director's route alone serves it
+status                    enum('pending','approved','rejected') DEFAULT 'pending'
+reviewed_by               bigint NULL FK → users.id       -- the Director
+reviewed_at               timestamp NULL
+rejection_message         text NULL                       -- 10–500 chars (Director\RejectReleaseRequest); the college reads it
+created_at, updated_at
+INDEX (batch_request_id, status)
+```
+
 ---
 
 ## 9. Key relationships summary
@@ -987,6 +1015,7 @@ users ────────┬──| student_profiles (user_id)          one
               └──< clearance_records (encoded_by)
 
 batch_requests ──< batch_request_students ──|── appointments (generated on approval)
+batch_requests ──< document_release_requests (D-113 — requested_by / reviewed_by → users)
 
 appointments ──|── clinic_visits (appointment_id, nullable)
 
