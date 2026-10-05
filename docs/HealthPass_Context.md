@@ -595,6 +595,7 @@ then nurse-edited — D-76).
 - **Table**: Student (600), College (muted — capture-time `clinic_visits.college_id` snapshot, not the student's current college), Flag (flagged badge), Value (orange 700), View (link). **The Category column is dropped (D-32).**
 - Source: `ClinicVisit::scopeFlagged()` — clinic visits where `vital_signs.is_bp_flagged OR is_temp_flagged OR is_bmi_flagged OR is_hr_flagged OR is_rr_flagged` = true (D-66), joined to student name and the visit's snapshot college. That one scope is also what the Director dashboard preview and the D-57 sidebar badge count, so all three moved together.
 - No Export button (FR-ANL-06 removed by D-32).
+- **Phones (below `md`, 2026-10-05 fix):** each flagged visit is a stacked card — student, college, each flag badge beside its value, and View. The table shows from `md` up, in a `relative` scroll box so its screen-reader-only header label can't widen the page.
 
 ---
 

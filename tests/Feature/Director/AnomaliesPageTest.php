@@ -11,6 +11,7 @@ use App\Models\StudentProfile;
 use App\Models\User;
 use App\Models\VitalSigns;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -117,6 +118,43 @@ class AnomaliesPageTest extends TestCase
     }
 
     // ── The year filter (D-102) ──────────────────────────────────────────────
+
+    public function test_phones_get_one_card_per_flagged_visit_with_everything_its_row_shows(): void
+    {
+        // Below md the table is hidden and each visit is a stacked card, so a
+        // phone never has to scroll sideways to reach a flag's value or View.
+        $twoFlags = $this->makeVisit($this->ccs, [
+            'is_bp_flagged' => true, 'bp_systolic' => 150, 'bp_diastolic' => 95,
+            'is_hr_flagged' => true, 'heart_rate_bpm' => 118,
+        ]);
+        $oneFlag = $this->makeVisit($this->cea, ['is_bp_flagged' => true, 'bp_systolic' => 160, 'bp_diastolic' => 100]);
+
+        $html = $this->actingAs($this->director)->get('/director/anomalies')->assertOk()->getContent();
+
+        // From md the table is back, in a RELATIVE scroll box: its sr-only
+        // "View" header label is absolutely positioned and would otherwise
+        // escape the box and stretch the page sideways.
+        $tableBox = '<div class="relative hidden overflow-x-auto md:block">';
+        $this->assertStringContainsString($tableBox, $html);
+
+        // The phone cards: everything from their list's opening tag to the table.
+        $this->assertSame(1, preg_match('/<ul class="space-y-3 md:hidden" data-anomaly-cards>/', $html));
+        $cardsHtml = Str::between($html, 'data-anomaly-cards>', $tableBox);
+        $cards = array_slice(explode('rounded-xl border border-hp-slate/15 p-4', $cardsHtml), 1);
+        $this->assertCount(2, $cards);
+
+        $cardFor = fn (ClinicVisit $visit): string => collect($cards)->first(
+            fn (string $card): bool => str_contains($card, route('director.anomalies.show', ['visit' => $visit, 'year' => now()->year])),
+        ) ?? '';
+
+        foreach (['Juan Santos', 'CCS', 'High Blood Pressure', '150/95 mmHg', 'High Heart Rate', '118 bpm', 'View'] as $text) {
+            $this->assertStringContainsString($text, $cardFor($twoFlags));
+        }
+        foreach (['Juan Santos', 'CEA', 'High Blood Pressure', '160/100 mmHg'] as $text) {
+            $this->assertStringContainsString($text, $cardFor($oneFlag));
+        }
+        $this->assertStringNotContainsString('High Heart Rate', $cardFor($oneFlag));
+    }
 
     public function test_the_page_opens_on_this_year_and_leaves_other_years_out(): void
     {

@@ -116,7 +116,42 @@
                 </p>
             </div>
         @else
-            <div class="overflow-x-auto">
+            {{-- ── Phones and small tablets (below md): one card per visit ────────
+                 The table needs 720 px, so on a phone it scrolled sideways inside
+                 its card and hid View. Each card shows what its row does — the
+                 student, the college, each flag beside its value, and View. --}}
+            <ul class="space-y-3 md:hidden" data-anomaly-cards>
+                @foreach ($visits as $visit)
+                    @php $flags = $visit->vitalSigns?->flagDetails() ?? []; @endphp
+                    <li class="rounded-xl border border-hp-slate/15 p-4 text-hp-slate">
+                        <div class="flex items-baseline justify-between gap-4">
+                            <p class="min-w-0 break-words text-sm font-semibold">{{ $visit->student->name ?? '—' }}</p>
+                            {{-- Capture-time college snapshot (FR-STU-09, D-17) --}}
+                            <p class="shrink-0 text-xs text-hp-slate/60">{{ $visit->college->code ?? '—' }}</p>
+                        </div>
+
+                        <ul class="mt-3 space-y-1.5">
+                            @foreach ($flags as $flag)
+                                <li class="flex items-center justify-between gap-4">
+                                    <x-hp.badge variant="flagged">{{ $flag['label'] }}</x-hp.badge>
+                                    <span class="shrink-0 text-xs font-bold text-hp-orange">{{ $flag['value'] }}</span>
+                                </li>
+                            @endforeach
+                        </ul>
+
+                        <a href="{{ route('director.anomalies.show', ['visit' => $visit, 'year' => $year]) }}"
+                           class="mt-3 inline-block text-xs font-semibold text-hp-orange hover:underline">
+                            View
+                        </a>
+                    </li>
+                @endforeach
+            </ul>
+
+            {{-- ── md and up: the table ────────────────────────────────────────────
+                 `relative` keeps the header's screen-reader-only "View" label
+                 (absolutely positioned) inside this scroll box. Without it, that
+                 label escaped the box and stretched the whole page sideways. --}}
+            <div class="relative hidden overflow-x-auto md:block">
                 <table class="w-full min-w-[720px] text-left text-sm text-hp-slate">
                     <thead>
                         <tr class="border-b border-gray-200 text-[10px] uppercase tracking-wider text-hp-slate/40">

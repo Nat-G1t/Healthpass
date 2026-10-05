@@ -1511,6 +1511,19 @@
 
 ### Fixed
 
+* **Flagged Anomalies fits a phone and no longer slides sideways** (reported
+  by Nat 2026-10-05; the bug the Batch Approvals fix found in its 390 px sweep;
+  no schema change, no new route). Below `md` each flagged visit is a stacked
+  card — student, college, each flag badge beside its value, and View (keeping
+  the picked `?year=`) — instead of a 720 px table that scrolled inside its card
+  and hid View. From `md` up the table is unchanged. Same root cause as the
+  queue: the table's screen-reader-only "View" header label is absolutely
+  positioned and its scroll box was not, so the label escaped the box and
+  widened the page to 730 px on a 360–390 px phone. The box is now `relative`.
+  * Test: `AnomaliesPageTest` — one card per flagged visit carrying its
+    student, college, every flag with its value and its View link; table in
+    a `relative` box shown from `md`.
+
 * **The Director's Batch Approvals queue fits a phone and no longer slides
   sideways** (reported by Nat 2026-10-05 from a phone screenshot; no schema
   change, no new route). Below `md` each pending request is a stacked card —
