@@ -327,7 +327,12 @@ class AssessmentPrintTest extends TestCase
         return $found === 1 ? (float) $match[1] : null;
     }
 
-    public function test_the_assessment_pdf_is_named_after_its_form(): void
+    /**
+     * D-114: a batch student's PDF is "{Batch ID}-{Surname}-{Student ID}.pdf"
+     * — the same name it gets inside every role's ZIP. (A visit with no batch
+     * keeps "{HP ref}-medical-…pdf": ClearancePdfTest.)
+     */
+    public function test_a_batch_students_pdf_is_named_after_the_batch_surname_and_student_id(): void
     {
         $nurse = $this->nurse();
         $visit = $this->makeVisit();
@@ -338,8 +343,11 @@ class AssessmentPrintTest extends TestCase
             ->assertOk()
             ->assertHeader('content-type', 'application/pdf');
 
+        $batchId = $visit->appointment->batchRequest->reference_no;
+        $studentId = $visit->student->studentProfile->student_number;
+
         $this->assertStringContainsString(
-            "attachment; filename={$visit->reference_no}-medical-assessment.pdf",
+            "attachment; filename={$batchId}-Cruz-{$studentId}.pdf",
             (string) $response->headers->get('content-disposition')
         );
     }

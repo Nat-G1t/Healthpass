@@ -340,7 +340,7 @@ class BatchTrackingPageTest extends TestCase
         // The oldest clinic date sits on page 2 without a search.
         $target = $batches->first();
 
-        $response = $this->tracking(['q' => $target->reference_no])->assertOk();
+        $response = $this->tracking(['results_q' => $target->reference_no])->assertOk();
 
         $this->assertSame([$target->id], $response->viewData('approvedBatches')->pluck('id')->all());
         $response->assertSee('value="'.$target->reference_no.'"', false);
@@ -350,10 +350,108 @@ class BatchTrackingPageTest extends TestCase
     {
         $this->makeBatch('approved');
 
-        $this->tracking(['q' => 'BR-1999'])
+        $this->tracking(['results_q' => 'BR-1999'])
             ->assertOk()
             ->assertSee('Batch Results')
-            ->assertSee('No approved batch matches');
+            ->assertSee('No approved batch matches these filters.');
+    }
+
+    // ── D-114: each card's own Batch ID search + College dropdown ───────────
+
+    public function test_each_card_has_its_own_search_and_college_dropdown(): void
+    {
+        $this->makeBatch('approved');
+        $this->makeBatch('rejected');
+
+        $this->tracking()
+            ->assertOk()
+            ->assertSee('data-card-filters="results"', false)
+            ->assertSee('data-card-filters="rejected"', false)
+            ->assertSee('name="results_q"', false)
+            ->assertSee('name="results_college"', false)
+            ->assertSee('name="rejected_q"', false)
+            ->assertSee('name="rejected_college"', false)
+            ->assertSeeInOrder(['All colleges', 'CCS', 'COE'], false);
+    }
+
+    public function test_the_college_dropdown_filters_its_own_card_only(): void
+    {
+        $ccsApproved = $this->makeBatch('approved');
+        $coeApproved = $this->makeBatch('approved', $this->coe);
+        $ccsRejected = $this->makeBatch('rejected');
+        $coeRejected = $this->makeBatch('rejected', $this->coe);
+
+        $response = $this->tracking(['results_college' => $this->coe->id])->assertOk();
+        $this->assertSame([$coeApproved->id], $response->viewData('approvedBatches')->pluck('id')->all());
+        $this->assertEqualsCanonicalizing(
+            [$ccsRejected->id, $coeRejected->id],
+            $response->viewData('closedBatches')->pluck('id')->all(),
+        );
+
+        $response = $this->tracking(['rejected_college' => $this->ccs->id])->assertOk();
+        $this->assertEqualsCanonicalizing(
+            [$ccsApproved->id, $coeApproved->id],
+            $response->viewData('approvedBatches')->pluck('id')->all(),
+        );
+        $this->assertSame([$ccsRejected->id], $response->viewData('closedBatches')->pluck('id')->all());
+    }
+
+    public function test_the_rejected_card_searches_by_batch_id(): void
+    {
+        $target = $this->makeBatch('cancelled');
+        $this->makeBatch('rejected');
+
+        $response = $this->tracking(['rejected_q' => $target->reference_no])->assertOk();
+
+        $this->assertSame([$target->id], $response->viewData('closedBatches')->pluck('id')->all());
+
+        $this->tracking(['rejected_q' => 'BR-1999'])
+            ->assertOk()
+            ->assertSee('No rejected or cancelled batch matches these filters.');
+    }
+
+    public function test_one_cards_form_keeps_the_other_cards_filters(): void
+    {
+        $this->makeBatch('approved');
+        $this->makeBatch('rejected');
+
+        $response = $this->tracking([
+            'results_q' => 'BR', 'results_college' => $this->ccs->id, 'results_page' => 2, 'rejected_page' => 1,
+        ])->assertOk();
+
+        // Card 2's form carries card 1's filters and page along as hidden
+        // fields, and drops its own page (a new search starts at page 1).
+        $rejectedForm = $this->cardForm($response, 'rejected');
+        $this->assertStringContainsString('<input type="hidden" name="results_q" value="BR">', $rejectedForm);
+        $this->assertStringContainsString('<input type="hidden" name="results_college" value="'.$this->ccs->id.'">', $rejectedForm);
+        $this->assertStringContainsString('<input type="hidden" name="results_page" value="2">', $rejectedForm);
+        $this->assertStringNotContainsString('name="rejected_page"', $rejectedForm);
+
+        // Card 1's form: its own filters are visible inputs, card 2's page rides along.
+        $resultsForm = $this->cardForm($response, 'results');
+        $this->assertStringContainsString('<input type="hidden" name="rejected_page" value="1">', $resultsForm);
+        $this->assertStringNotContainsString('name="results_page"', $resultsForm);
+        $this->assertStringNotContainsString('type="hidden" name="results_q"', $resultsForm);
+    }
+
+    /** The HTML of one card's filter form (data-card-filters="$prefix"). */
+    private function cardForm(TestResponse $response, string $prefix): string
+    {
+        $found = preg_match('/<form[^>]*data-card-filters="'.$prefix.'"[^>]*>.*?<\/form>/s', $response->getContent(), $match);
+        $this->assertSame(1, $found, "No {$prefix} filter form on the page.");
+
+        return $match[0];
+    }
+
+    public function test_malformed_filters_read_as_no_filter(): void
+    {
+        $approved = $this->makeBatch('approved');
+
+        $response = $this->actingAs($this->director)
+            ->get(route('director.tracking.index').'?results_college=abc&results_q[]=x')
+            ->assertOk();
+
+        $this->assertSame([$approved->id], $response->viewData('approvedBatches')->pluck('id')->all());
     }
 
     public function test_both_cards_render_their_empty_state_with_no_decided_batches(): void

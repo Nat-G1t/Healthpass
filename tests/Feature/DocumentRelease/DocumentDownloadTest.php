@@ -14,8 +14,8 @@ use ZipArchive;
 
 /**
  * D-113 — the selected students' official forms as ONE ZIP (Q15): one PDF per
- * student, named "{Batch ID}-{Student No}-{Last name}.pdf", inside
- * "{Batch ID}-documents.zip".
+ * student, named "{Batch ID}-{Surname}-{Student ID}.pdf" (D-114 — it was
+ * "{Batch ID}-{Student No}-{Last name}.pdf"), inside "{Batch ID}-documents.zip".
  *
  * Two routes, one rule (App\Services\BatchDocumentZip):
  *   - the College Admin's — only after the Director released the batch (403
@@ -105,9 +105,9 @@ class DocumentDownloadTest extends TestCase
 
         $number = fn ($visit): string => $visit->student->studentProfile->student_number;
         $this->assertSame([
-            "{$batch->reference_no}-{$number($cruz)}-Cruz.pdf",
-            "{$batch->reference_no}-{$number($delaCruz)}-Dela-Cruz.pdf",
-            "{$batch->reference_no}-{$number($penaflor)}-Penaflor.pdf",
+            "{$batch->reference_no}-Cruz-{$number($cruz)}.pdf",
+            "{$batch->reference_no}-Dela-Cruz-{$number($delaCruz)}.pdf",
+            "{$batch->reference_no}-Penaflor-{$number($penaflor)}.pdf",
         ], array_keys($entries));
 
         foreach ($entries as $bytes) {
@@ -224,7 +224,7 @@ class DocumentDownloadTest extends TestCase
             ->assertDownload($batch->reference_no.'-documents.zip');
 
         $this->assertSame(
-            ["{$batch->reference_no}-{$visit->student->studentProfile->student_number}-Santos.pdf"],
+            ["{$batch->reference_no}-Santos-{$visit->student->studentProfile->student_number}.pdf"],
             array_keys($this->zipEntries($response)),
         );
     }

@@ -1159,6 +1159,57 @@
 
 ### Changed
 
+* **The clinic sees every approved batch on an Upcoming Batches page, with
+  per-student Print / PDF and batch downloads; every batch card filters by
+  college; student PDFs are named Batch ID-surname-student ID** (D-114, adds
+  FR-NRS-12; amends FR-DIRA-09, FR-ADM-15, FR-PRT-06, FR-UI-06, §8.3 and §17;
+  PRD revision 1.98, 2026-10-05). No schema change, no new package; three new
+  routes and one sidebar item.
+  * **Upcoming Batches** right after Live Queue in the shared Clinic
+    Dashboard sidebar (nurse and physician; calendar icon).
+    `GET /nurse/batches` (`Nurse\BatchController@index`): every college's
+    **approved** batches in two cards — **Upcoming** (a clinic day today or
+    later, the first day or a 2nd-chance day; soonest clinic hour first,
+    `upcoming_page`) and **Past** (the rest, newest first, `past_page`).
+    Columns as the Director's Batch Results card; Date scheduled also shows
+    the 2nd-chance day when there is one. "Today" is bound from PHP and the
+    order is a plain subquery on `appointments` — no date function in raw SQL.
+  * **Per-card filters** (clinic **and** the Director's Batch Tracking, both
+    cards each): a **College** dropdown (applies on change) and a **Batch ID
+    search**, read by `App\Support\BatchCardFilters` under each card's own
+    keys (`upcoming_*`, `past_*`, `results_*`, `rejected_*`) and drawn by one
+    partial, `resources/views/batches/_card-filters.blade.php`, which carries
+    the other card's filters and page as hidden fields. The Director's old
+    `?q=` is now `results_q`; the Rejected card is searchable for the first
+    time.
+  * **View** → `GET /nurse/batches/{batch}`: the D-111 results body (header
+    naming the college, summary cards, filters, scrolling table), no release
+    button. A new **Document** column gives each encoded row the encode
+    screen's print buttons — **Print**, or **Print front** / **Print back** on
+    a Medical Assessment Form — posting the clinic's Reprint into a hidden
+    print frame (dialog on the page, `printed_at` re-stamped, the
+    "sheet back in the tray" hint after a front), and **PDF**. The shared
+    `_table` partial adds the column only when passed `rowDocuments`, so the
+    admin and Director pages are unchanged. `partials/print-frame` now uses one
+    delegated click listener so Alpine-drawn buttons print too.
+  * **File names:** `VisitDocument::filename()` names a batch student's PDF
+    `{Batch ID}-{Surname}-{Student ID}.pdf` — the clinic's PDF button (encode
+    screen included) and every role's ZIP entries (`BatchDocumentZip` now uses
+    it; was `{Batch ID}-{Student No}-{Last name}.pdf`). A visit with no batch
+    keeps `{reference_no}-medical-….pdf`.
+  * **Select & download** always on: `POST /nurse/batches/{batch}/documents`
+    (own `clinic-documents` throttle) calls `BatchDocumentZip::download()` —
+    the same 422 rule and cap as the college and the Director.
+  * Tests: new `tests/Feature/Nurse/UpcomingBatchesTest.php` (21) — menu item
+    and access, both cards' contents and order (a batch dated tomorrow and a
+    past batch whose 2nd chance is tomorrow), approved-only, per-card search
+    and college filters, paging, no per-student queries, Print / Print front /
+    Print back / PDF only on encoded rows, printing stamps `printed_at`, the
+    PDF name, no release button, the other roles' tables unchanged, and the
+    ZIP (three PDFs, the 422 cases). `BatchTrackingPageTest` +5 (per-card
+    filters, independence, malformed input); `DocumentDownloadTest` and
+    `AssessmentPrintTest` updated for the new file names.
+
 * **Colleges request the release of a finished batch's documents, the
   Director reviews it, and staff download the batch's official forms as a
   ZIP** (D-113, adds FR-ADM-15 and FR-DIRA-11; amends FR-ADM-12, FR-DIRA-09,

@@ -6,7 +6,9 @@ namespace App\Http\Controllers\Director;
 
 use App\Http\Controllers\Controller;
 use App\Models\BatchRequest;
+use App\Models\College;
 use App\Services\BatchDocumentZip;
+use App\Support\BatchCardFilters;
 use App\Support\BatchResults;
 use App\Support\PrivateUpload;
 use Illuminate\Http\Request;
@@ -35,20 +37,21 @@ class BatchTrackingController extends Controller
      * paging one never moves the other. `id` breaks ties, so no row lands on
      * two pages or on none.
      *
-     * The Batch ID search (`?q=`) filters the Batch Results card only, on the
-     * server, so it finds a batch on any page — the same as the College
-     * Admin's Batch Results card (FR-ADM-12). The term is a bound parameter.
+     * D-114: EACH card has its own Batch ID search and College dropdown
+     * (BatchCardFilters — keys "results_*" for Batch Results, "rejected_*"
+     * for Rejected batches), applied on the server so they find a batch on
+     * any page. Every value is a bound parameter.
      */
     public function index(Request $request): View
     {
-        $search = trim((string) $request->query('q', ''));
         $perPage = config('healthpass.ui.rows_per_page');
+        $resultsFilters = BatchCardFilters::fromRequest($request, 'results');
+        $rejectedFilters = BatchCardFilters::fromRequest($request, 'rejected');
 
         // Card 1: approved, newest clinic date first. statusRelations() is
         // everything resultsStatus() reads, so the card costs the same few
         // queries whether a batch has 4 students or 60.
-        $approvedBatches = BatchRequest::where('status', 'approved')
-            ->when($search !== '', fn ($query) => $query->where('reference_no', 'like', '%'.$search.'%'))
+        $approvedBatches = $resultsFilters->apply(BatchRequest::where('status', 'approved'))
             ->with('college:id,code')
             ->with(BatchResults::statusRelations())
             // D-113: the "Release requested" tag — a college is waiting for
@@ -56,21 +59,27 @@ class BatchTrackingController extends Controller
             ->withExists(['releaseRequests as release_requested' => fn ($query) => $query->where('status', 'pending')])
             ->orderByDesc('scheduled_date')
             ->orderByDesc('id')
-            ->paginate($perPage, pageName: 'results_page')
+            ->paginate($perPage, pageName: $resultsFilters->pageName())
             ->withQueryString();
 
         // Card 2: rejected or cancelled, newest DECISION first — the
         // cancellation for a cancelled batch (even one approved before it was
         // cancelled), the rejection otherwise. COALESCE is the same in MySQL
         // and SQLite, and the SQL is a fixed string with no input in it.
-        $closedBatches = BatchRequest::whereIn('status', ['rejected', 'cancelled'])
+        $closedBatches = $rejectedFilters->apply(BatchRequest::whereIn('status', ['rejected', 'cancelled']))
             ->with('college:id,code')
             ->orderByRaw('COALESCE(cancelled_at, reviewed_at) DESC')
             ->orderByDesc('id')
-            ->paginate($perPage, pageName: 'rejected_page')
+            ->paginate($perPage, pageName: $rejectedFilters->pageName())
             ->withQueryString();
 
-        return view('director.tracking.index', compact('approvedBatches', 'closedBatches', 'search'));
+        return view('director.tracking.index', [
+            'approvedBatches' => $approvedBatches,
+            'closedBatches' => $closedBatches,
+            'resultsFilters' => $resultsFilters,
+            'rejectedFilters' => $rejectedFilters,
+            'colleges' => College::orderBy('code')->get(['id', 'code']),
+        ]);
     }
 
     /**

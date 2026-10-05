@@ -21,6 +21,7 @@ use App\Http\Controllers\Director\StaffAccountController as DirectorStaffAccount
 use App\Http\Controllers\Director\YearlyReportController as DirectorYearlyReportController;
 use App\Http\Controllers\Kiosk\BpReadingController;
 use App\Http\Controllers\Kiosk\KioskController;
+use App\Http\Controllers\Nurse\BatchController as NurseBatchController;
 use App\Http\Controllers\Nurse\DashboardController as NurseDashboardController;
 use App\Http\Controllers\Nurse\EncodeController as NurseEncodeController;
 use App\Http\Controllers\Nurse\KioskDeviceController as NurseKioskDeviceController;
@@ -225,6 +226,17 @@ Route::middleware(['auth', 'role:nurse,physician'])
         // JSON feed for the 4 s Live Queue poll (FR-NRS-02). Nurse-only, same
         // guard as the page — it exposes the same captured-visit rows.
         Route::get('/queue/feed', [NurseQueueController::class, 'feed'])->name('queue.feed');
+        // Upcoming Batches (FR-NRS-12, D-114): every college's approved
+        // batches, upcoming first. View opens a batch's results page (the
+        // D-111 body) with Print / PDF on each encoded student's row and the
+        // D-113 select & download, always on — the clinic already holds the
+        // full records. The ZIP route has its own throttle bucket (3rd arg):
+        // an authed throttle keys on the user id with no path.
+        Route::get('/batches', [NurseBatchController::class, 'index'])->name('batches.index');
+        Route::get('/batches/{batch}', [NurseBatchController::class, 'results'])
+            ->whereNumber('batch')->name('batches.results');
+        Route::post('/batches/{batch}/documents', [NurseBatchController::class, 'documents'])
+            ->whereNumber('batch')->middleware('throttle:10,1,clinic-documents')->name('batches.documents');
         // Encode Result / "Doctor's Assessment" (FR-NRS-03). {visit} is
         // route-model-bound to ClinicVisit by the controller's type-hint —
         // Laravel looks the id up and 404s unknown ids before our code runs.

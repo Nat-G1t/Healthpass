@@ -77,7 +77,9 @@ final class BatchDocumentZip
             ->whereHas('appointment.batchRequestStudent', fn (Builder $row) => $row
                 ->where('batch_request_id', $batch->id)
                 ->notWithdrawn())
-            ->with('student.studentProfile')
+            // The file name (VisitDocument::filename) reads the batch and the
+            // student's profile — loaded here once, not once per PDF.
+            ->with(['student.studentProfile', 'appointment.batchRequest'])
             ->get();
 
         abort_if($visits->count() !== count($ids), 422, 'A selected student has no document on this batch.');
@@ -108,7 +110,7 @@ final class BatchDocumentZip
                 ->setPaper(VisitDocument::paper($visit))
                 ->output();
 
-            $zip->addFromString($this->entryName($batch, $visit), $pdf);
+            $zip->addFromString(VisitDocument::filename($visit), $pdf);
         }
 
         if ($zip->close() !== true) {
@@ -122,23 +124,5 @@ final class BatchDocumentZip
     public static function maxPerDownload(): int
     {
         return (int) config('healthpass.documents.max_per_download');
-    }
-
-    /**
-     * "{Batch ID}-{Student No}-{Last name}.pdf", e.g.
-     * "BR-2026-014-2023-123456-Dela-Cruz.pdf". The name is made plain ASCII
-     * (ñ → n, spaces → -) so every zip tool and operating system shows it the
-     * same way. Student numbers are unique, so two entries never collide.
-     */
-    private function entryName(BatchRequest $batch, ClinicVisit $visit): string
-    {
-        $profile = $visit->student?->studentProfile;
-
-        $parts = array_map(
-            fn (string $part): string => trim((string) preg_replace('/[^A-Za-z0-9]+/', '-', Str::ascii($part)), '-'),
-            [$batch->reference_no, (string) $profile?->student_number, (string) $profile?->last_name],
-        );
-
-        return implode('-', array_filter($parts, fn (string $part): bool => $part !== '')).'.pdf';
     }
 }

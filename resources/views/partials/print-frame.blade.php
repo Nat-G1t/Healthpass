@@ -40,20 +40,26 @@
 
         let armed = false;
 
-        document.querySelectorAll('[data-print-trigger]').forEach((el) => {
-            el.addEventListener('click', (event) => {
-                armed = true;
+        // ONE listener on the document (event delegation), not one per
+        // trigger: a click anywhere bubbles up here and closest() finds the
+        // trigger it came from. That also covers triggers drawn AFTER this
+        // script runs — D-114's Print buttons live in rows Alpine renders
+        // (and re-renders on every filter change).
+        document.addEventListener('click', (event) => {
+            const el = event.target.closest('[data-print-trigger]');
+            if (!el) return;
 
-                // A submit button already targets the frame via formtarget —
-                // let the form submit. A link would navigate the whole page,
-                // so load its href into the frame instead. location.replace
-                // (rather than frame.src) so clicking the SAME link twice
-                // still re-loads and re-fires the print.
-                if (el.tagName === 'A' && el.getAttribute('href')) {
-                    event.preventDefault();
-                    frame.contentWindow.location.replace(el.href);
-                }
-            });
+            armed = true;
+
+            // A submit button already targets the frame via formtarget (or
+            // its form's target) — let the form submit. A link would navigate
+            // the whole page, so load its href into the frame instead.
+            // location.replace (rather than frame.src) so clicking the SAME
+            // link twice still re-loads and re-fires the print.
+            if (el.tagName === 'A' && el.getAttribute('href')) {
+                event.preventDefault();
+                frame.contentWindow.location.replace(el.href);
+            }
         });
 
         frame.addEventListener('load', () => {

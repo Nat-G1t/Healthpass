@@ -42,6 +42,11 @@ export function registerBatchResults(Alpine) {
         selected: [],                            // ticked visit ids
         preparing: false,                        // a download was just sent
 
+        // D-114 (clinic only): whose FRONT page was printed last, so the card
+        // can say "put the sheet back in the tray, then click Print back".
+        // Print back (or any other print) clears it.
+        flipHintFor: null,
+
         /** The rows the table shows: the filters, and — in select mode — encoded students only. */
         get filtered() {
             const term = this.search.trim().toLowerCase();

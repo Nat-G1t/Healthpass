@@ -1134,7 +1134,8 @@ template, so they must match the official blank **and each other**.
    unchecked**. Record any difference as a Fail with a photo.
 4. Back on the same read-only screen, click **Save as PDF**. → **Expect:**
    the browser downloads a file named
-   **`HP-…-medical-clearance.pdf`** (the visit's reference number). No new tab
+   **`HP-…-medical-clearance.pdf`** (the visit's reference number) — or, for a
+   student of a batch (D-114), **`BR-…-{surname}-{student ID}.pdf`**. No new tab
    opens and the page does not navigate.
 5. Open the downloaded PDF. → **Expect:** it is **exactly one page**, it is
    **Letter** sized, and it is the **same document** as the printout from step
@@ -1420,7 +1421,8 @@ not A4, not Letter.
    read **Print front**, **Print back** and **Save as PDF** — no "Reprint", and
    the read-only banner names Print front / Print back.
 2. Click **Save as PDF**. → **Expect:** a file named
-   `HP-…-medical-assessment.pdf` downloads. Open it: **exactly two pages**, each
+   `BR-…-{surname}-{student ID}.pdf` downloads (D-114 — every Medical Assessment
+   student belongs to a batch). Open it: **exactly two pages**, each
    **8.5 × 14in** (your reader's document properties should say Legal, or
    612 × 1008 pt), with **PSU-QSP-OSS-004-FO010-R00** at the bottom left of
    **both**.
@@ -2145,9 +2147,15 @@ cancelled while pending and one cancelled after it was approved. Never run
    approval"** under it only if the college cancelled it after it was
    approved — that one still shows the date it was scheduled for. The newest
    decision is at the top.
-4. Type part of an approved Batch ID into the search and press **Search**. →
-   **Expect:** only that batch in Batch Results; the Rejected card is
-   unchanged. **Clear** brings everything back.
+4. Type part of an approved Batch ID into the **Batch Results** card's search
+   and press **Search**. → **Expect:** only that batch in Batch Results; the
+   Rejected card is unchanged. **Clear** brings everything back.
+4a. (D-114) In the **Batch Results** card, pick a college in its **All
+   colleges** dropdown. → **Expect:** the card reloads with that college's
+   batches only; the Rejected card is unchanged. Now use the **Rejected**
+   card's own dropdown and search. → **Expect:** only that card changes, and
+   the Batch Results card keeps its college. Each card's **Clear** resets only
+   that card.
 5. If either card has more than ten rows: page it. → **Expect:** ten rows per
    page, and paging one card does not move the other.
 
@@ -2286,7 +2294,7 @@ sheet of paper to photograph (any "request letter"). Never run
     Click **Download documents (3)**. → **Expect:** "Preparing…" for a moment,
     then a file **BR-…-documents.zip** downloads.
 17. Open the ZIP. → **Expect:** exactly **3 PDFs**, named
-    **BR-…-{student no.}-{last name}.pdf**. Open one and compare it with the
+    **BR-…-{surname}-{student ID}.pdf** (D-114). Open one and compare it with the
     clinic's **Save as PDF** for the same student (nurse → encode history →
     PDF). → **Expect:** the same official form.
 18. As the Director, tick a student on any approved batch (no request needed)
@@ -2305,6 +2313,91 @@ it (badge, tag, popup, zoomable attachment) and can reject with a message the
 college reads, then approve a new request; before approval the college's
 tools are greyed out and after it they download a ZIP with one official form
 per selected encoded student; the Director can always download.
+
+---
+
+## E2E-37 — The clinic prints one student's form from a batch and downloads a ZIP of three (D-114)
+
+**Goal:** confirm that the nurse and the physician see every approved batch on
+**Upcoming Batches** (upcoming first), and that from a batch's results page
+they can print or save one student's official form and download several as
+one ZIP — with no release request.
+
+**Accounts:** the nurse `nurse@healthpass.test`, the physician
+`physician@healthpass.test` (passwords `password`), and the CCS Admin
+`admin.ccs@healthpass.test` for step 9.
+
+**Preconditions:** at least one **approved** batch scheduled **today or
+later**, and one approved batch whose clinic day is **over** with **at least 3
+encoded students** (Fit or Unfit) — ideally one **Medical Assessment Form**
+batch and one **Medical Clearance** batch like that. Ideally also a past batch
+with a student on a **2nd-chance day** today or later (E2E-33). No release
+request is needed on any of them. Paper in the printer. Never run
+`migrate:fresh`.
+
+**Steps:**
+
+**Part A — the list**
+
+1. Sign in as the nurse. → **Expect:** **Upcoming Batches** in the sidebar,
+   right under **Live Queue**, with a calendar icon. Click it.
+2. → **Expect:** two cards. **Upcoming** lists the batches with a clinic day
+   today or later, the soonest at the top; **Past** lists the others, newest
+   first. Columns: Batch ID · College · Form Type · Purpose · Date scheduled ·
+   Status · View. Only approved batches — no pending, rejected or cancelled
+   one.
+3. If you have the 2nd-chance batch: → **Expect:** it is in **Upcoming**, and
+   under its first date a line "2nd chance: {date, time}".
+4. Each card has its **own** filter bar. In the **Past** card, type a Batch ID
+   in **Search Batch ID** → **Search**. → **Expect:** only that batch in Past;
+   the Upcoming card is unchanged. Then pick a college in the **Upcoming**
+   card's **All colleges** dropdown. → **Expect:** the page reloads at once,
+   Upcoming shows only that college, and Past still shows your search. Click
+   **Clear** in each card → each resets only itself.
+
+**Part B — print one student**
+
+5. Click **View** on the past **Medical Assessment Form** batch. → **Expect:**
+   the same results page the college and the Director see (summary cards,
+   filters, student table), **no** "Request release" or "Review request"
+   button, and a **Document** column: **Print front**, **Print back** and
+   **PDF** on every Fit / Unfit row, "—" on the others.
+6. Click **Print front** on one student. → **Expect:** Chrome's print dialog
+   opens **on this page** (no new tab) with only the **front** page of that
+   student's form; print it. Under the table: "Put {name}'s printed sheet back
+   in the tray, then click Print back."
+7. Put the sheet back and click **Print back**. → **Expect:** the dialog shows
+   only the **back** page; the hint disappears. The results page never moved
+   and its filters are unchanged.
+8. Click **PDF** on the same student. → **Expect:** a file named
+   **BR-…-{surname}-{student ID}.pdf** downloads (e.g.
+   `BR-2026-784-Reyes-2022060002.pdf`); the page does not move. Open it → both
+   pages of the same form.
+9. Open the **Medical Clearance** batch. → **Expect:** one **Print** button per
+   row (no front / back); it opens the dialog on the page with the one-page
+   form.
+
+**Part C — a ZIP of three**
+
+10. Click **Select students** (it works straight away — nothing is greyed),
+    tick exactly **3** students, click **Download documents (3)**. →
+    **Expect:** "Preparing…", then **BR-…-documents.zip** downloads. Open it →
+    exactly **3 PDFs**, named **BR-…-{surname}-{student ID}.pdf**.
+11. As the CCS Admin, open the same batch's results page. → **Expect:** no
+    **Document** column, and (unless the Director released it) the download
+    tools still greyed out — the clinic's download did not release anything.
+
+**Part D — the physician**
+
+12. Sign in as the physician and repeat steps 1, 5, 6 and 10. → **Expect:** the
+    same page and the same results.
+
+**Pass criteria:** both clinic roles reach Upcoming Batches from the sidebar;
+the cards list approved batches only, upcoming first, and each card filters by
+college and Batch ID on its own; Print opens the print dialog on the page like
+the encode screen — front and back separately for a Medical Assessment Form;
+PDF and every ZIP entry are named Batch ID-surname-student ID; no release
+request is involved, and the college's page is unchanged.
 
 ---
 

@@ -13,6 +13,9 @@
                              college cancelled (Q20), newest decision first;
                              View opens the details page with the reason
 
+    D-114: each card has its own College dropdown and Batch ID search
+    (batches/_card-filters — keys results_* and rejected_*).
+
     Both tables are <x-hp.table>, which re-flows each row into a stacked card
     below `md` instead of sliding the page sideways.
 --}}
@@ -47,30 +50,19 @@
             <p class="mt-1 text-xs text-hp-slate/50">Approved batches from every college, newest clinic date first.</p>
         </div>
 
-        {{-- Batch ID search: a plain GET form, so the server filters every
-             page (not just the ten on screen) and the term stays in the URL
-             for the pager links. It filters this card only. --}}
-        @if ($search !== '' || $approvedBatches->total() > 0)
-            <form method="GET" action="{{ route('director.tracking.index') }}" role="search"
-                  class="flex w-full items-center gap-2 sm:w-auto">
-                <label for="tracking-search" class="sr-only">Search by Batch ID</label>
-                <input id="tracking-search" name="q" type="search" value="{{ $search }}"
-                       maxlength="30" placeholder="Search Batch ID"
-                       class="w-full rounded-lg border-hp-slate/20 bg-hp-white px-3 py-1.5 text-xs text-hp-slate placeholder-hp-slate/40 focus:border-hp-orange focus:ring-hp-orange sm:w-48">
-                <x-hp.button type="submit" variant="soft" size="sm">Search</x-hp.button>
-                @if ($search !== '')
-                    <a href="{{ route('director.tracking.index') }}"
-                       class="px-1 py-1.5 text-xs font-medium text-hp-slate/50 hover:text-hp-slate">
-                        Clear
-                    </a>
-                @endif
-            </form>
+        {{-- This card's own College dropdown + Batch ID search (D-114). --}}
+        @if ($resultsFilters->isActive() || $approvedBatches->total() > 0)
+            @include('batches._card-filters', [
+                'filters' => $resultsFilters,
+                'colleges' => $colleges,
+                'action' => route('director.tracking.index'),
+            ])
         @endif
     </div>
 
-    @if ($approvedBatches->isEmpty() && $search !== '')
+    @if ($approvedBatches->isEmpty() && $resultsFilters->isActive())
         <p class="py-6 text-center text-sm text-hp-slate/50">
-            No approved batch matches “{{ $search }}”.
+            No approved batch matches these filters.
         </p>
     @elseif ($approvedBatches->isEmpty())
         <p class="py-6 text-center text-sm text-hp-slate/50">No approved batches yet.</p>
@@ -109,12 +101,25 @@
 
 {{-- ── Card 2: Rejected batches (rejected + cancelled by college) ──────── --}}
 <x-hp.card>
-    <div class="mb-4">
-        <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Rejected batches</p>
-        <p class="mt-1 text-xs text-hp-slate/50">Batches you rejected and batches a college cancelled, newest first.</p>
+    <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
+        <div>
+            <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Rejected batches</p>
+            <p class="mt-1 text-xs text-hp-slate/50">Batches you rejected and batches a college cancelled, newest first.</p>
+        </div>
+
+        {{-- This card's own College dropdown + Batch ID search (D-114). --}}
+        @if ($rejectedFilters->isActive() || $closedBatches->total() > 0)
+            @include('batches._card-filters', [
+                'filters' => $rejectedFilters,
+                'colleges' => $colleges,
+                'action' => route('director.tracking.index'),
+            ])
+        @endif
     </div>
 
-    @if ($closedBatches->isEmpty())
+    @if ($closedBatches->isEmpty() && $rejectedFilters->isActive())
+        <p class="py-6 text-center text-sm text-hp-slate/50">No rejected or cancelled batch matches these filters.</p>
+    @elseif ($closedBatches->isEmpty())
         <p class="py-6 text-center text-sm text-hp-slate/50">No rejected or cancelled batches.</p>
     @else
         <x-hp.table :headers="$headers" data-tracking-rejected>

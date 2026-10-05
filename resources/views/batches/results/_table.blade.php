@@ -11,6 +11,18 @@
                     'enabled' => may this viewer use them now,
                     'hint' => what to say while they are greyed out]
                    Left out, the card has no tools at all.
+      $rowDocuments — optional (D-114, the clinic's page only):
+                   ['twoSided' => is this batch's form the two-page Medical
+                    Assessment Form]
+                   A fifth column, Document, on every encoded row: Print
+                   (Print front + Print back when two-sided) and PDF — the
+                   encode page's own buttons. Print POSTs to the row's
+                   `print_url` (the clinic's Reprint, which re-stamps
+                   printed_at) inside the hidden print frame, so the print
+                   dialog opens on this page; the page must include
+                   partials.print-frame. PDF is the row's `pdf_url`. Both are
+                   null on a row with no document. The College Admin's and the
+                   Director's pages leave it out, so their table is unchanged.
 
     The whole roster is on the page, so filtering happens in the browser: the
     `batchResults` Alpine component (resources/js/shared/batch-results.js)
@@ -47,6 +59,23 @@
     $documents ??= null;
     $toolsEnabled = $documents !== null && $documents['enabled'];
     $maxPerDownload = App\Services\BatchDocumentZip::maxPerDownload();
+
+    $rowDocuments ??= null;
+    $hasRowDocuments = $rowDocuments !== null;
+    // D-71: the Medical Assessment Form is two pages and clinic printers
+    // rarely duplex, so it prints one side at a time, as on the encode page.
+    $printButtons = ($rowDocuments['twoSided'] ?? false)
+        ? ['front' => 'Print front', 'back' => 'Print back']
+        : ['' => 'Print'];   // '' = no side: the whole (one-page) form
+    $headers = ['Name', 'Student ID', 'Completion status', 'Result', ...($hasRowDocuments ? ['Document'] : [])];
+
+    // D-114: a small outlined pill exactly as tall as a badge (py-px + the
+    // 1px border = a badge's py-0.5), so the ten-row height measured below
+    // still holds — py-0.5 here made every row 1px taller.
+    $rowLink = 'inline-flex items-center rounded-full border border-hp-slate/30 px-2.5 py-px
+                text-[11px] font-semibold leading-tight text-hp-slate transition-colors
+                duration-hp-fast hover:bg-hp-slate/10 focus-visible:outline-none
+                focus-visible:ring-2 focus-visible:ring-hp-slate focus-visible:ring-offset-1';
 @endphp
 
 <div x-data="batchResults({{ Illuminate\Support\Js::from([
@@ -117,7 +146,7 @@
              (it always holds a badge) 45.75px, so ten rows plus the header
              is 498px = 31.125rem. --}}
         <div class="max-h-[31.125rem] overflow-y-auto" data-results-scroll>
-            <x-hp.table :headers="['Name', 'Student ID', 'Completion status', 'Result']" sticky-header>
+            <x-hp.table :headers="$headers" sticky-header>
                 <template x-for="(row, index) in filtered" :key="index">
                     <x-hp.table-row>
                         <x-hp.table-cell label="Name" class="font-medium">
@@ -148,16 +177,55 @@
                             <x-hp.badge variant="unfit" x-show="row.result === 'Unfit'">Unfit</x-hp.badge>
                             <span x-show="row.result === null" class="text-hp-slate/50">&mdash;</span>
                         </x-hp.table-cell>
+
+                        @if ($hasRowDocuments)
+                            {{-- D-114: the student's own document, printed like the
+                                 encode page prints it. Each Print button POSTs the
+                                 clinic's Reprint (re-stamps printed_at) into the
+                                 hidden print frame — target="hp-print-frame" — and
+                                 the frame opens the print dialog right here. A
+                                 two-sided form posts side=front / side=back from the
+                                 button itself (name/value on a submit button). The
+                                 CSRF field is ordinary HTML, so every row Alpine
+                                 draws carries its own copy.
+                                 PDF downloads, so this page stays put and
+                                 data-no-progress keeps the top progress bar still. --}}
+                            <x-hp.table-cell label="Document">
+                                <form x-show="row.visit_id !== null" method="POST" :action="row.print_url"
+                                      target="hp-print-frame" class="inline-flex flex-wrap items-center justify-end gap-2 md:justify-start"
+                                      data-row-documents>
+                                    @csrf
+                                    @foreach ($printButtons as $side => $label)
+                                        <button type="submit" class="whitespace-nowrap {{ $rowLink }}" data-print-trigger
+                                                @if ($side !== '') name="side" value="{{ $side }}" data-print-side="{{ $side }}" @endif
+                                                @click="flipHintFor = {{ $side === 'front' ? 'row.name' : 'null' }}"
+                                                :aria-label="'{{ $label }} — ' + row.name" data-row-print>{{ $label }}</button>
+                                    @endforeach
+                                    <a :href="row.pdf_url" class="whitespace-nowrap {{ $rowLink }}" data-no-progress
+                                       :aria-label="'Download the PDF of ' + row.name" data-row-pdf>PDF</a>
+                                </form>
+                                <span x-show="row.visit_id === null" class="text-hp-slate/50">&mdash;</span>
+                            </x-hp.table-cell>
+                        @endif
                     </x-hp.table-row>
                 </template>
 
                 <x-hp.table-row x-show="filtered.length === 0" x-cloak>
-                    <td colspan="4" class="block py-6 text-center text-sm text-hp-slate/50 md:table-cell">
+                    <td colspan="{{ count($headers) }}" class="block py-6 text-center text-sm text-hp-slate/50 md:table-cell">
                         No students match these filters.
                     </td>
                 </x-hp.table-row>
             </x-hp.table>
         </div>
+
+        @if ($rowDocuments['twoSided'] ?? false)
+            {{-- D-114: the encode page's hint after a Print front (FR-NRS-05),
+                 naming whose sheet it is. --}}
+            <p x-show="flipHintFor !== null" x-cloak class="mt-3 text-sm text-hp-slate/70" data-flip-hint>
+                Put <span class="font-semibold" x-text="flipHintFor"></span>’s printed sheet back in the tray,
+                then click <span class="font-semibold">Print back</span>.
+            </p>
+        @endif
 
         @if ($documents !== null)
             {{-- ── Download documents, lower right (D-113) ─────────────────

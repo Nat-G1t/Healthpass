@@ -7,11 +7,13 @@ namespace App\Support;
 use App\Models\ClearanceRecord;
 use App\Models\ClinicVisit;
 use App\Models\MedicalAssessment;
+use Illuminate\Support\Str;
 
 /**
- * Module PRT / D-73 — the three facts that depend on a visit's FORM TYPE
- * (D-62) and nothing else: which template renders it, what paper it is laid
- * out on, and what the downloaded file is called.
+ * Module PRT / D-73 — the three facts about a visit's document: which
+ * template renders it and what paper it is laid out on (both decided by its
+ * FORM TYPE, D-62), and what the downloaded file is called (by its batch and
+ * student since D-114).
  *
  * Why its own class: the document has several callers — the clinic's print,
  * the pre-save preview, the clinic's Reprint and the clinic's Save as PDF
@@ -45,14 +47,40 @@ final class VisitDocument
         return 'letter';
     }
 
-    /** The downloaded file's name, e.g. "HP-2026-0042-medical-clearance.pdf". */
+    /**
+     * The downloaded file's name.
+     *
+     * A batch student's document (D-114): "{Batch ID}-{Surname}-{Student ID}.pdf",
+     * e.g. "BR-2026-014-Dela-Cruz-2023-123456.pdf" — the same name from the
+     * clinic's PDF button and inside every role's ZIP (BatchDocumentZip), so a
+     * college can sort a folder of them by batch, then by name. Each part is
+     * made plain ASCII (ñ → n, spaces → -) so every zip tool and operating
+     * system shows it the same way; student IDs are unique, so two students'
+     * files never collide.
+     *
+     * A visit with no batch (a pre-D-61 self-booking) has no Batch ID and keeps
+     * "HP-2026-0042-medical-clearance.pdf".
+     */
     public static function filename(ClinicVisit $visit): string
     {
-        return sprintf(
-            '%s-medical-%s.pdf',
-            $visit->reference_no,
-            $visit->formType() === 'assessment' ? 'assessment' : 'clearance',
+        $batch = $visit->appointment?->batchRequest;
+
+        if ($batch === null) {
+            return sprintf(
+                '%s-medical-%s.pdf',
+                $visit->reference_no,
+                $visit->formType() === 'assessment' ? 'assessment' : 'clearance',
+            );
+        }
+
+        $profile = $visit->student?->studentProfile;
+
+        $parts = array_map(
+            fn (string $part): string => trim((string) preg_replace('/[^A-Za-z0-9]+/', '-', Str::ascii($part)), '-'),
+            [$batch->reference_no, (string) $profile?->last_name, (string) $profile?->student_number],
         );
+
+        return implode('-', array_filter($parts, fn (string $part): bool => $part !== '')).'.pdf';
     }
 
     /**
