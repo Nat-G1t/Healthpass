@@ -1463,6 +1463,20 @@
 
 ### Fixed
 
+* **The Director's Batch Approvals queue fits a phone and no longer slides
+  sideways** (reported by Nat 2026-10-05 from a phone screenshot; no schema
+  change, no new route). Below `md` each pending request is a stacked card —
+  Batch ID (+ Next tag), College, Form Type, Purpose and a full-width Review
+  button, the Next request painted peach — instead of a table that scrolled
+  inside its card and hid Purpose and Review. From `md` up the D-108 table is
+  unchanged. Root cause of the sideways drag: the table's screen-reader-only
+  "Action" header label is absolutely positioned, and its scroll box was not,
+  so the label escaped the box and widened the page to 514 px on a 390 px
+  phone (the burger menu slid off-screen). The box is now `relative`.
+  * Test: `BatchApprovalsPageTest` — one card per request carrying every
+    field and its Review link, Next marked on its card only, table in a
+    `relative` box shown from `md`.
+
 * **Every program is named on the Clinic Visits by Program chart**
   (2026-09-30). No schema change, no new package, no new route.
   * Rows were a fixed 56 px, too short for program names that wrap to four or

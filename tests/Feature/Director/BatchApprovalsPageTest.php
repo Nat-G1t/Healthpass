@@ -180,6 +180,37 @@ class BatchApprovalsPageTest extends TestCase
         $this->queue()->assertSee(route('director.batches.review', $batch));
     }
 
+    public function test_phones_get_one_card_per_request_with_everything_its_row_shows(): void
+    {
+        // Below md the table is hidden and each request is a stacked card, so a
+        // phone never has to scroll sideways to reach Purpose or Review.
+        $oldest = $this->makeBatch($this->ccs, 1);
+        $newer = $this->makeBatch($this->ccs);
+
+        $html = $this->queue()->getContent();
+
+        preg_match('/<ul[^>]*data-queue-cards[^>]*>(.*?)<\/ul>/s', $html, $list);
+        preg_match_all('/<li\b[^>]*>.*?<\/li>/s', $list[1] ?? '', $cards);
+        $this->assertCount(2, $cards[0]);
+        $this->assertStringContainsString('md:hidden', $list[0]);
+
+        foreach ([$oldest, $newer] as $i => $batch) {
+            $card = $cards[0][$i];
+            foreach ([$batch->reference_no, 'College', 'CCS', 'Form Type', 'Medical Assessment Form', 'Purpose', 'On-the-job Training', route('director.batches.review', $batch)] as $text) {
+                $this->assertStringContainsString($text, $card);
+            }
+        }
+
+        // The Next request is marked on its card, and only there.
+        $this->assertStringContainsString('data-next-card', $cards[0][0]);
+        $this->assertStringContainsString('Next', $cards[0][0]);
+        $this->assertStringNotContainsString('data-next-card', $cards[0][1]);
+
+        // The table shows from md up, inside a `relative` scroll box — that is
+        // what keeps its screen-reader-only header label from widening the page.
+        $this->assertMatchesRegularExpression('/<div class="relative hidden overflow-x-auto md:block">\s*(\{\{--.*?--\}\}\s*)?<table/s', $html);
+    }
+
     public function test_no_decision_controls_live_on_the_queue(): void
     {
         $batch = $this->makeBatch($this->ccs);

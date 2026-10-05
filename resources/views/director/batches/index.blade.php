@@ -22,6 +22,19 @@
     tr[data-next] > td:last-child  { border-top-right-radius: 1rem; border-bottom-right-radius: 1rem; }
 </style>
 
+@php
+    // The Review link, styled like <x-hp.button> (which only renders a
+    // <button>): primary on the Next request, soft on the rest. Shared by the
+    // phone cards and the table so the two never drift apart.
+    $reviewLink = 'inline-flex items-center justify-center gap-2 rounded-full font-semibold
+                   transition-[color,background-color,transform] duration-hp-fast ease-hp-out
+                   active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2
+                   focus-visible:ring-hp-orange focus-visible:ring-offset-1';
+    $reviewNext = 'bg-hp-orange text-white hover:bg-orange-500';
+    $reviewRest = 'bg-hp-peach text-hp-orange hover:bg-orange-100';
+    $cardLabel = 'shrink-0 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40';
+@endphp
+
 {{-- ── Page header ─────────────────────────────────────────────────────── --}}
 <div class="mb-6">
     <h2 class="text-xl font-semibold text-hp-slate">Batch Approvals</h2>
@@ -89,7 +102,53 @@
             </p>
         </div>
     @else
-        <div class="overflow-x-auto">
+        {{-- ── Phones and small tablets (below md): one card per request ───────
+             The five columns don't fit a phone, and a sideways-scrolling table
+             hid Purpose and Review. Each card shows everything its table row
+             does — Batch ID (+ Next), College, Form Type, Purpose, Review —
+             stacked, with the Next request painted peach like its table row. --}}
+        <ul class="space-y-3 md:hidden" data-queue-cards>
+            @foreach ($batchRequests as $batch)
+                <li class="rounded-xl border p-4 text-hp-slate {{ $batch->id === $nextId ? 'border-hp-orange/30 bg-hp-peach/40' : 'border-hp-slate/15' }}"
+                    @if ($batch->id === $nextId) data-next-card @endif>
+                    <p class="flex flex-wrap items-center gap-2">
+                        <span class="font-medium">{{ $batch->reference_no }}</span>
+                        @if ($batch->id === $nextId)
+                            <span class="inline-flex items-center rounded-full bg-hp-orange px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-white">
+                                Next
+                            </span>
+                        @endif
+                    </p>
+
+                    <dl class="mt-3 space-y-2 text-sm">
+                        <div class="flex items-baseline justify-between gap-4">
+                            <dt class="{{ $cardLabel }}">College</dt>
+                            <dd class="min-w-0 text-right">{{ $batch->college->code }}</dd>
+                        </div>
+                        <div class="flex items-baseline justify-between gap-4">
+                            <dt class="{{ $cardLabel }}">Form Type</dt>
+                            <dd class="min-w-0 text-right">{{ $batch->formTypeLabel() }}</dd>
+                        </div>
+                        <div class="flex items-baseline justify-between gap-4">
+                            <dt class="{{ $cardLabel }}">Purpose</dt>
+                            <dd class="min-w-0 break-words text-right">&ldquo;{{ Str::limit($batch->reasonText(), 60) }}&rdquo;</dd>
+                        </div>
+                    </dl>
+
+                    <a href="{{ route('director.batches.review', $batch) }}"
+                       class="{{ $reviewLink }} mt-4 w-full px-4 py-2.5 text-sm {{ $batch->id === $nextId ? $reviewNext : $reviewRest }}">
+                        Review
+                    </a>
+                </li>
+            @endforeach
+        </ul>
+
+        {{-- ── md and up: the table ────────────────────────────────────────────
+             `relative` keeps the header's screen-reader-only "Action" label
+             (absolutely positioned) inside this scroll box. Without it, that
+             label escaped the box whenever the table was wider than the screen
+             and stretched the whole page sideways. --}}
+        <div class="relative hidden overflow-x-auto md:block">
             {{-- border-separate so the Next row's rounded band clips, like the Live Queue. --}}
             <table class="w-full border-separate border-spacing-x-0 border-spacing-y-1 text-left text-sm">
                 <thead>
@@ -118,15 +177,8 @@
                             <td class="whitespace-nowrap py-3 pr-4">{{ $batch->formTypeLabel() }}</td>
                             <td class="py-3 pr-4">&ldquo;{{ Str::limit($batch->reasonText(), 60) }}&rdquo;</td>
                             <td class="py-3 pr-3 text-right">
-                                {{-- A link styled as <x-hp.button size="sm"> (which only
-                                     renders a <button>): primary on the Next row, soft
-                                     on the rest. --}}
                                 <a href="{{ route('director.batches.review', $batch) }}"
-                                   class="inline-flex items-center justify-center gap-2 rounded-full px-4 py-1.5 text-xs
-                                          font-semibold transition-[color,background-color,transform] duration-hp-fast
-                                          ease-hp-out active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2
-                                          focus-visible:ring-hp-orange focus-visible:ring-offset-1
-                                          {{ $batch->id === $nextId ? 'bg-hp-orange text-white hover:bg-orange-500' : 'bg-hp-peach text-hp-orange hover:bg-orange-100' }}">
+                                   class="{{ $reviewLink }} px-4 py-1.5 text-xs {{ $batch->id === $nextId ? $reviewNext : $reviewRest }}">
                                     Review
                                 </a>
                             </td>

@@ -537,6 +537,7 @@ then nurse-edited — D-76).
 #### Batch Approvals (`director-approvals`) — a queue since D-108
 - **Pending requests only, oldest first** (`created_at`, then `id`), ten per page, the order carried across pages. Columns: **Batch ID / College / Form Type / Purpose** (in quotes) **/ [Review]** — the Students, Requested Date, Clinic Hours, Submitted and Action columns are gone (D-108).
 - The oldest pending request in the whole queue is highlighted as **Next**, styled like the clinic's Live Queue (peach band, orange "Next" tag, primary Review button) — only ever the first row of page 1. **Any** row can be reviewed; the highlight is a guide.
+- **Phones (below `md`, 2026-10-05 fix):** each request is a stacked card — Batch ID (+ Next tag), College, Form Type, Purpose, full-width Review button; the Next card is peach. The table shows from `md` up. The page never scrolls sideways.
 - **Batch ID search (D-90)** at the top of the card — server-side, across all pages. Empty state: "No batch requests are waiting."
 - Decided and college-cancelled batches **leave** the queue (the Director's Batch Tracking page, D-112, will list them). The row Approve/Reject buttons and modals, D-90's conflict lines and Schedule-conflict modal, and D-92's cancel-reason popup are removed.
 
