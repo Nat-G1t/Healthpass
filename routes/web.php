@@ -151,6 +151,12 @@ Route::middleware(['auth', 'role:college_admin', 'college.scope'])
         // managedCollege() like every other /admin read, so a foreign id 404s.
         Route::get('/batches/{batch}', [AdminBatchRequestController::class, 'show'])
             ->whereNumber('batch')->name('batches.show');
+        // One approved batch's results page (FR-ADM-12, D-111): summary cards
+        // and every student's status and Fit/Unfit — what the Batch Results
+        // card's View opens. Through managedCollege(), approved only: any
+        // other batch 404s.
+        Route::get('/batches/{batch}/results', [AdminBatchRequestController::class, 'results'])
+            ->whereNumber('batch')->name('batches.results');
         // The batch's signed memo (D-109), shown inline in the browser. Found
         // through managedCollege(), so another college's batch 404s. Its own
         // throttle bucket (3rd arg), like every authed throttle here.

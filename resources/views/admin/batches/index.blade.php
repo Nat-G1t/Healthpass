@@ -28,18 +28,17 @@
 @endphp
 
 {{--
-    One page-level Alpine component holds ALL THREE modals' state:
-    `results` (D-55) is null (closed) or the Batch Results popup payload of the
-    approved batch whose View button was clicked; `detail` is null or the
-    { ref, reason, reviewer, reviewedAt } of the rejected row whose View button
-    was clicked; `cancelTarget` (D-52) is null or the { id, ref, students, date }
-    of the row whose Cancel button was clicked.
+    One page-level Alpine component holds both modals' state: `detail` is null
+    or the { ref, reason, reviewer, reviewedAt } of the rejected row whose View
+    button was clicked; `cancelTarget` (D-52) is null or the
+    { id, ref, students, date } of the row whose Cancel button was clicked.
+    (D-111 moved the Batch Results popup to its own page.)
 
     Independent keys rather than one shared `modal` object: the dialogs carry
     different payloads, and only one can be open at a time, so closing one
     never has to reset the others.
 --}}
-<div x-data="{ results: null, detail: null, cancelTarget: null }">
+<div x-data="{ detail: null, cancelTarget: null }">
 
 {{-- ── Flash messages ─────────────────────────────────────────────────────── --}}
 {{-- Where the cancel endpoint lands (FR-ADM-11): both its success and its
@@ -81,13 +80,14 @@
     </a>
 </div>
 
-{{-- ── Batch Results (FR-ADM-12, D-55, D-86) ─────────────────────────────── --}}
+{{-- ── Batch Results (FR-ADM-12, D-55, D-86, D-111) ───────────────────────── --}}
 {{-- Every APPROVED batch of this college, newest clinic date first — a batch
      appears here the moment the Director approves it. The card renders when
      the college has at least one ($hasApprovedBatches — decided in the
      controller, so neither a stale page link nor a search with no match can
      hide it), and it is rebuilt on every page load (nothing polls), so a
-     reload after the nurse encodes shows the new result. --}}
+     reload after the nurse encodes shows the new status. D-111: View opens
+     the batch's own results page. --}}
 @if ($hasApprovedBatches)
     <x-hp.card class="mb-6">
         <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
@@ -124,53 +124,36 @@
                 No approved batch matches “{{ $search }}”.
             </p>
         @else
-        <x-hp.table :headers="['Batch ID', 'Time of Completion', 'Status', '']">
+        {{-- D-111: Purpose (cut to 60 characters, like the requests list) and
+             Date requested — the day the college SUBMITTED it (Q10) — replace
+             Time of Completion. The status rule lives on the model
+             (BatchRequest::resultsStatus()); the shared partial words it. --}}
+        <x-hp.table :headers="['Batch ID', 'Purpose', 'Date requested', 'Status', '']">
             @foreach ($approvedBatches as $batch)
-                @php
-                    // D-86: the completion rule lives on the model and reads the
-                    // same clearanceProgress() as the popup rows, so the columns
-                    // and the popup can never disagree. Only the wording lives here.
-                    $completedAt = $batch->resultsCompletedAt();
-                    $resultsStatus = $batch->resultsStatus();
-                @endphp
                 <x-hp.table-row>
                     <x-hp.table-cell label="Batch ID" class="font-semibold">
                         {{ $batch->reference_no }}
                     </x-hp.table-cell>
 
-                    <x-hp.table-cell label="Time of Completion">
-                        @if ($completedAt !== null)
-                            {{ $completedAt->format('M j, Y · g:i A') }}
-                        @else
-                            <span class="text-hp-slate/50">&mdash;</span>
-                        @endif
+                    <x-hp.table-cell label="Purpose">{{ Str::limit($batch->reasonText(), 60) }}</x-hp.table-cell>
+
+                    <x-hp.table-cell label="Date requested" class="whitespace-nowrap text-hp-slate/60">
+                        {{ $batch->created_at->format('M j, Y') }}
                     </x-hp.table-cell>
 
                     <x-hp.table-cell label="Status">
-                        @if ($resultsStatus === 'completed')
-                            <x-hp.badge variant="approved">Completed</x-hp.badge>
-                        @elseif ($resultsStatus === 'no_one_attended')
-                            <x-hp.badge variant="rejected">No one attended</x-hp.badge>
-                        @else
-                            <x-hp.badge variant="live">In progress</x-hp.badge>
-                        @endif
+                        @include('batches.results._status', ['status' => $batch->resultsStatus()])
                     </x-hp.table-cell>
 
                     <x-hp.table-cell label="">
-                        {{-- Plain <button> (not <x-hp.button>), like the rejection
-                             reason's View button below: the payload is built with
-                             Js::from(), and Blade output isn't compiled inside a
-                             component tag's attribute. Js::from() also escapes
-                             quotes, so a name like O'Brien can't break it. --}}
-                        <button type="button"
-                            @click="results = {{ Illuminate\Support\Js::from($resultPopups[$batch->id]) }}"
-                            class="inline-flex items-center justify-center gap-2 rounded-full
-                                   border-[1.5px] border-hp-slate/30 px-4 py-1 text-xs font-semibold
-                                   text-hp-slate transition-colors duration-hp-fast hover:bg-hp-slate/10
-                                   focus-visible:outline-none focus-visible:ring-2
-                                   focus-visible:ring-hp-slate focus-visible:ring-offset-1">
+                        <a href="{{ route('admin.batches.results', $batch->id) }}"
+                           class="inline-flex items-center justify-center gap-2 rounded-full
+                                  border-[1.5px] border-hp-slate/30 px-4 py-1 text-xs font-semibold
+                                  text-hp-slate transition-colors duration-hp-fast hover:bg-hp-slate/10
+                                  focus-visible:outline-none focus-visible:ring-2
+                                  focus-visible:ring-hp-slate focus-visible:ring-offset-1">
                             View
-                        </button>
+                        </a>
                     </x-hp.table-cell>
                 </x-hp.table-row>
             @endforeach
@@ -307,117 +290,6 @@
         <x-hp.pager :paginator="$batchRequests" />
     @endif
 </x-hp.card>
-
-{{-- ── Batch Results popup (FR-ADM-12, D-55) ──────────────────────────────── --}}
-{{-- Same dialog shape as the rejection-reason modal below: teleported to <body>
-     so no ancestor's overflow or stacking context clips the full-screen
-     backdrop, and dismissable with Esc, a backdrop click or Close.
-
-     OUTCOME ONLY (PRD §6.6): the payload holds each student's name, number,
-     hour, a status key and Fit/Unfit, and nothing else of the clinical record
-     is ever sent. Every value is written with x-text, which sets textContent,
-     so a name is never parsed as markup. The status WORDING lives here — one
-     badge per key, shown with x-show. D-86: from `md` up the student list is
-     capped at six rows plus half of the seventh (the half row is the cue that
-     it scrolls), so a big batch can't stretch the popup. Below `md` the table
-     re-flows into stacked cards like everywhere else; a card is several rows
-     tall, so there the list scrolls within the panel's own 90vh instead. --}}
-@if ($approvedBatches->isNotEmpty())
-    <template x-teleport="body">
-        <div
-            x-show="results !== null"
-            x-cloak
-            @keydown.escape.window="results = null"
-            class="fixed inset-0 z-[60] flex items-center justify-center px-4"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="batch-results-title"
-        >
-            {{-- Backdrop — click outside to dismiss --}}
-            <div
-                x-show="results !== null"
-                @click="results = null"
-                x-transition:enter="ease-hp-out duration-hp-base"
-                x-transition:enter-start="opacity-0"
-                x-transition:enter-end="opacity-100"
-                x-transition:leave="ease-hp-in duration-hp-fast"
-                x-transition:leave-start="opacity-100"
-                x-transition:leave-end="opacity-0"
-                class="absolute inset-0 bg-hp-slate/50"
-                aria-hidden="true"
-            ></div>
-
-            {{-- Panel --}}
-            <div
-                x-show="results !== null"
-                x-transition:enter="ease-hp-spring duration-hp-slow"
-                x-transition:enter-start="opacity-0 translate-y-6"
-                x-transition:enter-end="opacity-100 translate-y-0"
-                x-transition:leave="ease-hp-in duration-hp-base"
-                x-transition:leave-start="opacity-100 translate-y-0"
-                x-transition:leave-end="opacity-0 translate-y-6"
-                class="relative flex max-h-[90vh] w-full max-w-3xl flex-col rounded-2xl bg-hp-white p-6 shadow-xl"
-            >
-                <h2 id="batch-results-title" class="text-lg font-semibold text-hp-slate">
-                    Results for <span x-text="results?.ref"></span>
-                </h2>
-                <p class="mt-1 text-sm text-hp-slate/60">
-                    <span x-text="results?.form"></span> ·
-                    <span x-text="results?.date"></span> ·
-                    <span x-text="results?.span"></span>
-                </p>
-
-                <div class="mt-5 min-h-0 overflow-y-auto md:max-h-[21rem]">
-                    <x-hp.table :headers="['Student', 'Student No.', 'Hour', 'Status', 'Result']">
-                        <template x-for="(row, index) in results?.students ?? []" :key="index">
-                            <x-hp.table-row>
-                                <x-hp.table-cell label="Student" class="font-medium">
-                                    <span x-text="row.name"></span>
-                                </x-hp.table-cell>
-
-                                <x-hp.table-cell label="Student No." class="text-hp-slate/60">
-                                    <span x-text="row.number"></span>
-                                </x-hp.table-cell>
-
-                                <x-hp.table-cell label="Hour">
-                                    <span x-text="row.hour"></span>
-                                </x-hp.table-cell>
-
-                                <x-hp.table-cell label="Status">
-                                    {{-- D-110's student statuses: orange for the states
-                                         still moving, peach once done, slate for waiting or
-                                         did-not-happen, red for a student on their 2nd chance. --}}
-                                    <x-hp.badge variant="neutral" x-show="row.status === 'scheduled'">Scheduled</x-hp.badge>
-                                    {{-- D-110: missed their day; the 8 PM job booked them a
-                                         2nd-chance day (the Hour column is that day's hour). --}}
-                                    <x-hp.badge variant="danger" x-show="row.status === 'rescheduled'">Rescheduled</x-hp.badge>
-                                    {{-- D-72: the kiosk captured a high reading and the
-                                         student is resting before re-taking it — at the
-                                         clinic, just not in the queue yet. --}}
-                                    <x-hp.badge variant="live" x-show="row.status === 'rest_retake'">Rest / Retake</x-hp.badge>
-                                    <x-hp.badge variant="live" x-show="row.status === 'in_clinic'">At the clinic</x-hp.badge>
-                                    <x-hp.badge variant="approved" x-show="row.status === 'completed'">Completed</x-hp.badge>
-                                    <x-hp.badge variant="rejected" x-show="row.status === 'unattended'">Unattended</x-hp.badge>
-                                    <span x-show="row.status === null" class="text-hp-slate/50">&mdash;</span>
-                                </x-hp.table-cell>
-
-                                <x-hp.table-cell label="Result">
-                                    <x-hp.badge variant="fit" x-show="row.result === 'Fit'">Fit</x-hp.badge>
-                                    <x-hp.badge variant="unfit" x-show="row.result === 'Unfit'">Unfit</x-hp.badge>
-                                    <span x-show="row.result === null" class="text-hp-slate/50">&mdash;</span>
-                                </x-hp.table-cell>
-                            </x-hp.table-row>
-                        </template>
-                    </x-hp.table>
-                </div>
-
-                <div class="mt-6 flex justify-end">
-                    <x-hp.button variant="muted" @click="results = null">Close</x-hp.button>
-                </div>
-            </div>
-        </div>
-    </template>
-@endif
 
 {{-- ── Rejection reason modal (FR-ADM-05, D-36) ───────────────────────────── --}}
 {{-- Teleported to <body> so no ancestor's overflow/stacking clips the

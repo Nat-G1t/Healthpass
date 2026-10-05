@@ -267,72 +267,127 @@ class BatchRequest extends Model
         return $this->reasonLabel() ?? ucfirst($this->reason);
     }
 
-    // ── Batch results (FR-ADM-12, D-55, D-86) ────────────────────────────────
+    // ── Batch results (FR-ADM-12, D-111) ─────────────────────────────────────
 
     /**
-     * D-86: when this batch was done, or null while it is still in progress.
-     *
-     * A batch is done at the ABSENT CUTOFF (8:00 PM) on its clinic date, even
-     * if some students never came — D-55 used to keep it open until every
-     * student was Completed or Absent, so one student left un-encoded held it
-     * "In progress" forever. It is done EARLIER, at the last encode, when every
-     * student it still holds has been encoded before the cutoff.
-     *
-     * So the time returned is the last encode when everyone finished early, and
-     * otherwise the cutoff itself. An encode made AFTER the cutoff (a student
-     * still "At the clinic" at 8 PM, encoded next morning) never moves it: the
-     * batch was already done at the cutoff.
-     *
-     * Reads the SAME Appointment::clearanceProgress() the Batch Results popup
-     * rows show, so the Status column and the popup can never disagree. Callers
-     * eager-load batchRequestStudents.appointment.clinicVisit.clearanceRecord.
+     * The student statuses (Appointment::clearanceProgress()) that are not
+     * final yet: the student may still come, or the clinic still has to encode
+     * them. While any student reads one of these, the batch is not finished.
      */
-    public function resultsCompletedAt(): ?Carbon
-    {
-        $held = $this->heldAppointments();
-        $cutoff = $this->scheduled_date !== null
-            ? Appointment::absentCutoffOn($this->scheduled_date)
-            : null;
-
-        $allEncoded = $held->isNotEmpty() && $held->every(
-            fn (Appointment $appointment): bool => $appointment->clearanceProgress() === 'completed',
-        );
-
-        if ($allEncoded) {
-            // encoded_at is a nullable column, though every encode path sets it.
-            $lastEncode = $held
-                ->map(fn (Appointment $appointment): ?Carbon => $appointment->clinicVisit->clearanceRecord->encoded_at)
-                ->max();
-
-            return $cutoff !== null && ($lastEncode === null || $lastEncode->gt($cutoff)) ? $cutoff : $lastEncode;
-        }
-
-        if ($cutoff !== null && now()->gte($cutoff)) {
-            return $cutoff;
-        }
-
-        return null;
-    }
+    private const OPEN_PROGRESS = ['scheduled', 'rescheduled', 'rest_retake', 'in_clinic'];
 
     /**
-     * D-86: the Batch Results Status column — `in_progress`, `completed`, or
-     * `no_one_attended` (done, and every student it holds is Unattended —
-     * D-110's name for D-55's Absent). The view owns the wording.
+     * D-111: where this batch stands, as ONE key — the views word and badge it.
+     * The rules are tried in this order, on the server clock:
      *
-     * D-110 renamed the student key only; prompt 09 (D-111) rewrites the
-     * batch statuses around the 2nd chance.
+     *   completed           — every student it holds has been encoded. Right
+     *                         away, even at 3 PM on day 1 (Q11).
+     *   scheduled           — its first clinic hour has not started yet.
+     *   in_progress         — one of its clinic days is happening: from the
+     *                         batch's earliest hour that day until the 8 PM
+     *                         cutoff. Day 1, and its 2nd-chance day (D-110).
+     *   still_in_progress   — no clinic day is happening, but some student is
+     *                         not final yet (OPEN_PROGRESS): booked for the
+     *                         2nd-chance day, or captured at the kiosk and still
+     *                         waiting for the clinic's encode.
+     *   no_one_attended     — finished, and every student is Unattended.
+     *   finished_incomplete — finished, and some students are Unattended.
+     *
+     * D-110's job books the 2nd chances a few minutes after 8 PM, so in that
+     * gap a missed student reads Unattended and the batch can read Finished
+     * incomplete until the job runs (accepted by D-110).
+     *
+     * Reads the same held appointments as resultsSummary() and the rows of the
+     * results page, so the badge, the cards and the table can never disagree.
+     * Callers eager-load BatchResults::statusRelations().
      */
     public function resultsStatus(): string
     {
-        if ($this->resultsCompletedAt() === null) {
+        $progress = $this->heldAppointments()
+            ->map(fn (Appointment $appointment): string => $appointment->clearanceProgress());
+
+        if ($progress->isNotEmpty() && $progress->every(fn (string $key): bool => $key === 'completed')) {
+            return 'completed';
+        }
+
+        $firstStart = $this->firstHourStart();
+
+        if ($firstStart !== null && now()->lt($firstStart)) {
+            return 'scheduled';
+        }
+
+        if ($this->isClinicDayUnderway($firstStart) || $this->isClinicDayUnderway($this->secondChanceStart())) {
             return 'in_progress';
         }
 
-        $nobodyCame = $this->heldAppointments()->every(
-            fn (Appointment $appointment): bool => $appointment->clearanceProgress() === 'unattended',
-        );
+        if ($progress->contains(fn (string $key): bool => in_array($key, self::OPEN_PROGRESS, true))) {
+            return 'still_in_progress';
+        }
 
-        return $nobodyCame ? 'no_one_attended' : 'completed';
+        return $progress->every(fn (string $key): bool => $key === 'unattended')
+            ? 'no_one_attended'
+            : 'finished_incomplete';
+    }
+
+    /**
+     * D-111: the numbers on the results page's three summary cards — how many
+     * students the batch holds, how many are encoded, how many of those are
+     * Fit, and how many were EVER given a 2nd chance (D-110). That last count
+     * reads the roster's current appointment, which stays the 2nd-chance one
+     * after the student completes, so a rescheduled student is still counted.
+     *
+     * @return array{total: int, completed: int, fit: int, rescheduled: int}
+     */
+    public function resultsSummary(): array
+    {
+        $held = $this->heldAppointments();
+
+        return [
+            'total' => $held->count(),
+            'completed' => $held->filter(fn (Appointment $appointment): bool => $appointment->clearanceProgress() === 'completed')->count(),
+            'fit' => $held->filter(fn (Appointment $appointment): bool => $appointment->clearanceResult() === 'Fit')->count(),
+            'rescheduled' => $held->filter(fn (Appointment $appointment): bool => $appointment->isSecondChance())->count(),
+        ];
+    }
+
+    /**
+     * D-111: when this batch's 2nd-chance day starts — the date and earliest
+     * hour of the 2nd-chance appointments on its roster — or null when nobody
+     * on it was rescheduled. BR-27 books a batch's missed students together,
+     * so there is at most one such day.
+     */
+    public function secondChanceStart(): ?Carbon
+    {
+        return $this->heldAppointments()
+            ->filter(fn (Appointment $appointment): bool => $appointment->isSecondChance())
+            ->map(fn (Appointment $appointment): Carbon => self::hourStart($appointment->scheduled_date, $appointment->scheduled_time))
+            ->min();
+    }
+
+    /** D-111: the first clinic day's start — its date at the batch's first hour — or null while unscheduled. */
+    private function firstHourStart(): ?Carbon
+    {
+        return $this->scheduled_date === null ? null : self::hourStart($this->scheduled_date, $this->scheduled_time);
+    }
+
+    /**
+     * Is a clinic day that starts at $start happening now — from that hour
+     * until the absent cutoff (8:00 PM) that evening?
+     */
+    private function isClinicDayUnderway(?Carbon $start): bool
+    {
+        return $start !== null && now()->gte($start) && now()->lt(Appointment::absentCutoffOn($start));
+    }
+
+    /**
+     * A clinic date at a slot key ('09:00:00'). A pre-D-37 row has no slot, so
+     * it starts at the clinic's first hour (never a hardcoded 7 AM).
+     */
+    private static function hourStart(Carbon $date, ?string $slot): Carbon
+    {
+        $slot ??= app(ClinicScheduleService::class)->slots()[0];
+
+        return Carbon::parse($date->toDateString().' '.$slot);
     }
 
     /**

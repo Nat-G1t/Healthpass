@@ -268,46 +268,49 @@ students.
 9. Repeat for a second sampled student.
 10. Log back in as `admin.ccs@healthpass.test` and open **Batch Tracking**. →
     **Expect:** a **Batch Results** card **above** the requests table, listing
-    the approved batch with **Time of Completion = In progress** (at least one
-    student has not been encoded yet). Pending, rejected and cancelled batches
-    are **not** in this card (D-55).
-11. Click **View** on that row. → **Expect:** a popup with the Batch ID,
-    service, clinic date and hour span, and one row per student: name, student
-    no., hour, **Status** and **Result**. A student taken through the kiosk but
-    not yet encoded reads **At the clinic** with Result "—"; a student not at the
-    kiosk yet reads **Scheduled**. **No vital signs, questionnaire
-    answers, nurse notes or HP- reference appear anywhere in the popup.**
+    the approved batch as **Batch ID · Purpose · Date requested · Status** with
+    **Status = In progress** during its clinic hours (D-111). Date requested is
+    the day you submitted it. Pending, rejected and cancelled batches are
+    **not** in this card (D-55).
+11. Click **View** on that row. → **Expect:** the batch's own **results page**
+    (not a popup — D-111): "← Batch Tracking", **Batch BR-…**, the form ·
+    purpose · clinic date and hours, the status badge, three summary cards, and
+    one row per student: **Name**, **Student ID**, **Completion status** and
+    **Result**. A student taken through the kiosk but not yet encoded reads **At
+    the clinic** with Result "—"; a student not at the kiosk yet reads
+    **Scheduled**. **No vital signs, questionnaire answers, nurse notes or HP-
+    reference appear anywhere on the page.** (Filters: E2E-34.)
 12. Log in as `nurse@healthpass.test` and encode one sampled student (Fit or
-    Unfit). Back as the CCS admin, **reload** Batch Tracking and click View
-    again. → **Expect:** that student now reads **Completed** with the result
-    you encoded.
+    Unfit). Back as the CCS admin, **reload** the results page. → **Expect:**
+    that student now reads **Completed** with the result you encoded, and the
+    **Completed** card counts one more. Once **every** student is encoded the
+    batch reads **Completed** at once — it does not wait for 8 PM.
 13. **Absent rule (8 PM).** A student who never reaches the kiosk stays **Scheduled**
     all clinic day and reads **Unattended from 8:00 PM** on the clinic date
     (D-110 — within five minutes the 2nd-chance job then shows them
     **Rescheduled**; see E2E-33). To test without waiting until evening, ask a developer to set
     `HEALTHPASS_ABSENT_CUTOFF` in `.env` to a time a couple of minutes ahead
     (e.g. `14:05`), run `php artisan config:clear`, and reload after that time.
-    → **Expect:** the no-shows read **Unattended**. Once every student is Completed,
-    Unattended or Withdrawn, Time of Completion shows the **date and time of the
-    last encode** (e.g. "Sep 10, 2026 · 3:42 PM"), or **No one attended** if
-    nobody was encoded. A student still **At the clinic** keeps the batch **In
-    progress** even after the cutoff. Ask the developer to remove the setting
-    afterwards.
+    → **Expect:** the no-shows read **Unattended** (then **Rescheduled**), and
+    the batch reads **Still in progress** until their 2nd-chance day starts.
+    A student still **At the clinic** also keeps the batch **Still in
+    progress** after the cutoff, until the clinic encodes them. Ask the
+    developer to remove the setting afterwards.
 14. In the requests table, click the Batch ID to open the **batch roster**. →
     **Expect:** clinic date, hour span, purpose and student count, and each
-    student's appointment and hour with **Withdraw** — but **no** Status or
-    Result columns and no "Clearance results" line (they live in the popup
-    now). Withdraw still works for a student who has not checked in.
+    student's appointment and hour — but **no** Status or Result columns and
+    no "Clearance results" line (they live on the results page now).
 15. Narrow the browser to phone width (about 400 px) and repeat steps 10–11. →
-    **Expect:** the card and the popup table re-flow into stacked cards, the
-    popup scrolls, and nothing overflows sideways.
+    **Expect:** the card's table and the student table re-flow into stacked
+    cards, the three summary cards stack, the filters wrap, and nothing
+    overflows sideways.
 
 **Pass criteria:** N selected students → exactly N appointments created on the
 chosen date, visible to those students, and sampled students complete the
 kiosk loop against their generated appointment. The Batch Results card lists
-only approved batches; its popup shows each student's status and Fit/Unfit and
-nothing else clinical; no-shows read Unattended from 8 PM on the clinic day; and
-the completion time appears once every student is finished.
+only approved batches; View opens a page showing each student's status and
+Fit/Unfit and nothing else clinical; no-shows read Unattended from 8 PM on the
+clinic day; and the batch reads Completed the moment every student is encoded.
 
 ---
 
@@ -1551,9 +1554,9 @@ the steps below assume that value.
 
 15. While a student is still resting (repeat Part A with a second student),
     sign in as their **College Admin**, open **Batch Tracking → Batch Results →
-    View**. → **Expect:** their Status reads **Rest / Retake**, and the batch's Time
-    of Completion still reads **In progress**.
-16. Have that student **never** come back, and check the same popup after
+    View**. → **Expect:** their Status reads **Rest / Retake**, and the batch's
+    status still reads **In progress**.
+16. Have that student **never** come back, and check the same page after
     **8:00 PM** on the clinic date (`healthpass.absent_cutoff`; for a test,
     reseed with the demo row HP-2026-9008, which rested yesterday). →
     **Expect:** their Status reads **Unattended** — their result never reached the
@@ -1996,8 +1999,10 @@ put it back at the end.**
    last chance.", the new date, the hour, an **Arrive at** time and the
    **Batch ID** (BR-…) — never an APT number.
 3. Reload Batch Results → **View**. → **Expect:** all three read
-   **Rescheduled** in red, and the Hour column shows the new hours — the
-   earliest free ones of the new day.
+   **Rescheduled** in red, the **Rescheduled** card reads "3 out of 3 students
+   were rescheduled", the header names the new day — "2nd chance: {date},
+   {hour}", the earliest free hour of that day — and the batch reads **Still
+   in progress** (D-111).
 4. Log in as one of the three students. → **Expect:** the **Next Appointment**
    card shows the new date with a red **2nd chance** badge and "You missed
    {today}. This is your last chance."; Recent Activity lists "2nd chance
@@ -2021,6 +2026,87 @@ put it back at the end.**
 never came back — are booked together on one day at its earliest hours, keep
 the same Batch ID, are emailed once each, see the red 2nd-chance card, and are
 never booked a third time; a captured student is not rescheduled.
+
+---
+
+## E2E-34 — A batch's results page: statuses, summary cards and filters (D-111)
+
+**Goal:** confirm that the Batch Results card's statuses follow the clinic
+days, that **View** opens a full results page, and that its three filters
+narrow the student table — alone and together.
+
+**Accounts:** the CCS Admin `admin.ccs@healthpass.test`, the Director
+`director@healthpass.test`, the nurse `nurse@healthpass.test` (passwords
+`password`).
+
+**Preconditions:** an approved CCS batch for **today** with **at least 15
+students** in mixed states — some encoded **Fit**, some **Unfit**, one **At
+the clinic** (kiosk done, not encoded), one resting (**Rest / Retake**) and
+some not seen yet. Use the kiosk and the encode page, or ask a developer to
+seed one. Never run `migrate:fresh`.
+
+**Steps:**
+
+**Part A — the card**
+
+1. As the CCS Admin open **Batch Tracking**. → **Expect:** the **Batch
+   Results** card's columns are **Batch ID · Purpose · Date requested ·
+   Status** and a **View** link; there is **no** Time of Completion. Purpose
+   is cut with "..." past 60 characters; Date requested is the day the college
+   submitted the request, not the clinic date.
+2. Read the batch's **Status**. → **Expect:** **Scheduled** before its first
+   clinic hour, **In progress** from that hour until 8:00 PM, **Still in
+   progress** in the evening while a student waits for a 2nd chance or the
+   clinic's encode, and **Completed** as soon as everyone is encoded. After a
+   2nd-chance day: **Finished incomplete** if someone missed it, **No one
+   attended** if nobody came on either day.
+
+**Part B — the page**
+
+3. Click **View**. → **Expect:** "← Batch Tracking", **Batch BR-…**, the line
+   form · purpose · clinic date and hours, and the same status badge as the
+   card.
+4. Read the three cards. → **Expect:** **Completed** "*N* out of *total*
+   students completed", **Fit** "*F* out of *N* completed students are fit",
+   **Rescheduled** "*R* out of *total* students were rescheduled". Count the
+   table by hand: the numbers match.
+5. Look at the table. → **Expect:** columns **Name · Student ID · Completion
+   status · Result** (no Hour), names in last-name order. It shows about
+   **ten rows**, then **scrolls inside the card**; while you scroll, the
+   column header stays at the top. There is **no** Previous / Next pager.
+
+**Part C — the filters**
+
+6. **Result → Fit.** → **Expect:** only Fit rows; the count matches the Fit
+   card. **Unfit** → only Unfit rows. **All results** → everyone again.
+7. **Completion status** → try each of **Scheduled, At the clinic, Rest /
+   Retake, Rescheduled, Completed, Unattended**. → **Expect:** only rows with
+   that badge each time (a status nobody has shows "No students match these
+   filters."). **All** → everyone again.
+8. **Search** part of a student's **last name**, then part of a **student
+   ID**. → **Expect:** only the matching students, with no page reload.
+   Upper/lower case does not matter.
+9. **Together:** Result **Fit** + Completion status **Completed**. → **Expect:**
+   exactly the Fit students. Add a search that matches none of them. →
+   **Expect:** "No students match these filters." Clear the search → the Fit
+   students come back.
+
+**Part D — phone and privacy**
+
+10. Narrow the browser to about **390 px**. → **Expect:** the three cards
+    stack, the two drop-downs and the search wrap onto their own lines, each
+    student is a small card inside the scrolling box, and the page never
+    slides sideways.
+11. View the page source (Ctrl+U). → **Expect:** no vital signs, questionnaire
+    answers, clinic notes, physician details or HP- reference anywhere.
+12. Change the batch number in the address bar to another college's batch, and
+    to a pending one. → **Expect:** **404** both times.
+
+**Pass criteria:** the card shows Purpose and Date requested with a status
+that follows the clinic days; View opens a page whose cards add up to the
+table; each filter and the search narrow the list alone and together; the
+table scrolls after ten rows with its header in view and no pager; it fits a
+phone; nothing clinical beyond Fit / Unfit reaches the page.
 
 ---
 

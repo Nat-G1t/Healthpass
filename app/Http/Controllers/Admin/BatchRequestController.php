@@ -11,11 +11,11 @@ use App\Http\Requests\Admin\StoreBatchRequestRequest;
 use App\Jobs\SendAppointmentCancelledMail;
 use App\Models\Appointment;
 use App\Models\BatchRequest;
-use App\Models\BatchRequestStudent;
 use App\Models\StudentProfile;
 use App\Services\ClinicScheduleService;
 use App\Services\ReferenceNumberService;
 use App\Support\AssessmentDocument;
+use App\Support\BatchResults;
 use App\Support\ClearanceDocument;
 use App\Support\Programs;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -53,11 +53,11 @@ class BatchRequestController extends Controller
      * rejected it); with() means one extra query for the whole list instead
      * of one per rejected row.
      *
-     * Above that list sits the Batch Results card (FR-ADM-12, D-55): every
-     * APPROVED batch, newest clinic date first, from its own query. It
-     * eager-loads everything Appointment::clearanceProgress() reads, so the
-     * page costs the same handful of queries whether a batch has 4 students or
-     * 60. The popup rows are built here, per batch, by resultsPopup().
+     * Above that list sits the Batch Results card (FR-ADM-12, D-55, D-111):
+     * every APPROVED batch, newest clinic date first, from its own query. It
+     * eager-loads everything BatchRequest::resultsStatus() reads, so the page
+     * costs the same handful of queries whether a batch has 4 students or 60.
+     * Each row's View opens that batch's own results page (results()).
      *
      * D-86: the Batch Results card has its own Batch ID search (`?q=`). It is
      * applied on the SERVER, so it finds a batch on any page, not just the ten
@@ -65,7 +65,7 @@ class BatchRequestController extends Controller
      * as on the nurse dashboard's search; the term itself is a bound parameter.
      *
      * D-87: students whose appointment was withdrawn under the removed
-     * per-student withdrawal are left out of the counts and the popup
+     * per-student withdrawal are left out of the counts and the statuses
      * (BatchRequestStudent::scopeNotWithdrawn()).
      */
     public function index(Request $request): View
@@ -86,19 +86,9 @@ class BatchRequestController extends Controller
         $approvedBatches = $college->batchRequests()
             ->where('status', 'approved')
             ->when($search !== '', fn ($query) => $query->where('reference_no', 'like', '%'.$search.'%'))
-            ->with([
-                'batchRequestStudents' => fn ($query) => $query->notWithdrawn()->orderBy('id'),
-                'batchRequestStudents.student:id,name',
-                'batchRequestStudents.student.studentProfile:id,user_id,student_number',
-                'batchRequestStudents.appointment',
-                // Only the columns the status and completion rules read. The
-                // rest of the clinical record (notes, physician) is never even
-                // loaded for this page.
-                // `status` tells a resting visit (Rest / Retake, D-72) from a
-                // captured one (At the clinic) — D-110.
-                'batchRequestStudents.appointment.clinicVisit:id,appointment_id,status',
-                'batchRequestStudents.appointment.clinicVisit.clearanceRecord:id,clinic_visit_id,result,encoded_at',
-            ])
+            // Only what each row's Status reads — the student names and the
+            // rest of the clinical record are never loaded for this card.
+            ->with(BatchResults::statusRelations())
             ->orderByDesc('scheduled_date')
             ->orderByDesc('id')
             // FR-UI-06: ten per page. Its own page name, because the requests
@@ -106,12 +96,6 @@ class BatchRequestController extends Controller
             // move the other.
             ->paginate(config('healthpass.ui.rows_per_page'), pageName: 'results_page')
             ->withQueryString();
-
-        // Keyed by batch id, so each row's View button picks its own payload.
-        // Built for the current page only — the rows on screen.
-        $resultPopups = $approvedBatches
-            ->mapWithKeys(fn (BatchRequest $batch): array => [$batch->id => $this->resultsPopup($batch)])
-            ->all();
 
         // The card (and so its search box) shows whenever the college has ANY
         // approved batch — not only when the search found one — so a search
@@ -121,40 +105,34 @@ class BatchRequestController extends Controller
             : $college->batchRequests()->where('status', 'approved')->exists();
 
         return view('admin.batches.index', compact(
-            'college', 'batchRequests', 'approvedBatches', 'resultPopups', 'hasApprovedBatches', 'search',
+            'college', 'batchRequests', 'approvedBatches', 'hasApprovedBatches', 'search',
         ));
     }
 
     /**
-     * One batch's Batch Results popup (FR-ADM-12, D-55), as the plain array the
-     * view embeds with Js::from().
+     * One approved batch's results page (FR-ADM-12, D-111) — what the Batch
+     * Results card's View opens, replacing D-55's popup: the batch status,
+     * three summary cards and a filterable table of every student.
      *
-     * OUTCOME ONLY (PRD §6.6): each row is the student's name, number, hour,
-     * the clearanceProgress() key and Fit/Unfit — nothing else. No vitals,
-     * screening answers, nurse notes, physician details or clinic-visit
-     * reference go into it, so none of them can reach the page source. The view
-     * owns the wording of each status key.
+     * Found through the managed college, so another college's batch is a
+     * plain 404 (FR-ADM-06), and approved only — a pending, rejected or
+     * cancelled batch has no results, so it 404s too.
      *
-     * @return array{ref: string, form: string, date: string, span: string, students: list<array{name: string, number: string, hour: string, status: ?string, result: ?string}>}
+     * OUTCOME ONLY (PRD §6.6): BatchResults::page() builds each row from the
+     * student's name, number, status and Fit / Unfit, and nothing else of the
+     * clinical record is loaded.
      */
-    private function resultsPopup(BatchRequest $batch): array
+    public function results(int $batchId): View
     {
-        return [
-            'ref' => $batch->reference_no,
-            'form' => $batch->formTypeLabel(),   // D-62
-            'date' => $batch->scheduled_date?->format('l, F j, Y') ?? '—',
-            'span' => $batch->scheduledSpanLabel(),   // D-108: the Director's hours
-            'students' => $batch->batchRequestStudents
-                ->map(fn (BatchRequestStudent $row): array => [
-                    'name' => $row->student?->name ?? 'Unknown student',
-                    'number' => $row->student?->studentProfile?->student_number ?? '—',
-                    'hour' => $row->appointment?->timeRangeLabel() ?? '—',
-                    'status' => $row->appointment?->clearanceProgress(),
-                    'result' => $row->appointment?->clearanceResult(),
-                ])
-                ->values()
-                ->all(),
-        ];
+        $batch = $this->managedCollege()->batchRequests()
+            ->where('status', 'approved')
+            ->with(BatchResults::pageRelations())
+            ->findOrFail($batchId);
+
+        return view('admin.batches.results', [
+            'batch' => $batch,
+            'results' => BatchResults::page($batch),
+        ]);
     }
 
     public function create(): View

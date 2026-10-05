@@ -13,8 +13,8 @@ use Tests\Support\SecondChanceFixture;
 use Tests\TestCase;
 
 /**
- * D-110 — what the 2nd chance looks like: the student statuses on the Batch
- * Results popup, the student's Next Appointment card, and the kiosk on the
+ * D-110 — what the 2nd chance looks like: the student statuses on a batch's
+ * results page (D-111), the student's Next Appointment card, and the kiosk on the
  * 2nd-chance day.
  */
 class SecondChancePagesTest extends TestCase
@@ -29,9 +29,9 @@ class SecondChancePagesTest extends TestCase
         $this->setUpSecondChance();
     }
 
-    // ── Batch Results popup (FR-ADM-12) ─────────────────────────────────────
+    // ── Batch results page (FR-ADM-12, D-111) ───────────────────────────────
 
-    public function test_the_popup_shows_each_student_status_with_its_label(): void
+    public function test_the_results_page_shows_each_student_status_with_its_label(): void
     {
         $batch = $this->makeBatch();
 
@@ -46,11 +46,14 @@ class SecondChancePagesTest extends TestCase
         $this->onSecondChance($this->addStudent($batch), $this->day(-1));  // unattended
 
         $this->travelTo(Carbon::parse(self::CLINIC_DAY.' 12:00:00'));
-        $response = $this->actingAs($this->admin)->get('/admin/batches')->assertOk();
+        $response = $this->actingAs($this->admin)->get(route('admin.batches.results', $batch->id))->assertOk();
 
-        $statuses = array_column($response->viewData('resultPopups')[$batch->id]['students'], 'status');
+        // D-111 sorts the rows by name (random factory names here), so compare
+        // the statuses as a set.
+        $statuses = array_column($response->viewData('results')['rows'], 'status');
+        sort($statuses);
         $this->assertSame(
-            ['scheduled', 'rest_retake', 'in_clinic', 'completed', 'rescheduled', 'unattended'],
+            ['completed', 'in_clinic', 'rescheduled', 'rest_retake', 'scheduled', 'unattended'],
             $statuses,
         );
 

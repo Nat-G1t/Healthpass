@@ -1159,6 +1159,46 @@
 
 ### Changed
 
+* **Batch statuses follow the clinic days, and View opens a full results
+  page** (D-111, rewrites FR-ADM-12; amends FR-UI-06, FR-ADM-07, FR-ADM-10
+  and §6.6; supersedes D-86's completion rule and D-55's popup; PRD revision
+  1.95, 2026-10-05). No schema change, no new package; one new route.
+  * **Batch status** (`BatchRequest::resultsStatus()`, server clock, first
+    match wins): **Completed** the moment every student is encoded ·
+    **Scheduled** before the first clinic hour · **In progress** from the
+    batch's earliest hour until 8 PM, on day 1 and on its 2nd-chance day ·
+    **Still in progress** while a student is still Scheduled, Rescheduled,
+    Rest / Retake or At the clinic · **No one attended** (all Unattended) ·
+    **Finished incomplete** (some Unattended). New `resultsSummary()` and
+    `secondChanceStart()`; `resultsCompletedAt()` is removed.
+  * **Batch Results card:** Batch ID · **Purpose** (60 characters) · **Date
+    requested** (the day the college submitted it) · Status · View. Time of
+    Completion is gone; the search, order and pager are unchanged.
+  * **Results page** `GET /admin/batches/{batch}/results`
+    (`admin.batches.results`), through `managedCollege()`, approved batches
+    only (404 otherwise): a header (form · purpose · clinic date and hours,
+    the 2nd-chance day, the status), three summary cards (Completed · Fit ·
+    Rescheduled — everyone ever given a 2nd chance), and a main card with
+    Result and Completion status drop-downs and a name / student ID search
+    that filter in the browser. The Name · Student ID · Completion status ·
+    Result table is ten rows tall, scrolls with its header pinned, and has no
+    pager (FR-UI-06's exception). Outcome only (§6.6).
+  * **Shared for the other roles:** `App\Support\BatchResults` (eager-loads +
+    page payload, rows in last-name order) and the partials under
+    `resources/views/batches/results/` (`_header`, `_status`, `_summary`,
+    `_table`). `<x-hp.table>` gains an optional `sticky-header` prop. The
+    popup and its Alpine state are removed from Batch Tracking.
+  * Tests: `BatchResultsTest` rewritten — the card's columns and View link,
+    the status matrix with `travelTo()` and the real 2nd-chance job
+    (scheduled, in progress, still in progress on the evening and the next
+    morning, in progress on the 2nd-chance day, finished incomplete, no one
+    attended, completed at 3 PM, a captured visit holding it open past the
+    cutoff), the summary for a mixed batch and after a rescheduled student
+    completes, and the page (college scope, approved only, other roles turned
+    away, outcome only, withdrawn hidden, last-name order, filters present,
+    no pager, no per-student queries). `SecondChancePagesTest` reads the
+    statuses from the new page.
+
 * **Missed students get one automatic 2nd-chance day at the 8 PM cutoff**
   (D-110, adds FR-ADM-14 and BR-27; amends FR-STU-01, FR-STU-12, FR-ADM-12,
   FR-DIRA-03, BR-08, BR-12, BR-25 and D-61; supersedes D-86's `did_not_finish`

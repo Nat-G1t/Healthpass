@@ -1,4 +1,4 @@
-@props(['headers' => []])
+@props(['headers' => [], 'stickyHeader' => false])
 
 {{--
     Responsive data table (mobile-first).
@@ -24,11 +24,14 @@
     The `label` on each cell is what the mobile card shows in place of the
     column header (the real <thead> is hidden below `md`), so it should match
     the matching entry in `$headers`.
+
+    `sticky-header` (D-111) pins the header row to the top of a scrolling box
+    the table sits in, so a long list keeps its column names in view.
 --}}
 <table {{ $attributes->merge(['class' => 'block w-full text-left text-sm md:table']) }}>
 
     @if (! empty($headers))
-        <thead class="hidden md:table-header-group">
+        <thead @class(['hidden md:table-header-group', 'sticky top-0 z-10 bg-hp-white' => $stickyHeader])>
             <tr class="border-b border-hp-slate/10 text-[11px] uppercase tracking-widest text-hp-slate/40">
                 @foreach ($headers as $header)
                     <th class="py-2.5 pr-4 font-semibold last:pr-0">{{ $header }}</th>

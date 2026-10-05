@@ -195,9 +195,9 @@ class Appointment extends Model
      * The absent cutoff (`healthpass.absent_cutoff`, 8:00 PM) on a clinic date.
      *
      * One definition shared by clearanceProgress() below and by
-     * BatchRequest::resultsCompletedAt() (D-86: a batch is done at this moment
-     * even if some students never came), so a student's row and their batch's
-     * Status column always flip at the same instant.
+     * BatchRequest::resultsStatus() (D-111: a batch's clinic day is "In
+     * progress" until this moment), so a student's row and their batch's
+     * status always flip at the same instant.
      */
     public static function absentCutoffOn(Carbon $clinicDate): Carbon
     {
@@ -215,9 +215,9 @@ class Appointment extends Model
     }
 
     /**
-     * How far this appointment has got, as ONE key the Batch Results popup maps
-     * to a label and a badge (FR-ADM-12, D-55 — introduced by D-53 for the
-     * roster, which no longer shows it).
+     * How far this appointment has got, as ONE key the batch results page maps
+     * to a label and a badge (FR-ADM-12 — introduced by D-53 for the roster,
+     * moved to a popup by D-55, to its own page by D-111).
      *
      * The College Admin who booked a graduation cohort needs to know who still
      * has to turn up, and `appointments.status` alone cannot tell them: the
@@ -300,7 +300,7 @@ class Appointment extends Model
      * Outcome only. The vitals, the screening answers and the nurse's notes
      * stay out of the College Admin's reach: PRD §6.6 opens exactly this one
      * field to the admin of the student's own college, and nothing else on the
-     * record — shown on the Batch Results popup since D-55.
+     * record — shown on the batch results page (D-55's popup until D-111).
      */
     public function clearanceResult(): ?string
     {
