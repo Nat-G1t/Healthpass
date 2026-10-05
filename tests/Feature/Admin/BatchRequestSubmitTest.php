@@ -11,6 +11,8 @@ use App\Models\College;
 use App\Models\StudentProfile;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
@@ -41,6 +43,9 @@ class BatchRequestSubmitTest extends TestCase
         // the unit test ClinicScheduleServiceTest.
         config(['healthpass.hourly_capacity' => 12, 'healthpass.daily_capacity' => 120]);
 
+        // D-109: every submission carries a signed memo; keep it off the real disk.
+        Storage::fake('local');
+
         $this->ccs = College::create(['code' => 'CCS', 'name' => 'College of Computing Studies']);
         $this->cea = College::create(['code' => 'CEA', 'name' => 'College of Engineering and Architecture']);
 
@@ -60,6 +65,7 @@ class BatchRequestSubmitTest extends TestCase
             'reason' => 'ojt',
             // D-108: no clinic date and no start hour — the Director picks both.
             'students' => $students->pluck('id')->all(),
+            'memo' => UploadedFile::fake()->image('memo.jpg'),   // D-109
         ], $overrides));
     }
 
@@ -74,6 +80,7 @@ class BatchRequestSubmitTest extends TestCase
                 'form_type' => 'clearance',
                 'reason' => 'fieldtrip',
                 'students' => $students->pluck('id')->all(),
+                'memo' => UploadedFile::fake()->image('memo.jpg'),   // D-109
             ])
             ->assertSessionHasNoErrors();
 
@@ -197,6 +204,7 @@ class BatchRequestSubmitTest extends TestCase
                 'form_type' => 'assessment',
                 'reason' => 'ojt',
                 'students' => $students->pluck('id')->all(),
+                'memo' => UploadedFile::fake()->image('memo.jpg'),   // D-109
             ])
             ->assertSessionHasNoErrors()
             ->assertSessionDoesntHaveErrors('clashes.'.$students[0]->id);
@@ -235,6 +243,7 @@ class BatchRequestSubmitTest extends TestCase
                 'form_type' => 'assessment',
                 'reason' => 'ojt',
                 'students' => [$own->id, $foreign->id],
+                'memo' => UploadedFile::fake()->image('memo.jpg'),   // D-109
             ])
             ->assertSessionHasErrors('students.1');
 

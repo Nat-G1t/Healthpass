@@ -9,7 +9,9 @@ use App\Models\College;
 use App\Models\StudentProfile;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
@@ -42,6 +44,9 @@ class BatchConfirmationPageTest extends TestCase
         // the unit test ClinicScheduleServiceTest.
         config(['healthpass.hourly_capacity' => 12, 'healthpass.daily_capacity' => 120]);
 
+        // D-109: every submission carries a signed memo; keep it off the real disk.
+        Storage::fake('local');
+
         $this->ccs = College::create(['code' => 'CCS', 'name' => 'College of Computing Studies']);
         $this->admin = User::factory()->create(['role' => 'college_admin', 'managed_college_id' => $this->ccs->id]);
         $this->date = now()->addDays(7)->toDateString();
@@ -56,6 +61,7 @@ class BatchConfirmationPageTest extends TestCase
             'form_type' => 'clearance',
             'reason' => 'fieldtrip',
             'students' => $students->pluck('id')->all(),
+            'memo' => UploadedFile::fake()->image('memo.jpg'),   // D-109
         ])->assertSessionHasNoErrors();
 
         return BatchRequest::latest('id')->first();

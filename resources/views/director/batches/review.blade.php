@@ -14,7 +14,8 @@
     Cards, stacked in this order (single column on phones):
       1. Batch details      — what the college sent
       2. Students           — ten rows tall, then it scrolls inside the card
-      3. (D-109, prompt 07: the attached signed memo goes here)
+      3. Signed memo        — thumbnail / PDF tile + full-screen viewer (D-109,
+                              partials/memo-card.blade.php)
       4. Schedule           — the calendar, the hour picker, Approve / Reject
 
     The Schedule card's Alpine component (`batchSchedule`, in
@@ -154,7 +155,8 @@
         </x-hp.card>
     </div>
 
-    {{-- Card 3 (D-109, prompt 07): the attached signed memo goes here. --}}
+    {{-- ── Card 3: the signed memo (D-109) ──────────────────────────────── --}}
+    @include('director.batches.partials.memo-card')
 
     {{-- ── Card 4: schedule ─────────────────────────────────────────────── --}}
     <x-hp.card class="mt-6">

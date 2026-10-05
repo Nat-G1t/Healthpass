@@ -70,6 +70,11 @@ class BatchRequest extends Model
         'form_type',
         'reason',
         'reason_detail',
+        // D-109: the signed memo — a private file, plus the name and type to
+        // show and serve it with. NULL on every batch submitted before D-109.
+        'memo_path',
+        'memo_original_name',
+        'memo_mime',
         'service_type',
         // Legacy since D-108: what a college asked for before the Director
         // started choosing the schedule. New batches leave all three NULL.
@@ -219,6 +224,21 @@ class BatchRequest extends Model
     public function isApprovable(): bool
     {
         return $this->status === 'pending';
+    }
+
+    /**
+     * D-109: did the college attach a signed memo? False for every batch
+     * submitted before memos were required — those are never backfilled.
+     */
+    public function hasMemo(): bool
+    {
+        return $this->memo_path !== null;
+    }
+
+    /** D-109: is the memo a photo / image (shown with a thumbnail and zoom) rather than a PDF? */
+    public function memoIsImage(): bool
+    {
+        return str_starts_with((string) $this->memo_mime, 'image/');
     }
 
     /** "Medical Clearance" / "Medical Assessment Form" (D-62). */

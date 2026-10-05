@@ -92,6 +92,15 @@ return [
     // BR-26 (D-107): months a Fit result stays valid from its encoded date — display-only (student dashboard card).
     'clearance_validity_months' => 6,
 
+    // D-109: files a College Admin attaches — the batch's signed memo (and, from
+    // D-113, the release request's attachment). Stored on the PRIVATE `local` disk.
+    'uploads' => [
+        // Largest file accepted, in kilobytes (Laravel's `max` rule on a file is KB): 5 MB.
+        'max_kb' => 5120,
+        // Allowed types, checked against the file's real content (fileinfo), not just its name.
+        'mimes' => ['jpg', 'jpeg', 'png', 'pdf'],
+    ],
+
     // §7.4, D-10: Rule-based flag thresholds — screening signals, not diagnoses.
     // All flag logic (kiosk badges, nurse queue, Director anomalies) reads ONLY from here. (NFR-7, BR-13)
     'thresholds' => [

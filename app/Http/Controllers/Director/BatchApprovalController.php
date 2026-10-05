@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Services\ClinicScheduleService;
 use App\Services\ReferenceNumberService;
 use App\Services\ScheduleClashService;
+use App\Support\SignedMemo;
 use Carbon\CarbonPeriod;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -35,8 +36,9 @@ use Illuminate\View\View;
  *
  *   index()     the queue — pending requests only, oldest first; the oldest
  *               is highlighted as Next, like the clinic's Live Queue
- *   review()    one request's Review page: details, students, and the
- *               calendar + hour picker the Director schedules it with
+ *   review()    one request's Review page: details, students, the signed
+ *               memo (D-109), and the calendar + hour picker the Director
+ *               schedules it with
  *   calendar()  JSON for that calendar — per day, how full it is and whether
  *               any start hour can take this batch
  *   hours()     JSON for the hour picker — per hour, who is in it and whether
@@ -113,6 +115,8 @@ class BatchApprovalController extends Controller
         return view('director.batches.review', [
             'batch' => $batch,
             'students' => $students,
+            // Card 3 (D-109): the signed memo's size, for its tile.
+            'memoSize' => SignedMemo::sizeLabel($batch),
             'blocks' => $this->schedule->blocksFor($students->count()),
             'hourlyCapacity' => $this->schedule->hourlyCapacity(),
             // Everything the Schedule card's Alpine component needs. "Today"

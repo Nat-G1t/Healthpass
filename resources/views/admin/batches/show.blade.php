@@ -98,6 +98,20 @@
             </dt>
             <dd class="mt-1 text-sm font-semibold text-hp-slate">{{ $totalCount }}</dd>
         </div>
+        {{-- D-109: the signed memo, opened in a new tab. --}}
+        <div>
+            <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+                Signed memo
+            </dt>
+            <dd class="mt-1 text-sm font-semibold">
+                @if ($batch->hasMemo())
+                    <a href="{{ route('admin.batches.memo', $batch) }}" target="_blank" rel="noopener"
+                       class="text-hp-orange hover:underline" data-memo-link>View</a>
+                @else
+                    <span class="font-normal text-hp-slate/50">None — submitted before signed memos were required</span>
+                @endif
+            </dd>
+        </div>
     </dl>
 </x-hp.card>
 

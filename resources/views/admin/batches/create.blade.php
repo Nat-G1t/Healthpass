@@ -44,6 +44,10 @@ function batchForm() {
         // BR-07 (D-105): the Form Request's minimum, shipped from the server.
         minStudents:    {{ $minStudents }},
         reasonOthers:  @js(\App\Models\BatchRequest::REASON_OTHERS),
+        // D-109: set by the memo card's file-capture-change event. Always
+        // false on load — a browser never refills a file input, even after a
+        // failed submit.
+        memoAttached:  false,
 
         // ── Student picker ──────────────────────────────────────────────────
         students: @js($students),
@@ -128,6 +132,7 @@ function batchForm() {
 
         get canSubmit() {
             return this.reasonReady
+                && this.memoAttached
                 && this.selected.length >= this.minStudents
                 && !this.tooManyStudents;
         },
@@ -135,7 +140,9 @@ function batchForm() {
 }
 </script>
 
-<form method="POST" action="{{ route('admin.batches.store') }}" x-data="batchForm()">
+{{-- multipart: the form carries a file, the signed memo (D-109). --}}
+<form method="POST" action="{{ route('admin.batches.store') }}" enctype="multipart/form-data"
+      x-data="batchForm()" @file-capture-change="memoAttached = $event.detail.attached">
     @csrf
 
     {{-- ── D-62: the form the clinic will use ───────────────────────────────
@@ -257,7 +264,17 @@ function batchForm() {
                 </div>
             </x-hp.card>
 
-            {{-- Submit — disabled until purpose valid + ≥ minStudents students (FR-ADM-03, D-105) --}}
+            {{-- D-109: the signed request memo, where the date card used to be
+                 (D-108). Required; the Director reads it before scheduling. --}}
+            <x-hp.card>
+                <h3 class="text-sm font-semibold text-hp-slate">Attach signed memo</h3>
+                <p class="mb-4 mt-0.5 text-xs text-hp-slate/50">
+                    A photo or PDF of the signed request memo. The Director reads it before scheduling.
+                </p>
+                <x-hp.file-capture name="memo" noun="memo" />
+            </x-hp.card>
+
+            {{-- Submit — disabled until purpose valid + memo + ≥ minStudents students (FR-ADM-03, D-105, D-109) --}}
             <x-hp.card>
                 <x-hp.button type="submit" class="w-full" x-bind:disabled="!canSubmit" data-pending-label="Submitting…">
                     Submit Batch Request
@@ -269,7 +286,7 @@ function batchForm() {
                 </p>
                 <p class="mt-2 text-center text-xs text-hp-slate/50"
                    x-show="!canSubmit" x-cloak>
-                    Choose a purpose and at least {{ $minStudents }} students to submit.
+                    Choose a purpose, attach the signed memo and pick at least {{ $minStudents }} students to submit.
                 </p>
             </x-hp.card>
 

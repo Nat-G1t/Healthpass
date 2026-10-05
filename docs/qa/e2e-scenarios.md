@@ -24,6 +24,9 @@ to use, what to click, and what you should see.
 4. Open **Google Chrome** (the kiosk needs Chromium; the web app works in
    Chrome/Edge/Firefox). Use `http://127.0.0.1:8080` for every URL — never
    type `localhost`.
+5. Keep a small **sample memo** handy — any JPG, PNG or PDF under 5 MB. Every
+   New Batch Request needs one attached (D-109, E2E-32), including the
+   scenarios below written before that change.
 
 ### Seeded accounts (all passwords are `password`)
 
@@ -69,9 +72,10 @@ students never book for themselves and never walk in.
 
 1. Log in as `admin.ccs@healthpass.test`, open **New Batch Request**. Choose
    a form and any **Purpose**, tick **Juan Santos** and **Maria Reyes** (a
-   batch needs at least 2 students — D-105; Maria is E2E-2's student), and
-   click **Submit Batch Request**. There is **no date or hour to pick**
-   (D-108). → **Expect:** the confirmation screen, "Pending Director
+   batch needs at least 2 students — D-105; Maria is E2E-2's student),
+   attach any **signed memo** (a photo or small PDF — required since D-109,
+   E2E-32), and click **Submit Batch Request**. There is **no date or hour to
+   pick** (D-108). → **Expect:** the confirmation screen, "Pending Director
    Approval", Clinic date "To be scheduled by the Director". Log out.
 2. Log in as `director@healthpass.test`, open **Batch Approvals**, click
    **Review** on that batch, click **today** on the calendar, pick a **Start
@@ -1830,7 +1834,8 @@ CCS student's mailbox (Resend test address or the log mailer).
 **Steps:**
 
 1. As the **CCS admin**, submit a batch of **25** students (no date or hour
-   fields). Then, as the **CEA admin**, submit a batch of **3**.
+   fields; attach any signed memo — required since D-109, see E2E-32). Then,
+   as the **CEA admin**, submit a batch of **3**.
 2. As the **Director**, open **Batch Approvals**. → **Expect:** only pending
    requests, **oldest first**; columns **Batch ID / College / Form Type /
    Purpose** and a **Review** button; the **first** row has a peach band and
@@ -1874,6 +1879,77 @@ row; the calendar rings match each day's bookings and disable days no hour
 can take; the hour list greys out exactly the hours the batch can't start at
 and names the colleges in each; approval creates the appointments, emails the
 students and moves the queue on.
+
+---
+
+## E2E-32 — A batch request carries a signed memo; the Director views it (D-109)
+
+**Goal:** confirm the College Admin must attach one signed memo (photo, image
+or PDF) to every batch request, and that the Director can open it full-screen,
+zoom it and close it.
+
+**Accounts:** the CCS Admin `admin.ccs@healthpass.test` (once on a **phone**,
+once on a laptop) and the Director `director@healthpass.test`. Have a small
+PDF (under 5 MB) and, for Part C, a file over 5 MB and a `.gif`.
+
+**Part A — a phone photo**
+
+1. On a phone, sign in as the CCS admin and open **New Batch Request**. →
+   **Expect:** an **"Attach signed memo"** card under Request Details with
+   **Take photo** and **Upload file** side by side, and the line "JPG, PNG or
+   PDF, up to 5 MB."
+2. Choose a form, a purpose and 2 students. → **Expect:** Submit is still
+   disabled, and the note under it asks for the signed memo.
+3. Tap **Take photo**. → **Expect:** the phone's **camera** opens (not a
+   webcam window in the page). Photograph any signed paper. → **Expect:** a
+   thumbnail of the photo, its name and size, and **Remove**; Submit enables.
+4. Tap **Remove**, then **Take photo** again and retake. → **Expect:** only the
+   new photo is shown (one file at a time).
+5. Submit. → **Expect:** the Request Submitted page shows **Signed memo:
+   View**; View opens the photo in a new tab.
+
+**Part B — a PDF from a laptop**
+
+1. On a laptop, as the CCS admin, start another batch and click **Take
+   photo**. → **Expect:** a normal file picker (laptops have no camera
+   capture). Cancel it.
+2. Click **Upload file** and pick the PDF. → **Expect:** a PDF tile with the
+   file name and size. Submit. → **Expect:** Request Submitted with **View**;
+   the batch roster page shows **Signed memo: View** too.
+
+**Part C — what is refused**
+
+1. Pick the `.gif` (or a file over 5 MB) with Upload file. → **Expect:** a red
+   "The memo must be a JPG, PNG or PDF." (or "… 5 MB or smaller.") and no
+   preview; Submit stays disabled.
+2. Attach a valid memo but clear the purpose so the server refuses the form.
+   → **Expect:** the page comes back with the purpose error and, on the memo
+   card, "Please attach the memo again." (browsers cannot keep a chosen file).
+
+**Part D — the Director views it**
+
+1. As the Director, open **Batch Approvals** → **Review** on the Part A batch.
+   → **Expect:** a **Signed memo** card between the students and the Schedule
+   card, showing the photo as a thumbnail.
+2. Click it. → **Expect:** a full-screen dark viewer with the memo, an **X** at
+   the top-right and **−  100%  +  Reset** buttons.
+3. Click **+** three times. → **Expect:** 175 %, the memo larger, and you can
+   scroll to every edge of it. Click **−** down to 25 %. → **Expect:** − greys
+   out at 25 %. Click **Reset** → 100 % (the whole memo fits the screen).
+4. Click **X**. → **Expect:** the viewer closes and the Review page is as it
+   was. Open it again and press **Esc**. → **Expect:** it closes too.
+5. Review the Part B batch. → **Expect:** a PDF tile (name, "PDF · size");
+   clicking it opens the PDF in the browser's own viewer filling the screen;
+   **X** closes it.
+6. Review a batch submitted **before** this change (any of the older pending
+   ones). → **Expect:** "No memo attached — submitted before signed memos were
+   required."
+
+**Pass criteria:** no batch can be submitted without a memo; the camera opens
+on a phone and a file picker on a laptop; only JPG, PNG and PDF up to 5 MB are
+accepted; the Director sees the memo on the Review page, zooms an image from
+25 % to 400 % and closes the viewer with X or Esc; a PDF opens in the browser's
+viewer; older batches say they have no memo.
 
 ---
 

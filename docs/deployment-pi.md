@@ -769,6 +769,16 @@ Two things to know before you rely on it:
   `http://localhost` — do it once *before* defense day, not during the failure.
 - **The local database is separate.** Restore a fresh dump from the hosted server
   or the fallback demos stale data.
+- **So are the uploaded files (D-109).** Each batch's signed memo lives in
+  `storage/app/private` (never `public/`), not in the database. Copy the hosted
+  server's latest archive with the dump — `docs/deployment-hosted.md` §8, "Back
+  up the uploaded files too" — and unpack it into the Pi's checkout
+  (`tar -xzf storage-<date>.tar.gz -C /var/www/healthpass`), or the Director's
+  Review page shows broken memos. `storage/app/private` must be **writable by
+  `www-data`** (the `storage/` ownership fix in §2 covers it), or submitting a
+  batch fails with "The memo could not be saved." If the Pi ever takes real
+  submissions while it is the live app, back that folder up daily too, next to
+  its DB dump, exactly as on the hosted server.
 - **No internet means no email, and that is fine — it is not lost (D-39).**
   Appointment emails (FR-STU-12) and registration OTPs are **queued jobs**, so
   the app writes them to the local `jobs` table and returns immediately.

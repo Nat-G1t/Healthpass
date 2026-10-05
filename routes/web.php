@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\ActivityLogController as AdminActivityLogController;
 use App\Http\Controllers\Admin\AnalyticsController as AdminAnalyticsController;
+use App\Http\Controllers\Admin\BatchMemoController as AdminBatchMemoController;
 use App\Http\Controllers\Admin\BatchRequestController as AdminBatchRequestController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\MonthlyReportController as AdminMonthlyReportController;
@@ -10,6 +11,7 @@ use App\Http\Controllers\Auth\PasswordChangeController;
 use App\Http\Controllers\Director\AnalyticsController as DirectorAnalyticsController;
 use App\Http\Controllers\Director\AnomaliesController as DirectorAnomaliesController;
 use App\Http\Controllers\Director\BatchApprovalController as DirectorBatchApprovalController;
+use App\Http\Controllers\Director\BatchMemoController as DirectorBatchMemoController;
 use App\Http\Controllers\Director\DashboardController as DirectorDashboardController;
 use App\Http\Controllers\Director\MonthlyReportController as DirectorMonthlyReportController;
 use App\Http\Controllers\Director\StaffAccountController as DirectorStaffAccountController;
@@ -149,6 +151,11 @@ Route::middleware(['auth', 'role:college_admin', 'college.scope'])
         // managedCollege() like every other /admin read, so a foreign id 404s.
         Route::get('/batches/{batch}', [AdminBatchRequestController::class, 'show'])
             ->whereNumber('batch')->name('batches.show');
+        // The batch's signed memo (D-109), shown inline in the browser. Found
+        // through managedCollege(), so another college's batch 404s. Its own
+        // throttle bucket (3rd arg), like every authed throttle here.
+        Route::get('/batches/{batch}/memo', AdminBatchMemoController::class)
+            ->whereNumber('batch')->middleware('throttle:60,1,admin-memo')->name('batches.memo');
         // Cancel a whole batch (FR-ADM-11): pending (D-52), or approved until
         // its first clinic hour starts, with a written reason (D-92). Its own throttle
         // bucket: an authed throttle keys on the user id with no path, so
@@ -293,6 +300,10 @@ Route::middleware(['auth', 'role:director'])
             ->whereNumber('batch')->middleware('throttle:60,1,director-calendar')->name('batches.calendar');
         Route::get('/batches/{batch}/hours', [DirectorBatchApprovalController::class, 'hours'])
             ->whereNumber('batch')->middleware('throttle:60,1,director-hours')->name('batches.hours');
+        // Card 3's signed memo (D-109), shown inline — the thumbnail, the
+        // full-screen viewer and the PDF frame all load it from here.
+        Route::get('/batches/{batch}/memo', DirectorBatchMemoController::class)
+            ->whereNumber('batch')->middleware('throttle:60,1,director-memo')->name('batches.memo');
         // Decision endpoints — both terminal (FR-DIRA-05). Approve: FR-DIRA-02,
         // BR-08 (the Director's date + start hour, transaction + appointment
         // fan-out). Reject: FR-DIRA-04 (reviewer stamps, zero appointments).

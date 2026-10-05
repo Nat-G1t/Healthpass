@@ -15,7 +15,8 @@ use Illuminate\Validation\Validator;
  * Validates a New Batch Request submission (FR-ADM-02/03, BR-06, BR-07).
  *
  * D-108: the college sends the form, the purpose and the students — no clinic
- * date and no start hour, which the Director now picks at approval.
+ * date and no start hour, which the Director now picks at approval. D-109 adds
+ * the signed memo, a required file.
  *
  * The college scope (FR-ADM-06) is enforced HERE too, not just in the UI:
  * every submitted student id must belong to the admin's managed college,
@@ -78,6 +79,16 @@ class StoreBatchRequestRequest extends FormRequest
             // D-108: no clinic date and no start hour — the Director picks
             // both at approval. A posted requested_date / requested_time is
             // never read.
+            // D-109: the signed memo — one photo, image or PDF, required.
+            // `mimes` checks the file's REAL content (PHP's fileinfo reads the
+            // bytes), not the name the browser sent — a text file renamed
+            // memo.pdf is refused. `max` is in kilobytes.
+            'memo' => [
+                'required',
+                'file',
+                'mimes:'.implode(',', config('healthpass.uploads.mimes')),
+                'max:'.config('healthpass.uploads.max_kb'),
+            ],
             // BR-07 (D-105): at least MIN_STUDENTS students per batch.
             'students' => ['required', 'array', 'min:'.self::MIN_STUDENTS],
             'students.*' => [
@@ -94,9 +105,17 @@ class StoreBatchRequestRequest extends FormRequest
     public function messages(): array
     {
         $tooFewStudents = 'Select at least '.self::MIN_STUDENTS.' students for this batch.';
+        $memoTooBig = 'The memo must be '.self::memoMaxMb().' MB or smaller.';
 
         // D-105: people see the batch's reason as its "Purpose".
         return [
+            // D-109. `uploaded` is PHP refusing the file before Laravel sees
+            // it — in practice, a file over the server's upload limit.
+            'memo.required' => 'Please attach the signed memo.',
+            'memo.file' => 'Please attach the signed memo.',
+            'memo.uploaded' => $memoTooBig,
+            'memo.mimes' => 'The memo must be a JPG, PNG or PDF.',
+            'memo.max' => $memoTooBig,
             'form_type.required' => 'Please choose the form the clinic will use.',
             'form_type.in' => 'Invalid form.',
             'reason.required' => 'Please choose a purpose for this batch request.',
@@ -109,6 +128,12 @@ class StoreBatchRequestRequest extends FormRequest
             'students.*.exists' => 'One of the selected students is not an active student in your college.',
             'students.*.integer' => 'One of the selected students is invalid.',
         ];
+    }
+
+    /** D-109: the memo size limit in whole megabytes (5), for the messages. */
+    public static function memoMaxMb(): int
+    {
+        return (int) round(config('healthpass.uploads.max_kb') / 1024);
     }
 
     /**

@@ -418,6 +418,30 @@ Back up the database before any deploy that carries a migration:
 mysqldump -u healthpass -p healthpass > ~/healthpass-$(date +%F).sql
 ```
 
+### Back up the uploaded files too (D-109)
+
+Since D-109 the app stores **files** as well as rows: every batch's signed memo
+(and, from D-113, release attachments) lives in `storage/app/private` — never
+under `public/`. A database dump alone no longer restores HealthPass: a restored
+batch would point at a memo that isn't there. Archive the folder **daily, next to
+the DB dump**, and keep the last 7:
+
+```bash
+# /root/backup-storage.sh  (chmod 700) — the % in date can't go straight into a
+# crontab line, hence a script. Add to root's crontab (crontab -e):
+#   30 2 * * * /root/backup-storage.sh
+mkdir -p /root/backups
+tar -czf /root/backups/storage-$(date +%F).tar.gz -C /var/www/healthpass storage/app/private
+ls -1t /root/backups/storage-*.tar.gz | tail -n +8 | xargs -r rm --   # keep the newest 7
+```
+
+Restore: `tar -xzf /root/backups/storage-<date>.tar.gz -C /var/www/healthpass`,
+then `chown -R www-data:www-data storage/app/private`.
+
+`storage/app/private` must be **writable by `www-data`** (the `chown` in §2 covers
+it) — if it isn't, submitting a batch fails with "The memo could not be saved.
+Please try again." and the error is in `storage/logs/laravel.log`.
+
 ---
 
 ## 9. Go-live checklist
@@ -446,6 +470,8 @@ mysqldump -u healthpass -p healthpass > ~/healthpass-$(date +%F).sql
       in every appointment email
 - [ ] `php artisan queue:failed` is empty
 - [ ] Database backup taken and restore tested
+- [ ] `storage/app/private` (signed memos, D-109) archived daily next to the DB
+      dump (§8), and writable by `www-data`
 
 ---
 

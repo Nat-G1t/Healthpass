@@ -110,6 +110,20 @@
             </div>
         @endif
 
+        {{-- D-109: the signed memo, opened in a new tab (private file, served
+             through this college's own route). --}}
+        <div class="flex items-center justify-between gap-4">
+            <dt class="text-sm text-hp-slate/50">Signed memo</dt>
+            <dd class="text-right text-sm font-semibold">
+                @if ($batch->hasMemo())
+                    <a href="{{ route('admin.batches.memo', $batch) }}" target="_blank" rel="noopener"
+                       class="text-hp-orange hover:underline" data-memo-link>View</a>
+                @else
+                    <span class="font-normal text-hp-slate/50">None — submitted before signed memos were required</span>
+                @endif
+            </dd>
+        </div>
+
         {{-- Submitted date --}}
         <div class="flex items-center justify-between gap-4">
             <dt class="text-sm text-hp-slate/50">Submitted</dt>

@@ -22,8 +22,11 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
+use Throwable;
 
 /**
  * Batch Requests: New Batch form, submission, confirmation and Tracking
@@ -221,6 +224,11 @@ class BatchRequestController extends Controller
      * schedules it. So there is nothing here to check against the clinic's
      * capacity or other batches: approval does that, under a lock, on the date
      * the Director picks. The legacy requested_* columns are left NULL.
+     *
+     * D-109: the signed memo is saved to the PRIVATE `local` disk first
+     * (storage/app/private/memos, Laravel's random file name) — a file can't
+     * be part of a database transaction. If the transaction then fails, the
+     * file is deleted again, so no orphan memo is left behind.
      */
     public function store(StoreBatchRequestRequest $request, ReferenceNumberService $refs): RedirectResponse
     {
@@ -231,32 +239,70 @@ class BatchRequestController extends Controller
         // batch_request_students.student_id → users) — translate here.
         $studentUserIds = StudentProfile::whereIn('id', $request->validated('students'))->pluck('user_id');
 
+        $memo = $request->file('memo');
+        $memoPath = $memo->store('memos', 'local');
+
+        if ($memoPath === false) {
+            Log::error('D-109: the signed memo could not be written to storage/app/private/memos.', [
+                'college_id' => $college->id,
+                'user_id' => $request->user()->id,
+            ]);
+
+            return back()->withInput()->withErrors(['memo' => 'The memo could not be saved. Please try again.']);
+        }
+
         // One transaction: the reference number, the batch row and all pivot
         // rows commit together or not at all. generateBatchRef() is called
         // INSIDE so its sequence lock holds until this commit (see the
         // service's concurrency notes).
-        $batch = DB::transaction(function () use ($request, $refs, $college, $studentUserIds): BatchRequest {
-            $batch = BatchRequest::create([
-                'reference_no' => $refs->generateBatchRef(),
-                'college_id' => $college->id, // from the session scope — never the request (BR-05)
-                'requested_by' => $request->user()->id,
-                'form_type' => $request->validated('form_type'),   // D-62
-                'reason' => $request->validated('reason'),
-                'reason_detail' => $request->validated('reason_detail'),
-                // D-60: dental is gone. The server always writes 'medical' and
-                // never reads a service type from the request body.
-                'service_type' => 'medical',
-                'status' => 'pending',
-            ]);
+        try {
+            $batch = DB::transaction(function () use ($request, $refs, $college, $studentUserIds, $memo, $memoPath): BatchRequest {
+                $batch = BatchRequest::create([
+                    'reference_no' => $refs->generateBatchRef(),
+                    'college_id' => $college->id, // from the session scope — never the request (BR-05)
+                    'requested_by' => $request->user()->id,
+                    'form_type' => $request->validated('form_type'),   // D-62
+                    'reason' => $request->validated('reason'),
+                    'reason_detail' => $request->validated('reason_detail'),
+                    // D-109. The type is the one the SERVER detected from the
+                    // file's content — never the browser's claim.
+                    'memo_path' => $memoPath,
+                    'memo_original_name' => $this->memoDisplayName($memo->getClientOriginalName()),
+                    'memo_mime' => $memo->getMimeType(),
+                    // D-60: dental is gone. The server always writes 'medical' and
+                    // never reads a service type from the request body.
+                    'service_type' => 'medical',
+                    'status' => 'pending',
+                ]);
 
-            $batch->batchRequestStudents()->createMany(
-                $studentUserIds->map(fn ($userId): array => ['student_id' => $userId])->all(),
-            );
+                $batch->batchRequestStudents()->createMany(
+                    $studentUserIds->map(fn ($userId): array => ['student_id' => $userId])->all(),
+                );
 
-            return $batch;
-        });
+                return $batch;
+            });
+        } catch (Throwable $e) {
+            // Nothing committed, so nothing points at the file: remove it, then
+            // let the error surface exactly as it would have.
+            Storage::disk('local')->delete($memoPath);
+
+            throw $e;
+        }
 
         return redirect()->route('admin.batches.confirmation', $batch);
+    }
+
+    /**
+     * D-109: the memo's original file name, made safe to keep and to send back
+     * in a Content-Disposition header — control characters dropped, cut to the
+     * column's 255 characters. The browser sent it, so it is never trusted as
+     * is (it is only ever shown, escaped, and never used as a path).
+     */
+    private function memoDisplayName(string $clientName): string
+    {
+        $name = mb_substr(trim((string) preg_replace('/[\x00-\x1F\x7F]/u', '', $clientName)), 0, 255);
+
+        return $name !== '' ? $name : 'signed-memo';
     }
 
     /**

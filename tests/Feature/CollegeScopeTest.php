@@ -9,6 +9,8 @@ use App\Models\College;
 use App\Models\StudentProfile;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
@@ -40,6 +42,9 @@ class CollegeScopeTest extends TestCase
     {
         parent::setUp();
 
+        // D-109: a valid store payload carries a signed memo; keep it off the real disk.
+        Storage::fake('local');
+
         $this->ccs = College::create(['code' => 'CCS', 'name' => 'College of Computer Studies']);
         $this->cea = College::create(['code' => 'CEA', 'name' => 'College of Engineering and Architecture']);
 
@@ -66,6 +71,7 @@ class CollegeScopeTest extends TestCase
                 $this->ownStudent->id,
                 StudentProfile::factory()->forCollege($this->ccs)->create()->id,
             ],
+            'memo' => UploadedFile::fake()->image('memo.jpg'),   // D-109
         ], $overrides);
     }
 

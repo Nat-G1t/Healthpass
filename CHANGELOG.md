@@ -1159,6 +1159,44 @@
 
 ### Changed
 
+* **Every batch request carries a signed memo the Director can view**
+  (D-109, amends FR-ADM-02 and FR-DIRA-07; §6.6, §6.2, §8.3 and §10 updated;
+  PRD revision 1.93, 2026-10-05). **Flagged schema change**, no new package —
+  Laravel's own file storage.
+  * **Schema:** `batch_requests.memo_path`, `memo_original_name`, `memo_mime`
+    (VARCHAR(255), all NULL). No backfill — every earlier batch has no memo.
+  * **New Batch Request:** a required **"Attach signed memo"** card where the
+    date card was, built from the new reusable `<x-hp.file-capture>`: **Take
+    photo** (`capture="environment"` — camera on phones/tablets, file picker on
+    laptops) and **Upload file**; one JPG, PNG or PDF up to 5 MB (config
+    `healthpass.uploads.max_kb` / `mimes`), with a thumbnail or PDF tile, name,
+    size and Remove. The browser checks type and size; `StoreBatchRequestRequest`
+    re-checks by the file's real content. Submit stays disabled without a memo;
+    after a failed submit the card asks for the memo again. The form is
+    `multipart/form-data`.
+  * **Storage:** saved to the private `local` disk under `memos/` (Laravel's
+    random name, never `public/`) before the batch transaction, and deleted if
+    the transaction fails. The stored type is the server-detected one. Memos
+    are kept on rejected and cancelled batches.
+  * **Opening it:** `GET /director/batches/{batch}/memo` (`director.batches.memo`)
+    and `GET /admin/batches/{batch}/memo` (`admin.batches.memo`, through the
+    managed college — another college's batch 404s), inline, stored
+    Content-Type, `X-Content-Type-Options: nosniff`, own throttle buckets; 404
+    when there is no memo. Shared by `App\Support\SignedMemo`.
+  * **Review page Card 3:** a thumbnail (image) or PDF tile; a click opens a
+    full-screen viewer with X top-right and Esc, Zoom in / Zoom out / Reset
+    (25 %–400 %) for images and the browser's own viewer for PDFs. Legacy
+    batches: "No memo attached — submitted before signed memos were required."
+  * **College Admin:** "Signed memo: View" on Request Submitted and the roster.
+  * **Deployment docs:** `storage/app/private` is backed up daily next to the
+    DB dump (keep 7) and must be writable by `www-data`.
+  * Tests: new `BatchMemoUploadTest` (required, JPG/PNG/PDF accepted, GIF /
+    renamed text file / 6 MB refused, server-detected type, no orphan file on
+    a failed insert, form markup, "attach again") and `BatchMemoViewTest`
+    (inline headers, own-college admin 200 / other college 404, other roles and
+    guests turned away, no-memo 404, Card 3 thumbnail / PDF tile / legacy note,
+    admin links). Existing batch-submit tests now attach a memo.
+
 * **The Clinic Director schedules every batch from a first-come queue; the
   College Admin no longer picks a date or an hour** (D-108, supersedes D-29,
   D-36, D-37's admin clause, D-54's admin side and D-90; amends FR-ADM-02/04/05,

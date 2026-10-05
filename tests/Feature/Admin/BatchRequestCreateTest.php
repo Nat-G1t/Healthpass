@@ -11,6 +11,8 @@ use App\Models\StudentProfile;
 use App\Models\User;
 use App\Support\Programs;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
@@ -33,6 +35,9 @@ class BatchRequestCreateTest extends TestCase
     {
         parent::setUp();
 
+        // D-109: a valid batch carries a signed memo; keep it off the real disk.
+        Storage::fake('local');
+
         $this->ccs = College::create(['code' => 'CCS', 'name' => 'College of Computing Studies']);
         $this->cea = College::create(['code' => 'CEA', 'name' => 'College of Engineering and Architecture']);
 
@@ -53,6 +58,7 @@ class BatchRequestCreateTest extends TestCase
             'reason' => 'ojt',
             // D-108: no clinic date and no start hour — the Director picks both.
             'students' => $students->pluck('id')->all(),
+            'memo' => UploadedFile::fake()->image('memo.jpg'),   // D-109
         ], $overrides);
     }
 
@@ -288,12 +294,13 @@ class BatchRequestCreateTest extends TestCase
 
     // ── BR-06: reason + conditional reason_detail ───────────────────────────
 
-    public function test_form_purpose_and_students_are_required_and_nothing_else(): void
+    public function test_form_purpose_memo_and_students_are_required_and_nothing_else(): void
     {
         $this->actingAs($this->admin)
             ->post('/admin/batches', [])
             ->assertSessionHasErrors([
                 'form_type',
+                'memo' => 'Please attach the signed memo.',   // D-109
                 // D-105: the batch's reason is called its purpose on screen.
                 'reason' => 'Please choose a purpose for this batch request.',
                 'students' => 'Select at least 2 students for this batch.',
@@ -451,6 +458,7 @@ class BatchRequestCreateTest extends TestCase
                 'form_type' => 'clearance',
                 'reason' => 'fieldtrip',
                 'students' => $students->pluck('id')->all(),
+                'memo' => UploadedFile::fake()->create('memo.pdf', 200, 'application/pdf'),   // D-109
             ])
             ->assertSessionHasNoErrors()
             ->assertRedirect(route('admin.batches.confirmation', BatchRequest::sole()));
