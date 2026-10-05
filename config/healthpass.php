@@ -83,11 +83,25 @@ return [
     'closing_hour' => 17,
 
     // FR-ADM-12 (D-55): when a batch student who never reached the kiosk stops
-    // reading "Not yet attended" and becomes "Absent" on the Batch Results popup.
+    // reading "Scheduled" and becomes "Unattended" on the Batch Results popup
+    // (D-110's names; "Not yet attended" / "Absent" before).
     // 24h 'H:i' on the CLINIC DATE, server clock (Asia/Manila) — from 8:00 PM, so
     // the clinic day and the evening after it have passed. Any later day is
     // absent too. Decided on the server, never in the browser.
     'absent_cutoff' => env('HEALTHPASS_ABSENT_CUTOFF', '20:00'),
+
+    // D-110 / BR-27: at the absent cutoff above, the healthpass:second-chances job
+    // books a batch's missed students together on one 2nd-chance day.
+    'second_chance' => [
+        // How many days ahead (from tomorrow) the job looks for a day that fits
+        // the whole group. If none does, nobody in the group gets a 2nd chance.
+        'search_days' => 30,
+        // Only cutoffs that passed within this many hours are processed, so a
+        // server or Pi that was off at 8 PM still catches up — and an absence
+        // older than this (every absence before D-110 was deployed included)
+        // is never rescheduled.
+        'catch_up_hours' => 24,
+    ],
 
     // BR-26 (D-107): months a Fit result stays valid from its encoded date — display-only (student dashboard card).
     'clearance_validity_months' => 6,

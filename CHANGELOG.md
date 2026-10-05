@@ -1159,6 +1159,54 @@
 
 ### Changed
 
+* **Missed students get one automatic 2nd-chance day at the 8 PM cutoff**
+  (D-110, adds FR-ADM-14 and BR-27; amends FR-STU-01, FR-STU-12, FR-ADM-12,
+  FR-DIRA-03, BR-08, BR-12, BR-25 and D-61; supersedes D-86's `did_not_finish`
+  and D-55's `absent` naming; PRD revision 1.94, 2026-10-05). **Flagged schema
+  change**, no new package. **First scheduled task in the app.**
+  * **Schema:** `appointments.rescheduled_from_id` — nullable FK →
+    `appointments.id`, UNIQUE, null on delete. No backfill.
+  * **The job:** `php artisan healthpass:second-chances`
+    (`App\Console\Commands\ScheduleSecondChances`), scheduled in
+    `routes/console.php` every five minutes with `withoutOverlapping()`. The
+    rules live in `App\Services\SecondChanceScheduler`: an approved batch's
+    appointment still `scheduled` past its 8 PM cutoff with no visit, or only a
+    resting one, is missed (a captured visit is not); each batch's missed
+    students are booked together on the nearest day from tomorrow that fits all
+    of them (daily + hourly capacity, BR-25, booking weekdays), at the earliest
+    free hours with free arrival times, on the same batch, `created_by` NULL;
+    their roster rows are re-pointed to the new appointments. One transaction
+    per batch with the capacity reads locked. One chance only; only cutoffs from
+    the last 24 h; never for a cancelled batch or an inactive student; no day
+    within 30 → nobody booked and a warning naming the batch is logged. Config
+    `healthpass.second_chance.search_days` (30) / `catch_up_hours` (24).
+  * **Email:** `SecondChanceScheduledMail` + `SendSecondChanceMail`, queued per
+    student after each batch commits — "HealthPass — your 2nd chance for your
+    {form} on {date}", with the missed day, "last chance", date, hour, arrival
+    time and Batch ID. The scheduling email is unchanged.
+  * **Statuses** (`Appointment::clearanceProgress()`): Scheduled · Rescheduled
+    (red) · Rest / Retake · At the clinic (also after the cutoff) · Completed ·
+    Unattended. `did_not_finish` is gone. Batch Results now loads the visit's
+    `status`, so a resting student shows Rest / Retake on the popup. The
+    batch-level Status column is unchanged (D-111 rewrites it).
+  * **Student dashboard:** the Next Appointment card skips a replaced
+    appointment and shows the 2nd chance with a red "2nd chance" badge and
+    "You missed {date}. This is your last chance."; Recent Activity reads
+    "2nd chance scheduled".
+  * **BR-25:** `ScheduleClashService` also holds a student on the day of their
+    2nd chance, so the Director cannot approve another batch onto it.
+  * **Deployment:** cron must call `php artisan schedule:run` every minute as
+    `www-data` on the droplet, and on the Pi while it is the live app
+    (`docs/deployment-hosted.md` §3, `docs/deployment-pi.md` §10).
+  * Tests: new `SecondChanceSchedulerTest` (no-show, resting, captured,
+    encoded, idempotent, group moves together, BR-25, earliest hours + arrival
+    times, no day fits + warning, no 3rd chance, 24 h window both sides,
+    cancelled batch / inactive student, clash check, schedule registered) and
+    `SecondChancePagesTest` (every popup status + label, dashboard card on the
+    missed evening, kiosk day 2 is a fresh first pass on the new appointment);
+    `AppointmentClearanceProgressTest`, `BatchResultsTest`,
+    `KioskRestAndRecheckTest` and `DemoBatchSeederTest` moved to the new keys.
+
 * **Every batch request carries a signed memo the Director can view**
   (D-109, amends FR-ADM-02 and FR-DIRA-07; §6.6, §6.2, §8.3 and §10 updated;
   PRD revision 1.93, 2026-10-05). **Flagged schema change**, no new package —

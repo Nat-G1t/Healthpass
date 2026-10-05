@@ -33,8 +33,8 @@ use Tests\TestCase;
  * Two rules carry the page, and both live on the models so the column and the
  * popup read one definition:
  *   - Appointment::clearanceProgress() — a student with no clinic visit is
- *     ABSENT once the server clock reaches `healthpass.absent_cutoff`
- *     (8:00 PM) on the clinic date, and Not yet attended before that
+ *     UNATTENDED once the server clock reaches `healthpass.absent_cutoff`
+ *     (8:00 PM) on the clinic date, and Scheduled before that (D-110's names)
  *   - BatchRequest::resultsCompletedAt() / resultsStatus() — D-86: a batch is
  *     done at that same cutoff even if some students never came, or earlier,
  *     at its last encode, when everyone was encoded before the cutoff
@@ -333,13 +333,13 @@ class BatchResultsTest extends TestCase
         $this->travelTo(Carbon::parse(self::CLINIC_DAY.' 19:59:00'));
         $response = $this->tracking();
 
-        $this->assertSame('awaiting', $this->popup($response, $batch)['students'][0]['status']);
+        $this->assertSame('scheduled', $this->popup($response, $batch)['students'][0]['status']);
         $response->assertSee('In progress');
 
         $this->travelTo(Carbon::parse(self::CLINIC_DAY.' 20:00:00'));
         $response = $this->tracking();
 
-        $this->assertSame('absent', $this->popup($response, $batch)['students'][0]['status']);
+        $this->assertSame('unattended', $this->popup($response, $batch)['students'][0]['status']);
         $response->assertSee('No one attended');
         $response->assertDontSee('In progress');
         // D-86: done at the cutoff itself, and the column says when.
@@ -355,17 +355,18 @@ class BatchResultsTest extends TestCase
         $this->addStudent($batch, 'booked', 'Dino Booked');
 
         $this->travelTo(Carbon::parse(self::CLINIC_DAY.' 17:59:00'));
-        $this->assertSame('awaiting', $this->popup($this->tracking(), $batch)['students'][0]['status']);
+        $this->assertSame('scheduled', $this->popup($this->tracking(), $batch)['students'][0]['status']);
 
         $this->travelTo(Carbon::parse(self::CLINIC_DAY.' 18:00:00'));
-        $this->assertSame('absent', $this->popup($this->tracking(), $batch)['students'][0]['status']);
+        $this->assertSame('unattended', $this->popup($this->tracking(), $batch)['students'][0]['status']);
     }
 
-    public function test_a_student_never_encoded_by_the_cutoff_did_not_finish_and_the_batch_completes(): void
+    public function test_a_student_never_encoded_by_the_cutoff_stays_at_the_clinic_and_the_batch_completes(): void
     {
-        // D-86 (was D-55's "keeps the batch in progress"): Cara reached the
-        // kiosk but the nurse never encoded her. The clinic day is over, so she
-        // "did not finish" and the batch is done at 8:00 PM regardless.
+        // D-86: Cara reached the kiosk but the nurse never encoded her; the
+        // batch is done at 8:00 PM regardless. D-110: an un-encoded student is
+        // the clinic's delay, so she still reads "At the clinic" (was D-86's
+        // "did not finish").
         $batch = $this->makeBatch();
         $this->addStudent($batch, 'in_clinic', 'Cara Waiting');
         $this->addStudent($batch, 'booked', 'Dino Booked');
@@ -374,7 +375,7 @@ class BatchResultsTest extends TestCase
         $response = $this->tracking();
 
         $statuses = array_column($this->popup($response, $batch)['students'], 'status');
-        $this->assertSame(['did_not_finish', 'absent'], $statuses);
+        $this->assertSame(['in_clinic', 'unattended'], $statuses);
         // Cara came, so this is Completed — not "No one attended".
         $this->assertSame(['completed', 'Sep 10, 2026 · 8:00 PM'], $this->resultRow($response, $batch));
         $response->assertDontSee('In progress');
@@ -418,7 +419,7 @@ class BatchResultsTest extends TestCase
 
     public function test_an_encode_after_the_cutoff_does_not_move_the_completion_time(): void
     {
-        // Cara did not finish by 8:00 PM; the nurse encodes her next morning.
+        // Cara was still at the clinic at 8:00 PM; the nurse encodes her next morning.
         // The batch was already done at the cutoff, and stays done then.
         $batch = $this->makeBatch();
         $this->addStudent($batch, 'Fit', 'Ana Cleared', self::CLINIC_DAY.' 10:15:00');
@@ -536,7 +537,7 @@ class BatchResultsTest extends TestCase
 
         // D-87: Fina, withdrawn before withdrawal was removed, is not listed.
         $this->assertSame(
-            [['completed', 'Fit'], ['completed', 'Unfit'], ['in_clinic', null], ['awaiting', null]],
+            [['completed', 'Fit'], ['completed', 'Unfit'], ['in_clinic', null], ['scheduled', null]],
             array_map(fn (array $row): array => [$row['status'], $row['result']], $popup['students']),
         );
 
@@ -642,7 +643,7 @@ class BatchResultsTest extends TestCase
         $response->assertDontSee('>Result<', false);
         $response->assertDontSee('Unfit');
         $response->assertDontSee('At the clinic');
-        $response->assertDontSee('Not yet attended');
+        $response->assertDontSee('Unattended');
 
         // What stays: the appointment and its hour. D-87 removed Withdraw.
         $response->assertSee($unfit->reference_no);

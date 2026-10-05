@@ -384,22 +384,20 @@
                                 </x-hp.table-cell>
 
                                 <x-hp.table-cell label="Status">
-                                    {{-- Same badges the roster used under D-53: orange for
-                                         the one state still moving, peach once done, slate
-                                         for waiting or did-not-happen. --}}
-                                    <x-hp.badge variant="pending" x-show="row.status === 'awaiting'">Not yet attended</x-hp.badge>
+                                    {{-- D-110's student statuses: orange for the states
+                                         still moving, peach once done, slate for waiting or
+                                         did-not-happen, red for a student on their 2nd chance. --}}
+                                    <x-hp.badge variant="neutral" x-show="row.status === 'scheduled'">Scheduled</x-hp.badge>
+                                    {{-- D-110: missed their day; the 8 PM job booked them a
+                                         2nd-chance day (the Hour column is that day's hour). --}}
+                                    <x-hp.badge variant="danger" x-show="row.status === 'rescheduled'">Rescheduled</x-hp.badge>
                                     {{-- D-72: the kiosk captured a high reading and the
-                                         student is resting before re-taking it. Still
-                                         moving, so the same orange "pending" badge as
-                                         Not yet attended would be wrong — this one is
-                                         at the clinic, just not in the queue yet. --}}
-                                    <x-hp.badge variant="live" x-show="row.status === 'rechecking'">Re-check</x-hp.badge>
+                                         student is resting before re-taking it — at the
+                                         clinic, just not in the queue yet. --}}
+                                    <x-hp.badge variant="live" x-show="row.status === 'rest_retake'">Rest / Retake</x-hp.badge>
                                     <x-hp.badge variant="live" x-show="row.status === 'in_clinic'">At the clinic</x-hp.badge>
                                     <x-hp.badge variant="approved" x-show="row.status === 'completed'">Completed</x-hp.badge>
-                                    <x-hp.badge variant="rejected" x-show="row.status === 'absent'">Absent</x-hp.badge>
-                                    {{-- D-86: reached the kiosk, but by the 8 PM cutoff was
-                                         still resting or not yet encoded. --}}
-                                    <x-hp.badge variant="rejected" x-show="row.status === 'did_not_finish'">Did not finish</x-hp.badge>
+                                    <x-hp.badge variant="rejected" x-show="row.status === 'unattended'">Unattended</x-hp.badge>
                                     <span x-show="row.status === null" class="text-hp-slate/50">&mdash;</span>
                                 </x-hp.table-cell>
 

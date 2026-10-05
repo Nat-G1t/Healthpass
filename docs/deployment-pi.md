@@ -762,6 +762,19 @@ Pi from hosted to local:
    `HEALTHPASS_KIOSK_KEY` the BP daemon sends.
 3. `sudo -u www-data php artisan config:cache`
 4. Restart the kiosk service / relaunch Chromium.
+5. **Scheduler cron (D-110)** — the 2nd-chance job only runs if cron calls the
+   scheduler every minute, as `www-data`:
+   ```bash
+   sudo crontab -u www-data -e
+   # add this one line, then save:
+   * * * * * cd /var/www/healthpass && php artisan schedule:run >> /dev/null 2>&1
+   ```
+   Check with `sudo -u www-data php artisan schedule:list` — it lists
+   `healthpass:second-chances` every five minutes. **Only while the Pi is the
+   live app:** when you switch back to the hosted site, delete the line again
+   (`sudo crontab -u www-data -e`). The Pi's database is a copy; left running,
+   its job would book 2nd chances — and queue emails to real students — that
+   the hosted site never made.
 
 Two things to know before you rely on it:
 
@@ -796,6 +809,12 @@ Two things to know before you rely on it:
   offline demo get their email late rather than never. Registration OTPs are the
   real casualty: a student cannot complete sign-up while mail is stalled, so use
   pre-seeded accounts for an offline demo rather than registering live.
+
+- **Missed students get their 2nd chance only if the cron line (step 5) is
+  there (D-110).** Without it nothing fails visibly — at 8 PM nobody is
+  rescheduled, and they stay "Unattended". The job queues its emails like
+  every other appointment email, so with no worker or no internet they wait
+  in `jobs` (above); the bookings themselves are made either way.
 
 **Rehearse this switch end to end at least once.** An untested fallback is not a
 fallback.
@@ -895,3 +914,4 @@ domain did not change.
 | Staff URL (LAN, fallback only) | `http://<pi-ip>/` |
 | Enroll a kiosk device | Nurse nav → **Enable Kiosk Mode** → *Kiosk Devices* (§9) |
 | Local health check | `curl -I http://localhost/kiosk` |
+| Scheduler (D-110 — only while the Pi is the live app) | cron line in `sudo crontab -u www-data -l`; `sudo -u www-data php artisan schedule:list` (§10 step 5) |

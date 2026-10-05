@@ -134,6 +134,8 @@ Do not silently reconcile conflicts.
   `bootstrap/app.php` — that middleware closure runs before the config files
   load, so `config()` is unavailable and `env()` reads empty once
   `config:cache` has run.
+- The 2nd-chance job (D-110) needs `php artisan schedule:run` from cron every
+  minute — on the droplet **and** the Pi.
 
 ## Run / dev commands
 
@@ -200,9 +202,10 @@ npm run dev                       # terminal 2
   routes to the clinic queue (nurse or physician). On a Medical Clearance a
   "Yes" requires details (≥ 3 characters, checked in the kiosk AND in
   `KioskSubmitRequest` — D-75); on a Medical Assessment they stay optional.
-- **Students never self-schedule and never walk in (D-61)** — only
-  Director-approved college batches create appointments; the kiosk refuses
-  a student with no appointment today.
+- **Students never self-schedule and never walk in (D-61)** — the only
+  appointments are Director-approved batch seats **and the one automatic 2nd
+  chance a missed student gets (D-110)**; the kiosk refuses a student with no
+  appointment today.
 - **Every batch names its form (D-62)** — `clearance` (Medical Clearance) or
   `assessment` (Medical Assessment Form); the form type drives the kiosk
   questions, the encode fields and the printed document, and the batch

@@ -275,19 +275,20 @@ students.
     service, clinic date and hour span, and one row per student: name, student
     no., hour, **Status** and **Result**. A student taken through the kiosk but
     not yet encoded reads **At the clinic** with Result "—"; a student not at the
-    kiosk yet reads **Not yet attended**. **No vital signs, questionnaire
+    kiosk yet reads **Scheduled**. **No vital signs, questionnaire
     answers, nurse notes or HP- reference appear anywhere in the popup.**
 12. Log in as `nurse@healthpass.test` and encode one sampled student (Fit or
     Unfit). Back as the CCS admin, **reload** Batch Tracking and click View
     again. → **Expect:** that student now reads **Completed** with the result
     you encoded.
-13. **Absent rule (8 PM).** A student who never reaches the kiosk stays **Not
-    yet attended** all clinic day and reads **Absent from 8:00 PM** on the
-    clinic date. To test without waiting until evening, ask a developer to set
+13. **Absent rule (8 PM).** A student who never reaches the kiosk stays **Scheduled**
+    all clinic day and reads **Unattended from 8:00 PM** on the clinic date
+    (D-110 — within five minutes the 2nd-chance job then shows them
+    **Rescheduled**; see E2E-33). To test without waiting until evening, ask a developer to set
     `HEALTHPASS_ABSENT_CUTOFF` in `.env` to a time a couple of minutes ahead
     (e.g. `14:05`), run `php artisan config:clear`, and reload after that time.
-    → **Expect:** the no-shows read **Absent**. Once every student is Completed,
-    Absent or Withdrawn, Time of Completion shows the **date and time of the
+    → **Expect:** the no-shows read **Unattended**. Once every student is Completed,
+    Unattended or Withdrawn, Time of Completion shows the **date and time of the
     last encode** (e.g. "Sep 10, 2026 · 3:42 PM"), or **No one attended** if
     nobody was encoded. A student still **At the clinic** keeps the batch **In
     progress** even after the cutoff. Ask the developer to remove the setting
@@ -305,7 +306,7 @@ students.
 chosen date, visible to those students, and sampled students complete the
 kiosk loop against their generated appointment. The Batch Results card lists
 only approved batches; its popup shows each student's status and Fit/Unfit and
-nothing else clinical; no-shows read Absent from 8 PM on the clinic day; and
+nothing else clinical; no-shows read Unattended from 8 PM on the clinic day; and
 the completion time appears once every student is finished.
 
 ---
@@ -1550,13 +1551,14 @@ the steps below assume that value.
 
 15. While a student is still resting (repeat Part A with a second student),
     sign in as their **College Admin**, open **Batch Tracking → Batch Results →
-    View**. → **Expect:** their Status reads **Re-check**, and the batch's Time
+    View**. → **Expect:** their Status reads **Rest / Retake**, and the batch's Time
     of Completion still reads **In progress**.
 16. Have that student **never** come back, and check the same popup after
     **8:00 PM** on the clinic date (`healthpass.absent_cutoff`; for a test,
     reseed with the demo row HP-2026-9008, which rested yesterday). →
-    **Expect:** their Status reads **Absent** — their result never reached the
-    queue, so from the batch's point of view nothing happened. The visit is
+    **Expect:** their Status reads **Unattended** — their result never reached the
+    queue — and, once the 8 PM job has run, **Rescheduled** onto their
+    2nd-chance day (D-110, E2E-33). The visit is
     still absent from the queue, the analytics and their My Records.
 17. Re-scan that student's ID the **next day**. → **Expect:** yesterday's
     resting visit is **ignored** — they start a normal first pass against
@@ -1581,8 +1583,8 @@ re-check and nothing else; the resting visit is invisible to the queue, the
 analytics, the badges and the student; an early re-scan is refused with the
 server's own time; the return pass asks only for the flagged reading(s) and
 nothing else; submitting it puts the student at the **back** of the queue with
-the first reading preserved for the clinic; Batch Results reads **Re-check**
-before the cutoff and **Absent** after it; and BMI never triggers any of it.
+the first reading preserved for the clinic; Batch Results reads **Rest / Retake**
+before the cutoff and **Unattended** (then **Rescheduled**) after it; and BMI never triggers any of it.
 
 ---
 
@@ -1950,6 +1952,75 @@ on a phone and a file picker on a laptop; only JPG, PNG and PDF up to 5 MB are
 accepted; the Director sees the memo on the Review page, zooms an image from
 25 % to 400 % and closes the viewer with X or Esc; a PDF opens in the browser's
 viewer; older batches say they have no memo.
+
+---
+
+## E2E-33 — A missed student gets one automatic 2nd chance (D-110)
+
+**Goal:** confirm that at the 8 PM cutoff the students who missed their clinic
+day are booked together onto one new day on the same batch, emailed, shown
+their 2nd chance on the dashboard — and never given a third.
+
+**Accounts:** the CCS Admin `admin.ccs@healthpass.test`, the Director
+`director@healthpass.test`, three CCS students (passwords `password`), and the
+log mailer (`MAIL_MAILER=log` — mails land in `storage/logs/laravel.log`).
+
+**Setup (developer, on a laptop — never on the live site):** you need to move
+the 8 PM cutoff to "a minute from now" instead of waiting for the evening. In
+`.env` set `HEALTHPASS_ABSENT_CUTOFF` to the next minute (24-hour `HH:MM`, e.g.
+`14:31`), then run `php artisan config:clear`. **Write down the old value and
+put it back at the end.**
+
+**Steps:**
+
+**Part A — three students miss their day**
+
+1. As the CCS Admin, submit a batch with **three** students. As the Director,
+   approve it for **today**.
+2. Leave two students alone. Put the third through the kiosk with a high blood
+   pressure (e.g. type 150/95) so the kiosk says **Rest & re-check** — and do
+   **not** come back.
+3. Before the cutoff, open Batch Tracking → Batch Results → **View** on the
+   batch. → **Expect:** two **Scheduled**, one **Rest / Retake**.
+
+**Part B — the job runs**
+
+1. Wait until the cutoff minute has passed, then run
+   `php artisan healthpass:second-chances`. → **Expect:** a line such as
+   "BR-2026-0xx: 3 students rescheduled to Tue, Oct 6, 2026." and
+   "Done — 3 rescheduled, 0 left Unattended."
+2. Process the queued mails: `php artisan queue:work --stop-when-empty`. Open
+   `storage/logs/laravel.log`. → **Expect:** three emails titled
+   "HealthPass — your 2nd chance for your Medical Clearance on …" (or "Medical
+   Assessment Form" for that form), each naming the day missed, "This is your
+   last chance.", the new date, the hour, an **Arrive at** time and the
+   **Batch ID** (BR-…) — never an APT number.
+3. Reload Batch Results → **View**. → **Expect:** all three read
+   **Rescheduled** in red, and the Hour column shows the new hours — the
+   earliest free ones of the new day.
+4. Log in as one of the three students. → **Expect:** the **Next Appointment**
+   card shows the new date with a red **2nd chance** badge and "You missed
+   {today}. This is your last chance."; Recent Activity lists "2nd chance
+   scheduled". Today's missed appointment is not shown.
+5. Run `php artisan healthpass:second-chances` again. → **Expect:** "No missed
+   students to reschedule." — nothing new is booked or emailed.
+
+**Part C — what is not rescheduled**
+
+1. A student who reached the kiosk and submitted (captured) but was not
+   encoded before the cutoff. → **Expect:** after the job they still read
+   **At the clinic** and get no 2nd chance.
+2. A student who misses their **2nd-chance** day too (repeat Part B's clock
+   trick on the new day). → **Expect:** **Unattended**, and the job books
+   nothing more.
+
+**Clean up:** put `HEALTHPASS_ABSENT_CUTOFF` back (or remove the line), run
+`php artisan config:clear`.
+
+**Pass criteria:** the missed students — no-shows and the one who rested and
+never came back — are booked together on one day at its earliest hours, keep
+the same Batch ID, are emailed once each, see the red 2nd-chance card, and are
+never booked a third time; a captured student is not rescheduled.
 
 ---
 

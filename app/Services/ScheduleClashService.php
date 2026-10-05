@@ -32,7 +32,8 @@ use Illuminate\Support\Collection;
  *      all — the Director picks one at approval — so it holds nothing.
  *      Rejected and cancelled batches hold nothing, and neither does a batch a
  *      student was WITHDRAWN from (FR-ADM-07 — their appointment on it is
- *      cancelled, the pivot row is kept).
+ *      cancelled, the pivot row is kept). (D-110) A student who missed their
+ *      day and was given a 2nd chance is held on the 2nd-chance day as well.
  *   3. One kind of clash: a batch vs another approved batch the student is on,
  *      same date — hours don't matter, so a pre-D-37 batch with no hour span
  *      clashes too. (D-54 had a second kind, a batch vs the student's own
@@ -115,9 +116,14 @@ class ScheduleClashService
             ->whereIn('student_id', $studentUserIds)
             ->whereHas('batchRequest', fn ($batch) => $batch
                 ->where('status', self::HOLDING_STATUS)
-                // D-108: the day the Director scheduled. A pending batch has none.
-                ->whereDate('scheduled_date', $date)
                 ->when($exceptBatchId !== null, fn ($batch) => $batch->whereKeyNot($exceptBatchId)))
+            ->where(fn ($place) => $place
+                // D-108: the day the Director scheduled. A pending batch has none.
+                ->whereHas('batchRequest', fn ($batch) => $batch->whereDate('scheduled_date', $date))
+                // D-110: a student on a 2nd chance is ALSO held on its day —
+                // their roster row points at the 2nd-chance appointment, which
+                // sits on a different day from the batch's own.
+                ->orWhereHas('appointment', fn ($appointment) => $appointment->whereDate('scheduled_date', $date)))
             ->with(['batchRequest', 'appointment:id,status'])
             ->when($lock, fn ($query) => $query->lockForUpdate())
             ->orderBy('id')

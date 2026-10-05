@@ -201,6 +201,44 @@ php artisan queue:failed          # what did not go out
 php artisan queue:monitor default # depth — a number that only grows means no worker
 ```
 
+### The scheduler cron (D-110) — or missed students never get their 2nd chance
+
+The 2nd-chance job (`healthpass:second-chances`, FR-ADM-14) is the app's first
+**scheduled task**: at the 8:00 PM cutoff it books the students who missed
+their clinic day onto one new day and emails them. Laravel does not run
+scheduled tasks by itself — **cron must call `php artisan schedule:run` every
+minute**, and the scheduler then decides what is due (this job: every five
+minutes). Add the line to **`www-data`'s** crontab, so it runs as the same user
+as php-fpm and can write `storage/`:
+
+```bash
+sudo crontab -u www-data -e
+# add this one line, then save:
+* * * * * cd /var/www/healthpass && php artisan schedule:run >> /dev/null 2>&1
+```
+
+Check it:
+
+```bash
+sudo crontab -u www-data -l                  # the line is there
+sudo -u www-data php artisan schedule:list   # healthpass:second-chances … every five minutes, next due
+grep CRON /var/log/syslog | tail             # cron fires every minute
+```
+
+Notes:
+
+- **Without the line nothing fails loudly** — missed students are simply never
+  rescheduled and stay "Unattended" on Batch Results.
+- The job **queues** its emails, so the queue worker above must be running too.
+- Running it again is harmless (it is idempotent), and a server that was down
+  at 8 PM catches up on its next run — but only within 24 hours
+  (`healthpass.second_chance.catch_up_hours`).
+- `withoutOverlapping()` takes a cache lock; `CACHE_STORE=database` (the
+  template's value) supports it.
+- **Before the first 8 PM after deploying D-110,** check that no live
+  appointment from the previous day is unattended — the 24-hour window would
+  give it a 2nd chance.
+
 ---
 
 ## 4. nginx + TLS
@@ -463,6 +501,9 @@ Please try again." and the error is in `storage/logs/laravel.log`.
 - [ ] Registration OTP email actually arrives via real SMTP
 - [ ] **`supervisorctl status` shows `healthpass-worker` RUNNING** — without it
       every appointment email queues silently and never sends (§3, D-39)
+- [ ] **`www-data`'s crontab has the `schedule:run` line** and
+      `php artisan schedule:list` lists `healthpass:second-chances` every five
+      minutes — without it no missed student gets a 2nd chance (§3, D-110)
 - [ ] Book one test appointment and approve one small test batch; confirm the
       emails actually **arrive** (not just that `jobs` emptied), and that the
       body shows the right date, hour slot and reference number
@@ -483,6 +524,7 @@ Please try again." and the error is in `storage/logs/laravel.log`.
 | Queue worker status | `sudo supervisorctl status healthpass-worker:*` |
 | Undelivered mail | `php artisan queue:failed` |
 | Queue depth (grows = no worker) | `php artisan queue:monitor default` |
+| Scheduler (D-110 2nd chances) | `sudo -u www-data php artisan schedule:list`; cron line in `sudo crontab -u www-data -l` |
 | Trusted-proxy parser | `app/Support/TrustedProxies.php` |
 | Kiosk URL | `https://<domain>/kiosk` |
 | Enroll the Pi | Nurse nav → **Enable Kiosk Mode** → *Kiosk Devices* |

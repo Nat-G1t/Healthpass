@@ -28,9 +28,13 @@ class DashboardController extends Controller
         $nextAppointment = $user->appointments()
             ->where('status', '!=', 'cancelled')
             ->where('scheduled_date', '>=', today())
+            // D-110: a missed appointment that has a 2nd chance has been
+            // replaced — even on the evening of the missed day it is not "next".
+            ->whereDoesntHave('secondChance')
             ->oldest('scheduled_date')
-            // scheduledByLabel() names the college on a batch row (FR-STU-14).
-            ->with('batchRequest.college')
+            // scheduledByLabel() names the college on a batch row (FR-STU-14);
+            // rescheduledFrom gives a 2nd chance its "You missed …" date.
+            ->with(['batchRequest.college', 'rescheduledFrom:id,scheduled_date'])
             ->first();
 
         // Count of visits that have an encoded clearance
@@ -64,7 +68,11 @@ class DashboardController extends Controller
             ->merge(
                 $recentAppointments->map(fn ($a) => [
                     'icon' => $a->status === 'cancelled' ? 'x' : 'calendar',
-                    'label' => $a->status === 'cancelled' ? 'Appointment cancelled' : 'Appointment booked',
+                    'label' => match (true) {
+                        $a->status === 'cancelled' => 'Appointment cancelled',
+                        $a->isSecondChance() => '2nd chance scheduled',   // D-110
+                        default => 'Appointment booked',
+                    },
                     // D-101: the Batch ID the student was emailed, not the APT reference.
                     'detail' => ($a->batchRequest ? 'Batch '.$a->batchRequest->reference_no.' · ' : '')
                         .ucfirst($a->service_type).' Clearance',

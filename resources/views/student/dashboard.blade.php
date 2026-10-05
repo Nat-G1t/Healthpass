@@ -103,12 +103,21 @@
                         {{ ucfirst($nextAppointment->service_type) }}
                     </x-hp.badge>
                     <x-hp.badge variant="pending">Scheduled</x-hp.badge>
+                    {{-- D-110: the one automatic new day after a missed one. --}}
+                    @if ($nextAppointment->isSecondChance())
+                        <x-hp.badge variant="danger">2nd chance</x-hp.badge>
+                    @endif
                     {{-- FR-STU-14 (D-51): who put this in the diary, on every
                          date — the "Booked by your college" note below is gated
                          on a future date, so without the badge an appointment
                          dated today would say nothing about where it came from. --}}
                     <x-hp.badge variant="neutral">{{ $nextAppointment->scheduledByLabel() }}</x-hp.badge>
                 </div>
+                @if ($nextAppointment->isSecondChance() && $nextAppointment->rescheduledFrom)
+                    <p class="mt-2 text-xs font-semibold text-red-700">
+                        You missed {{ $nextAppointment->rescheduledFrom->scheduled_date->format('M j, Y') }}. This is your last chance.
+                    </p>
+                @endif
                 <p class="mt-2 flex items-center gap-1 text-xs text-hp-slate/50">
                     <svg class="h-3 w-3 shrink-0" fill="none" viewBox="0 0 24 24"
                          stroke="currentColor" stroke-width="2">

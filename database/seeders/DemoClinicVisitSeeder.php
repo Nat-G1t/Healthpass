@@ -133,10 +133,10 @@ class DemoClinicVisitSeeder extends Seeder
      * shown without standing at the kiosk:
      *
      *   HP-2026-9007  Juan Santos, TODAY, BP 150/95, rest still running.
-     *                 Batch Results reads "Re-check"; the Live Queue, the
+     *                 Batch Results reads "Rest / Retake"; the Live Queue, the
      *                 analytics and My Records all show nothing.
      *   HP-2026-9008  Maria Reyes, YESTERDAY, temperature 38.1 °C, never
-     *                 came back. Past the 8 PM cutoff she is simply Absent.
+     *                 came back. Past the 8 PM cutoff she is Unattended.
      *
      * Neither visit is counted anywhere — that is the point of them. Push
      * HP-2026-9007's `resting_until` into the past with tinker to demo the
@@ -165,7 +165,7 @@ class DemoClinicVisitSeeder extends Seeder
             vitals: ['bp_systolic' => 150, 'bp_diastolic' => 95, 'temperature_c' => 36.9],
         );
 
-        // Yesterday: never came back, so the cutoff has made her Absent.
+        // Yesterday: never came back, so the cutoff has made her Unattended.
         $yesterday = Carbon::yesterday()->setTime(10, 20);
         $this->restingVisit(
             reference: 'HP-2026-9008',

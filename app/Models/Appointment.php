@@ -26,6 +26,9 @@ class Appointment extends Model
         'status',
         'source',
         'batch_request_id',
+        // D-110: the missed appointment this 2nd chance replaces (NULL on a
+        // first appointment).
+        'rescheduled_from_id',
         'created_by',
     ];
 
@@ -202,6 +205,16 @@ class Appointment extends Model
     }
 
     /**
+     * D-110: is this appointment a 2nd chance — the one automatic new day a
+     * student gets after missing their clinic day? A 2nd chance never gets
+     * another one; missing it is final (Unattended).
+     */
+    public function isSecondChance(): bool
+    {
+        return $this->rescheduled_from_id !== null;
+    }
+
+    /**
      * How far this appointment has got, as ONE key the Batch Results popup maps
      * to a label and a badge (FR-ADM-12, D-55 — introduced by D-53 for the
      * roster, which no longer shows it).
@@ -214,30 +227,40 @@ class Appointment extends Model
      * the clinic with their vitals captured while this row still reads
      * "scheduled". The visit and its clearance record are what carry that.
      *
-     *   withdrawn      — a seat pulled under the old per-student withdrawal
-     *                    (FR-ADM-07, removed by D-87). No new ones can happen;
-     *                    the few old rows are hidden from the college's pages.
-     *   absent         — no visit, and the server clock has reached
-     *                    `healthpass.absent_cutoff` (8:00 PM) on the clinic date,
-     *                    or any later day (D-55 — was `missed`, flipped at midnight)
-     *   awaiting       — no visit yet, and it is still before that cutoff
-     *   rechecking     — D-72: the kiosk captured a high temperature, blood
-     *                    pressure or heart rate and the student is resting before
-     *                    re-taking it
-     *   in_clinic      — vitals captured at the kiosk, waiting on the nurse
-     *   did_not_finish — D-86: the student reached the kiosk but, by the cutoff,
-     *                    was still resting (never came back to re-check) or was
-     *                    never encoded. It turns `completed` if the nurse encodes
-     *                    them later.
-     *   completed      — the nurse has encoded it; clearanceResult() has a value
+     * D-110 renamed and regrouped the keys around the 2nd chance:
+     *
+     *   withdrawn   — a seat pulled under the old per-student withdrawal
+     *                 (FR-ADM-07, removed by D-87). No new ones can happen; the
+     *                 few old rows are hidden from the college's pages.
+     *   scheduled   — a first appointment, no visit yet, before the cutoff
+     *                 (was `awaiting`)
+     *   rescheduled — a 2nd-chance appointment, no visit yet, before ITS cutoff
+     *   rest_retake — D-72: the kiosk caught a high temperature, blood pressure
+     *                 or heart rate and the student is resting before re-taking
+     *                 it, before the cutoff (was `rechecking`)
+     *   in_clinic   — vitals captured at the kiosk, waiting on the nurse — ALSO
+     *                 after the cutoff: an un-encoded student is the clinic's
+     *                 delay, not the student's (replaces D-86's did_not_finish)
+     *   completed   — the nurse has encoded it; clearanceResult() has a value
+     *   unattended  — the cutoff (`healthpass.absent_cutoff`, 8:00 PM on the
+     *                 clinic date, server clock) has passed with no visit, or
+     *                 with only a resting one (was `absent`)
+     *
+     * A missed FIRST appointment is "unattended" on its own: the student did
+     * not attend that day. Whether a 2nd chance follows is told by the batch
+     * roster, not by this row — the 8 PM job re-points the student's roster
+     * row to the new appointment, and every batch page reads the roster row's
+     * appointment, so the student then reads `rescheduled`. Between 8:00 PM
+     * and the job's next run (at most five minutes) a missed student still
+     * reads `unattended`; that short window is accepted (D-110).
      *
      * `checked_in` is deliberately not consulted: nothing in the app ever
      * writes it (the enum value predates the kiosk flow), so keying on it
      * would produce a state no real row can reach.
      *
-     * Reads $this->clinicVisit and its clearanceRecord — Batch Tracking
-     * eager-loads both, so a 60-student batch stays a handful of queries
-     * rather than 121.
+     * Reads $this->clinicVisit (its `status`) and its clearanceRecord — Batch
+     * Tracking eager-loads both, so a 60-student batch stays a handful of
+     * queries rather than 121.
      */
     public function clearanceProgress(): string
     {
@@ -247,25 +270,27 @@ class Appointment extends Model
 
         $visit = $this->clinicVisit;
 
-        // D-55: a no-show may still turn up all clinic day, so they only become
-        // absent from the cutoff. Server clock only (like BR-23). D-86: a
-        // student who DID reach the kiosk but is still resting or un-encoded at
-        // the cutoff is "did not finish", not absent — they came.
-        $pastCutoff = now()->gte(self::absentCutoffOn($this->scheduled_date));
-
-        if ($visit === null) {
-            return $pastCutoff ? 'absent' : 'awaiting';
-        }
-
-        if ($visit->clearanceRecord !== null) {
+        if ($visit?->clearanceRecord !== null) {
             return 'completed';
         }
 
-        if ($pastCutoff) {
-            return 'did_not_finish';
+        // Captured and waiting for the nurse — whatever the clock says.
+        if ($visit !== null && $visit->status !== 'resting') {
+            return 'in_clinic';
         }
 
-        return $visit->status === 'resting' ? 'rechecking' : 'in_clinic';
+        // No visit, or only a resting one. D-55: until the cutoff the student
+        // may still turn up (or come back to re-take); server clock only, like
+        // BR-23.
+        if (now()->gte(self::absentCutoffOn($this->scheduled_date))) {
+            return 'unattended';
+        }
+
+        if ($visit !== null) {
+            return 'rest_retake';
+        }
+
+        return $this->isSecondChance() ? 'rescheduled' : 'scheduled';
     }
 
     /**
@@ -312,5 +337,17 @@ class Appointment extends Model
     public function batchRequestStudent(): HasOne
     {
         return $this->hasOne(BatchRequestStudent::class);
+    }
+
+    /** D-110: the missed appointment this 2nd chance replaces (null on a first appointment). */
+    public function rescheduledFrom(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'rescheduled_from_id');
+    }
+
+    /** D-110: the 2nd chance booked after this appointment was missed, if any (at most one — the column is unique). */
+    public function secondChance(): HasOne
+    {
+        return $this->hasOne(self::class, 'rescheduled_from_id');
     }
 }

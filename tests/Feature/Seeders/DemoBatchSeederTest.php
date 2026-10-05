@@ -76,8 +76,8 @@ class DemoBatchSeederTest extends TestCase
             ->sort()->values()->all();
 
         // One of each — the whole point of this fixture.
-        // The clinic day is past, so the un-encoded student "did not finish" (D-86).
-        $this->assertSame(['absent', 'completed', 'completed', 'did_not_finish'], $progress);
+        // The clinic day is past; the un-encoded student is still "At the clinic" (D-110).
+        $this->assertSame(['completed', 'completed', 'in_clinic', 'unattended'], $progress);
 
         $results = $batch->batchRequestStudents
             ->map(fn ($row) => $row->appointment?->clearanceResult())
@@ -94,7 +94,7 @@ class DemoBatchSeederTest extends TestCase
             ->map(fn ($row) => $row->appointment?->clearanceProgress())
             ->sort()->values()->all();
 
-        $this->assertSame(['awaiting', 'awaiting', 'awaiting'], $progress);
+        $this->assertSame(['scheduled', 'scheduled', 'scheduled'], $progress);
     }
 
     public function test_pending_batches_have_no_appointments(): void

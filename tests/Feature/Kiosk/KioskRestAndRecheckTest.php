@@ -242,7 +242,7 @@ class KioskRestAndRecheckTest extends TestCase
         $student = $this->student();
         $visit = $this->resting($student);
 
-        // Yesterday's abandoned pass: the student is already Absent for it, and
+        // Yesterday's abandoned pass: the student is already Unattended for it, and
         // it must not hijack today's fresh appointment.
         $visit->update([
             'checked_in_at' => now()->subDay(),
@@ -444,7 +444,7 @@ class KioskRestAndRecheckTest extends TestCase
 
     // ── Batch Results (FR-ADM-12) ────────────────────────────────────────────
 
-    public function test_clearance_progress_is_rechecking_before_the_cutoff(): void
+    public function test_clearance_progress_is_rest_retake_before_the_cutoff(): void
     {
         // Mid-morning on the clinic day - well before the 8 PM cutoff. Pinned,
         // because otherwise the result would depend on the hour the suite runs.
@@ -454,12 +454,12 @@ class KioskRestAndRecheckTest extends TestCase
         $this->resting($student);
 
         $appointment = Appointment::where('student_id', $student->id)->firstOrFail();
-        $this->assertSame('rechecking', $appointment->fresh()->clearanceProgress());
+        $this->assertSame('rest_retake', $appointment->fresh()->clearanceProgress());
 
         Carbon::setTestNow();
     }
 
-    public function test_a_still_resting_student_did_not_finish_after_the_cutoff(): void
+    public function test_a_still_resting_student_is_unattended_after_the_cutoff(): void
     {
         Carbon::setTestNow(today()->setTime(9, 0));
 
@@ -469,9 +469,10 @@ class KioskRestAndRecheckTest extends TestCase
         $appointment = Appointment::where('student_id', $student->id)->firstOrFail();
 
         // 8:00 PM on the clinic date — their result never reached the queue.
-        // D-86 (was Absent under D-72): they came, so they "did not finish".
+        // D-110 (was "did not finish" under D-86): they missed the day, and
+        // the 8 PM job gives them a 2nd chance.
         Carbon::setTestNow(today()->setTimeFromTimeString(config('healthpass.absent_cutoff')));
-        $this->assertSame('did_not_finish', $appointment->fresh()->clearanceProgress());
+        $this->assertSame('unattended', $appointment->fresh()->clearanceProgress());
 
         Carbon::setTestNow();
     }

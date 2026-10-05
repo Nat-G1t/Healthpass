@@ -94,7 +94,9 @@ class BatchRequestController extends Controller
                 // Only the columns the status and completion rules read. The
                 // rest of the clinical record (notes, physician) is never even
                 // loaded for this page.
-                'batchRequestStudents.appointment.clinicVisit:id,appointment_id',
+                // `status` tells a resting visit (Rest / Retake, D-72) from a
+                // captured one (At the clinic) — D-110.
+                'batchRequestStudents.appointment.clinicVisit:id,appointment_id,status',
                 'batchRequestStudents.appointment.clinicVisit.clearanceRecord:id,clinic_visit_id,result,encoded_at',
             ])
             ->orderByDesc('scheduled_date')

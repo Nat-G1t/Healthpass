@@ -279,9 +279,9 @@ class BatchRequest extends Model
      * student it still holds has been encoded before the cutoff.
      *
      * So the time returned is the last encode when everyone finished early, and
-     * otherwise the cutoff itself. An encode made AFTER the cutoff (a
-     * did-not-finish student encoded next morning) never moves it: the batch was
-     * already done at the cutoff.
+     * otherwise the cutoff itself. An encode made AFTER the cutoff (a student
+     * still "At the clinic" at 8 PM, encoded next morning) never moves it: the
+     * batch was already done at the cutoff.
      *
      * Reads the SAME Appointment::clearanceProgress() the Batch Results popup
      * rows show, so the Status column and the popup can never disagree. Callers
@@ -316,8 +316,11 @@ class BatchRequest extends Model
 
     /**
      * D-86: the Batch Results Status column — `in_progress`, `completed`, or
-     * `no_one_attended` (done, and every student it holds is Absent: nobody
-     * even reached the kiosk). The view owns the wording.
+     * `no_one_attended` (done, and every student it holds is Unattended —
+     * D-110's name for D-55's Absent). The view owns the wording.
+     *
+     * D-110 renamed the student key only; prompt 09 (D-111) rewrites the
+     * batch statuses around the 2nd chance.
      */
     public function resultsStatus(): string
     {
@@ -326,7 +329,7 @@ class BatchRequest extends Model
         }
 
         $nobodyCame = $this->heldAppointments()->every(
-            fn (Appointment $appointment): bool => $appointment->clearanceProgress() === 'absent',
+            fn (Appointment $appointment): bool => $appointment->clearanceProgress() === 'unattended',
         );
 
         return $nobodyCame ? 'no_one_attended' : 'completed';
