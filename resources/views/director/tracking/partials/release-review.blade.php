@@ -50,7 +50,7 @@
     {{-- The request history, small. --}}
     @if ($batch->releaseRequests->isNotEmpty())
         <div class="mt-4 rounded-lg bg-hp-bg px-4 py-3 text-xs text-hp-slate/70" data-release-history>
-            <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Release requests</p>
+            <p class="hp-card-title">Release requests</p>
             <ul class="mt-1.5 space-y-1">
                 @foreach ($batch->releaseRequests as $release)
                     @php

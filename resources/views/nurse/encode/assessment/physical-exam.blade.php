@@ -11,7 +11,7 @@
      Variables from the parent view: $readOnly, $finding, $findingOthers.
 ──────────────────────────────────────────────────────────────────────────── --}}
 <x-hp.card>
-    <h3 class="text-sm font-semibold text-hp-slate">Pertinent Physical Examination</h3>
+    <h3 class="text-sm font-bold text-hp-slate">Pertinent Physical Examination</h3>
     <p class="mt-0.5 text-xs text-hp-slate/50">Tick every finding observed; each group has its own Others line.</p>
 
     {{-- Two columns on a wide screen, three on a very wide one, stacked on a

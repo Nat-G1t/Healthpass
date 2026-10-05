@@ -16,7 +16,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 
 /**
@@ -26,7 +26,7 @@ use Throwable;
  *   store()     ask the Director to release the batch's documents — a reason
  *               and one attached photo / image / PDF
  *   download()  once the Director has approved, the selected encoded
- *               students' official forms as one ZIP
+ *               students' official forms (one PDF, or a ZIP for two or more — D-118)
  *
  * The batch is always found THROUGH the managed college, like every /admin
  * batch page (FR-ADM-06): another college's batch is a plain 404, and only an
@@ -109,7 +109,7 @@ class DocumentReleaseController extends Controller
      * Refused (403) until the Director has released this batch. Which
      * students may be in the ZIP is BatchDocumentZip's one shared rule.
      */
-    public function download(Request $request, int $batchId, BatchDocumentZip $zip): BinaryFileResponse
+    public function download(Request $request, int $batchId, BatchDocumentZip $zip): Response
     {
         $batch = $this->approvedBatch($batchId);
 

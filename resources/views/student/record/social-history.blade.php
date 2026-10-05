@@ -5,7 +5,7 @@
 ──────────────────────────────────────────────────────────────────────────────── --}}
 
 <x-hp.card>
-    <h3 class="text-sm font-semibold text-hp-slate">I. Personal / Social History</h3>
+    <h3 class="text-sm font-bold text-hp-slate">I. Personal / Social History</h3>
     <p class="mt-0.5 text-xs text-hp-slate/50">Your own answers at the kiosk.</p>
 
     <dl class="mt-3 grid gap-x-8 sm:grid-cols-2">

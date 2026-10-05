@@ -150,7 +150,7 @@
 
 {{-- ── Roster ───────────────────────────────────────────────────────────────── --}}
 <x-hp.card>
-    <p class="mb-5 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+    <p class="mb-5 hp-card-title">
         Students in this batch
     </p>
 

@@ -4,17 +4,25 @@
     Director Batch Tracking (FR-DIRA-09, D-112).
 
     A batch leaves Batch Approvals the moment it is decided (D-108); this is
-    where the Director finds it again, for every college. Two cards, each
-    paged at ten under its own page parameter (FR-UI-06):
+    where the Director finds it again, for every college. Three cards; the
+    two tables are each paged at ten under their own page parameter (FR-UI-06):
 
       1. Batch Results     — APPROVED batches, newest clinic date first, with
                              the D-111 status; View opens the results page
-      2. Rejected batches  — batches the Director rejected and batches a
-                             college cancelled (Q20), newest decision first;
-                             View opens the details page with the reason
+      2. Clinic Calendar   — D-119: read-only — how full each day is, and the
+                             picked day's hours and batches
+                             (batches/_clinic-calendar)
+      3. Rejected and Cancelled batches — D-116's name for the batches the
+                             Director rejected and the ones a college
+                             cancelled (Q20), newest decision first; View
+                             opens the details page with the reason
 
     D-114: each card has its own College dropdown and Batch ID search
     (batches/_card-filters — keys results_* and rejected_*).
+
+    D-120: a row with news the Director has not opened — a status change, a
+    release request, a college's cancellation — ends in a notification dot
+    ($dots, from App\Support\BatchNotifications); View clears it.
 
     Both tables are <x-hp.table>, which re-flows each row into a stacked card
     below `md` instead of sliding the page sideways.
@@ -46,7 +54,7 @@
 <x-hp.card class="mb-6">
     <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
-            <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Batch Results</p>
+            <p class="hp-card-title">Batch Results</p>
             <p class="mt-1 text-xs text-hp-slate/50">Approved batches from every college, newest clinic date first.</p>
         </div>
 
@@ -89,7 +97,10 @@
                         @include('batches.results._status', ['status' => $batch->resultsStatus()])
                     </x-hp.table-cell>
                     <x-hp.table-cell label="">
-                        <a href="{{ route('director.tracking.results', $batch) }}" class="{{ $viewLink }}">View</a>
+                        <span class="inline-flex items-center gap-2">
+                            <a href="{{ route('director.tracking.results', $batch) }}" class="{{ $viewLink }}">View</a>
+                            <x-hp.notify-dot :show="$dots[$batch->id] ?? false" />
+                        </span>
                     </x-hp.table-cell>
                 </x-hp.table-row>
             @endforeach
@@ -99,11 +110,17 @@
     @endif
 </x-hp.card>
 
-{{-- ── Card 2: Rejected batches (rejected + cancelled by college) ──────── --}}
+{{-- ── Card 2: Clinic Calendar (D-119) ──────────────────────────────────── --}}
+@include('batches._clinic-calendar', [
+    'monthUrl' => route('director.calendar.month'),
+    'dayUrl' => route('director.calendar.day'),
+])
+
+{{-- ── Card 3: Rejected and Cancelled batches (D-116) ─────────────────── --}}
 <x-hp.card>
     <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
-            <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Rejected batches</p>
+            <p class="hp-card-title">Rejected and Cancelled batches</p>
             <p class="mt-1 text-xs text-hp-slate/50">Batches you rejected and batches a college cancelled, newest first.</p>
         </div>
 
@@ -150,7 +167,10 @@
                         @endif
                     </x-hp.table-cell>
                     <x-hp.table-cell label="">
-                        <a href="{{ route('director.tracking.show', $batch) }}" class="{{ $viewLink }}">View</a>
+                        <span class="inline-flex items-center gap-2">
+                            <a href="{{ route('director.tracking.show', $batch) }}" class="{{ $viewLink }}">View</a>
+                            <x-hp.notify-dot :show="$dots[$batch->id] ?? false" />
+                        </span>
                     </x-hp.table-cell>
                 </x-hp.table-row>
             @endforeach

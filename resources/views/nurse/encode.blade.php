@@ -266,7 +266,7 @@
              kiosk's value underneath wherever the two differ. --}}
         <x-hp.card>
             <div class="flex items-center justify-between gap-3">
-                <h3 class="text-sm font-semibold text-hp-slate">Vital Signs</h3>
+                <h3 class="text-sm font-bold text-hp-slate">Vital Signs</h3>
                 @if ($vs)
                     <span class="text-xs text-hp-slate/40">Kiosk entry: {{ ucfirst($vs->entry_method) }}</span>
                 @endif
@@ -391,7 +391,7 @@
                  "Physical Signs Disorder of: (Self Assessment)" — the student's
                  own answers are what prints, so the clinic never re-encodes
                  them and the Assessment fieldset below is not rendered. --}}
-            <h3 class="text-sm font-semibold text-hp-slate">
+            <h3 class="text-sm font-bold text-hp-slate">
                 {{ $isAssessment ? 'Physical Signs Disorder of (Self Assessment)' : 'Health Questionnaire' }}
             </h3>
             <p class="mt-0.5 text-xs text-hp-slate/50">The student's own answers at the kiosk, with any details they typed.</p>
@@ -448,7 +448,7 @@
              visit has no such section, so this card is not rendered at all. --}}
         @if ($sr && $visit->formType() === 'assessment')
             <x-hp.card>
-                <h3 class="text-sm font-semibold text-hp-slate">Personal / Social History (from the kiosk)</h3>
+                <h3 class="text-sm font-bold text-hp-slate">Personal / Social History (from the kiosk)</h3>
                 <p class="mt-0.5 text-xs text-hp-slate/50">Section I of the Medical Assessment Form, in the student's own words.</p>
                 <div class="mt-2 grid gap-x-8 sm:grid-cols-2">
                     @foreach ($sr->socialHistoryRows() as $row)
@@ -490,7 +490,7 @@
 
     {{-- ══ Right column — the assessment form (FR-NRS-03) ══════════════════════ --}}
     <x-hp.card class="lg:sticky lg:top-20">
-        <h3 class="text-sm font-semibold text-hp-slate">Assessment</h3>
+        <h3 class="text-sm font-bold text-hp-slate">Assessment</h3>
         <p class="mt-0.5 text-xs text-hp-slate/50">
             Result is required; notes are optional. The purpose comes from the batch.
         </p>

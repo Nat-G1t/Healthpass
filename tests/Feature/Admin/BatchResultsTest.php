@@ -28,7 +28,7 @@ use Tests\TestCase;
  *
  * A College Admin who booked a cohort wants to see, per batch, how far it has
  * got. Every APPROVED batch of their college gets one row on the Batch Results
- * card — Batch ID, Purpose, Date requested, Status — and a View link to the
+ * card — Batch ID, Purpose, Scheduled date (D-115), Status — and a View link to the
  * batch's own page: three summary cards and a filterable table of every
  * student's status and result.
  *
@@ -272,7 +272,7 @@ class BatchResultsTest extends TestCase
 
     // ── The Batch Results card ───────────────────────────────────────────────
 
-    public function test_the_card_shows_batch_id_purpose_date_requested_status_and_a_view_link(): void
+    public function test_the_card_shows_batch_id_purpose_scheduled_date_status_and_a_view_link(): void
     {
         $batch = $this->makeBatch(overrides: [
             'reason' => 'others',
@@ -282,14 +282,16 @@ class BatchResultsTest extends TestCase
 
         $response = $this->tracking()->assertOk();
 
-        $response->assertSeeInOrder(['>Batch ID<', '>Purpose<', '>Date requested<', '>Status<'], false);
+        $response->assertSeeInOrder(['>Batch ID<', '>Purpose<', '>Scheduled date<', '>Status<'], false);
+        $response->assertDontSee('Date requested');
         $response->assertDontSee('Time of Completion');
         $response->assertSee($batch->reference_no);
         // Cut to 60 characters, like the requests list's Purpose.
         $response->assertSee('Inter-university robotics competition in Baguio City, two ni...');
         $response->assertDontSee('three days');
-        // Q10: the day the college SUBMITTED it, not the clinic date.
-        $response->assertSee('Sep 8, 2026');
+        // D-115 (reverses D-111 Q10): the Director's clinic date, not the
+        // day the college submitted it.
+        $response->assertSee('Sep 10, 2026');
         $response->assertSee('Scheduled');
         $response->assertSee('href="'.route('admin.batches.results', $batch->id).'"', false);
         // D-111: the popup is gone.
@@ -351,7 +353,7 @@ class BatchResultsTest extends TestCase
 
         $response->assertOk();
         $response->assertDontSee('Batch Results');
-        $response->assertDontSee('Date requested');
+        $response->assertDontSee('data-notify-dot', false);
     }
 
     public function test_another_colleges_approved_batch_never_appears(): void
@@ -840,7 +842,11 @@ class BatchResultsTest extends TestCase
     public function test_the_page_does_not_query_per_student(): void
     {
         $batch = $this->makeBatch();
-        $this->addStudent($batch, 'Fit', 'Ana Cleared');
+        // Not Fit: a Completed batch is "settled" for the D-120 badge, which
+        // then skips working its status out — fewer queries for a reason that
+        // has nothing to do with the student count. Waiting keeps the batch
+        // Still in progress before AND after the students below are added.
+        $this->addStudent($batch, 'in_clinic', 'Ana Waiting');
 
         $this->results($batch);
         $withOne = $this->countQueries(fn () => $this->results($batch));

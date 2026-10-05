@@ -14,7 +14,7 @@ use App\Support\BatchResults;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\Response;
 
 /**
  * The clinic's Upcoming Batches page (FR-NRS-12, D-114) — nurse and physician
@@ -32,7 +32,7 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
  *   results()   an approved batch's results page — the D-111 body every role
  *               shares, plus the encode page's Print (front / back) and PDF
  *               buttons on each encoded row
- *   documents() the selected students' forms as one ZIP — D-113's service,
+ *   documents() the selected students' forms (one PDF, or a ZIP for two or more — D-118) — D-113's service,
  *               and so its one rule for which students may be in it
  */
 class BatchController extends Controller
@@ -130,7 +130,7 @@ class BatchController extends Controller
      * college requested to the clinic to print the copies?"). Which students
      * may be in the ZIP is BatchDocumentZip's one shared rule.
      */
-    public function documents(Request $request, BatchRequest $batch, BatchDocumentZip $zip): BinaryFileResponse
+    public function documents(Request $request, BatchRequest $batch, BatchDocumentZip $zip): Response
     {
         abort_unless($batch->status === 'approved', 404);
 

@@ -10,7 +10,7 @@
     `student.studentProfile:id,user_id,student_number,course,year_level`.
 --}}
 <x-hp.card>
-    <p class="mb-5 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+    <p class="mb-5 hp-card-title">
         Students in this batch <span class="ml-1 normal-case tracking-normal text-hp-slate/50">({{ $students->count() }})</span>
     </p>
 

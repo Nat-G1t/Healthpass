@@ -11,6 +11,31 @@ use Illuminate\Support\Str;
 
 class StudentSeeder extends Seeder
 {
+    /**
+     * Demo roster size for the two colleges the defense walks through
+     * (Nat, 2026-10-05): CCS and CIT get this many ACTIVE students each, so a
+     * full 200-student batch (the most one clinic day holds) can be picked.
+     * The named students below count toward it.
+     */
+    private const DEMO_ROSTER = ['CCS' => 200, 'CIT' => 200];
+
+    /** Student-number college codes, as the named rows use them (2023 06 0003 = CCS). */
+    private const NUMBER_CODES = ['CCS' => '06', 'CIT' => '08'];
+
+    private const FIRST_NAMES = [
+        'M' => ['Miguel', 'Marco', 'Paolo', 'Luis', 'Christian', 'Nico', 'John', 'Kenneth', 'Darwin', 'Jayson',
+            'Erwin', 'Aldrin', 'Bryan', 'Renz', 'Kristoffer', 'Gabriel', 'Rafael', 'Joshua', 'Adrian', 'Vincent'],
+        'F' => ['Ana', 'Sofia', 'Kristine', 'Maricel', 'Camille', 'Tricia', 'Diane', 'Marisol', 'Rhea', 'Carla',
+            'Rina', 'Sheila', 'Jessa', 'Lovely', 'Hazel', 'Patricia', 'Aileen', 'Bianca', 'Nicole', 'Andrea'],
+    ];
+
+    private const LAST_NAMES = [
+        'Santos', 'Reyes', 'Cruz', 'Bautista', 'Ocampo', 'Garcia', 'Mendoza', 'Torres', 'Ramirez', 'Flores',
+        'Mercado', 'Castillo', 'Gonzales', 'Diaz', 'Castro', 'Ramos', 'Tolentino', 'Villanueva', 'Padilla', 'Aquino',
+        'Manalo', 'David', 'Fernandez', 'Lim', 'Tan', 'Go', 'Chua', 'Ong', 'Abalos', 'Pangan',
+        'Dizon', 'Lacson', 'Sison', 'Yabut', 'Gomez', 'Navarro', 'Salazar', 'Valdez', 'Soriano', 'Miranda',
+    ];
+
     public function run(): void
     {
         // Pre-load all colleges keyed by code — avoids N+1 queries in the loop.
@@ -40,6 +65,60 @@ class StudentSeeder extends Seeder
                     'course' => $row['course'],
                     'year_level' => $row['year'],
                     'date_of_birth' => $row['dob'],
+                    'qr_token' => Str::random(32),
+                ]);
+        }
+
+        foreach (self::DEMO_ROSTER as $code => $size) {
+            $this->fillRoster($colleges[$code], $size);
+        }
+    }
+
+    /**
+     * Top $college up to $size active students with deterministic names
+     * (no randomness in who they are — re-seeding gives the same roster).
+     * Every program and year level comes from the college's own catalog
+     * (config/programs.php, D-42), cycled, so the New Batch page's Program
+     * filter has students under each.
+     */
+    private function fillRoster(College $college, int $size): void
+    {
+        $have = StudentProfile::where('college_id', $college->id)->count();
+        $programs = config("programs.{$college->code}.programs");
+        $years = array_keys(config("programs.{$college->code}.year_levels"));
+        // One bcrypt for the whole roster — hashing 200 times takes minutes.
+        // The `hashed` cast leaves an already-hashed value alone.
+        $password = Hash::make('password');
+
+        for ($i = $have; $i < $size; $i++) {
+            $sex = $i % 2 === 0 ? 'M' : 'F';
+            $first = self::FIRST_NAMES[$sex][intdiv($i, 2) % 20];
+            $last = self::LAST_NAMES[($i * 7) % count(self::LAST_NAMES)];
+            $middle = self::LAST_NAMES[($i * 11 + 3) % count(self::LAST_NAMES)];
+            $year = $years[$i % count($years)];
+            $number = sprintf('%d%s%04d', 2026 - (int) $year, self::NUMBER_CODES[$college->code], 1000 + $i);
+
+            $user = User::create([
+                'role' => 'student',
+                'name' => "{$first} {$last}",
+                'email' => strtolower("{$first}.{$last}.{$number}@psu.edu.ph"),
+                'email_verified_at' => now(),
+                'password' => $password,
+                'status' => 'active',
+            ]);
+
+            StudentProfile::factory()
+                ->forCollege($college)
+                ->create([
+                    'user_id' => $user->id,
+                    'first_name' => $first,
+                    'middle_name' => $middle,
+                    'last_name' => $last,
+                    'sex' => $sex,
+                    'student_number' => $number,
+                    'course' => $programs[$i % count($programs)],
+                    'year_level' => (string) $year,
+                    'date_of_birth' => sprintf('%d-%02d-%02d', 2026 - 18 - (int) $year, $i % 12 + 1, $i % 28 + 1),
                     'qr_token' => Str::random(32),
                 ]);
         }

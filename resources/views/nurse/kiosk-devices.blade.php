@@ -36,7 +36,7 @@
                 </svg>
             </div>
             <div class="min-w-0 flex-1">
-                <h3 class="text-sm font-semibold text-hp-slate">Copy this now — it won't be shown again</h3>
+                <h3 class="text-sm font-bold text-hp-slate">Copy this now — it won't be shown again</h3>
                 <p class="mt-1 text-[13px] text-hp-slate/70">
                     This browser is already enrolled (no copying needed here). Use the URL
                     below only to provision a Pi launcher that runs Chromium in incognito
@@ -64,7 +64,7 @@
 
     {{-- ── Enroll this browser ──────────────────────────────────────────────── --}}
     <x-hp.card class="lg:col-span-1 h-fit">
-        <h3 class="text-sm font-semibold text-hp-slate">Enable Kiosk Mode</h3>
+        <h3 class="text-sm font-bold text-hp-slate">Enable Kiosk Mode</h3>
         <p class="mt-1 text-[13px] text-hp-slate/60">
             Enrolls the browser you're using right now. Do this on the actual clinic
             terminal.
@@ -93,7 +93,7 @@
 
     {{-- ── Enrolled devices ─────────────────────────────────────────────────── --}}
     <x-hp.card class="lg:col-span-2">
-        <h3 class="mb-4 text-sm font-semibold text-hp-slate">Enrolled devices</h3>
+        <h3 class="mb-4 text-sm font-bold text-hp-slate">Enrolled devices</h3>
 
         @if ($devices->isEmpty())
             <p class="py-8 text-center text-sm text-hp-slate/50">

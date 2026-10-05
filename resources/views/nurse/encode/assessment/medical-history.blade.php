@@ -11,7 +11,7 @@
      $specifyValue.
 ──────────────────────────────────────────────────────────────────────────── --}}
 <x-hp.card>
-    <h3 class="text-sm font-semibold text-hp-slate">Past Medical History &amp; Family History</h3>
+    <h3 class="text-sm font-bold text-hp-slate">Past Medical History &amp; Family History</h3>
     <p class="mt-0.5 text-xs text-hp-slate/50">
         Tick every condition present. Rows with a blank line on the form take a short note.
     </p>

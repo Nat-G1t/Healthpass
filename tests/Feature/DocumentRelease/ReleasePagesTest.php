@@ -257,23 +257,30 @@ class ReleasePagesTest extends TestCase
         );
     }
 
-    public function test_the_batch_tracking_badge_counts_pending_requests(): void
+    /**
+     * D-120 replaced D-113's work count: a release request is a dot on its
+     * batch's row (and one on the badge) until the Director opens the batch.
+     * The "Release requested" tag stays until the request is decided.
+     */
+    public function test_a_release_request_is_a_dot_until_the_director_opens_the_batch(): void
     {
-        $this->assertSame(0, NavBadges::forUser($this->director)['director.tracking.index']);
+        $batch = $this->completedBatch();
+        $this->actingAs($this->director)->get(route('director.tracking.results', $batch))->assertOk();
+        $this->assertSame(0, NavBadges::forUser($this->director->fresh())['director.tracking.index']);
 
-        $first = $this->release($this->completedBatch(), 'pending');
-        $this->release($this->completedBatch(), 'pending');
-        $this->release($this->completedBatch(), 'approved');
-        $this->release($this->completedBatch(), 'rejected');
+        $this->travel(1)->minutes();
+        $this->release($batch, 'pending');
 
-        $this->assertSame(2, NavBadges::forUser($this->director)['director.tracking.index']);
-
-        // A work count: opening the page doesn't clear it; deciding does.
-        $this->actingAs($this->director)->get(route('director.tracking.index'))
-            ->assertSee('data-nav-badge-for="director.tracking.index"', false);
-        $this->assertSame(2, NavBadges::forUser($this->director->fresh())['director.tracking.index']);
-
-        $this->actingAs($this->director)->post(route('director.release-requests.approve', $first));
         $this->assertSame(1, NavBadges::forUser($this->director->fresh())['director.tracking.index']);
+        $this->actingAs($this->director)->get(route('director.tracking.index'))
+            ->assertSee('data-nav-badge-for="director.tracking.index"', false)
+            ->assertSee('data-notify-dot', false);
+
+        $this->actingAs($this->director)->get(route('director.tracking.results', $batch))->assertOk();
+
+        $this->assertSame(0, NavBadges::forUser($this->director->fresh())['director.tracking.index']);
+        $this->actingAs($this->director)->get(route('director.tracking.index'))
+            ->assertDontSee('data-notify-dot', false)
+            ->assertSee('data-release-requested', false);
     }
 }

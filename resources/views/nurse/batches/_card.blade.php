@@ -35,7 +35,7 @@
 <x-hp.card class="mb-6" data-batches-card="{{ $filters->prefix }}">
     <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
-            <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">{{ $title }}</p>
+            <p class="hp-card-title">{{ $title }}</p>
             <p class="mt-1 text-xs text-hp-slate/50">{{ $caption }}</p>
         </div>
 

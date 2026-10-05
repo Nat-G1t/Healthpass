@@ -1,3 +1,7 @@
+import {
+    dateLabel, isAfterTodaysMonth, isBeforeLastMonth, monthCells, monthLabel, stepMonth,
+} from '../shared/month-calendar';
+
 /**
  * Alpine.data component for the Director's Review page — the Schedule card
  * (FR-DIRA-07/08, D-108).
@@ -9,6 +13,9 @@
  * the server re-checks every rule when Approve is posted, so this only helps.
  *
  * Registered in app.js before Alpine.start() (same pattern as qr-link-id.js).
+ *
+ * The month arithmetic (cells, labels, paging) is shared with the read-only
+ * Clinic Calendar card (D-119) — see shared/month-calendar.js.
  *
  * @param {Alpine} Alpine - the single Alpine instance from app.js
  */
@@ -64,36 +71,22 @@ export function registerBatchSchedule(Alpine) {
 
         /** "October 2026" */
         get monthLabel() {
-            return new Date(this.calYear, this.calMonth - 1, 1)
-                .toLocaleString('en-US', { month: 'long', year: 'numeric' });
+            return monthLabel(this.calYear, this.calMonth);
         },
 
         /** The server's current month is the earliest one worth showing. */
         get canGoBack() {
-            const [y, m] = this.today.split('-').map(Number);
-            return this.calYear > y || (this.calYear === y && this.calMonth > m);
+            return isAfterTodaysMonth(this.calYear, this.calMonth, this.today);
         },
 
         /** The calendar endpoint answers up to two years ahead. */
         get canGoForward() {
-            const [y] = this.today.split('-').map(Number);
-            return this.calYear < y + 2 || this.calMonth < 12;
+            return isBeforeLastMonth(this.calYear, this.calMonth, this.today);
         },
 
-        /** One cell per day, padded to the right weekday column. */
+        /** One cell per day, padded to the right weekday column; `fill` is the ring. */
         get cells() {
-            const firstDow = new Date(this.calYear, this.calMonth - 1, 1).getDay();
-            const blanks = Array.from({ length: firstDow }, (_, i) => ({ blank: true, key: `b${i}` }));
-
-            return blanks.concat(this.days.map((day) => ({
-                ...day,
-                blank: false,
-                key: day.date,
-                number: Number(day.date.slice(8)),
-                isToday: day.date === this.today,
-                // Ring = booked ÷ daily capacity, full at capacity; none at 0.
-                fill: Math.min(1, day.booked / day.capacity),
-            })));
+            return monthCells(this.calYear, this.calMonth, this.days, this.today);
         },
 
         /** A cell's tooltip / screen-reader text: the date, its load, and why it can't be picked. */
@@ -104,13 +97,13 @@ export function registerBatchSchedule(Alpine) {
 
         prevMonth() {
             if (!this.canGoBack) return;
-            if (this.calMonth === 1) { this.calYear--; this.calMonth = 12; } else { this.calMonth--; }
+            [this.calYear, this.calMonth] = stepMonth(this.calYear, this.calMonth, -1);
             this.fetchMonth();
         },
 
         nextMonth() {
             if (!this.canGoForward) return;
-            if (this.calMonth === 12) { this.calYear++; this.calMonth = 1; } else { this.calMonth++; }
+            [this.calYear, this.calMonth] = stepMonth(this.calYear, this.calMonth, 1);
             this.fetchMonth();
         },
 
@@ -208,13 +201,9 @@ export function registerBatchSchedule(Alpine) {
             return `${this.students} students → ${this.spanRange} (${this.blocks} hour${this.blocks === 1 ? '' : 's'})`;
         },
 
-        /** "Tue, Oct 6, 2026" — built from the date's parts, so no timezone shift. */
+        /** "Tue, Oct 6, 2026" */
         get dateLabel() {
-            if (this.selectedDate === '') return '';
-            const [y, m, d] = this.selectedDate.split('-').map(Number);
-            return new Date(y, m - 1, d).toLocaleDateString('en-US', {
-                weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
-            });
+            return dateLabel(this.selectedDate);
         },
 
         /** "A, B, C, D, E and 3 more" */

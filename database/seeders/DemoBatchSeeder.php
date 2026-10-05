@@ -7,67 +7,98 @@ namespace Database\Seeders;
 use App\Models\Appointment;
 use App\Models\BatchRequest;
 use App\Models\BatchRequestStudent;
+use App\Models\BatchSeen;
 use App\Models\ClearanceRecord;
 use App\Models\ClinicVisit;
 use App\Models\College;
-use App\Models\ScreeningResponse;
+use App\Models\DocumentReleaseRequest;
 use App\Models\User;
-use App\Models\VitalSigns;
 use App\Services\ClinicScheduleService;
+use App\Support\BatchResults;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
-use Illuminate\Database\Seeder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use RuntimeException;
 
 /**
- * DEV/DEMO ONLY — synthetic batch requests for the CCS College Admin.
+ * DEV/DEMO ONLY — the batch side of a full HealthPass demo, for CCS and CIT
+ * (rewritten for the 2026-10-05 re-seed; it was six small CCS batches).
  *
- * Seeds one batch per state so every branch of Batch Tracking (FR-ADM-05), its
- * Batch Results card and popup (FR-ADM-12 / D-55 / D-86), the batch roster (FR-ADM-07)
- * and the Activity Log (FR-ADM-10) can be clicked through without a live
- * Director, a live kiosk or a live nurse:
+ * Every date is RELATIVE to the day it runs, so re-seeding before a demo
+ * keeps it current. Seed on the demo morning: "today's" batch reads In
+ * progress from its first hour (7 AM) to the 8 PM cutoff.
  *
- *   BR-2026-901  PENDING    4 students — CANCELLABLE (D-52); Cancel button shown
- *   BR-2026-902  PENDING    2 students — CANCELLABLE; proves the column holds
- *                                        more than one row
- *   BR-2026-903  APPROVED   4 students, clinic day 4 days AGO — the Batch
- *                                        Results popup in full: 1 Fit, 1 Unfit,
- *                                        1 at the clinic (never encoded), 1
- *                                        unattended; Completed at the 8 PM cutoff
- *   BR-2026-904  APPROVED   3 students, clinic day in 3 days — all 3
- *                                        Scheduled; In progress
- *   BR-2026-905  REJECTED   3 students — the Rejection Reason column, which now
- *                                        sits next to the Cancel column
- *   BR-2026-906  CANCELLED  2 students — the D-52 end state: Cancelled badge,
- *                                        the roster notice, the Activity Log row
+ *   Director pipeline (Batch Approvals, Batch Tracking)
+ *     BR-2026-941  CCS  pending    45  Medical Clearance, field trip   — yesterday
+ *     BR-2026-942  CIT  pending   120  Medical Assessment, OJT         — yesterday
+ *     BR-2026-943  CCS  pending    12  Medical Assessment, sports      — today
+ *     BR-2026-944  CIT  pending    25  Medical Clearance, outbound     — today
+ *     BR-2026-951  CIT  rejected   30  (reason not opened yet → the admin's dot)
+ *     BR-2026-952  CCS  rejected   15  (reason already read)
+ *     BR-2026-961  CCS  cancelled  10  by the college while pending
+ *     BR-2026-962  CIT  cancelled  20  by the college after approval
  *
- * Everything is deterministic — no randomness — so a re-seeded database always
- * produces the same screens.
+ *   Finished (Batch Results, results pages, document release)
+ *     BR-2026-911  CCS  14 days ago   40  Completed — documents RELEASED
+ *     BR-2026-912  CIT   9 days ago   60  Finished incomplete — 5 missed, 3 came
+ *                                         on their 2nd chance; release PENDING
+ *     BR-2026-913  CCS   6 days ago    5  No one attended (2nd chance missed too)
+ *     BR-2026-914  CIT   3 days ago   40  Still in progress — 3 booked for a
+ *                                         2nd chance in 2 days (D-110)
+ *     BR-2026-915  CCS   5 days ago   20  Completed — release REJECTED
  *
- * RESERVED REFERENCE BANDS, chosen so nothing collides and no other seeder's
- * idempotency guard is tripped:
- *   BR-2026-90x   batch requests   (nothing else mints BR- refs)
- *   APT-2026-85xx appointments     (DemoClinicVisitSeeder owns APT-2026-9xxx
- *                                   and SKIPS ITSELF if any exists — so this
- *                                   seeder must stay out of that band)
- *   HP-2026-85xx  clinic visits    (likewise: 90xx and 91xx are that seeder's)
+ *   Today (Clinic Dashboard, Live Queue, kiosk)
+ *     BR-2026-921  CCS  7 AM   30  12 encoded, 6 waiting in the queue, 2
+ *                                  resting (D-72), 10 not here yet
+ *     BR-2026-922  CIT  10 AM  20  nobody here yet
+ *
+ *   Upcoming (calendar rings, Upcoming Batches)
+ *     BR-2026-931  CCS  +2 days  9 AM   50
+ *     BR-2026-932  CIT  +4 days  7 AM  100
+ *     BR-2026-933  CCS  +8 days  1 PM   20
+ *     BR-2026-934  CIT  +11 days 7 AM  200  — a FULL day (the whole ring)
+ *
+ * Notification dots (D-120): the history from DemoClinicVisitSeeder and the
+ * older batches here are marked SEEN by the Director and their college's
+ * admin, so the dots that remain are a realistic handful to demo.
+ *
+ * Juan Santos and Maria Reyes stay off every roster here: DemoClinicVisitSeeder
+ * gives them today's and yesterday's resting visits, and a student holds one
+ * schedule per day (BR-25). Every other CCS / CIT student is active and can be
+ * put on a new batch.
+ *
+ * Extends DemoClinicVisitSeeder only to reuse its vitals / encode helpers,
+ * like HistoricalClearanceSeeder. Deterministic — no randomness.
+ *
+ * Reference bands: BR-2026-9xx, APT-2026-6xxx, HP-2026-6xxx — clear of
+ * DemoClinicVisitSeeder's 7xx/8xx, 84xx and 9xxx bands.
  */
-class DemoBatchSeeder extends Seeder
+class DemoBatchSeeder extends DemoClinicVisitSeeder
 {
-    /** The reserved batch band, and this seeder's idempotency guard. */
-    private const BATCH_REF_PREFIX = 'BR-2026-90';
+    private ClinicScheduleService $schedule;
 
     private College $ccs;
 
-    private User $admin;
-
-    private User $director;
+    private College $cit;
 
     private User $nurse;
 
-    /** The four CCS students, in a stable order. @var Collection<int, User> */
-    private Collection $students;
+    private User $physician;
 
-    private ClinicScheduleService $schedule;
+    /** @var Collection<int, User> CCS students, minus Juan and Maria */
+    private Collection $ccsStudents;
+
+    /** @var Collection<int, User> */
+    private Collection $citStudents;
+
+    private int $appointmentSeq = 6000;
+
+    private int $visitSeq = 6000;
+
+    /** Free arrival times per "date slot", handed out in order (D-96). @var array<string, list<string>> */
+    private array $freeTimes = [];
 
     public function run(): void
     {
@@ -75,352 +106,460 @@ class DemoBatchSeeder extends Seeder
             return;
         }
 
-        if (BatchRequest::where('reference_no', 'like', self::BATCH_REF_PREFIX.'%')->exists()) {
+        if (BatchRequest::where('reference_no', 'BR-2026-911')->exists()) {
             $this->command?->info('DemoBatchSeeder: demo batches already exist, skipping.');
 
             return;
         }
 
-        $this->ccs = College::where('code', 'CCS')->firstOrFail();
         $this->schedule = app(ClinicScheduleService::class);
-
-        // Looked up by ROLE + scope rather than by email: the staff email
-        // domain is a config value (config/healthpass.php seed_staff), so
-        // hardcoding addresses here would break on a hosted seed.
-        $this->admin = User::where('role', 'college_admin')
-            ->where('managed_college_id', $this->ccs->id)
-            ->orderBy('id')->firstOrFail();
-
+        $this->ccs = College::where('code', 'CCS')->firstOrFail();
+        $this->cit = College::where('code', 'CIT')->firstOrFail();
         $this->director = User::where('role', 'director')->orderBy('id')->firstOrFail();
         $this->nurse = User::where('role', 'nurse')->orderBy('id')->firstOrFail();
+        $this->physician = User::where('role', 'physician')->orderBy('id')->firstOrFail();
+        $this->admins = User::where('role', 'college_admin')->orderByDesc('id')->get()->keyBy('managed_college_id');
 
-        $this->students = User::where('role', 'student')
-            ->whereHas('studentProfile', fn ($query) => $query->where('college_id', $this->ccs->id))
-            ->orderBy('id')->get();
+        $this->ccsStudents = $this->studentsOf($this->ccs)
+            ->reject(fn (User $student): bool => in_array($student->email, ['juan.santos@psu.edu.ph', 'maria.reyes@psu.edu.ph'], true))
+            ->values();
+        $this->citStudents = $this->studentsOf($this->cit);
 
-        if ($this->students->count() < 4) {
-            $this->command?->warn('DemoBatchSeeder: CCS needs 4 students — run StudentSeeder first. Skipping.');
-
-            return;
+        if ($this->ccsStudents->count() < 190 || $this->citStudents->count() < 200) {
+            throw new RuntimeException('DemoBatchSeeder needs the 200-student CCS and CIT rosters — run StudentSeeder first.');
         }
 
-        $this->seedPending();
-        $this->seedApprovedWithResults();
-        $this->seedApprovedUpcoming();
-        $this->seedRejected();
-        $this->seedCancelled();
+        DB::transaction(function (): void {
+            $this->seedFinished();
+            $this->seedToday();
+            $this->seedUpcoming();
+            $this->seedPipeline();
+            $this->markHistorySeen();
+        });
 
-        $this->command?->info('DemoBatchSeeder: seeded 6 CCS batches (BR-2026-901…906).');
+        $this->command?->info('DemoBatchSeeder: seeded the CCS / CIT demo batches (BR-2026-911…962).');
     }
 
-    // ── The six batches ──────────────────────────────────────────────────────
-
-    /** Two pending batches — the only state D-52 lets the admin cancel. */
-    private function seedPending(): void
+    /** @return Collection<int, User> */
+    private function studentsOf(College $college): Collection
     {
-        $batch = $this->makeBatch('901', 'pending', 'assessment', 'ojt');
-        $this->attach($batch, $this->students->take(4));
+        return User::where('role', 'student')
+            ->where('status', 'active')
+            ->whereHas('studentProfile', fn ($query) => $query->where('college_id', $college->id))
+            ->with('studentProfile')
+            ->orderBy('id')
+            ->get();
+    }
 
-        $batch = $this->makeBatch('902', 'pending', 'clearance', 'fieldtrip');
-        $this->attach($batch, $this->students->take(2));
+    // ── Scenarios ────────────────────────────────────────────────────────────
+
+    private function seedFinished(): void
+    {
+        $directorSeen = [];
+
+        // 911 — Completed, documents released to CCS.
+        $date = $this->day(-14);
+        $batch = $this->approved('911', $this->ccs, 'clearance', 'fieldtrip', $date, '08:00:00', $this->ccsStudents->slice(0, 40));
+        foreach ($this->seatsOf($batch) as $i => $seat) {
+            $this->encodeVisit($seat, $batch, $i, $i % 10 === 9 ? 'Unfit' : 'Fit');
+        }
+        $this->releaseRequest($batch, 'approved', $this->day(-10)->setTime(9, 30), $this->day(-9)->setTime(15, 0));
+        $directorSeen[] = [$batch, $this->day(-9)->setTime(16, 0)];
+
+        // 912 — Finished incomplete: 5 missed day 1, 3 of them came on their
+        // 2nd chance two days later, 2 missed that too. Release pending.
+        $date = $this->day(-9);
+        $batch = $this->approved('912', $this->cit, 'assessment', 'ojt', $date, '07:00:00', $this->citStudents->slice(0, 60));
+        $seats = $this->seatsOf($batch);
+        foreach ($seats as $i => $seat) {
+            if ($i < 55) {
+                $this->encodeVisit($seat, $batch, $i, $i % 12 === 7 ? 'Unfit' : 'Fit');
+            }
+        }
+        foreach ($this->secondChances($batch, $seats->slice(55), $this->day(-7), '13:00:00') as $i => $second) {
+            if ($i < 3) {
+                $this->encodeVisit($second, $batch, 100 + $i, 'Fit');
+            }
+        }
+        $this->releaseRequest($batch, 'pending', $this->day(-1)->setTime(14, 10));
+        $directorSeen[] = [$batch, $this->day(-6)->setTime(9, 0)];
+
+        // 913 — No one attended: 5 missed, and missed their 2nd chance too.
+        $batch = $this->approved('913', $this->ccs, 'clearance', 'outbound', $this->day(-6), '13:00:00', $this->ccsStudents->slice(40, 5));
+        $this->secondChances($batch, $this->seatsOf($batch), $this->day(-4), '07:00:00');
+
+        // 914 — Still in progress: 37 encoded, 3 missed and booked for a 2nd
+        // chance in two days.
+        $batch = $this->approved('914', $this->cit, 'clearance', 'sports', $this->day(-3), '09:00:00', $this->citStudents->slice(60, 40));
+        $seats = $this->seatsOf($batch);
+        foreach ($seats as $i => $seat) {
+            if ($i < 37) {
+                $this->encodeVisit($seat, $batch, $i, 'Fit');
+            }
+        }
+        $this->secondChances($batch, $seats->slice(37), $this->day(2), '07:00:00');
+
+        // 915 — Completed; the college asked for the documents and was told
+        // to attach the dean's memo.
+        $batch = $this->approved('915', $this->ccs, 'assessment', 'rle', $this->day(-5), '10:00:00', $this->ccsStudents->slice(45, 20));
+        foreach ($this->seatsOf($batch) as $i => $seat) {
+            $this->encodeVisit($seat, $batch, $i, $i === 4 ? 'Unfit' : 'Fit');
+        }
+        $this->releaseRequest($batch, 'rejected', $this->day(-3)->setTime(10, 0), $this->day(-2)->setTime(11, 30));
+        // The Director opened it after turning the request down — no dot for them.
+        $directorSeen[] = [$batch, $this->day(-2)->setTime(12, 0)];
+
+        // Opened by the Director and the college while they read as now —
+        // a release request or decision after that is what stays news.
+        foreach ($directorSeen as [$seenBatch, $at]) {
+            $this->seen($this->director, $seenBatch, $at);
+        }
+        $this->seen($this->admins[$this->ccs->id], BatchRequest::where('reference_no', 'BR-2026-911')->sole(), $this->day(-8));
+        $this->seen($this->admins[$this->cit->id], BatchRequest::where('reference_no', 'BR-2026-912')->sole(), $this->day(-6));
+        $this->seen($this->admins[$this->ccs->id], BatchRequest::where('reference_no', 'BR-2026-915')->sole(), $this->day(-4));
+        $this->seen($this->director, BatchRequest::where('reference_no', 'BR-2026-913')->sole(), $this->day(-1));
+    }
+
+    /** Today's clinic: one CCS batch in full swing, one CIT batch still to come. */
+    private function seedToday(): void
+    {
+        // Carlo Cruz and Angel Garcia (named CCS demo students) lead the
+        // roster, so their My Records show today's Pending and Fit.
+        $roster = $this->ccsStudents->slice(0, 2)->concat($this->ccsStudents->slice(65, 28));
+        $batch = $this->approved('921', $this->ccs, 'assessment', 'ojt', $this->day(0), '07:00:00', $roster);
+
+        foreach ($this->seatsOf($batch) as $i => $seat) {
+            match (true) {
+                $i === 0 => $this->captureVisit($seat, $batch, $i),               // Carlo — waiting
+                $i <= 12 => $this->encodeVisit($seat, $batch, $i, $i % 6 === 5 ? 'Unfit' : 'Fit'),
+                $i <= 17 => $this->captureVisit($seat, $batch, $i),               // the Live Queue
+                $i <= 19 => $this->restVisit($seat, $batch, $i),                  // D-72
+                default => null,                                                  // not here yet
+            };
+        }
+
+        $this->approved('922', $this->cit, 'clearance', 'fieldtrip', $this->day(0), '10:00:00', $this->citStudents->slice(100, 20));
+    }
+
+    private function seedUpcoming(): void
+    {
+        $this->approved('931', $this->ccs, 'clearance', 'fieldtrip', $this->day(2), '09:00:00', $this->ccsStudents->slice(93, 50));
+        $this->approved('932', $this->cit, 'assessment', 'ojt', $this->day(4), '07:00:00', $this->citStudents->slice(100, 100));
+        $this->approved('933', $this->ccs, 'assessment', 'rle', $this->day(8), '13:00:00', $this->ccsStudents->slice(143, 20));
+        $this->approved('934', $this->cit, 'clearance', 'outbound', $this->day(11), '07:00:00', $this->citStudents);
+    }
+
+    /** What waits on the Director, and what the Director and colleges turned down. */
+    private function seedPipeline(): void
+    {
+        $this->pending('941', $this->ccs, 'clearance', 'fieldtrip', $this->ccsStudents->slice(0, 45), $this->day(-1)->setTime(9, 15));
+        $this->pending('942', $this->cit, 'assessment', 'ojt', $this->citStudents->slice(0, 120), $this->day(-1)->setTime(13, 40));
+        $this->pending('943', $this->ccs, 'assessment', 'sports', $this->ccsStudents->slice(150, 12), $this->day(0)->setTime(0, 5));
+        $this->pending('944', $this->cit, 'clearance', 'outbound', $this->citStudents->slice(150, 25), $this->day(0)->setTime(0, 10));
+
+        $rejected = $this->pending('951', $this->cit, 'assessment', 'rle', $this->citStudents->slice(30, 30), $this->day(-4)->setTime(10, 0));
+        $this->reject($rejected, $this->day(-2)->setTime(16, 20),
+            'The clinic is running the nursing licensure medicals that week. Please resubmit for any date after the 20th and we will take the whole class in one morning.');
+
+        $read = $this->pending('952', $this->ccs, 'clearance', 'outbound', $this->ccsStudents->slice(170, 15), $this->day(-12)->setTime(9, 0));
+        $this->reject($read, $this->day(-11)->setTime(10, 0),
+            'The signed memo is from last semester. Please attach the memo for this term and submit again.');
+        $this->seen($this->admins[$this->ccs->id], $read, $this->day(-10), 'rejected');
+
+        $cancelled = $this->pending('961', $this->ccs, 'clearance', 'fieldtrip', $this->ccsStudents->slice(185, 10), $this->day(-2)->setTime(8, 0));
+        $this->cancel($cancelled, $this->day(-1)->setTime(17, 0), 'The field trip was moved to next semester by the department.');
+
+        $approvedThenCancelled = $this->approved('962', $this->cit, 'clearance', 'sports', $this->day(6), '13:00:00', $this->citStudents->slice(180, 20));
+        $this->cancel($approvedThenCancelled, $this->day(-1)->setTime(18, 30), 'The intramurals were postponed, so the team no longer needs clearance this month.');
+        Appointment::where('batch_request_id', $approvedThenCancelled->id)->update(['status' => 'cancelled']);
     }
 
     /**
-     * The results showcase: a clinic day that has already passed, with every
-     * outcome the Batch Results popup can render sitting side by side.
+     * DemoClinicVisitSeeder's history (BR-2026-7xx / 8xx) has been opened by
+     * the Director and by each batch's college admin long ago — otherwise every
+     * one of those 60-odd batches would carry a dot.
      */
-    private function seedApprovedWithResults(): void
+    private function markHistorySeen(): void
     {
-        $date = now()->subDays(4)->toDateString();
-        $batch = $this->makeBatch('903', 'approved', 'assessment', 'rle', $date, '08:00:00', studentCount: 4);
+        $history = BatchRequest::query()
+            ->where('status', 'approved')
+            ->where(fn ($query) => $query->where('reference_no', 'like', 'BR-2026-7%')->orWhere('reference_no', 'like', 'BR-2026-8%'))
+            ->with(BatchResults::statusRelations())
+            ->get();
 
-        [$juan, $maria, $carlo, $angel] = $this->students->take(4)->all();
-
-        // Encoded Fit — the clean pass.
-        $this->attachOne($batch, $juan, $date, '08:00:00', appointmentStatus: 'completed');
-        $this->encode($batch, $juan, $date, 'Fit', bpFlagged: false);
-
-        // Encoded Unfit — the outcome the college actually needs to chase.
-        $this->attachOne($batch, $maria, $date, '08:00:00', appointmentStatus: 'completed');
-        $this->encode($batch, $maria, $date, 'Unfit', bpFlagged: true);
-
-        // Captured but NOT encoded — the appointment row still reads
-        // 'scheduled', which proves the status column cannot be read off
-        // appointments alone. The clinic day is over, but an un-encoded student
-        // is the clinic's delay, so D-110 shows "At the clinic".
-        $this->attachOne($batch, $carlo, $date, '08:00:00', appointmentStatus: 'scheduled');
-        $this->capture($batch, $carlo, $date);
-
-        // Never turned up, and the clinic day has gone — "Unattended" (D-110).
-        $this->attachOne($batch, $angel, $date, '08:00:00', appointmentStatus: 'scheduled');
-    }
-
-    /** An upcoming approved batch: nobody has attended yet (In progress). */
-    private function seedApprovedUpcoming(): void
-    {
-        $date = now()->addDays(3)->toDateString();
-        $batch = $this->makeBatch('904', 'approved', 'clearance', 'outbound', $date, '10:00:00', studentCount: 3);
-
-        [$juan, $maria, $carlo] = $this->students->take(3)->all();
-
-        $this->attachOne($batch, $juan, $date, '10:00:00', appointmentStatus: 'scheduled');
-        $this->attachOne($batch, $maria, $date, '10:00:00', appointmentStatus: 'scheduled');
-        $this->attachOne($batch, $carlo, $date, '10:00:00', appointmentStatus: 'scheduled');
-    }
-
-    /** A Director rejection, so the Reason column renders beside Cancel. */
-    private function seedRejected(): void
-    {
-        $batch = $this->makeBatch('905', 'rejected', 'assessment', 'sports');
-        $this->attach($batch, $this->students->take(3));
-    }
-
-    /** Already cancelled by the college (D-52) — the end state of FR-ADM-11. */
-    private function seedCancelled(): void
-    {
-        $batch = $this->makeBatch('906', 'cancelled', 'clearance', 'fieldtrip');
-        $this->attach($batch, $this->students->take(2));
+        foreach ($history as $batch) {
+            $status = $batch->resultsStatus();
+            $this->seen($this->director, $batch, now(), $status);
+            $this->seen($this->admins[$batch->college_id], $batch, now(), $status);
+        }
     }
 
     // ── Builders ─────────────────────────────────────────────────────────────
 
-    /**
-     * One batch_requests row. Since D-108 the college proposes no date or
-     * hour, so only an APPROVED batch carries one — the date and start hour
-     * the Director scheduled (`$date` is relative to today, so the demo stays
-     * meaningful whenever it is seeded). The legacy requested_* columns stay
-     * NULL, as on every batch submitted since D-108.
-     */
-    private function makeBatch(
-        string $seq,
-        string $status,
-        string $formType,   // D-62
-        string $reason,
-        ?string $date = null,
-        ?string $slot = null,
-        int $studentCount = 0,
-    ): BatchRequest {
-        $decided = in_array($status, ['approved', 'rejected'], true);
-
-        return BatchRequest::create([
-            'reference_no' => 'BR-2026-'.$seq,
-            'college_id' => $this->ccs->id,
-            'requested_by' => $this->admin->id,
-            'form_type' => $formType,
-            'reason' => $reason,
-            'service_type' => 'medical',
-            'scheduled_date' => $date,
-            'scheduled_time' => $slot,
-            'scheduled_blocks' => $slot === null ? null : $this->schedule->blocksFor($studentCount),
-            'status' => $status,
-            'rejection_reason' => $status === 'rejected'
-                ? 'The clinic is running the nursing licensure medicals that whole week. Please resubmit for any date after the 20th and we will take the full cohort in one morning.'
-                : null,
-            'reviewed_by' => $decided ? $this->director->id : null,
-            'reviewed_at' => $decided ? now()->subDay() : null,
-            // D-52's two columns. Only a cancelled batch carries them, and they
-            // are never backfilled onto anything else.
-            'cancelled_at' => $status === 'cancelled' ? now()->subHours(6) : null,
-            'cancelled_by' => $status === 'cancelled' ? $this->admin->id : null,
-        ]);
+    /** $offset days from today, at midnight. */
+    private function day(int $offset): Carbon
+    {
+        return Carbon::today()->addDays($offset);
     }
 
     /**
-     * Roster rows with no appointment — the shape of every batch the Director
-     * has not approved (BR-08).
+     * An approved batch, every student seated from $slot onward (hourly
+     * capacity per hour) with their D-96 arrival time — what approval writes.
+     * Submitted five days and approved three days before its clinic day (or
+     * yesterday, for one that close).
      *
      * @param  Collection<int, User>  $students
      */
-    private function attach(BatchRequest $batch, Collection $students): void
+    private function approved(string $seq, College $college, string $formType, string $reason, Carbon $date, string $slot, Collection $students): BatchRequest
     {
-        foreach ($students as $student) {
-            BatchRequestStudent::create([
-                'batch_request_id' => $batch->id,
-                'student_id' => $student->id,
-                'appointment_id' => null,
-            ]);
+        $submittedAt = $date->copy()->subDays(5)->setTime(10, 0)->min(now()->subDays(2));
+        $approvedAt = $date->copy()->subDays(3)->setTime(14, 0)->min(now()->subDay());
+
+        $batch = $this->newBatch($seq, $college, $formType, $reason, $submittedAt, [
+            'scheduled_date' => $date->toDateString(),
+            'scheduled_time' => $slot,
+            'scheduled_blocks' => $this->schedule->blocksFor($students->count()),
+            'status' => 'approved',
+            'reviewed_by' => $this->director->id,
+            'reviewed_at' => $approvedAt,
+        ]);
+
+        $span = $this->schedule->span($slot, $this->schedule->blocksFor($students->count()));
+        $perHour = $this->schedule->hourlyCapacity();
+
+        foreach ($students->values() as $i => $student) {
+            $this->seatOn($batch, $student, $date, $span[intdiv($i, $perHour)], $approvedAt);
         }
+
+        return $batch;
     }
 
-    /** One roster row WITH the appointment approval would have generated. */
-    private function attachOne(
-        BatchRequest $batch,
-        User $student,
-        string $date,
-        string $slot,
-        string $appointmentStatus,
-    ): void {
-        $appointment = Appointment::create([
-            'reference_no' => 'APT-2026-'.$this->nextSeq(),
+    /** @param  Collection<int, User>  $students */
+    private function pending(string $seq, College $college, string $formType, string $reason, Collection $students, Carbon $submittedAt): BatchRequest
+    {
+        $batch = $this->newBatch($seq, $college, $formType, $reason, $submittedAt, ['status' => 'pending']);
+
+        foreach ($students as $student) {
+            BatchRequestStudent::create(['batch_request_id' => $batch->id, 'student_id' => $student->id, 'appointment_id' => null]);
+        }
+
+        return $batch;
+    }
+
+    /** @param  array<string, mixed>  $attributes */
+    private function newBatch(string $seq, College $college, string $formType, string $reason, Carbon $submittedAt, array $attributes): BatchRequest
+    {
+        $reference = 'BR-2026-'.$seq;
+
+        $batch = new BatchRequest([
+            'reference_no' => $reference,
+            'college_id' => $college->id,
+            'requested_by' => $this->admins[$college->id]->id,
+            'form_type' => $formType,
+            'reason' => $reason,
+            'service_type' => 'medical',
+            ...$this->memo($reference),
+            ...$attributes,
+        ]);
+        $batch->created_at = $submittedAt;
+        $batch->updated_at = $attributes['reviewed_at'] ?? $submittedAt;
+        $batch->save();
+
+        return $batch;
+    }
+
+    private function reject(BatchRequest $batch, Carbon $at, string $reason): void
+    {
+        $batch->forceFill([
+            'status' => 'rejected',
+            'rejection_reason' => $reason,
+            'reviewed_by' => $this->director->id,
+            'reviewed_at' => $at,
+            'updated_at' => $at,
+        ])->save();
+    }
+
+    private function cancel(BatchRequest $batch, Carbon $at, string $reason): void
+    {
+        $batch->forceFill([
+            'status' => 'cancelled',
+            'cancelled_at' => $at,
+            'cancelled_by' => $batch->requested_by,
+            'cancellation_reason' => $reason,
+            'updated_at' => $at,
+        ])->save();
+    }
+
+    /** One seat (appointment + roster row) at the slot's next free arrival time. */
+    private function seatOn(BatchRequest $batch, User $student, Carbon $date, string $slot, Carbon $createdAt, ?Appointment $missed = null): Appointment
+    {
+        $key = $date->toDateString().' '.$slot;
+        $this->freeTimes[$key] ??= $this->schedule->freeArrivalTimes($date->toDateString(), $slot);
+        $arrival = array_shift($this->freeTimes[$key]) ?? throw new RuntimeException("DemoBatchSeeder: {$key} is over capacity.");
+
+        $appointment = new Appointment([
+            'reference_no' => 'APT-2026-'.$this->appointmentSeq++,
             'student_id' => $student->id,
             'service_type' => 'medical',
-            'scheduled_date' => $date,
+            'scheduled_date' => $date->toDateString(),
             'scheduled_time' => $slot,
-            'status' => $appointmentStatus,
+            'arrival_time' => $arrival,
+            'status' => 'scheduled',
             'source' => 'batch',
             'batch_request_id' => $batch->id,
-            'created_by' => $this->director->id,
+            'rescheduled_from_id' => $missed?->id,
+            'created_by' => $missed === null ? $this->director->id : null,
         ]);
+        $appointment->created_at = $createdAt;
+        $appointment->updated_at = $createdAt;
+        $appointment->save();
 
-        BatchRequestStudent::create([
-            'batch_request_id' => $batch->id,
-            'student_id' => $student->id,
-            'appointment_id' => $appointment->id,
-        ]);
+        if ($missed === null) {
+            BatchRequestStudent::create(['batch_request_id' => $batch->id, 'student_id' => $student->id, 'appointment_id' => $appointment->id]);
+        } else {
+            // D-110: the roster row follows the student to the new day.
+            BatchRequestStudent::where('appointment_id', $missed->id)->update(['appointment_id' => $appointment->id]);
+        }
+
+        return $appointment;
     }
 
     /**
-     * A kiosk visit CAPTURED but not yet encoded — vitals and screening
-     * answers present, no clearance record. The Batch Results popup reads this
-     * as "At the clinic", and the Nurse Live Queue picks it up as real work.
+     * D-110: the students on $missed get their one automatic 2nd chance on
+     * $date from $slot — booked the evening they missed, like the job does.
+     *
+     * @param  Collection<int, Appointment>  $missed
+     * @return Collection<int, Appointment>
      */
-    private function capture(BatchRequest $batch, User $student, string $date): ClinicVisit
+    private function secondChances(BatchRequest $batch, Collection $missed, Carbon $date, string $slot): Collection
     {
-        $appointment = Appointment::where('batch_request_id', $batch->id)
-            ->where('student_id', $student->id)->firstOrFail();
+        return $missed->values()->map(fn (Appointment $original): Appointment => $this->seatOn(
+            $batch,
+            $original->student,
+            $date,
+            $slot,
+            $original->scheduled_date->copy()->setTime(20, 5),
+            $original,
+        ));
+    }
 
-        $visit = ClinicVisit::create([
-            'reference_no' => 'HP-2026-'.$this->nextSeq(),
-            'student_id' => $student->id,
-            'college_id' => $this->ccs->id,
-            // Capture-time program snapshot (D-43), exactly as the kiosk does.
-            'course' => $student->studentProfile?->course,
-            'appointment_id' => $appointment->id,
-            'login_method' => 'qr',
-            'status' => 'captured',
-            'privacy_consent_at' => Carbon::parse($date)->setTime(8, 4),
-            'checked_in_at' => Carbon::parse($date)->setTime(8, 6),
-        ]);
+    /** @return Collection<int, Appointment> the batch's seats in roster order */
+    private function seatsOf(BatchRequest $batch): Collection
+    {
+        return Appointment::where('batch_request_id', $batch->id)->with('student.studentProfile')->orderBy('id')->get();
+    }
 
-        VitalSigns::create([
-            'clinic_visit_id' => $visit->id,
-            'height_cm' => 168.0,
-            'weight_kg' => 61.0,
-            'bmi' => 21.6,
-            'temperature_c' => 36.7,
-            'heart_rate_bpm' => 78,
-            'bp_systolic' => 122,
-            'bp_diastolic' => 79,
-            'entry_method' => 'manual',
-            'is_temp_flagged' => false,
-            'is_bp_flagged' => false,
-            'is_bmi_flagged' => false,
-            // D-66: derived through the shared helper, like a real capture.
-            'is_hr_flagged' => VitalSigns::isHeartRateFlagged(78),
-        ]);
+    /** A kiosk visit at the seat's arrival time, with vitals and answers. */
+    private function kioskVisit(Appointment $seat, BatchRequest $batch, int $seq, string $status): ClinicVisit
+    {
+        $checkedIn = Carbon::parse($seat->scheduled_date->toDateString().' '.$seat->arrival_time)->addMinute();
 
-        ScreeningResponse::create([
-            'clinic_visit_id' => $visit->id,
-            // All twelve of the form's Physical Signs rows answered NO (D-63).
-            ...array_fill_keys(array_keys(ScreeningResponse::QUESTIONS), false),
-            // D-68: the Medical Assessment Form also asks the Personal /
-            // Social History; the Medical Clearance does not, so those visits
-            // store four NULLs — exactly what the kiosk itself writes.
-            ...$this->socialHistory($batch->form_type),
-            'is_pregnant' => false,
+        $visit = new ClinicVisit([
+            'reference_no' => 'HP-2026-'.$this->visitSeq++,
+            'student_id' => $seat->student_id,
+            'college_id' => $batch->college_id,
+            'course' => $seat->student->studentProfile?->course,
+            'appointment_id' => $seat->id,
+            'login_method' => $seq % 3 === 0 ? 'email' : 'qr',
+            'status' => $status,
+            'privacy_consent_at' => $checkedIn->copy()->subMinutes(2),
+            'checked_in_at' => $checkedIn,
         ]);
+        $visit->created_at = $checkedIn;
+        $visit->updated_at = $checkedIn;
+        $visit->save();
+
+        $this->createSpreadVitalsAndScreening($visit, $seq + $batch->id, $batch->form_type);
 
         return $visit;
     }
 
-    /**
-     * Personal / Social History for a demo capture (D-68): four answers on a
-     * Medical Assessment Form batch, four NULLs on a Medical Clearance one.
-     *
-     * @return array<string, mixed>
-     */
-    private function socialHistory(string $formType): array
+    private function captureVisit(Appointment $seat, BatchRequest $batch, int $seq): ClinicVisit
     {
-        if ($formType !== 'assessment') {
-            return ['smoking' => null, 'alcohol' => null, 'illicit_drugs' => null, 'sexually_active' => null];
-        }
-
-        return ['smoking' => 'no', 'alcohol' => 'quit', 'illicit_drugs' => 'no', 'sexually_active' => false];
+        return $this->kioskVisit($seat, $batch, $seq, 'captured');
     }
 
-    /**
-     * A visit the nurse has encoded: the same capture, plus the clearance
-     * record whose `result` is the one clinical field the College Admin may
-     * see (PRD §6.6 as amended by D-53).
-     */
-    private function encode(BatchRequest $batch, User $student, string $date, string $result, bool $bpFlagged): void
+    /** D-72: high BP on the first pass — sent to rest, re-check still to come. */
+    private function restVisit(Appointment $seat, BatchRequest $batch, int $seq): void
     {
-        $visit = $this->capture($batch, $student, $date);
+        $visit = $this->kioskVisit($seat, $batch, $seq, 'resting');
+        $visit->update(['resting_until' => $visit->checked_in_at->copy()->addMinutes((int) config('healthpass.kiosk.recheck_rest_minutes'))]);
+        $visit->vitalSigns->update(['bp_systolic' => 148, 'bp_diastolic' => 96, 'is_bp_flagged' => true]);
+    }
 
-        $visit->update(['status' => 'encoded']);
-
-        if ($bpFlagged) {
-            // BP threshold is locked at 140/90 (CLAUDE.md), so this is a real
-            // flag, not a decorative one.
-            $visit->vitalSigns->update([
-                'bp_systolic' => 148,
-                'bp_diastolic' => 94,
-                'is_bp_flagged' => true,
-            ]);
-        }
-
-        // D-65: the clinic confirmed the kiosk's reading unchanged and measured
-        // the respiratory rate — the same pair Save & Close writes.
-        $vitals = $visit->vitalSigns->fresh();
-        // D-66: the flagged demo row's 22 breaths/min is outside 12-20, so the
-        // helper raises is_rr_flagged exactly as the encode controller would.
-        $respiratoryRate = $bpFlagged ? 22 : 16;
-        $vitals->update([
-            'respiratory_rate' => $respiratoryRate,
-            'is_rr_flagged' => VitalSigns::isRespiratoryRateFlagged($respiratoryRate),
-        ]);
+    /** Captured, then encoded by the nurse or (every fourth) the physician, half an hour later. */
+    private function encodeVisit(Appointment $seat, BatchRequest $batch, int $seq, string $result): void
+    {
+        $visit = $this->kioskVisit($seat, $batch, $seq, 'encoded');
+        $encoder = $seq % 4 === 3 ? $this->physician : $this->nurse;
 
         $record = ClearanceRecord::create([
             'clinic_visit_id' => $visit->id,
-            'encoded_by' => $this->nurse->id,
+            'encoded_by' => $encoder->id,
+            ...$visit->batchPurpose(),              // D-62
+            ...$this->encodedVitals($visit, 14 + $seq % 5),
             'result' => $result,
-            'encoded_vitals' => [
-                'height_cm' => (float) $vitals->height_cm,
-                'weight_kg' => (float) $vitals->weight_kg,
-                'bmi' => (float) $vitals->bmi,
-                'temperature_c' => (float) $vitals->temperature_c,
-                'bp_systolic' => $vitals->bp_systolic,
-                'bp_diastolic' => $vitals->bp_diastolic,
-                'heart_rate_bpm' => $vitals->heart_rate_bpm,
-                'respiratory_rate' => $vitals->respiratory_rate,
-            ],
-            ...$visit->batchPurpose(),   // D-62: as the real encode copies it
             'nurse_notes' => $result === 'Unfit'
                 ? 'Blood pressure above threshold on two readings. Advised to consult before clearance is re-issued.'
                 : null,
-            'encoded_at' => Carbon::parse($date)->setTime(10, 15),
+            ...ClearanceRecord::physicianBlockFor($encoder), // D-64
+            'encoded_at' => $visit->checked_in_at->copy()->addMinutes(30),
         ]);
+        $this->medicalAssessment($record, $batch->form_type, $seq); // D-69
 
-        // D-69: a Medical Assessment Form visit also carries the paper's own
-        // sections; a Medical Clearance one carries none.
-        if ($batch->form_type === 'assessment') {
-            $record->medicalAssessment()->create([
-                'medical_history' => [
-                    'patient' => ['asthma'],
-                    'family' => ['hypertension'],
-                    'specify' => ['hypertension' => '150/95'],
-                ],
-                'immunizations' => ['given' => ['bcg', 'measles', 'hpv'], 'others' => null],
-                'family_planning_access' => true,
-                'surgical_history' => ['procedures' => null, 'date_done' => null],
-            ]);
-        }
-
-        // The nurse's encode is what completes the appointment
-        // (Nurse\EncodeController) — the Batch Results popup reads that as
-        // "Completed".
-        $visit->appointment?->update(['status' => 'completed']);
+        $seat->update(['status' => 'completed']);
     }
 
-    /**
-     * The next number in this seeder's reserved 85xx band. One counter serves
-     * both APT- and HP- refs: they are separate unique indexes, so sharing the
-     * sequence costs nothing and keeps the two easy to line up by eye.
-     */
-    private function nextSeq(): int
+    /** D-113: the college's request for the documents, decided or not. */
+    private function releaseRequest(BatchRequest $batch, string $status, Carbon $requestedAt, ?Carbon $decidedAt = null): void
     {
-        static $seq = 8500;
+        $path = "release-requests/demo-{$batch->reference_no}.pdf";
+        Storage::disk('local')->put($path, $this->pdf("Request for release of documents — {$batch->reference_no}"));
 
-        return $seq++;
+        $request = new DocumentReleaseRequest([
+            'batch_request_id' => $batch->id,
+            'requested_by' => $batch->requested_by,
+            'reason' => 'The partner companies need each student\'s signed form before the deployment starts.',
+            'attachment_path' => $path,
+            'attachment_original_name' => 'dean-request-letter.pdf',
+            'attachment_mime' => 'application/pdf',
+            'status' => $status,
+            'reviewed_by' => $decidedAt === null ? null : $this->director->id,
+            'reviewed_at' => $decidedAt,
+            'rejection_message' => $status === 'rejected' ? 'Please attach the request letter signed by the dean, not the program head.' : null,
+        ]);
+        $request->created_at = $requestedAt;
+        $request->updated_at = $decidedAt ?? $requestedAt;
+        $request->save();
+    }
+
+    /** @return array{memo_path: string, memo_original_name: string, memo_mime: string} the D-109 signed memo */
+    private function memo(string $reference): array
+    {
+        $path = "memos/demo-{$reference}.pdf";
+        Storage::disk('local')->put($path, $this->pdf("Signed memo — {$reference}"));
+
+        return ['memo_path' => $path, 'memo_original_name' => 'signed-memo.pdf', 'memo_mime' => 'application/pdf'];
+    }
+
+    /** A one-page demo PDF, so the memo and attachment viewers have something real to open. */
+    private function pdf(string $title): string
+    {
+        return Pdf::loadHTML('<h2 style="font-family: sans-serif">'.e($title).'</h2>'
+            .'<p style="font-family: sans-serif">Demo document generated by DemoBatchSeeder.</p>')->output();
+    }
+
+    /** D-120: $user opened $batch at $at, seeing $status (its status now, if not given). */
+    private function seen(User $user, BatchRequest $batch, Carbon $at, ?string $status = null): void
+    {
+        if ($status === null) {
+            $batch->load(BatchResults::statusRelations());
+            $status = $batch->resultsStatus();
+        }
+
+        BatchSeen::updateOrCreate(
+            ['user_id' => $user->id, 'batch_request_id' => $batch->id],
+            ['seen_status' => $status, 'seen_at' => $at],
+        );
     }
 }

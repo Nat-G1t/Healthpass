@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Http\Middleware\EnsureRole;
 use App\Models\Appointment;
 use App\Models\BatchRequest;
+use App\Models\BatchRequestStudent;
 use App\Models\ClearanceRecord;
 use App\Models\ClinicVisit;
 use App\Models\College;
@@ -27,6 +28,8 @@ use Tests\TestCase;
  *    back to the account's created_at.
  *  - work counts (Live Queue, Batch Approvals): what is waiting right now.
  *    Opening the page changes nothing; doing the work does.
+ *  - batch news (D-120, Batch Tracking): the dots on its rows, each cleared by
+ *    its View — BatchNotificationsTest covers the rules in full.
  *
  * Every viewer is created at 09:00 (their baseline) and each test then starts
  * at 09:05, so anything a test creates is strictly after the baseline. Events
@@ -125,9 +128,10 @@ class NavBadgesTest extends TestCase
         $batch->update(['status' => 'cancelled', 'cancelled_at' => now(), 'cancelled_by' => $by->id]);
     }
 
+    /** A seat on $batch: the appointment plus its roster row, as approval writes them. */
     private function batchAppointment(User $student, BatchRequest $batch): Appointment
     {
-        return Appointment::factory()->create([
+        $appointment = Appointment::factory()->create([
             'student_id' => $student->id,
             'service_type' => 'medical',
             'scheduled_date' => '2026-09-20',
@@ -136,6 +140,14 @@ class NavBadgesTest extends TestCase
             'batch_request_id' => $batch->id,
             'created_by' => $this->director->id,
         ]);
+
+        BatchRequestStudent::create([
+            'batch_request_id' => $batch->id,
+            'student_id' => $student->id,
+            'appointment_id' => $appointment->id,
+        ]);
+
+        return $appointment;
     }
 
     /** @param  array<string, bool>  $flags */
@@ -272,10 +284,16 @@ class NavBadgesTest extends TestCase
         $this->assertSame(2, $this->badges($this->admin)['admin.batches.index']);
     }
 
-    public function test_an_encode_for_a_batch_student_counts_until_batch_tracking_is_opened(): void
+    /**
+     * D-120: an encode is no longer news by itself (it was under D-57) — the
+     * batch's STATUS changing is, and it stays a dot until the batch's View is
+     * clicked; merely opening Batch Tracking does not clear it.
+     */
+    public function test_a_batch_status_change_counts_until_the_batch_is_opened(): void
     {
         $student = $this->makeStudent();
-        $visit = $this->captureVisit($student, $this->batchAppointment($student, $this->makeBatch('approved')));
+        $batch = $this->makeBatch('approved');
+        $visit = $this->captureVisit($student, $this->batchAppointment($student, $batch));
 
         $this->actingAs($this->admin)->get(route('admin.batches.index'))
             ->assertOk()
@@ -287,9 +305,15 @@ class NavBadgesTest extends TestCase
         // A visit on no batch (a legacy, pre-D-61 walk-in row) never counts.
         $this->encode($this->captureVisit($student));
 
+        // Scheduled → Completed: one dot, one on the badge.
         $this->assertSame(1, $this->badges($this->admin)['admin.batches.index']);
 
-        $this->actingAs($this->admin)->get(route('admin.batches.index'))->assertOk();
+        $this->actingAs($this->admin)->get(route('admin.batches.index'))
+            ->assertOk()
+            ->assertSee('data-notify-dot', false);
+        $this->assertSame(1, $this->badges($this->admin)['admin.batches.index']);
+
+        $this->actingAs($this->admin)->get(route('admin.batches.results', $batch->id))->assertOk();
         $this->assertSame(0, $this->badges($this->admin)['admin.batches.index']);
     }
 
@@ -305,8 +329,8 @@ class NavBadgesTest extends TestCase
         $this->encode($this->captureVisit($coeStudent, $this->batchAppointment($coeStudent, $coeBatch), college: $this->coe));
 
         $this->assertSame(['admin.batches.index' => 0, 'admin.activity' => 0], $this->badges($this->admin));
-        // The COE admin sees the decision and the encode; their own submissions
-        // and cancellation are not news to them.
+        // The COE admin sees the decision and the status change the encode
+        // made (D-120); their own submissions and cancellation are not news.
         $this->assertSame(['admin.batches.index' => 2, 'admin.activity' => 1], $this->badges($coeAdmin));
     }
 

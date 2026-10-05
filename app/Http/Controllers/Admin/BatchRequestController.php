@@ -15,6 +15,7 @@ use App\Models\StudentProfile;
 use App\Services\ClinicScheduleService;
 use App\Services\ReferenceNumberService;
 use App\Support\AssessmentDocument;
+use App\Support\BatchNotifications;
 use App\Support\BatchResults;
 use App\Support\ClearanceDocument;
 use App\Support\PrivateUpload;
@@ -22,6 +23,7 @@ use App\Support\Programs;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -105,9 +107,31 @@ class BatchRequestController extends Controller
             ? $approvedBatches->total() > 0
             : $college->batchRequests()->where('status', 'approved')->exists();
 
+        // D-120: the notification dots — Batch Results rows with news, and
+        // rejected requests whose reason has not been opened yet.
+        $dots = BatchNotifications::dots($request->user(), $approvedBatches->getCollection())
+            + BatchNotifications::dots($request->user(), $batchRequests->getCollection()->where('status', 'rejected'));
+
         return view('admin.batches.index', compact(
-            'college', 'batchRequests', 'approvedBatches', 'hasApprovedBatches', 'search',
+            'college', 'batchRequests', 'approvedBatches', 'hasApprovedBatches', 'search', 'dots',
         ));
+    }
+
+    /**
+     * D-120: the rejected request's View opened its reason popup, so its dot
+     * is cleared. The popup opens without leaving the page, so it posts here
+     * in the background. Found through the managed college, rejected only —
+     * anything else is a 404.
+     */
+    public function markSeen(Request $request, int $batchId): Response
+    {
+        $batch = $this->managedCollege()->batchRequests()
+            ->where('status', 'rejected')
+            ->findOrFail($batchId);
+
+        BatchNotifications::markSeen($request->user(), $batch, 'rejected');
+
+        return response()->noContent();
     }
 
     /**
@@ -128,13 +152,16 @@ class BatchRequestController extends Controller
      * latest request (pending / rejected / approved) decides the button under
      * the main card, and an approved one switches the download tools on.
      */
-    public function results(int $batchId): View
+    public function results(Request $request, int $batchId): View
     {
         $batch = $this->managedCollege()->batchRequests()
             ->where('status', 'approved')
             ->with(BatchResults::pageRelations())
             ->with('latestReleaseRequest')
             ->findOrFail($batchId);
+
+        // D-120: opening the batch clears its Batch Results dot.
+        BatchNotifications::markSeen($request->user(), $batch, $batch->resultsStatus());
 
         return view('admin.batches.results', [
             'batch' => $batch,

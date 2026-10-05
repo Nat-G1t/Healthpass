@@ -6,7 +6,7 @@
      Variables from the parent view: $readOnly, $familyPlanning.
 ──────────────────────────────────────────────────────────────────────────── --}}
 <x-hp.card>
-    <h3 class="text-sm font-semibold text-hp-slate">III. Family Planning Access</h3>
+    <h3 class="text-sm font-bold text-hp-slate">III. Family Planning Access</h3>
 
     <div class="mt-3">
         <span class="text-sm text-hp-slate/70">With access to family planning counseling?</span>

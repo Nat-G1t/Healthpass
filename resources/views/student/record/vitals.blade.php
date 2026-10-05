@@ -49,7 +49,7 @@
 @endphp
 
 <x-hp.card>
-    <h3 class="text-sm font-semibold text-hp-slate">Vital Signs</h3>
+    <h3 class="text-sm font-bold text-hp-slate">Vital Signs</h3>
     <p class="mt-0.5 text-xs text-hp-slate/50">As confirmed by the clinic when this visit was encoded.</p>
 
     {{-- D-72: the first pass read high, you rested, and the numbers below are

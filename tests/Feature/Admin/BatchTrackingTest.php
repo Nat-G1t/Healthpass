@@ -211,8 +211,8 @@ class BatchTrackingTest extends TestCase
             ->assertOk()
             ->getContent();
 
-        // One View trigger for the one rejected row; the approved row gets a dash.
-        $this->assertSame(1, substr_count($content, 'detail = JSON.parse'));
+        // One View trigger for the one rejected row (D-120: openReason() also clears its dot); the approved row gets a dash.
+        $this->assertSame(1, substr_count($content, '@click="openReason('));
         $this->assertStringContainsString('&mdash;', $content);
     }
 

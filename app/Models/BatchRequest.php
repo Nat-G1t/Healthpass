@@ -390,8 +390,12 @@ class BatchRequest extends Model
             ->min();
     }
 
-    /** D-111: the first clinic day's start — its date at the batch's first hour — or null while unscheduled. */
-    private function firstHourStart(): ?Carbon
+    /**
+     * D-111: the first clinic day's start — its date at the batch's first hour
+     * — or null while unscheduled. Public for D-120's badge: from this moment
+     * the batch can no longer read Scheduled.
+     */
+    public function firstHourStart(): ?Carbon
     {
         return $this->scheduled_date === null ? null : self::hourStart($this->scheduled_date, $this->scheduled_time);
     }

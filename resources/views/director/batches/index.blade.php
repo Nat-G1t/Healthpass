@@ -62,7 +62,7 @@
          search to change or clear. --}}
     @if ($search !== '' || $batchRequests->total() > 0)
         <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
-            <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+            <p class="hp-card-title">
                 Batch Requests
             </p>
 

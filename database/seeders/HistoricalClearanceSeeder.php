@@ -126,6 +126,7 @@ class HistoricalClearanceSeeder extends DemoClinicVisitSeeder
                     }
                 }
             }
+            $this->markSeenByStaff();
         });
 
         $this->command?->info(sprintf(
@@ -135,6 +136,31 @@ class HistoricalClearanceSeeder extends DemoClinicVisitSeeder
             self::FIRST_YEAR,
             self::LAST_YEAR,
         ));
+    }
+
+    /**
+     * D-120: years-old batches are old news — the Director and each college's
+     * admin opened them long ago, so none carries a notification dot. Every
+     * historical batch is fully encoded, so it was seen as Completed.
+     */
+    private function markSeenByStaff(): void
+    {
+        $rows = [];
+
+        $batches = BatchRequest::query()
+            ->where('reference_no', '>=', 'BR-'.self::FIRST_YEAR.'-')
+            ->where('reference_no', '<', 'BR-'.(self::LAST_YEAR + 1).'-')
+            ->get(['id', 'college_id']);
+
+        foreach ($batches as $batch) {
+            foreach ([$this->director, $this->admins[$batch->college_id]] as $viewer) {
+                $rows[] = ['user_id' => $viewer->id, 'batch_request_id' => $batch->id, 'seen_status' => 'completed', 'seen_at' => now()];
+            }
+        }
+
+        foreach (array_chunk($rows, 500) as $chunk) {
+            DB::table('batch_seen')->insert($chunk);
+        }
     }
 
     /**

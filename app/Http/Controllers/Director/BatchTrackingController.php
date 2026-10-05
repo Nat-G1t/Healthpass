@@ -9,11 +9,12 @@ use App\Models\BatchRequest;
 use App\Models\College;
 use App\Services\BatchDocumentZip;
 use App\Support\BatchCardFilters;
+use App\Support\BatchNotifications;
 use App\Support\BatchResults;
 use App\Support\PrivateUpload;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\Response;
 
 /**
  * The Director's Batch Tracking page (FR-DIRA-09/10, D-112).
@@ -27,7 +28,7 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
  *   results()  an approved batch's results page — the same body the college
  *              sees (D-111), built by the same App\Support\BatchResults
  *   show()     a rejected or cancelled batch's details, students and reason
- *   documents() an approved batch's encoded students' forms as one ZIP —
+ *   documents() an approved batch's encoded students' forms (one PDF, or a ZIP for two or more — D-118) —
  *              the Director needs no release request (D-113)
  */
 class BatchTrackingController extends Controller
@@ -76,6 +77,9 @@ class BatchTrackingController extends Controller
         return view('director.tracking.index', [
             'approvedBatches' => $approvedBatches,
             'closedBatches' => $closedBatches,
+            // D-120: which rows of both cards carry a notification dot.
+            'dots' => BatchNotifications::dots($request->user(), $approvedBatches->getCollection())
+                + BatchNotifications::dots($request->user(), $closedBatches->getCollection()),
             'resultsFilters' => $resultsFilters,
             'rejectedFilters' => $rejectedFilters,
             'colleges' => College::orderBy('code')->get(['id', 'code']),
@@ -96,13 +100,16 @@ class BatchTrackingController extends Controller
      * first — the pending one is what "Review request of documents" opens,
      * and all of them are the small history under the button.
      */
-    public function results(BatchRequest $batch): View
+    public function results(Request $request, BatchRequest $batch): View
     {
         abort_unless($batch->status === 'approved', 404);
 
         $batch->load('college:id,code,name')
             ->load(BatchResults::pageRelations())
             ->load(['releaseRequests' => fn ($query) => $query->orderBy('id'), 'releaseRequests.requester:id,name']);
+
+        // D-120: opening the batch clears its Batch Results dot.
+        BatchNotifications::markSeen($request->user(), $batch, $batch->resultsStatus());
 
         $pendingRelease = $batch->releaseRequests->firstWhere('status', 'pending');
 
@@ -120,7 +127,7 @@ class BatchTrackingController extends Controller
      * Director already sees every record). Which students may be in the ZIP is
      * BatchDocumentZip's one shared rule.
      */
-    public function documents(Request $request, BatchRequest $batch, BatchDocumentZip $zip): BinaryFileResponse
+    public function documents(Request $request, BatchRequest $batch, BatchDocumentZip $zip): Response
     {
         abort_unless($batch->status === 'approved', 404);
 
@@ -133,9 +140,12 @@ class BatchTrackingController extends Controller
      * the college's for a cancellation. An approved or pending batch is a 404
      * (those have the results page and the Review page).
      */
-    public function show(BatchRequest $batch): View
+    public function show(Request $request, BatchRequest $batch): View
     {
         abort_unless(in_array($batch->status, ['rejected', 'cancelled'], true), 404);
+
+        // D-120: opening a college-cancelled batch clears its dot.
+        BatchNotifications::markSeen($request->user(), $batch, $batch->status);
 
         $batch->load(['college', 'requester:id,name', 'reviewer:id,name', 'canceller:id,name']);
 

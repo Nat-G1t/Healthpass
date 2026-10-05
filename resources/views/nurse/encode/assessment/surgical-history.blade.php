@@ -7,7 +7,7 @@
      Variables from the parent view: $readOnly, $surgical.
 ──────────────────────────────────────────────────────────────────────────── --}}
 <x-hp.card>
-    <h3 class="text-sm font-semibold text-hp-slate">Past Surgical History / Procedures</h3>
+    <h3 class="text-sm font-bold text-hp-slate">Past Surgical History / Procedures</h3>
 
     <div class="mt-3 space-y-3">
         <div>

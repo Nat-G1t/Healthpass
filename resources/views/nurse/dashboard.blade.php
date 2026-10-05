@@ -14,7 +14,7 @@
     <div class="hp-stagger mb-6 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
 
         <x-hp.card class="border-l-4 border-l-hp-orange">
-            <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+            <p class="hp-card-title">
                 Encoded Today
             </p>
             <p class="mt-3 text-3xl font-bold leading-none text-hp-orange" data-hp-countup>{{ $stats['encodedToday'] }}</p>
@@ -22,7 +22,7 @@
         </x-hp.card>
 
         <x-hp.card>
-            <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+            <p class="hp-card-title">
                 Encoded This Month
             </p>
             <p class="mt-3 text-3xl font-bold leading-none text-hp-slate" data-hp-countup>{{ $stats['encodedMonth'] }}</p>
@@ -30,7 +30,7 @@
         </x-hp.card>
 
         <x-hp.card>
-            <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+            <p class="hp-card-title">
                 Awaiting Encode
             </p>
             <p class="mt-3 text-3xl font-bold leading-none text-hp-slate" data-hp-countup>{{ $stats['awaitingEncode'] }}</p>
@@ -40,7 +40,7 @@
         </x-hp.card>
 
         <x-hp.card>
-            <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+            <p class="hp-card-title">
                 Flagged Vitals This Month
             </p>
             <p class="mt-3 text-3xl font-bold leading-none text-hp-slate" data-hp-countup>{{ $stats['flaggedMonth'] }}</p>
@@ -54,7 +54,7 @@
 
         <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div>
-                <h3 class="text-sm font-semibold text-hp-slate">Encode History</h3>
+                <h3 class="text-sm font-bold text-hp-slate">Encode History</h3>
                 <p class="mt-1 text-xs text-hp-slate/50">
                     Every encoded result in the clinic, newest first — including your colleagues&rsquo;.
                 </p>

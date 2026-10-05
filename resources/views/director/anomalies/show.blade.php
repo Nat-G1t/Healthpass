@@ -42,7 +42,7 @@
 
         {{-- ── Clinic assessment (nurse or physician, D-64) ─────────────────────────────────────────── --}}
         <x-hp.card>
-            <h3 class="mb-4 text-sm font-semibold text-hp-slate">Clinic Assessment</h3>
+            <h3 class="mb-4 text-sm font-bold text-hp-slate">Clinic Assessment</h3>
 
             @if ($visit->clearanceRecord === null)
                 <div class="flex flex-col items-center py-8 text-center">
@@ -75,7 +75,7 @@
     {{-- ── Vitals (flagged readings highlighted) ────────────────────────── --}}
     <x-hp.card class="mt-5">
         <div class="mb-4 flex items-center justify-between">
-            <h3 class="text-sm font-semibold text-hp-slate">Vitals at Capture</h3>
+            <h3 class="text-sm font-bold text-hp-slate">Vitals at Capture</h3>
             @if ($visit->vitalSigns)
                 <span class="text-xs text-hp-slate/40">
                     {{ $visit->vitalSigns->entry_method === 'sensor' ? 'Sensor reading' : 'Manual entry' }}

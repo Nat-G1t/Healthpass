@@ -15,7 +15,7 @@
 
         {{-- Accent card — matches the prototype's orange-edged lead KPI --}}
         <x-hp.card class="border-l-4 border-l-hp-orange">
-            <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+            <p class="hp-card-title">
                 Total Encoded Clearances
             </p>
             <p class="mt-3 text-3xl font-bold leading-none text-hp-orange" data-hp-countup>{{ $stats['clearances'] }}</p>
@@ -23,7 +23,7 @@
         </x-hp.card>
 
         <x-hp.card>
-            <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+            <p class="hp-card-title">
                 Pending Batches
             </p>
             <p class="mt-3 text-3xl font-bold leading-none text-hp-slate" data-hp-countup>{{ $stats['pendingBatches'] }}</p>
@@ -31,7 +31,7 @@
         </x-hp.card>
 
         <x-hp.card>
-            <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+            <p class="hp-card-title">
                 Today&rsquo;s Appointments
             </p>
             <p class="mt-3 text-3xl font-bold leading-none text-hp-slate" data-hp-countup>{{ $stats['todaysAppointments'] }}</p>
@@ -39,7 +39,7 @@
         </x-hp.card>
 
         <x-hp.card>
-            <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+            <p class="hp-card-title">
                 Flagged Visits
             </p>
             <p class="mt-3 text-3xl font-bold leading-none text-hp-slate" data-hp-countup>{{ $stats['flaggedVisits'] }}</p>
@@ -54,7 +54,7 @@
         {{-- Pending Batch Approvals → Batch Approvals --}}
         <x-hp.card>
             <div class="mb-2 flex items-center justify-between">
-                <h3 class="text-sm font-semibold text-hp-slate">Pending Batch Approvals</h3>
+                <h3 class="text-sm font-bold text-hp-slate">Pending Batch Approvals</h3>
                 <x-hp.badge :variant="$stats['pendingBatches'] > 0 ? 'flagged' : 'neutral'">
                     {{ $stats['pendingBatches'] }} pending
                 </x-hp.badge>
@@ -103,7 +103,7 @@
         {{-- Flagged Anomalies → /director/anomalies --}}
         <x-hp.card>
             <div class="mb-2 flex items-center justify-between">
-                <h3 class="text-sm font-semibold text-hp-slate">Flagged Anomalies</h3>
+                <h3 class="text-sm font-bold text-hp-slate">Flagged Anomalies</h3>
                 <x-hp.badge :variant="$stats['flaggedVisits'] > 0 ? 'flagged' : 'neutral'">
                     {{ $stats['flaggedVisits'] }} flagged
                 </x-hp.badge>

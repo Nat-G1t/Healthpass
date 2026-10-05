@@ -10,6 +10,10 @@
                     2nd-chance day (D-110), soonest first
       2. Past     — every other approved batch, newest clinic date first
 
+    D-119: between them, the read-only Clinic Calendar card
+    (batches/_clinic-calendar) — how full each day is, and the picked day's
+    hours and batches.
+
     Each card has its own College dropdown and Batch ID search
     (batches/_card-filters). View opens the batch's results page, where the
     clinic prints or downloads the students' forms.
@@ -30,6 +34,11 @@
     'title' => 'Upcoming',
     'caption' => 'Batches with a clinic day today or later — including a 2nd-chance day — soonest first.',
     'empty' => 'No upcoming batches.',
+])
+
+@include('batches._clinic-calendar', [
+    'monthUrl' => route('nurse.calendar.month'),
+    'dayUrl' => route('nurse.calendar.day'),
 ])
 
 @include('nurse.batches._card', [

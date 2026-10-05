@@ -31,7 +31,7 @@
          Five since D-66 — three at two columns, five at three. --}}
     <div class="hp-stagger mb-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
         <x-hp.card class="border-l-4 border-l-hp-orange">
-            <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+            <p class="hp-card-title">
                 High Blood Pressure
             </p>
             <p class="mt-3 text-3xl font-bold leading-none text-hp-slate" data-hp-countup>{{ $stats['bp'] }}</p>
@@ -41,7 +41,7 @@
         </x-hp.card>
 
         <x-hp.card class="border-l-4 border-l-hp-orange">
-            <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+            <p class="hp-card-title">
                 Fever
             </p>
             <p class="mt-3 text-3xl font-bold leading-none text-hp-slate" data-hp-countup>{{ $stats['temp'] }}</p>
@@ -51,7 +51,7 @@
         </x-hp.card>
 
         <x-hp.card class="border-l-4 border-l-hp-orange">
-            <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+            <p class="hp-card-title">
                 Abnormal BMI
             </p>
             <p class="mt-3 text-3xl font-bold leading-none text-hp-slate" data-hp-countup>{{ $stats['bmi'] }}</p>
@@ -62,7 +62,7 @@
 
         {{-- D-66 --}}
         <x-hp.card class="border-l-4 border-l-hp-orange">
-            <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+            <p class="hp-card-title">
                 High Heart Rate
             </p>
             <p class="mt-3 text-3xl font-bold leading-none text-hp-slate" data-hp-countup>{{ $stats['hr'] }}</p>
@@ -74,7 +74,7 @@
         {{-- D-66. The one flag the kiosk cannot raise: the clinic measures the
              respiratory rate at encode (D-65), so it counts encoded visits. --}}
         <x-hp.card class="border-l-4 border-l-hp-orange">
-            <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+            <p class="hp-card-title">
                 Abnormal Respiratory Rate
             </p>
             <p class="mt-3 text-3xl font-bold leading-none text-hp-slate" data-hp-countup>{{ $stats['rr'] }}</p>
@@ -88,7 +88,7 @@
     <x-hp.card>
         <div class="mb-2 flex items-center justify-between">
             <div>
-                <h3 class="text-sm font-semibold text-hp-slate">Flagged Visits</h3>
+                <h3 class="text-sm font-bold text-hp-slate">Flagged Visits</h3>
                 <p class="mt-1 text-xs text-hp-slate/50">
                     Vitals over a flag threshold &mdash; screening signals, not diagnoses.
                     Includes visits still awaiting the clinic's encode (flags surface from capture).

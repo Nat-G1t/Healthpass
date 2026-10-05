@@ -24,14 +24,18 @@ use Illuminate\Support\Facades\DB;
  * Seeds 6 clinic visits across two demo students so that every UI state on the
  * My Records page is visible during development without needing a real kiosk:
  *
- *   • 3 encoded visits (with clearance records) → shows Fit/Unfit result + modal
+ *   • 6 encoded visits (with clearance records) → shows Fit/Unfit result + modal
  *       - HP-2026-9001  Juan Santos     Fit
  *       - HP-2026-9002  Juan Santos     Unfit, BP flagged
  *       - HP-2026-9003  Maria Reyes     Fit
- *   • 3 captured visits (no clearance record) → shows Pending, gated View
- *       - HP-2026-9004  Juan Santos     normal vitals
- *       - HP-2026-9005  Maria Reyes     temperature flagged (verifies flag display)
- *       - HP-2026-9006  Maria Reyes     normal vitals
+ *       - HP-2026-9004  Juan Santos     Fit, normal vitals
+ *       - HP-2026-9005  Maria Reyes     Unfit, temperature flagged (verifies flag display)
+ *       - HP-2026-9006  Maria Reyes     Fit, normal vitals
+ *
+ *   9004–9006 were CAPTURED (Pending) until the 2026-10-05 re-seed: a visit
+ *   left waiting on a PAST day holds its batch at "Still in progress" for
+ *   ever (D-111), which is not what a demo should show. The Pending state now
+ *   comes from today's live batch (DemoBatchSeeder).
  *
  * Plus an ANALYTICS SPREAD (HP-2026-9101…) — visits across SIX months
  * (Feb–Jul 2026), all 11 colleges and both sexes, feeding every card of
@@ -46,8 +50,9 @@ use Illuminate\Support\Facades\DB;
  *     the purpose Visits by Purpose counts;
  *   • a deterministic sprinkle of BP / fever / BMI flags (FR-ANL-10);
  *   • BMI values across all four FR-ANL-12 buckets;
- *   • a few CAPTURED (un-encoded) July visits — these still count
- *     (FR-ANL-07 as rewritten);
+ *   • every visit ENCODED — a captured one on a past day would hold its
+ *     batch at "Still in progress" (D-111); today's live batch carries the
+ *     captured ones (DemoBatchSeeder);
  *   • every visit carries the student's PROGRAM snapshot (D-43),
  *     so the per-program reporting built in later prompts has data.
  *
@@ -450,15 +455,15 @@ class DemoClinicVisitSeeder extends Seeder
         ]);
         $this->medicalAssessment($r3, $v3->formType(), 2); // D-69
 
-        // ── Captured visit 4 — Juan Santos, Pending, normal vitals ────────────
+        // ── Encoded visit 4 — Juan Santos, Fit, normal vitals ────────────────
         $v4 = ClinicVisit::create([
             'reference_no' => 'HP-2026-9004',
             'student_id' => $juan->id,
             'college_id' => $ccs->id,
             'course' => $juanCourse,
-            'appointment_id' => $this->recordsPageSeat(4, $juan, $ccs, '2026-06-15 08:45:00', 'scheduled', ['assessment', 'sports']),
+            'appointment_id' => $this->recordsPageSeat(4, $juan, $ccs, '2026-06-15 08:45:00', 'completed', ['assessment', 'sports']),
             'login_method' => 'qr',
-            'status' => 'captured',
+            'status' => 'encoded',
             'privacy_consent_at' => Carbon::parse('2026-06-15 08:40:00'),
             'checked_in_at' => Carbon::parse('2026-06-15 08:45:00'),
         ]);
@@ -484,15 +489,15 @@ class DemoClinicVisitSeeder extends Seeder
             'is_pregnant' => false,
         ]);
 
-        // ── Captured visit 5 — Maria Reyes, Pending, temperature + HR flagged ─
+        // ── Encoded visit 5 — Maria Reyes, Unfit, temperature + HR flagged ───
         $v5 = ClinicVisit::create([
             'reference_no' => 'HP-2026-9005',
             'student_id' => $maria->id,
             'college_id' => $ccs->id,
             'course' => $mariaCourse,
-            'appointment_id' => $this->recordsPageSeat(5, $maria, $ccs, '2026-05-10 09:00:00', 'scheduled', ['clearance', 'fieldtrip']),
+            'appointment_id' => $this->recordsPageSeat(5, $maria, $ccs, '2026-05-10 09:00:00', 'completed', ['clearance', 'fieldtrip']),
             'login_method' => 'qr',
-            'status' => 'captured',
+            'status' => 'encoded',
             'privacy_consent_at' => Carbon::parse('2026-05-10 08:55:00'),
             'checked_in_at' => Carbon::parse('2026-05-10 09:00:00'),
         ]);
@@ -513,8 +518,7 @@ class DemoClinicVisitSeeder extends Seeder
         ]);
         ScreeningResponse::create([
             'clinic_visit_id' => $v5->id,
-            // Captured, not yet encoded: opening it on the encode screen shows
-            // both details pre-filled into Nurse Notes (D-56).
+            // The two Yes details the clinic read when it encoded her (D-56).
             ...$this->screening([
                 'throat' => 'Sore throat since Monday',
                 'chest_lungs' => 'Cough at night',
@@ -523,15 +527,15 @@ class DemoClinicVisitSeeder extends Seeder
             'is_pregnant' => false,
         ]);
 
-        // ── Captured visit 6 — Maria Reyes, Pending, normal vitals ───────────
+        // ── Encoded visit 6 — Maria Reyes, Fit, normal vitals ────────────────
         $v6 = ClinicVisit::create([
             'reference_no' => 'HP-2026-9006',
             'student_id' => $maria->id,
             'college_id' => $ccs->id,
             'course' => $mariaCourse,
-            'appointment_id' => $this->recordsPageSeat(6, $maria, $ccs, '2026-06-20 08:30:00', 'scheduled', ['clearance', 'outbound']),
+            'appointment_id' => $this->recordsPageSeat(6, $maria, $ccs, '2026-06-20 08:30:00', 'completed', ['clearance', 'outbound']),
             'login_method' => 'qr',
-            'status' => 'captured',
+            'status' => 'encoded',
             'privacy_consent_at' => Carbon::parse('2026-06-20 08:25:00'),
             'checked_in_at' => Carbon::parse('2026-06-20 08:30:00'),
         ]);
@@ -556,6 +560,20 @@ class DemoClinicVisitSeeder extends Seeder
             ...$this->socialHistory($v6->formType()), // D-68: clearance -> NULLs
             'is_pregnant' => false,
         ]);
+
+        // Visits 4–6 encoded the same morning they were captured.
+        foreach ([[$v4, 'Fit', '2026-06-15 10:05:00', 3], [$v5, 'Unfit', '2026-05-10 10:20:00', 4], [$v6, 'Fit', '2026-06-20 09:40:00', 5]] as [$visit, $result, $encodedAt, $seq]) {
+            $record = ClearanceRecord::create([
+                'clinic_visit_id' => $visit->id,
+                'encoded_by' => $nurse->id,
+                ...$visit->batchPurpose(),            // D-62: as the real encode copies it
+                ...$this->encodedVitals($visit, 16),  // D-65: nothing corrected
+                'result' => $result,
+                ...ClearanceRecord::physicianBlockFor($nurse), // D-64: nurse → blank block
+                'encoded_at' => Carbon::parse($encodedAt),
+            ]);
+            $this->medicalAssessment($record, $visit->formType(), $seq); // D-69
+        }
 
         $this->command->info('DemoClinicVisitSeeder: 6 demo visits created (HP-2026-9001 – HP-2026-9006).');
     }
@@ -662,8 +680,9 @@ class DemoClinicVisitSeeder extends Seeder
                         college: $colleges[$visit['code']],
                         // D-64: every third record is the physician's own encode.
                         encoder: $visitSeq % 3 === 1 ? $physician : $nurse,
-                        // A few July visits stay captured — the nurse hasn't encoded yet.
-                        isCaptured: $yearMonth === '2026-07' && $visit['i'] % 5 === 0,
+                        // None stays captured: on a past day it would hold its
+                        // batch at "Still in progress" (D-111, re-seed 2026-10-05).
+                        isCaptured: false,
                     );
                 }
             }

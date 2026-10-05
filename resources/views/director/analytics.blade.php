@@ -114,7 +114,7 @@
     <x-hp.card class="hp-load-card mb-5" style="--i: 1">
         <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div>
-                <h3 class="text-sm font-semibold text-hp-slate">Clinic Visits by {{ $unitLabel }}</h3>
+                <h3 class="text-sm font-bold text-hp-slate">Clinic Visits by {{ $unitLabel }}</h3>
                 <p class="mt-1 text-xs text-hp-slate/50">
                     Kiosk check-ins per {{ strtolower($unitLabel) }} — sorted by volume.
                 </p>
@@ -203,7 +203,7 @@
     {{-- ── Vital-Sign Flags (FR-ANL-10) ─────────────────────────────────── --}}
     <x-hp.card class="hp-load-card mb-5" style="--i: 2">
         <div class="mb-4">
-            <h3 class="text-sm font-semibold text-hp-slate">Vital-Sign Flags</h3>
+            <h3 class="text-sm font-bold text-hp-slate">Vital-Sign Flags</h3>
             <p class="mt-1 text-xs text-hp-slate/50">
                 Which vitals get flagged most, from all captured kiosk screenings in scope.
             </p>
@@ -222,7 +222,7 @@
             <div class="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
                 @foreach ($flagTiles as $tile)
                     <div class="rounded-xl border border-hp-slate/10 px-4 py-4">
-                        <p class="text-[11px] font-semibold uppercase tracking-wider text-hp-slate/50">{{ $tile['label'] }}</p>
+                        <p class="hp-card-title">{{ $tile['label'] }}</p>
                         <p class="mt-1 text-3xl font-bold tabular-nums text-hp-slate" data-count-up>{{ $tile['count'] }}</p>
                         <span class="mt-1.5 inline-block rounded-full bg-hp-orange/15 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
                             {{ number_format($tile['rate'], 1) }}% of screenings
@@ -243,7 +243,7 @@
         {{-- Visits per Month (FR-ANL-11, D-99) — the selected year for the
              selected college; only the month filter doesn't narrow it. --}}
         <x-hp.card class="hp-load-card mb-5" style="--i: 3">
-            <h3 class="text-sm font-semibold text-hp-slate">Visits per Month</h3>
+            <h3 class="text-sm font-bold text-hp-slate">Visits per Month</h3>
             <p class="mt-1 text-xs text-hp-slate/50">
                 Clinic visits in each month of {{ $trendYear }} — follows the year and college filters.
             </p>
@@ -268,7 +268,7 @@
 
         {{-- Students Screened by Sex (FR-ANL-04 as amended by D-32). --}}
         <x-hp.card class="hp-load-card" style="--i: 4">
-            <h3 class="text-sm font-semibold text-hp-slate">Students Screened by Sex</h3>
+            <h3 class="text-sm font-bold text-hp-slate">Students Screened by Sex</h3>
             <p class="mt-1 text-xs text-hp-slate/50">
                 Captured kiosk visits, counted once per visit. Follows both filters.
             </p>
@@ -314,7 +314,7 @@
 
     {{-- ── BMI Distribution (FR-ANL-12) — last card, per the mockup ─────── --}}
     <x-hp.card class="hp-load-card" style="--i: 6">
-        <h3 class="text-sm font-semibold text-hp-slate">BMI Distribution</h3>
+        <h3 class="text-sm font-bold text-hp-slate">BMI Distribution</h3>
         <p class="mb-3.5 mt-1 text-xs text-hp-slate/50">
             Where screened students fall across BMI categories — rule-based buckets of captured
             vitals, descriptive only. Follows both filters.

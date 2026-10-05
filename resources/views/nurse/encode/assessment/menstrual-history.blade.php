@@ -31,7 +31,7 @@
 
 <x-hp.card class="{{ $isFemale ? '' : 'opacity-50' }}">
     <div class="flex items-baseline justify-between gap-3">
-        <h3 class="text-sm font-semibold text-hp-slate">V. Menstrual History</h3>
+        <h3 class="text-sm font-bold text-hp-slate">V. Menstrual History</h3>
         @unless ($isFemale)
             <span class="rounded-full bg-hp-slate/10 px-2.5 py-0.5 text-[11px] font-semibold text-hp-slate/60">
                 For female students only

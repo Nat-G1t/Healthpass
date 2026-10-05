@@ -12,7 +12,7 @@
 @endphp
 
 <x-hp.card class="mt-6" data-memo-card>
-    <p class="mb-5 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Signed memo</p>
+    <p class="mb-5 hp-card-title">Signed memo</p>
 
     @if ($memoUrl === null)
         <p class="rounded-lg bg-hp-bg px-3 py-2 text-sm text-hp-slate/70" data-memo-missing>

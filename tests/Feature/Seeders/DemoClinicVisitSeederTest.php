@@ -86,11 +86,23 @@ class DemoClinicVisitSeederTest extends TestCase
         $this->assertSame(0, Appointment::where('source', '!=', 'batch')->count());
         $this->assertSame(0, Appointment::whereNull('batch_request_id')->count());
 
-        // Every appointment has its roster row, on a batch that was approved.
-        $this->assertSame(Appointment::count(), BatchRequestStudent::whereNotNull('appointment_id')->count());
+        // Every appointment has its roster row — except a missed one, whose row
+        // moved on to its 2nd chance (D-110) …
+        $this->assertSame(
+            Appointment::whereDoesntHave('secondChance')->count(),
+            BatchRequestStudent::whereNotNull('appointment_id')->count(),
+        );
+        // … on a batch that was approved. One the college cancelled after
+        // approval keeps its seats, every one of them cancelled (D-92).
         $this->assertSame(
             0,
-            Appointment::whereHas('batchRequest', fn ($batch) => $batch->where('status', '!=', 'approved'))->count(),
+            Appointment::whereHas('batchRequest', fn ($batch) => $batch->whereNotIn('status', ['approved', 'cancelled']))->count(),
+        );
+        $this->assertSame(
+            0,
+            Appointment::where('status', '!=', 'cancelled')
+                ->whereHas('batchRequest', fn ($batch) => $batch->where('status', 'cancelled'))
+                ->count(),
         );
     }
 

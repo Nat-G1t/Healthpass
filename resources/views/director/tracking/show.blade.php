@@ -43,7 +43,7 @@
 
     {{-- ── Card 1: batch details (as on the Review page) ─────────────────── --}}
     <x-hp.card>
-        <p class="mb-5 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Batch Details</p>
+        <p class="mb-5 hp-card-title">Batch Details</p>
 
         <dl class="space-y-4">
             <div class="flex items-start justify-between gap-4">
@@ -115,7 +115,7 @@
 
 {{-- ── Card 3: why it ended ─────────────────────────────────────────────── --}}
 <x-hp.card class="mt-6" data-closed-reason>
-    <p class="mb-4 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+    <p class="mb-4 hp-card-title">
         {{ $isRejected ? 'Rejection reason' : 'Cancelled by college' }}
     </p>
 

@@ -63,7 +63,9 @@ class CollegeSeederTest extends TestCase
 
         $this->assertSame(11, College::count());
         $this->assertFalse(User::where('email', 'like', '%shs%')->exists());
-        $this->assertSame(28, StudentProfile::count());
+        // The 28 named students, with CCS (4 named) and CIT (2 named) topped up
+        // to the 200-student demo rosters: 28 + 196 + 198.
+        $this->assertSame(422, StudentProfile::count());
     }
 
     /**

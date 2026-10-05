@@ -8,7 +8,7 @@
 @endphp
 
 <x-hp.card>
-    <h3 class="text-sm font-semibold text-hp-slate">Past Surgical History / Procedures</h3>
+    <h3 class="text-sm font-bold text-hp-slate">Past Surgical History / Procedures</h3>
 
     <dl class="mt-3 grid gap-x-8 sm:grid-cols-2">
         <div class="flex items-start justify-between gap-3 border-b border-hp-slate/10 py-2">

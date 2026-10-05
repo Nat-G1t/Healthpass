@@ -21,7 +21,7 @@
 
     {{-- Card 1: Clearance Status --}}
     <x-hp.card class="flex flex-col">
-        <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+        <p class="hp-card-title">
             Clearance Status
         </p>
 
@@ -77,7 +77,7 @@
     {{-- Card 2: Next Appointment — read-only (D-61). Nobody cancels a batch
          appointment — D-87 removed the College Admin's withdrawal too. --}}
     <x-hp.card class="flex flex-col">
-        <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+        <p class="hp-card-title">
             Next Appointment
         </p>
 
@@ -157,7 +157,7 @@
 
     {{-- Card 3: Past Clearances --}}
     <x-hp.card class="flex flex-col">
-        <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+        <p class="hp-card-title">
             Past Clearances
         </p>
 
@@ -186,7 +186,7 @@
 
 {{-- ── Recent Activity ─────────────────────────────────────────────────────── --}}
 <x-hp.card>
-    <h3 class="mb-5 text-sm font-semibold text-hp-slate">Recent Activity</h3>
+    <h3 class="mb-5 text-sm font-bold text-hp-slate">Recent Activity</h3>
 
     @if ($recentActivity->isEmpty())
         <div class="flex flex-col items-center justify-center py-10 text-center">

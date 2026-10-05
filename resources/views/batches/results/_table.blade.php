@@ -84,7 +84,7 @@
         'maxPerDownload' => $maxPerDownload,
     ]) }})">
     <x-hp.card>
-        <p class="mb-4 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+        <p class="mb-4 hp-card-title">
             Students <span class="ml-1 normal-case tracking-normal text-hp-slate/50">({{ count($rows) }})</span>
         </p>
 
@@ -229,7 +229,7 @@
 
         @if ($documents !== null)
             {{-- ── Download documents, lower right (D-113) ─────────────────
-                 A normal POST form, so the browser downloads the ZIP the
+                 A normal POST form, so the browser downloads the PDF or ZIP (D-118) the
                  server sends back and the page stays put. data-no-progress:
                  nothing navigates, so the top progress bar must not start. --}}
             <form method="POST" action="{{ $documents['action'] }}" data-no-progress

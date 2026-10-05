@@ -15,7 +15,7 @@
 {{-- ── Clearance history card ───────────────────────────────────────────────── --}}
 <x-hp.card>
 
-    <h3 class="mb-5 text-sm font-semibold text-hp-slate">Clearance History</h3>
+    <h3 class="mb-5 text-sm font-bold text-hp-slate">Clearance History</h3>
 
     @if ($visits->isEmpty())
 

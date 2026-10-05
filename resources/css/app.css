@@ -93,6 +93,14 @@
     to   { stroke-dashoffset: 0; }
 }
 
+/* ── Card titles (D-117) ────────────────────────────────────────────────────
+   The small uppercase label at the top of every card: bold, full-strength
+   slate, 12px. ONE class so every card title in the app reads the same — the
+   faded 11px style it replaced stays on field labels and table headers only. */
+@layer components {
+    .hp-card-title { @apply text-xs font-bold uppercase tracking-widest text-hp-slate; }
+}
+
 /* ── Motion utility classes (hp-anim-*) ──────────────────────────────────────
    One-shot entrance animations for Blade. `both` fill keeps the element at its
    final state and hides it before a delayed start (staggers). */

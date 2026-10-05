@@ -35,7 +35,7 @@
          the request's `prohibited` rules want for every other role — the server
          re-checks either way. --}}
     <x-hp.card class="h-fit lg:col-span-1" x-data="{ role: '{{ old('role', 'college_admin') }}' }">
-        <h3 class="text-sm font-semibold text-hp-slate">New staff account</h3>
+        <h3 class="text-sm font-bold text-hp-slate">New staff account</h3>
         <p class="mt-1 text-[13px] text-hp-slate/60">
             The account is created active. Its one-time password is emailed
             straight to the new staff member — it is never shown on this page.
@@ -110,7 +110,7 @@
 
     {{-- ── Existing accounts ────────────────────────────────────────────────── --}}
     <x-hp.card class="lg:col-span-2">
-        <h3 class="mb-4 text-sm font-semibold text-hp-slate">
+        <h3 class="mb-4 text-sm font-bold text-hp-slate">
             College Admins, Nurses &amp; Physicians
             <span class="ml-1 font-normal text-hp-slate/50">({{ $accounts->total() }})</span>
         </h3>

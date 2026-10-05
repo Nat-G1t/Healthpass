@@ -8,19 +8,24 @@ use App\Models\BatchRequest;
 use App\Models\ClinicVisit;
 use App\Support\VisitDocument;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Barryvdh\DomPDF\PDF as DomPdf;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use RuntimeException;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\Response;
 use ZipArchive;
 
 /**
  * D-113 — a batch's official documents as ONE ZIP file, one PDF per selected
  * student (Q15), each rendered exactly like the clinic's own Save as PDF
  * (VisitDocument — the same template, data and paper).
+ *
+ * D-118: a download of ONE student skips the ZIP — the browser gets that
+ * student's PDF itself, under the same file name it would have had inside
+ * the ZIP. Two or more students still come as one ZIP.
  *
  * Every download route calls download(): the College Admin's (after the
  * Director releases the batch), the Director's (always), and the clinic's
@@ -34,12 +39,17 @@ use ZipArchive;
 final class BatchDocumentZip
 {
     /**
-     * The posted visit ids → a ZIP download named "{Batch ID}-documents.zip".
-     * The temporary file is deleted as soon as it has been sent.
+     * The posted visit ids → one student's PDF (D-118), or a ZIP download
+     * named "{Batch ID}-documents.zip" for two or more. The ZIP's temporary
+     * file is deleted as soon as it has been sent.
      */
-    public function download(BatchRequest $batch, mixed $visitIds): BinaryFileResponse
+    public function download(BatchRequest $batch, mixed $visitIds): Response
     {
         $visits = $this->downloadableVisits($batch, $visitIds);
+
+        if ($visits->count() === 1) {
+            return $this->pdf($visits->first())->download(VisitDocument::filename($visits->first()));
+        }
 
         return response()
             ->download($this->build($batch, $visits), $batch->reference_no.'-documents.zip', [
@@ -106,11 +116,7 @@ final class BatchDocumentZip
         }
 
         foreach ($visits as $visit) {
-            $pdf = Pdf::loadView(VisitDocument::template($visit), VisitDocument::data($visit))
-                ->setPaper(VisitDocument::paper($visit))
-                ->output();
-
-            $zip->addFromString(VisitDocument::filename($visit), $pdf);
+            $zip->addFromString(VisitDocument::filename($visit), $this->pdf($visit)->output());
         }
 
         if ($zip->close() !== true) {
@@ -121,6 +127,13 @@ final class BatchDocumentZip
     }
 
     /** The most students one download may hold (config, default 50). */
+    /** One visit's document, laid out by dompdf exactly like the clinic's Save as PDF. */
+    private function pdf(ClinicVisit $visit): DomPdf
+    {
+        return Pdf::loadView(VisitDocument::template($visit), VisitDocument::data($visit))
+            ->setPaper(VisitDocument::paper($visit));
+    }
+
     public static function maxPerDownload(): int
     {
         return (int) config('healthpass.documents.max_per_download');

@@ -12,7 +12,7 @@
 @endphp
 
 <x-hp.card>
-    <h3 class="text-sm font-semibold text-hp-slate">II. Immunization Profile</h3>
+    <h3 class="text-sm font-bold text-hp-slate">II. Immunization Profile</h3>
     <p class="mt-0.5 text-xs text-hp-slate/50">The vaccines the clinic recorded as given.</p>
 
     <div class="mt-3 space-y-4">
@@ -44,7 +44,7 @@
 </x-hp.card>
 
 <x-hp.card>
-    <h3 class="text-sm font-semibold text-hp-slate">III. Family Planning Access</h3>
+    <h3 class="text-sm font-bold text-hp-slate">III. Family Planning Access</h3>
 
     <div class="mt-3 flex items-center justify-between gap-3">
         <span class="text-sm text-hp-slate/70">With access to family planning counseling?</span>

@@ -7,7 +7,6 @@ namespace App\Support;
 use App\Models\BatchRequest;
 use App\Models\ClearanceRecord;
 use App\Models\ClinicVisit;
-use App\Models\DocumentReleaseRequest;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -24,15 +23,18 @@ use Illuminate\Support\Facades\DB;
  *  - SINCE LAST SEEN — events after the user last opened that page. Opening it
  *    stamps users.nav_seen_at[<route name>] (App\Http\Middleware\MarkNavSeen);
  *    a page never opened falls back to the account's created_at.
- *  - WORK COUNTS — Live Queue, Batch Approvals and the Director's Batch
- *    Tracking (D-113: release requests to review) show what is waiting right
+ *  - WORK COUNTS — Live Queue and Batch Approvals show what is waiting right
  *    now. Opening the page does not clear them; doing the work does.
+ *  - BATCH NEWS (D-120) — Batch Tracking, for the College Admin and the
+ *    Director, counts the dots on its rows (App\Support\BatchNotifications):
+ *    each clears when that row's View is clicked. The admin's count adds the
+ *    approvals since they last opened the page, which carry no dot.
  *
  * Each badge reuses its page's own definition (liveQueue(), flagged(), the
- * Activity Log's event set) so a badge and its page cannot disagree. Every
- * number is built from plain COUNT queries — a badge fed by two tables (Batch
- * Tracking: decisions AND encodes) is two counts added together, because one
- * query across both would need a UNION, which means raw SQL.
+ * Activity Log's event set, the rows' dots) so a badge and its page cannot
+ * disagree. The counts are plain COUNT queries — a badge fed by two tables is
+ * two counts added together, because one query across both would need a
+ * UNION, which means raw SQL.
  *
  * A Support class rather than a Service: it keeps no state and needs nothing
  * injected, like VisitMonths and TransferNotice. The App\Services classes are
@@ -150,30 +152,10 @@ final class NavBadges
         $collegeId = (int) $user->managed_college_id;
 
         return [
-            'admin.batches.index' => self::batchTrackingCount($user, $collegeId),
+            // D-120: the rows' dots + approvals since the page was last opened.
+            'admin.batches.index' => BatchNotifications::count($user),
             'admin.activity' => self::activityLogCount($user, $collegeId),
         ];
-    }
-
-    /** Director decisions on the college's batches, plus results encoded for its batch students. */
-    private static function batchTrackingCount(User $user, int $collegeId): int
-    {
-        $seen = self::lastSeen($user, 'admin.batches.index');
-
-        $decisions = BatchRequest::query()
-            ->where('college_id', $collegeId)
-            ->whereIn('status', self::DECIDED)
-            ->where('reviewed_at', '>', $seen)
-            ->count();
-
-        // Scoped through the BATCH's college, not the student's current one:
-        // the result belongs to the college that booked the cohort (FR-ADM-12).
-        $encodes = ClearanceRecord::query()
-            ->where('encoded_at', '>', $seen)
-            ->whereHas('clinicVisit.appointment.batchRequest', fn (Builder $batch) => $batch->where('college_id', $collegeId))
-            ->count();
-
-        return $decisions + $encodes;
     }
 
     /**
@@ -211,9 +193,9 @@ final class NavBadges
         return [
             // Work count: every request still waiting for a decision.
             'director.batches.index' => BatchRequest::query()->where('status', 'pending')->count(),
-            // D-113 work count: document release requests waiting for a review
-            // (each also tags its row "Release requested" on Batch Tracking).
-            'director.tracking.index' => DocumentReleaseRequest::query()->where('status', 'pending')->count(),
+            // D-120 (replaced D-113's work count): the rows' dots — status
+            // changes, release requests and college cancellations not opened yet.
+            'director.tracking.index' => BatchNotifications::count($user),
             // The Flagged Anomalies page's own definition, captured since last seen.
             'director.anomalies' => ClinicVisit::flagged()
                 ->where('checked_in_at', '>', self::lastSeen($user, 'director.anomalies'))

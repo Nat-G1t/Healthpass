@@ -9,7 +9,7 @@
      $immunizationOthers.
 ──────────────────────────────────────────────────────────────────────────── --}}
 <x-hp.card>
-    <h3 class="text-sm font-semibold text-hp-slate">II. Immunization Profile</h3>
+    <h3 class="text-sm font-bold text-hp-slate">II. Immunization Profile</h3>
     <p class="mt-0.5 text-xs text-hp-slate/50">Tick every vaccine the student reports having received.</p>
 
     <div class="mt-4 space-y-4">

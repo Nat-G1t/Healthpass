@@ -230,7 +230,7 @@ function batchForm() {
         <div class="space-y-6 xl:col-span-1">
 
             <x-hp.card>
-                <h3 class="mb-4 text-sm font-semibold text-hp-slate">Request Details</h3>
+                <h3 class="mb-4 text-sm font-bold text-hp-slate">Request Details</h3>
 
                 <div class="space-y-4">
                     {{-- Purpose (FR-ADM-02 / BR-06; the `reason` field, labelled
@@ -267,7 +267,7 @@ function batchForm() {
             {{-- D-109: the signed request memo, where the date card used to be
                  (D-108). Required; the Director reads it before scheduling. --}}
             <x-hp.card>
-                <h3 class="text-sm font-semibold text-hp-slate">Attach signed memo</h3>
+                <h3 class="text-sm font-bold text-hp-slate">Attach signed memo</h3>
                 <p class="mb-4 mt-0.5 text-xs text-hp-slate/50">
                     A photo or PDF of the signed request memo. The Director reads it before scheduling.
                 </p>
@@ -296,7 +296,7 @@ function batchForm() {
         <div class="xl:col-span-2">
             <x-hp.card>
                 <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-                    <h3 class="text-sm font-semibold text-hp-slate">
+                    <h3 class="text-sm font-bold text-hp-slate">
                         Select Students
                         <span class="ml-1 font-normal text-hp-slate/50">
                             (<span x-text="selected.length"></span> of {{ $students->count() }} selected)

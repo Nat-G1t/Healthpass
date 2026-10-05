@@ -6,8 +6,9 @@
     $hasRejected = $batchRequests->contains(fn ($batch) => $batch->status === 'rejected');
     // D-62: Form Type sits immediately before Purpose — the purpose list is the
     // form's. "Purpose" is the batch's `reason` column, renamed on screen by D-105.
-    // D-108: Clinic Date is the Director's schedule — the college no longer picks it.
-    $headers = ['Batch ID', 'Form Type', 'Purpose', 'Students', 'Submitted', 'Clinic Date', 'Status'];
+    // D-108: the Scheduled date is the Director's schedule — the college no
+    // longer picks it (D-115 renamed the column from "Clinic Date").
+    $headers = ['Batch ID', 'Form Type', 'Purpose', 'Students', 'Submitted', 'Scheduled date', 'Status'];
 
     // The Director's written reason for rejecting (D-36) keeps the word
     // "reason" — it really is one; the batch's own reason reads "Purpose".
@@ -37,8 +38,22 @@
     Independent keys rather than one shared `modal` object: the dialogs carry
     different payloads, and only one can be open at a time, so closing one
     never has to reset the others.
+
+    D-120: `seen` lists the rejected rows whose reason was opened on this page,
+    so their notification dot hides at once; openReason() also tells the
+    server (admin.batches.seen) in the background, so it stays gone.
 --}}
-<div x-data="{ detail: null, cancelTarget: null }">
+<div x-data="{
+    detail: null,
+    cancelTarget: null,
+    seen: [],
+    openReason(id, url, payload) {
+        this.detail = payload;
+        if (this.seen.includes(id)) return;
+        this.seen.push(id);
+        window.axios.post(url).catch((error) => console.error('Could not clear the dot', error));
+    },
+}">
 
 {{-- ── Flash messages ─────────────────────────────────────────────────────── --}}
 {{-- Where the cancel endpoint lands (FR-ADM-11): both its success and its
@@ -92,7 +107,7 @@
     <x-hp.card class="mb-6">
         <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
             <div>
-                <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+                <p class="hp-card-title">
                     Batch Results
                 </p>
                 <p class="mt-1 text-xs text-hp-slate/50">
@@ -124,11 +139,12 @@
                 No approved batch matches “{{ $search }}”.
             </p>
         @else
-        {{-- D-111: Purpose (cut to 60 characters, like the requests list) and
-             Date requested — the day the college SUBMITTED it (Q10) — replace
-             Time of Completion. The status rule lives on the model
+        {{-- D-111: Purpose (cut to 60 characters, like the requests list)
+             replaces Time of Completion. D-115: the date is the Director's
+             Scheduled date and hours (it was the day the college submitted it,
+             D-111 Q10). The status rule lives on the model
              (BatchRequest::resultsStatus()); the shared partial words it. --}}
-        <x-hp.table :headers="['Batch ID', 'Purpose', 'Date requested', 'Status', '']">
+        <x-hp.table :headers="['Batch ID', 'Purpose', 'Scheduled date', 'Status', '']">
             @foreach ($approvedBatches as $batch)
                 <x-hp.table-row>
                     <x-hp.table-cell label="Batch ID" class="font-semibold">
@@ -137,23 +153,29 @@
 
                     <x-hp.table-cell label="Purpose">{{ Str::limit($batch->reasonText(), 60) }}</x-hp.table-cell>
 
-                    <x-hp.table-cell label="Date requested" class="whitespace-nowrap text-hp-slate/60">
-                        {{ $batch->created_at->format('M j, Y') }}
+                    <x-hp.table-cell label="Scheduled date">
+                        <span class="whitespace-nowrap">{{ $batch->scheduled_date?->format('M j, Y') ?? '—' }}</span>
+                        <span class="block whitespace-nowrap text-xs text-hp-slate/60">{{ $batch->scheduledSpanLabel() }}</span>
                     </x-hp.table-cell>
 
                     <x-hp.table-cell label="Status">
                         @include('batches.results._status', ['status' => $batch->resultsStatus()])
                     </x-hp.table-cell>
 
+                    {{-- D-120: a dot when the status or the release request
+                         changed since this batch was last opened. --}}
                     <x-hp.table-cell label="">
-                        <a href="{{ route('admin.batches.results', $batch->id) }}"
-                           class="inline-flex items-center justify-center gap-2 rounded-full
-                                  border-[1.5px] border-hp-slate/30 px-4 py-1 text-xs font-semibold
-                                  text-hp-slate transition-colors duration-hp-fast hover:bg-hp-slate/10
-                                  focus-visible:outline-none focus-visible:ring-2
-                                  focus-visible:ring-hp-slate focus-visible:ring-offset-1">
-                            View
-                        </a>
+                        <span class="inline-flex items-center gap-2">
+                            <a href="{{ route('admin.batches.results', $batch->id) }}"
+                               class="inline-flex items-center justify-center gap-2 rounded-full
+                                      border-[1.5px] border-hp-slate/30 px-4 py-1 text-xs font-semibold
+                                      text-hp-slate transition-colors duration-hp-fast hover:bg-hp-slate/10
+                                      focus-visible:outline-none focus-visible:ring-2
+                                      focus-visible:ring-hp-slate focus-visible:ring-offset-1">
+                                View
+                            </a>
+                            <x-hp.notify-dot :show="$dots[$batch->id] ?? false" />
+                        </span>
                     </x-hp.table-cell>
                 </x-hp.table-row>
             @endforeach
@@ -168,7 +190,7 @@
 <x-hp.card>
     {{-- D-103: the same 11px label as Batch Results, above both the table and
          the empty state, so the card is labelled either way. --}}
-    <p class="mb-4 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Batch requests</p>
+    <p class="mb-4 hp-card-title">Batch requests</p>
 
     @if ($batchRequests->isEmpty())
         <div class="flex flex-col items-center py-10 text-center">
@@ -202,7 +224,7 @@
                     <x-hp.table-cell label="Submitted" class="text-hp-slate/60">{{ $batch->created_at->format('M j, Y') }}</x-hp.table-cell>
                     {{-- D-108: the date and hours the Director scheduled; while
                          pending, who will decide them; "—" if never scheduled. --}}
-                    <x-hp.table-cell label="Clinic Date">
+                    <x-hp.table-cell label="Scheduled date">
                         @if ($batch->scheduled_date !== null)
                             <span class="whitespace-nowrap">{{ $batch->scheduled_date->format('M j, Y') }}</span>
                             <span class="block whitespace-nowrap text-xs text-hp-slate/60">{{ $batch->scheduledSpanLabel() }}</span>
@@ -224,21 +246,27 @@
                             @if ($batch->status === 'rejected' && $batch->rejection_reason !== null)
                                 {{-- Plain <button> (not <x-hp.button>): the payload is
                                      built with Js::from(), and Blade output isn't
-                                     compiled inside a component tag's attribute. --}}
-                                <button type="button"
-                                    @click="detail = {{ Illuminate\Support\Js::from([
-                                        'ref' => $batch->reference_no,
-                                        'reason' => $batch->rejection_reason,
-                                        'reviewer' => $batch->reviewer?->name,
-                                        'reviewedAt' => $batch->reviewed_at?->format('M j, Y g:i A'),
-                                    ]) }}"
-                                    class="inline-flex items-center justify-center gap-2 rounded-full
-                                           border-[1.5px] border-hp-slate/30 px-4 py-1 text-xs font-semibold
-                                           text-hp-slate transition-colors duration-hp-fast hover:bg-hp-slate/10
-                                           focus-visible:outline-none focus-visible:ring-2
-                                           focus-visible:ring-hp-slate focus-visible:ring-offset-1">
-                                    View
-                                </button>
+                                     compiled inside a component tag's attribute.
+                                     D-120: opening the reason clears the row's dot. --}}
+                                <span class="inline-flex items-center gap-2">
+                                    <button type="button"
+                                        @click="openReason({{ $batch->id }}, {{ Illuminate\Support\Js::from(route('admin.batches.seen', $batch->id)) }}, {{ Illuminate\Support\Js::from([
+                                            'ref' => $batch->reference_no,
+                                            'reason' => $batch->rejection_reason,
+                                            'reviewer' => $batch->reviewer?->name,
+                                            'reviewedAt' => $batch->reviewed_at?->format('M j, Y g:i A'),
+                                        ]) }})"
+                                        class="inline-flex items-center justify-center gap-2 rounded-full
+                                               border-[1.5px] border-hp-slate/30 px-4 py-1 text-xs font-semibold
+                                               text-hp-slate transition-colors duration-hp-fast hover:bg-hp-slate/10
+                                               focus-visible:outline-none focus-visible:ring-2
+                                               focus-visible:ring-hp-slate focus-visible:ring-offset-1">
+                                        View
+                                    </button>
+                                    <span class="inline-flex" x-show="! seen.includes({{ $batch->id }})">
+                                        <x-hp.notify-dot :show="$dots[$batch->id] ?? false" />
+                                    </span>
+                                </span>
                             @else
                                 <span class="text-hp-slate/50">&mdash;</span>
                             @endif

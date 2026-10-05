@@ -3,7 +3,7 @@
      stacked bar per flag; hovering a segment shows that sex's count.
      $loadOrder = this card's place in the page's load-up sequence (--i). --}}
 <x-hp.card class="hp-load-card" style="--i: {{ $loadOrder ?? 0 }}">
-    <h3 class="text-sm font-semibold text-hp-slate">Flagged Vitals by Sex</h3>
+    <h3 class="text-sm font-bold text-hp-slate">Flagged Vitals by Sex</h3>
     <p class="mt-1 text-xs text-hp-slate/50">
         This month's flagged readings, split by the student's profile sex. Follows both filters.
     </p>

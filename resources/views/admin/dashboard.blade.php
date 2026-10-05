@@ -87,7 +87,7 @@
     <div class="hp-stagger mb-6 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
 
         <x-hp.card>
-            <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+            <p class="hp-card-title">
                 Active Students
             </p>
             <p class="mt-3 text-3xl font-bold leading-none text-hp-slate" data-hp-countup>{{ $stats['students'] }}</p>
@@ -95,7 +95,7 @@
         </x-hp.card>
 
         <x-hp.card>
-            <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+            <p class="hp-card-title">
                 Total Batches
             </p>
             <p class="mt-3 text-3xl font-bold leading-none text-hp-slate" data-hp-countup>{{ $stats['batches'] }}</p>
@@ -103,7 +103,7 @@
         </x-hp.card>
 
         <x-hp.card>
-            <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+            <p class="hp-card-title">
                 Pending Approval
             </p>
             <p class="mt-3 text-3xl font-bold leading-none text-hp-slate" data-hp-countup>{{ $stats['pending'] }}</p>
@@ -111,7 +111,7 @@
         </x-hp.card>
 
         <x-hp.card>
-            <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+            <p class="hp-card-title">
                 Approved
             </p>
             <p class="mt-3 text-3xl font-bold leading-none text-hp-slate" data-hp-countup>{{ $stats['approved'] }}</p>
@@ -123,7 +123,7 @@
     {{-- ── Batch requests table (FR-ADM-01) ─────────────────────────────── --}}
     <x-hp.card>
         <div class="mb-4 flex items-center justify-between">
-            <h3 class="text-sm font-semibold text-hp-slate">Batch Requests</h3>
+            <h3 class="text-sm font-bold text-hp-slate">Batch Requests</h3>
         </div>
 
         @if ($batchRequests->isEmpty())

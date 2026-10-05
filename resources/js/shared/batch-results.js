@@ -13,7 +13,7 @@
  *   - "Select all" ticks every student currently shown.
  *   - "Clear" (shown once something is ticked) unticks everyone.
  *   - "Download documents (N)" posts the ticked visit ids (a normal form POST,
- *     so the browser downloads the ZIP).
+ *     so the browser downloads the PDF or ZIP).
  * `enabled` is false for a College Admin until the Director releases the
  * batch: the tools are drawn, greyed out, and do nothing.
  *

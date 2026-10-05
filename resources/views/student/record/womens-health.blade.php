@@ -46,7 +46,7 @@
 @endphp
 
 <x-hp.card>
-    <h3 class="text-sm font-semibold text-hp-slate">V. Menstrual History</h3>
+    <h3 class="text-sm font-bold text-hp-slate">V. Menstrual History</h3>
 
     <dl class="mt-3 grid gap-x-8 sm:grid-cols-2">
         @foreach ($menstrualRows as $key => [$label, $unit])
@@ -68,7 +68,7 @@
 </x-hp.card>
 
 <x-hp.card>
-    <h3 class="text-sm font-semibold text-hp-slate">VI. OB/Pregnancy History</h3>
+    <h3 class="text-sm font-bold text-hp-slate">VI. OB/Pregnancy History</h3>
 
     <div class="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-6">
         @foreach ($obCounts as $key => $label)

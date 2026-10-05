@@ -16,6 +16,8 @@ use ZipArchive;
  * D-113 — the selected students' official forms as ONE ZIP (Q15): one PDF per
  * student, named "{Batch ID}-{Surname}-{Student ID}.pdf" (D-114 — it was
  * "{Batch ID}-{Student No}-{Last name}.pdf"), inside "{Batch ID}-documents.zip".
+ * D-118: ONE selected student skips the ZIP — the browser gets that PDF itself,
+ * under the same name.
  *
  * Two routes, one rule (App\Services\BatchDocumentZip):
  *   - the College Admin's — only after the Director released the batch (403
@@ -121,19 +123,44 @@ class DocumentDownloadTest extends TestCase
         $visit = $this->visitOf($this->addStudent($batch, 'Fit'));
         $this->release($batch, 'approved');
 
-        $entries = $this->zipEntries($this->adminDownload($batch, [$visit->id])->assertOk());
+        // D-118: one student → the PDF itself, no ZIP.
+        $response = $this->adminDownload($batch, [$visit->id])
+            ->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf');
 
-        $this->assertCount(1, $entries);
-        $this->assertStringStartsWith('%PDF-', array_values($entries)[0]);
+        $this->assertStringStartsWith('%PDF-', $response->getContent());
+    }
+
+    public function test_one_student_downloads_as_a_pdf_and_two_as_a_zip(): void
+    {
+        $batch = $this->makeBatch();
+        $cruz = $this->visitOf($this->addStudent($batch, 'Fit', 'Ana Cruz'));
+        $reyes = $this->visitOf($this->addStudent($batch, 'Unfit', 'Ben Reyes'));
+        $this->release($batch, 'approved');
+
+        // D-118: one → that student's PDF, under its ZIP-entry name.
+        $this->adminDownload($batch, [$cruz->id])
+            ->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf')
+            ->assertDownload("{$batch->reference_no}-Cruz-{$cruz->student->studentProfile->student_number}.pdf");
+
+        // Two or more → one ZIP, as before.
+        $response = $this->adminDownload($batch, [$cruz->id, $reyes->id])
+            ->assertOk()
+            ->assertHeader('Content-Type', 'application/zip')
+            ->assertDownload($batch->reference_no.'-documents.zip');
+
+        $this->assertCount(2, $this->zipEntries($response));
     }
 
     public function test_the_temporary_zip_is_deleted_once_sent(): void
     {
-        $batch = $this->completedBatch(1);
-        $visit = $batch->appointments()->first()->clinicVisit;
+        // Two students: one alone is a plain PDF with no temporary file (D-118).
+        $batch = $this->completedBatch(2);
+        $visits = $batch->appointments()->get()->map(fn ($appointment) => $appointment->clinicVisit->id)->all();
         $this->release($batch, 'approved');
 
-        $response = $this->adminDownload($batch, [$visit->id])->assertOk();
+        $response = $this->adminDownload($batch, $visits)->assertOk();
         $path = $response->baseResponse->getFile()->getPathname();
 
         // It was written under storage/app/private/tmp …
@@ -219,14 +246,11 @@ class DocumentDownloadTest extends TestCase
 
         $this->assertSame(0, $batch->releaseRequests()->count());
 
-        $response = $this->directorDownload($batch, [$visit->id])
+        // D-118: one student → the PDF itself.
+        $this->directorDownload($batch, [$visit->id])
             ->assertOk()
-            ->assertDownload($batch->reference_no.'-documents.zip');
-
-        $this->assertSame(
-            ["{$batch->reference_no}-Santos-{$visit->student->studentProfile->student_number}.pdf"],
-            array_keys($this->zipEntries($response)),
-        );
+            ->assertHeader('Content-Type', 'application/pdf')
+            ->assertDownload("{$batch->reference_no}-Santos-{$visit->student->studentProfile->student_number}.pdf");
     }
 
     public function test_the_director_is_held_to_the_same_rule(): void

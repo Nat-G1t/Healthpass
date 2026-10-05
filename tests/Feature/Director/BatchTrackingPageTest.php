@@ -22,10 +22,10 @@ use Tests\TestCase;
  * The Director's Batch Tracking page (FR-DIRA-09, FR-DIRA-10, D-112).
  *
  * Since D-108 a decided batch leaves the Batch Approvals queue, so the
- * Director needs somewhere to find it again. Batch Tracking has two cards:
+ * Director needs somewhere to find it again. Batch Tracking has two tables:
  *   - Batch Results — every college's APPROVED batches, each with its D-111
  *     status and a View link to the same results page the college sees
- *   - Rejected batches — the ones the Director rejected PLUS the ones a
+ *   - Rejected and Cancelled batches (D-116) — the ones the Director rejected PLUS the ones a
  *     college cancelled (Q20), each with a View link to a details page that
  *     shows the request, its students and the written reason
  */
@@ -482,7 +482,7 @@ class BatchTrackingPageTest extends TestCase
         );
 
         $response->assertSeeInOrder([
-            'Rejected batches',
+            'Rejected and Cancelled batches',
             'Batch ID', 'College', 'Form Type', 'Purpose', 'Date scheduled', 'Status',
         ]);
         $response->assertSee(route('director.tracking.show', $rejected));
@@ -621,7 +621,11 @@ class BatchTrackingPageTest extends TestCase
     public function test_the_results_page_does_not_query_per_student(): void
     {
         $batch = $this->makeBatch('approved');
-        $this->addStudent($batch, 'Fit', 'Ana Cleared');
+        // Not Fit: a Completed batch is "settled" for the D-120 badge, which
+        // then skips working its status out — fewer queries for a reason that
+        // has nothing to do with the student count. Waiting keeps the batch
+        // Still in progress before AND after the students below are added.
+        $this->addStudent($batch, 'in_clinic', 'Ana Waiting');
         $url = route('director.tracking.results', $batch);
 
         $this->actingAs($this->director)->get($url);

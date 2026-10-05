@@ -496,6 +496,18 @@ class UpcomingBatchesTest extends TestCase
 
     // ── The ZIP ──────────────────────────────────────────────────────────────
 
+    public function test_one_selected_student_downloads_as_the_pdf_itself(): void
+    {
+        $batch = $this->makeBatch(college: $this->coe);
+        $cruz = $this->visitOf($this->addStudent($batch, 'Fit', 'Ana Cruz'));
+
+        // D-118: no ZIP around a single form.
+        $this->download($this->nurse, $batch, [$cruz->id])
+            ->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf')
+            ->assertDownload("{$batch->reference_no}-Cruz-{$cruz->student->studentProfile->student_number}.pdf");
+    }
+
     public function test_clinic_staff_get_one_pdf_per_selected_student(): void
     {
         $batch = $this->makeBatch(college: $this->coe);

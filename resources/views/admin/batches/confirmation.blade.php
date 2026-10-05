@@ -34,7 +34,7 @@
 
 {{-- ── Batch detail card (FR-ADM-04) ────────────────────────────────────────── --}}
 <x-hp.card class="mb-6">
-    <p class="mb-5 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+    <p class="mb-5 hp-card-title">
         Batch Details
     </p>
 
@@ -137,7 +137,7 @@
 
 {{-- ── Students on this batch (D-88) ────────────────────────────────────────── --}}
 <x-hp.card class="mb-6">
-    <p class="mb-5 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+    <p class="mb-5 hp-card-title">
         Students in this batch
     </p>
 

@@ -77,7 +77,7 @@
     {{-- ══ LEFT: Kiosk ID card ════════════════════════════════════════════════ --}}
     <x-hp.card class="h-fit">
         <div class="mb-5 flex items-center justify-between">
-            <h3 class="text-sm font-semibold text-hp-slate">Kiosk ID</h3>
+            <h3 class="text-sm font-bold text-hp-slate">Kiosk ID</h3>
             @if ($isLinked)
                 <x-hp.badge variant="positive">● Active</x-hp.badge>
             @else
@@ -244,7 +244,7 @@
     {{-- ══ RIGHT: Profile details ═════════════════════════════════════════════ --}}
     <x-hp.card class="h-fit">
         <div class="mb-5 flex items-center justify-between">
-            <h3 class="text-sm font-semibold text-hp-slate">Profile</h3>
+            <h3 class="text-sm font-bold text-hp-slate">Profile</h3>
             <x-hp.button variant="soft" size="sm" @click="editOpen = true">
                 Edit Profile
             </x-hp.button>
@@ -320,7 +320,7 @@
             <div class="sticky top-0 flex items-start justify-between gap-4 rounded-t-2xl
                         border-b border-hp-slate/10 bg-hp-white px-6 py-4">
                 <div>
-                    <h3 class="text-sm font-semibold text-hp-slate">Edit Profile</h3>
+                    <h3 class="text-sm font-bold text-hp-slate">Edit Profile</h3>
                     <p class="mt-0.5 text-xs text-hp-slate/50">
                         Student number and sex can't be changed here.
                     </p>

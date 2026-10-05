@@ -68,7 +68,7 @@
 
         {{-- ── Card 1: batch details (the admin's Request Submitted look) ── --}}
         <x-hp.card>
-            <p class="mb-5 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Batch Details</p>
+            <p class="mb-5 hp-card-title">Batch Details</p>
 
             <dl class="space-y-4">
                 <div class="flex items-start justify-between gap-4">
@@ -132,7 +132,7 @@
 
     {{-- ── Card 4: schedule ─────────────────────────────────────────────── --}}
     <x-hp.card class="mt-6">
-        <p class="mb-5 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Schedule</p>
+        <p class="mb-5 hp-card-title">Schedule</p>
 
         <div class="grid grid-cols-1 gap-8 lg:grid-cols-2">
 

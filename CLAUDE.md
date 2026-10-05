@@ -264,14 +264,16 @@ npm run dev                       # terminal 2
 
 ## Database
 
-12 tables, canonical in `HealthPass_Context.md` / PRD data dictionary:
+13 tables, canonical in `HealthPass_Context.md` / PRD data dictionary:
 `colleges`, `users`, `student_profiles`, `appointments`, `batch_requests`,
 `batch_request_students`, `clinic_visits`, `vital_signs`,
 `screening_responses`, `clearance_records`, `medical_assessments` (D-69 —
 the Medical Assessment Form's own sections, one row per ENCODED `assessment`
 visit, none for a Medical Clearance), `document_release_requests` (D-113 —
 a College Admin's request that the Director release a finished batch's
-documents; many per batch, at most one pending).
+documents; many per batch, at most one pending), `batch_seen` (D-120 —
+what a College Admin or the Director last saw of a batch, for the Batch
+Tracking notification dots; one row per viewer and batch).
 (`clearance_case_categories`, added as table #11 by D-23, was **removed by
 D-32** with the case-category concept. The `kiosk_devices` device-auth
 table, D-27, is a flagged extension tracked in the PRD data dictionary.)

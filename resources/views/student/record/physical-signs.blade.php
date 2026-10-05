@@ -17,7 +17,7 @@
 @endphp
 
 <x-hp.card>
-    <h3 class="text-sm font-semibold text-hp-slate">
+    <h3 class="text-sm font-bold text-hp-slate">
         {{ $showsClinicColumn ? 'Physical Signs' : 'Physical Signs Disorder of (Self Assessment)' }}
     </h3>
     <p class="mt-0.5 text-xs text-hp-slate/50">

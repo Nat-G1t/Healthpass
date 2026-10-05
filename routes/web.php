@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\DocumentReleaseController as AdminDocumentRelease
 use App\Http\Controllers\Admin\MonthlyReportController as AdminMonthlyReportController;
 use App\Http\Controllers\Admin\YearlyReportController as AdminYearlyReportController;
 use App\Http\Controllers\Auth\PasswordChangeController;
+use App\Http\Controllers\ClinicCalendarController;
 use App\Http\Controllers\Director\AnalyticsController as DirectorAnalyticsController;
 use App\Http\Controllers\Director\AnomaliesController as DirectorAnomaliesController;
 use App\Http\Controllers\Director\BatchApprovalController as DirectorBatchApprovalController;
@@ -161,6 +162,11 @@ Route::middleware(['auth', 'role:college_admin', 'college.scope'])
         // other batch 404s.
         Route::get('/batches/{batch}/results', [AdminBatchRequestController::class, 'results'])
             ->whereNumber('batch')->name('batches.results');
+        // D-120: a rejected request's reason popup was opened — clear its
+        // notification dot. Posted in the background (the popup never leaves
+        // the page); through managedCollege(), rejected only. Own bucket.
+        Route::post('/batches/{batch}/seen', [AdminBatchRequestController::class, 'markSeen'])
+            ->whereNumber('batch')->middleware('throttle:60,1,batch-seen')->name('batches.seen');
         // The batch's signed memo (D-109), shown inline in the browser. Found
         // through managedCollege(), so another college's batch 404s. Its own
         // throttle bucket (3rd arg), like every authed throttle here.
@@ -237,6 +243,13 @@ Route::middleware(['auth', 'role:nurse,physician'])
             ->whereNumber('batch')->name('batches.results');
         Route::post('/batches/{batch}/documents', [NurseBatchController::class, 'documents'])
             ->whereNumber('batch')->middleware('throttle:10,1,clinic-documents')->name('batches.documents');
+        // Clinic Calendar card (D-119): the read-only month + day feeds the
+        // Upcoming Batches page's calendar reads. The same controller serves
+        // the Director's Batch Tracking card; each group checks its own role.
+        Route::get('/clinic-calendar/month', [ClinicCalendarController::class, 'month'])
+            ->middleware('throttle:60,1,clinic-calendar-month')->name('calendar.month');
+        Route::get('/clinic-calendar/day', [ClinicCalendarController::class, 'day'])
+            ->middleware('throttle:60,1,clinic-calendar-day')->name('calendar.day');
         // Encode Result / "Doctor's Assessment" (FR-NRS-03). {visit} is
         // route-model-bound to ClinicVisit by the controller's type-hint —
         // Laravel looks the id up and 404s unknown ids before our code runs.
@@ -357,6 +370,12 @@ Route::middleware(['auth', 'role:director'])
         // locked. Each has its own throttle bucket.
         Route::post('/batch-tracking/{batch}/documents', [DirectorBatchTrackingController::class, 'documents'])
             ->whereNumber('batch')->middleware('throttle:10,1,director-documents')->name('tracking.documents');
+        // Clinic Calendar card (D-119) — the clinic's read-only feeds, routed
+        // here too so the Director's card answers under role:director.
+        Route::get('/clinic-calendar/month', [ClinicCalendarController::class, 'month'])
+            ->middleware('throttle:60,1,director-calendar-month')->name('calendar.month');
+        Route::get('/clinic-calendar/day', [ClinicCalendarController::class, 'day'])
+            ->middleware('throttle:60,1,director-calendar-day')->name('calendar.day');
         Route::get('/release-requests/{releaseRequest}/attachment', [DirectorDocumentReleaseController::class, 'attachment'])
             ->whereNumber('releaseRequest')->middleware('throttle:60,1,release-attachment')->name('release-requests.attachment');
         Route::post('/release-requests/{releaseRequest}/approve', [DirectorDocumentReleaseController::class, 'approve'])

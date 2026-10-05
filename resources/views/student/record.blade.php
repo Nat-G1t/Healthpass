@@ -102,7 +102,7 @@
          line, so an Assessment record has no such card. --}}
     @unless ($isAssessment)
     <x-hp.card>
-        <h3 class="text-sm font-semibold text-hp-slate">Student remarks</h3>
+        <h3 class="text-sm font-bold text-hp-slate">Student remarks</h3>
         <p class="mt-0.5 text-xs text-hp-slate/50">What prints under REMARKS on your Medical Clearance.</p>
         @if (filled($record->nurse_notes))
             <p class="mt-3 whitespace-pre-line text-sm text-hp-slate/70">{{ $record->nurse_notes }}</p>

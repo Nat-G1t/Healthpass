@@ -36,7 +36,7 @@
 <div class="hp-stagger mb-6 grid grid-cols-1 gap-5 sm:grid-cols-3" data-results-summary>
     @foreach ($cards as $card)
         <x-hp.card>
-            <p class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">{{ $card['label'] }}</p>
+            <p class="hp-card-title">{{ $card['label'] }}</p>
             <p class="mt-3 text-3xl font-bold leading-none text-hp-slate" data-hp-countup>{{ $card['value'] }}</p>
             <p class="mt-2 text-xs text-hp-slate/50">{{ $card['caption'] }}</p>
         </x-hp.card>

@@ -571,6 +571,35 @@ class ClinicScheduleService
         return $bySlot;
     }
 
+    /**
+     * D-119: the same seats as collegesBySlot(), one level finer — which
+     * BATCH holds them: slot => [{ref, college, count}], by Batch ID. A 2nd
+     * chance (D-110) carries its batch, so it is listed under that batch.
+     *
+     * @return array<string, list<array{ref: string, college: string, count: int}>>
+     */
+    public function batchesBySlot(string $date): array
+    {
+        $rows = Appointment::query()
+            ->join('batch_requests', 'batch_requests.id', '=', 'appointments.batch_request_id')
+            ->join('colleges', 'colleges.id', '=', 'batch_requests.college_id')
+            ->whereDate('appointments.scheduled_date', $date)
+            ->whereNotNull('appointments.scheduled_time')
+            ->where('appointments.status', '!=', 'cancelled')
+            ->select('appointments.scheduled_time', 'batch_requests.reference_no', 'colleges.code', DB::raw('COUNT(*) as cnt'))
+            ->groupBy('appointments.scheduled_time', 'batch_requests.reference_no', 'colleges.code')
+            ->orderBy('batch_requests.reference_no')
+            ->get();
+
+        $bySlot = [];
+
+        foreach ($rows as $row) {
+            $bySlot[$row->scheduled_time][] = ['ref' => $row->reference_no, 'college' => $row->code, 'count' => (int) $row->cnt];
+        }
+
+        return $bySlot;
+    }
+
     // ── Month calendar (BR-20) ───────────────────────────────────────────────
     // Moved here from the student booking controller by D-54. The College
     // Admin's mini calendar went with D-108; the Director's Review-page
