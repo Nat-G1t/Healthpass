@@ -1159,6 +1159,22 @@
 
 ### Changed
 
+* **The "Finished incomplete" batch status reads "Done / Incomplete"** (D-121,
+  amends FR-ADM-12 and FR-ADM-15; PRD revision 2.05, 2026-10-08). Asked for by
+  the Clinic Director. Label only — no schema change, no new package, no new
+  route.
+  * One label map, `resources/views/batches/results/_status.blade.php`, words
+    the status for every role: the College Admin's and the Director's Batch
+    Results cards and results pages, and the clinic's batch cards.
+  * The key `finished_incomplete` is unchanged: `resultsStatus()`,
+    `RELEASABLE_STATUSES` and `BatchNotifications::SETTLED` still use it, and
+    `batch_seen.seen_status` stores it (D-120), so no stored row is orphaned
+    and no false notification dot lights.
+  * Tests: new `tests/Feature/DoneIncompleteLabelTest.php` (all five pages
+    read "Done / Incomplete" and never "Finished incomplete"; the release
+    button is ready and its "Available when the batch is completed." hint
+    hidden); `BatchResultsTest` asserts the new label.
+
 * **The clinic sees every approved batch on an Upcoming Batches page, with
   per-student Print / PDF and batch downloads; every batch card filters by
   college; student PDFs are named Batch ID-surname-student ID** (D-114, adds

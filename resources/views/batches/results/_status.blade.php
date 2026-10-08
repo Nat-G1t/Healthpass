@@ -10,7 +10,7 @@
         'in_progress' => ['live', 'In progress'],
         'still_in_progress' => ['pending', 'Still in progress'],
         'completed' => ['approved', 'Completed'],
-        'finished_incomplete' => ['danger', 'Finished incomplete'],
+        'finished_incomplete' => ['danger', 'Done / Incomplete'], // D-121: label only, the key stays
         'no_one_attended' => ['rejected', 'No one attended'],
     };
 @endphp

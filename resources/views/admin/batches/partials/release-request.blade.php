@@ -14,7 +14,7 @@
       pending              the button, disabled — "… waiting for the Director."
       latest rejected      the Director's message + "Request again"
       not finished yet     the button, disabled — "Available when the batch
-                           is completed." (Completed or Finished incomplete)
+                           is completed." (Completed or Done / Incomplete)
       ready, never asked   the button → the popup
 
     The popup: a reason (10–500 characters, live counter) and ONE attached

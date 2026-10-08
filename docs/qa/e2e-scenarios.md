@@ -2060,7 +2060,7 @@ seed one. Never run `migrate:fresh`.
    clinic hour, **In progress** from that hour until 8:00 PM, **Still in
    progress** in the evening while a student waits for a 2nd chance or the
    clinic's encode, and **Completed** as soon as everyone is encoded. After a
-   2nd-chance day: **Finished incomplete** if someone missed it, **No one
+   2nd-chance day: **Done / Incomplete** if someone missed it, **No one
    attended** if nobody came on either day.
 
 **Part B — the page**

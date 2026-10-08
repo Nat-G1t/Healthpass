@@ -524,7 +524,7 @@ class BatchResultsTest extends TestCase
 
         $this->assertSame(['Dino Booked' => 'unattended', 'Ana Cleared' => 'completed'], $this->studentStatuses($batch));
         $this->assertSame('finished_incomplete', $this->statusOf($batch));
-        $this->tracking()->assertSee('Finished incomplete');
+        $this->tracking()->assertSee('Done / Incomplete');   // D-121's label for the key
     }
 
     public function test_a_second_chance_that_everyone_attends_completes_the_batch(): void
