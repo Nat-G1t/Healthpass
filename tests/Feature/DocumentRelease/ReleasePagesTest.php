@@ -55,7 +55,14 @@ class ReleasePagesTest extends TestCase
             // The batch is Completed and nobody asked yet: the request button works.
             ->assertSee('data-release-state="ready"', false)
             ->assertSee('Request release of documents')
-            ->assertSee('Send request');
+            ->assertSee('Send request')
+            // D-123: no attachment — a "printed copies" box, unticked.
+            ->assertDontSee('name="attachment"', false)
+            ->assertDontSee('multipart/form-data', false)
+            ->assertSee('The college needs printed copies of the forms')
+            ->assertSee('If the Director approves, the clinic is asked to print them.')
+            ->assertSee('name="wants_printed_copies"', false)
+            ->assertDontSee('name="wants_printed_copies" value="1" checked', false);
     }
 
     public function test_a_batch_that_is_not_finished_cannot_be_asked_for_yet(): void
@@ -79,8 +86,19 @@ class ReleasePagesTest extends TestCase
         $this->adminPage($batch->id)
             ->assertSee('data-release-state="pending"', false)
             ->assertSee('Release requested on Sep 11, 2026 — waiting for the Director.')
+            ->assertDontSee('Printed copies requested.')
             ->assertSee('data-document-tools="disabled"', false)
             ->assertDontSee('Send request');
+    }
+
+    public function test_a_pending_request_for_printed_copies_says_so(): void
+    {
+        $batch = $this->completedBatch();
+        $this->release($batch, 'pending', ['wants_printed_copies' => true]);
+
+        $this->adminPage($batch->id)
+            ->assertSee('waiting for the Director.')
+            ->assertSee('Printed copies requested.');
     }
 
     public function test_a_rejected_request_shows_the_message_and_request_again(): void
@@ -167,11 +185,12 @@ class ReleasePagesTest extends TestCase
             ->assertDontSee('data-release-review-dialog', false);
     }
 
-    public function test_the_review_popup_shows_who_asked_the_reason_and_the_attachment(): void
+    public function test_the_review_popup_shows_who_asked_the_reason_and_the_batch_memo(): void
     {
-        $batch = $this->completedBatch();
+        $batch = $this->withMemo($this->completedBatch());
         $release = $this->release($batch, 'pending', [
             'reason' => 'For the <i>OJT</i> partners.',
+            'wants_printed_copies' => true,
             'created_at' => Carbon::parse('2026-09-11 08:15:00'),
         ]);
 
@@ -183,27 +202,45 @@ class ReleasePagesTest extends TestCase
             // The college's words, escaped.
             ->assertSee('For the &lt;i&gt;OJT&lt;/i&gt; partners.', false)
             ->assertDontSee('<i>OJT</i>', false)
-            // The image attachment: a thumbnail opening the shared viewer.
-            ->assertSee('data-release-thumbnail', false)
-            ->assertSee('src="'.route('director.release-requests.attachment', $release).'"', false)
+            ->assertSee('Printed copies: Yes')
+            // D-123: the batch's signed memo — a thumbnail opening the shared viewer.
+            ->assertSee('data-release-memo-thumbnail', false)
+            ->assertSee('src="'.route('director.batches.memo', $batch).'"', false)
             ->assertSee('data-file-viewer', false)
+            ->assertDontSee(route('director.release-requests.attachment', $release))
             ->assertSee('action="'.route('director.release-requests.approve', $release).'"', false)
             ->assertSee('action="'.route('director.release-requests.reject', $release).'"', false)
             ->assertSee('Message to the college');
     }
 
-    public function test_a_pdf_attachment_shows_as_a_tile(): void
+    public function test_a_request_without_printed_copies_says_no(): void
     {
-        $batch = $this->completedBatch();
-        $this->release($batch, 'pending', [
-            'attachment_mime' => 'application/pdf',
-            'attachment_original_name' => 'Request memo.pdf',
-        ]);
+        $batch = $this->withMemo($this->completedBatch());
+        $this->release($batch);
+
+        $this->directorPage($batch->id)->assertSee('Printed copies: No');
+    }
+
+    public function test_a_pdf_memo_shows_as_a_tile(): void
+    {
+        $batch = $this->withMemo($this->completedBatch(), 'application/pdf', 'Request memo.pdf');
+        $this->release($batch);
 
         $this->directorPage($batch->id)
-            ->assertSee('data-release-pdf-tile', false)
-            ->assertDontSee('data-release-thumbnail', false)
+            ->assertSee('data-release-memo-pdf-tile', false)
+            ->assertDontSee('data-release-memo-thumbnail', false)
             ->assertSee('Request memo.pdf');
+    }
+
+    public function test_a_batch_without_a_memo_says_so(): void
+    {
+        $batch = $this->completedBatch();
+        $this->release($batch);
+
+        $this->directorPage($batch->id)
+            ->assertSee('No memo on file — submitted before memos were required.')
+            ->assertDontSee('data-release-memo-thumbnail', false)
+            ->assertDontSee('data-release-memo-pdf-tile', false);
     }
 
     public function test_the_history_lists_every_request_with_its_outcome(): void
@@ -216,6 +253,21 @@ class ReleasePagesTest extends TestCase
             ->assertSee('data-release-history', false)
             ->assertSeeInOrder(['Sep 11, 2026 · 7:00 AM', 'Rejected Sep 11, 2026', 'Sep 11, 2026 · 9:00 AM', 'Approved Sep 11, 2026'])
             ->assertSee('No release request from the college.');
+    }
+
+    public function test_the_history_marks_printed_copies_and_links_an_old_requests_attachment(): void
+    {
+        $batch = $this->completedBatch();
+        $old = $this->legacyRelease($batch, 'rejected', ['created_at' => Carbon::parse('2026-09-11 07:00:00')]);
+        $new = $this->release($batch, 'approved', [
+            'wants_printed_copies' => true,
+            'created_at' => Carbon::parse('2026-09-11 09:00:00'),
+        ]);
+
+        $this->directorPage($batch->id)
+            ->assertSeeInOrder(['Rejected Sep 11, 2026', 'attachment', 'Approved Sep 11, 2026', '· printed copies'])
+            ->assertSee('href="'.route('director.release-requests.attachment', $old).'"', false)
+            ->assertDontSee(route('director.release-requests.attachment', $new));
     }
 
     public function test_a_refused_rejection_reopens_the_popup_with_the_message(): void

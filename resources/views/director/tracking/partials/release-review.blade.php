@@ -6,18 +6,21 @@
       $batch          — the approved BatchRequest, with `releaseRequests`
                         (oldest first) and each one's `requester` loaded
       $pendingRelease — the request waiting for a decision, or null
-      $attachmentSize — its attachment's size label ("2.4 MB"), or null
+      $memoSize       — the batch's signed memo's size label ("2.4 MB"), or null
 
     The button is enabled only while a request is pending; it opens a popup
-    with who asked and when, the reason, the attachment (an image as a
-    thumbnail, a PDF as a tile — both open the shared full-screen viewer,
-    <x-hp.file-viewer>), and Approve / Reject. Reject reveals a required
-    message (10–500 characters, live counter) the college reads on its page.
-    Under the button, small: every request this batch has had, with its
-    outcome.
+    with who asked and when, the reason, whether the college wants printed
+    copies, the batch's SIGNED MEMO (D-123 — D-109's memo, in place of the old
+    attachment: an image as a thumbnail, a PDF as a tile — both open the shared
+    full-screen viewer, <x-hp.file-viewer>, like the Review page's memo card),
+    and Approve / Reject. Reject reveals a required message (10–500
+    characters, live counter) the college reads on its page. Under the button,
+    small: every request this batch has had, with its outcome — and, for a
+    request made before D-123, a link to the file it carried
+    (director.release-requests.attachment, the Director's route only).
 
-    The attachment loads from director.release-requests.attachment — the
-    Director's route only. Both decisions are re-checked under a lock.
+    The memo loads from director.batches.memo. Both decisions are re-checked
+    under a lock.
 --}}
 @php
     $messageMin = App\Http\Requests\Director\RejectReleaseRequest::MESSAGE_MIN;
@@ -64,6 +67,15 @@
                         <span>{{ $release->created_at->format('M j, Y · g:i A') }}</span>
                         <span>—</span>
                         <span class="font-semibold">{{ $outcome }}</span>
+                        @if ($release->wants_printed_copies)
+                            <span>· printed copies</span>
+                        @endif
+                        @if ($release->hasAttachment())
+                            {{-- A request from before D-123 still carries its file. --}}
+                            <span>·</span>
+                            <a href="{{ route('director.release-requests.attachment', $release) }}" target="_blank" rel="noopener"
+                               class="font-semibold text-hp-orange hover:underline" data-release-history-attachment>attachment</a>
+                        @endif
                     </li>
                 @endforeach
             </ul>
@@ -73,7 +85,7 @@
     @if ($pendingRelease !== null)
         {{-- ── The review popup ────────────────────────────────────────────
              Teleported to <body> so no ancestor's overflow clips it. Esc closes
-             it — unless the attachment viewer is open on top, which handles
+             it — unless the memo viewer is open on top, which handles
              (and stops) its own Esc. --}}
         <template x-teleport="body">
             <div x-show="reviewOpen" x-cloak @keydown.escape.window="reviewOpen = false"
@@ -111,37 +123,49 @@
                             <dd class="mt-0.5 whitespace-pre-line text-hp-slate" data-release-reason>{{ $pendingRelease->reason }}</dd>
                         </div>
                         <div>
-                            <dt class="mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Attachment</dt>
+                            <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Printed copies</dt>
+                            <dd class="mt-0.5 text-hp-slate" data-release-printed-copies>
+                                Printed copies: {{ $pendingRelease->wants_printed_copies ? 'Yes' : 'No' }}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="mb-1.5 text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Signed memo</dt>
                             <dd>
-                                @php
-                                    $attachmentUrl = route('director.release-requests.attachment', $pendingRelease);
-                                    $attachmentLabel = 'Release request attachment for '.$batch->reference_no;
-                                @endphp
-                                <x-hp.file-viewer :url="$attachmentUrl" :name="$pendingRelease->attachment_original_name"
-                                                  :is-image="$pendingRelease->attachmentIsImage()" :label="$attachmentLabel">
-                                    @if ($pendingRelease->attachmentIsImage())
-                                        <button type="button" @click="show()" data-release-thumbnail
-                                                class="group block w-full rounded-lg border border-hp-slate/15 bg-hp-bg p-3 text-left transition-colors hover:border-hp-orange/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-hp-orange">
-                                            <img src="{{ $attachmentUrl }}" alt="{{ $attachmentLabel }}" class="mx-auto max-h-48 w-auto rounded object-contain shadow-sm">
-                                            <span class="mt-2 flex items-center justify-between gap-3 text-xs">
-                                                <span class="min-w-0 truncate font-semibold text-hp-slate">{{ $pendingRelease->attachment_original_name }}</span>
-                                                <span class="shrink-0 font-semibold text-hp-orange group-hover:underline">View full screen</span>
-                                            </span>
-                                        </button>
-                                    @else
-                                        <button type="button" @click="show()" data-release-pdf-tile
-                                                class="group flex w-full items-center gap-4 rounded-lg border border-hp-slate/15 bg-hp-bg p-4 text-left transition-colors hover:border-hp-orange/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-hp-orange">
-                                            <svg class="h-10 w-10 shrink-0 text-hp-orange" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-                                                <path stroke-linecap="round" stroke-linejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-                                            </svg>
-                                            <span class="min-w-0 flex-1">
-                                                <span class="block truncate text-sm font-semibold text-hp-slate">{{ $pendingRelease->attachment_original_name }}</span>
-                                                <span class="block text-xs text-hp-slate/50">PDF{{ $attachmentSize !== null ? ' · '.$attachmentSize : '' }}</span>
-                                            </span>
-                                            <span class="shrink-0 text-xs font-semibold text-hp-orange group-hover:underline">Open</span>
-                                        </button>
-                                    @endif
-                                </x-hp.file-viewer>
+                                @if (! $batch->hasMemo())
+                                    <p class="rounded-lg bg-hp-bg px-3 py-2 text-sm text-hp-slate/70" data-release-memo-missing>
+                                        No memo on file — submitted before memos were required.
+                                    </p>
+                                @else
+                                    @php
+                                        $memoUrl = route('director.batches.memo', $batch);
+                                        $memoLabel = 'Signed memo for '.$batch->reference_no;
+                                    @endphp
+                                    <x-hp.file-viewer :url="$memoUrl" :name="$batch->memo_original_name"
+                                                      :is-image="$batch->memoIsImage()" :label="$memoLabel">
+                                        @if ($batch->memoIsImage())
+                                            <button type="button" @click="show()" data-release-memo-thumbnail
+                                                    class="group block w-full rounded-lg border border-hp-slate/15 bg-hp-bg p-3 text-left transition-colors hover:border-hp-orange/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-hp-orange">
+                                                <img src="{{ $memoUrl }}" alt="{{ $memoLabel }}" class="mx-auto max-h-48 w-auto rounded object-contain shadow-sm">
+                                                <span class="mt-2 flex items-center justify-between gap-3 text-xs">
+                                                    <span class="min-w-0 truncate font-semibold text-hp-slate">{{ $batch->memo_original_name }}</span>
+                                                    <span class="shrink-0 font-semibold text-hp-orange group-hover:underline">View full screen</span>
+                                                </span>
+                                            </button>
+                                        @else
+                                            <button type="button" @click="show()" data-release-memo-pdf-tile
+                                                    class="group flex w-full items-center gap-4 rounded-lg border border-hp-slate/15 bg-hp-bg p-4 text-left transition-colors hover:border-hp-orange/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-hp-orange">
+                                                <svg class="h-10 w-10 shrink-0 text-hp-orange" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                                                </svg>
+                                                <span class="min-w-0 flex-1">
+                                                    <span class="block truncate text-sm font-semibold text-hp-slate">{{ $batch->memo_original_name }}</span>
+                                                    <span class="block text-xs text-hp-slate/50">PDF{{ $memoSize !== null ? ' · '.$memoSize : '' }}</span>
+                                                </span>
+                                                <span class="shrink-0 text-xs font-semibold text-hp-orange group-hover:underline">Open</span>
+                                            </button>
+                                        @endif
+                                    </x-hp.file-viewer>
+                                @endif
                             </dd>
                         </div>
                     </dl>

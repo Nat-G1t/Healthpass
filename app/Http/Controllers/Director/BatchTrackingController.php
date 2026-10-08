@@ -11,7 +11,7 @@ use App\Services\BatchDocumentZip;
 use App\Support\BatchCardFilters;
 use App\Support\BatchNotifications;
 use App\Support\BatchResults;
-use App\Support\PrivateUpload;
+use App\Support\SignedMemo;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\Response;
@@ -98,7 +98,9 @@ class BatchTrackingController extends Controller
      *
      * D-113: the college's document release requests come along too, oldest
      * first — the pending one is what "Review request of documents" opens,
-     * and all of them are the small history under the button.
+     * and all of them are the small history under the button. D-123: the
+     * popup shows the batch's own signed memo (its columns are on $batch
+     * itself, so nothing more is loaded).
      */
     public function results(Request $request, BatchRequest $batch): View
     {
@@ -117,7 +119,8 @@ class BatchTrackingController extends Controller
             'batch' => $batch,
             'results' => BatchResults::page($batch),
             'pendingRelease' => $pendingRelease,
-            'attachmentSize' => PrivateUpload::sizeLabel($pendingRelease?->attachment_path),
+            // Only the review popup shows the memo.
+            'memoSize' => $pendingRelease !== null ? SignedMemo::sizeLabel($batch) : null,
         ]);
     }
 

@@ -17,9 +17,10 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  * D-113 — the Director reviews a college's request to release a batch's
  * documents (FR-DIRA-11), from the batch's results page:
  *
- *   attachment()  the file the college attached, shown inline — the Director
- *                 is the ONLY one who can open it (not even the college admin
- *                 who uploaded it gets a route back to it)
+ *   attachment()  the file the college attached to a request made BEFORE
+ *                 D-123, shown inline — the Director is the ONLY one who can
+ *                 open it (not even the college admin who uploaded it gets a
+ *                 route back to it). A newer request has none: 404.
  *   approve()     release the documents to that college, for that batch only;
  *                 the approval never expires
  *   reject()      with a written message the college reads on its page
@@ -33,6 +34,10 @@ class DocumentReleaseController extends Controller
 {
     public function attachment(DocumentReleaseRequest $releaseRequest): StreamedResponse
     {
+        // D-123: checked here, before the NULL name / type reach inline()'s
+        // string parameters.
+        abort_unless($releaseRequest->hasAttachment(), 404);
+
         return PrivateUpload::inline(
             $releaseRequest->attachment_path,
             $releaseRequest->attachment_original_name,

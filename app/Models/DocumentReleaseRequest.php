@@ -11,11 +11,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * D-113 — a College Admin asks the Director to release a finished batch's
  * official documents (table #12, `document_release_requests`).
  *
- * The admin writes a reason and attaches one file (a photo, image or PDF on
- * the private disk, like the D-109 memo). The Director approves it — the
- * college may then download its encoded students' forms — or rejects it with
- * a written message the college reads on the results page. A rejected batch
- * may be asked for again; an approval never expires.
+ * The admin writes a reason and may ask for printed copies of the forms
+ * (`wants_printed_copies`, D-123). The Director reviews it against the
+ * batch's own signed memo (D-109) — approves it, and the college may then
+ * download its encoded students' forms, or rejects it with a written message
+ * the college reads on the results page. A rejected batch may be asked for
+ * again; an approval never expires.
+ *
+ * The attachment_* columns are LEGACY (D-123): requests made before then
+ * carry one file on the private disk, which the Director can still open;
+ * newer requests leave them NULL.
  */
 class DocumentReleaseRequest extends Model
 {
@@ -23,6 +28,7 @@ class DocumentReleaseRequest extends Model
         'batch_request_id',
         'requested_by',
         'reason',
+        'wants_printed_copies',
         'attachment_path',
         'attachment_original_name',
         'attachment_mime',
@@ -36,6 +42,7 @@ class DocumentReleaseRequest extends Model
     {
         return [
             'reviewed_at' => 'datetime',
+            'wants_printed_copies' => 'boolean',
         ];
     }
 
@@ -44,11 +51,12 @@ class DocumentReleaseRequest extends Model
         return $this->status === 'pending';
     }
 
-    /** A photo / image (thumbnail + zoom) rather than a PDF? */
-    public function attachmentIsImage(): bool
+    /** D-123: only requests made before D-123 carry a file. */
+    public function hasAttachment(): bool
     {
-        return str_starts_with($this->attachment_mime, 'image/');
+        return $this->attachment_path !== null;
     }
+
 
     // ── Relationships ────────────────────────────────────────────────────────
 

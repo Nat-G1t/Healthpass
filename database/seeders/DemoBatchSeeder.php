@@ -157,17 +157,18 @@ class DemoBatchSeeder extends DemoClinicVisitSeeder
     {
         $directorSeen = [];
 
-        // 911 — Completed, documents released to CCS.
+        // 911 — Completed, documents released to CCS, printed copies asked for (D-123).
         $date = $this->day(-14);
         $batch = $this->approved('911', $this->ccs, 'clearance', 'fieldtrip', $date, '08:00:00', $this->ccsStudents->slice(0, 40));
         foreach ($this->seatsOf($batch) as $i => $seat) {
             $this->encodeVisit($seat, $batch, $i, $i % 10 === 9 ? 'Unfit' : 'Fit');
         }
-        $this->releaseRequest($batch, 'approved', $this->day(-10)->setTime(9, 30), $this->day(-9)->setTime(15, 0));
+        $this->releaseRequest($batch, 'approved', $this->day(-10)->setTime(9, 30), $this->day(-9)->setTime(15, 0), wantsPrintedCopies: true);
         $directorSeen[] = [$batch, $this->day(-9)->setTime(16, 0)];
 
         // 912 — Finished incomplete: 5 missed day 1, 3 of them came on their
-        // 2nd chance two days later, 2 missed that too. Release pending.
+        // 2nd chance two days later, 2 missed that too. Release pending, with
+        // printed copies (D-123).
         $date = $this->day(-9);
         $batch = $this->approved('912', $this->cit, 'assessment', 'ojt', $date, '08:00:00', $this->citStudents->slice(0, 60));
         $seats = $this->seatsOf($batch);
@@ -181,7 +182,7 @@ class DemoBatchSeeder extends DemoClinicVisitSeeder
                 $this->encodeVisit($second, $batch, 100 + $i, 'Fit');
             }
         }
-        $this->releaseRequest($batch, 'pending', $this->day(-1)->setTime(14, 10));
+        $this->releaseRequest($batch, 'pending', $this->day(-1)->setTime(14, 10), wantsPrintedCopies: true);
         $directorSeen[] = [$batch, $this->day(-6)->setTime(9, 0)];
 
         // 913 — No one attended: 5 missed, and missed their 2nd chance too.
@@ -200,7 +201,7 @@ class DemoBatchSeeder extends DemoClinicVisitSeeder
         $this->secondChances($batch, $seats->slice(37), $this->day(2), '08:00:00');
 
         // 915 — Completed; the college asked for the documents and was told
-        // to attach the dean's memo.
+        // its reason was not specific enough.
         $batch = $this->approved('915', $this->ccs, 'assessment', 'rle', $this->day(-5), '10:00:00', $this->ccsStudents->slice(45, 20));
         foreach ($this->seatsOf($batch) as $i => $seat) {
             $this->encodeVisit($seat, $batch, $i, $i === 4 ? 'Unfit' : 'Fit');
@@ -510,23 +511,22 @@ class DemoBatchSeeder extends DemoClinicVisitSeeder
         $seat->update(['status' => 'completed']);
     }
 
-    /** D-113: the college's request for the documents, decided or not. */
-    private function releaseRequest(BatchRequest $batch, string $status, Carbon $requestedAt, ?Carbon $decidedAt = null): void
+    /**
+     * D-113: the college's request for the documents, decided or not. D-123:
+     * no attachment (the Director reviews the batch's memo), and maybe a
+     * request for printed copies.
+     */
+    private function releaseRequest(BatchRequest $batch, string $status, Carbon $requestedAt, ?Carbon $decidedAt = null, bool $wantsPrintedCopies = false): void
     {
-        $path = "release-requests/demo-{$batch->reference_no}.pdf";
-        Storage::disk('local')->put($path, $this->pdf("Request for release of documents — {$batch->reference_no}"));
-
         $request = new DocumentReleaseRequest([
             'batch_request_id' => $batch->id,
             'requested_by' => $batch->requested_by,
             'reason' => 'The partner companies need each student\'s signed form before the deployment starts.',
-            'attachment_path' => $path,
-            'attachment_original_name' => 'dean-request-letter.pdf',
-            'attachment_mime' => 'application/pdf',
+            'wants_printed_copies' => $wantsPrintedCopies,
             'status' => $status,
             'reviewed_by' => $decidedAt === null ? null : $this->director->id,
             'reviewed_at' => $decidedAt,
-            'rejection_message' => $status === 'rejected' ? 'Please attach the request letter signed by the dean, not the program head.' : null,
+            'rejection_message' => $status === 'rejected' ? 'Please name the partner hospital and the RLE dates the forms are needed for.' : null,
         ]);
         $request->created_at = $requestedAt;
         $request->updated_at = $decidedAt ?? $requestedAt;
@@ -542,7 +542,7 @@ class DemoBatchSeeder extends DemoClinicVisitSeeder
         return ['memo_path' => $path, 'memo_original_name' => 'signed-memo.pdf', 'memo_mime' => 'application/pdf'];
     }
 
-    /** A one-page demo PDF, so the memo and attachment viewers have something real to open. */
+    /** A one-page demo PDF, so the memo viewer has something real to open. */
     private function pdf(string $title): string
     {
         return Pdf::loadHTML('<h2 style="font-family: sans-serif">'.e($title).'</h2>'

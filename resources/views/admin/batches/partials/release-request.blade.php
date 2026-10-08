@@ -12,16 +12,17 @@
       released             a note "Documents released by the Director on …";
                            the select / download tools in the card above work
       pending              the button, disabled — "… waiting for the Director."
+                           (+ " Printed copies requested." when ticked — D-123)
       latest rejected      the Director's message + "Request again"
       not finished yet     the button, disabled — "Available when the batch
                            is completed." (Completed or Done / Incomplete)
       ready, never asked   the button → the popup
 
-    The popup: a reason (10–500 characters, live counter) and ONE attached
-    file — a photo, image or PDF — through the shared <x-hp.file-capture>
-    (the D-109 memo's card). The Director alone can open the attachment.
-    Send stays disabled until both are there; StoreReleaseRequest and the
-    controller's locked checks are the real gate.
+    The popup (D-123): a reason (10–500 characters, live counter) and a
+    "printed copies" checkbox, unchecked by default. No attachment — the
+    Director reviews the batch's own signed memo (D-109). Send stays disabled
+    until the reason is valid; StoreReleaseRequest and the controller's locked
+    checks are the real gate.
 --}}
 @php
     $reasonMin = App\Http\Requests\Admin\StoreReleaseRequest::REASON_MIN;
@@ -29,14 +30,13 @@
     $isReady = in_array($status, App\Models\BatchRequest::RELEASABLE_STATUSES, true);
     $isPending = $latestRelease?->isPending() ?? false;
     $isRejected = $latestRelease?->status === 'rejected';
-    $hasFormErrors = $errors->hasAny(['reason', 'attachment']);
+    $hasFormErrors = $errors->hasAny(['reason', 'wants_printed_copies']);
 @endphp
 
 <section class="mt-6" data-release-section
          x-data="{
             requestOpen: {{ Illuminate\Support\Js::from($hasFormErrors && $isReady) }},
             reason: {{ Illuminate\Support\Js::from((string) old('reason', '')) }},
-            attached: false,
             sending: false,
             get reasonLength() { return this.reason.trim().length; },
             get reasonIsValid() { return this.reasonLength >= {{ $reasonMin }} && this.reasonLength <= {{ $reasonMax }}; },
@@ -53,6 +53,9 @@
         <x-hp.button size="xl" class="w-full" disabled data-release-state="pending">Request release of documents</x-hp.button>
         <p class="mt-2 text-center text-sm text-hp-slate/60">
             Release requested on {{ $latestRelease->created_at->format('M j, Y') }} — waiting for the Director.
+            @if ($latestRelease->wants_printed_copies)
+                Printed copies requested.
+            @endif
         </p>
     @else
         @if ($isRejected)
@@ -60,7 +63,7 @@
             <div class="mb-3 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700" data-release-rejected>
                 <p><span class="font-semibold">Not released:</span> <span class="whitespace-pre-line">{{ $latestRelease->rejection_message }}</span></p>
                 <p class="mt-1 text-xs text-red-600/80">
-                    Reviewed on {{ $latestRelease->reviewed_at?->format('M j, Y') }}. You can send a new request with a new reason and file.
+                    Reviewed on {{ $latestRelease->reviewed_at?->format('M j, Y') }}. You can send a new request with a new reason.
                 </p>
             </div>
         @endif
@@ -91,14 +94,13 @@
                          class="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-hp-white p-6 shadow-xl">
                         <h2 id="release-request-title" class="text-lg font-semibold text-hp-slate">Request release of documents</h2>
                         <p class="mt-1.5 text-sm text-hp-slate/70">
-                            Tell the Director why the college needs {{ $batch->reference_no }}’s official forms, and attach
-                            the signed request. Once the Director releases them, you can download the forms of the
-                            students the clinic has encoded.
+                            Tell the Director why the college needs {{ $batch->reference_no }}’s official forms. The Director
+                            reviews it with the signed memo you sent for this batch. Once the Director releases them, you
+                            can download the forms of the students the clinic has encoded.
                         </p>
 
                         <form method="POST" action="{{ route('admin.batches.release-requests.store', $batch->id) }}"
-                              enctype="multipart/form-data" @submit="sending = true"
-                              @file-capture-change="attached = $event.detail.attached" class="mt-5">
+                              @submit="sending = true" class="mt-5">
                             @csrf
 
                             <label for="release-reason" class="block text-xs font-semibold uppercase tracking-widest text-hp-slate/40">
@@ -116,12 +118,19 @@
                                 <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
                             @enderror
 
-                            <p class="mb-2 mt-5 block text-xs font-semibold uppercase tracking-widest text-hp-slate/40">Attachment</p>
-                            <x-hp.file-capture name="attachment" />
+                            {{-- D-123. text-hp-orange, not accent-*: @tailwindcss/forms paints a checked box with currentColor. --}}
+                            <label class="mt-5 flex items-start gap-3 text-sm text-hp-slate">
+                                <input type="checkbox" name="wants_printed_copies" value="1" @checked(old('wants_printed_copies'))
+                                       class="mt-0.5 rounded border-hp-slate/30 text-hp-orange focus:ring-hp-orange" data-release-printed-copies>
+                                <span>
+                                    <span class="font-semibold">The college needs printed copies of the forms</span>
+                                    <span class="mt-0.5 block text-xs text-hp-slate/60">If the Director approves, the clinic is asked to print them.</span>
+                                </span>
+                            </label>
 
                             <div class="mt-6 flex flex-wrap justify-end gap-3">
                                 <x-hp.button variant="muted" @click="requestOpen = false">Cancel</x-hp.button>
-                                <x-hp.button type="submit" x-bind:disabled="! reasonIsValid || ! attached || sending" data-release-send>
+                                <x-hp.button type="submit" x-bind:disabled="! reasonIsValid || sending" data-release-send>
                                     <span x-text="sending ? 'Sending…' : 'Send request'">Send request</span>
                                 </x-hp.button>
                             </div>

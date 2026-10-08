@@ -1159,6 +1159,37 @@
 
 ### Changed
 
+* **Release requests carry no attachment — the Director reviews the batch's
+  signed memo, and the college can ask for printed copies** (D-123, amends
+  D-113, FR-ADM-15, FR-DIRA-11 and §6.2; PRD revision 2.07, 2026-10-08).
+  Asked for by the Clinic Director. No new package, no new route.
+  * **FLAGGED SCHEMA CHANGE** — migration
+    `2026_10_08_000001_d123_release_requests_no_attachment_printed_copies`:
+    `document_release_requests.attachment_path`, `attachment_original_name`
+    and `attachment_mime` become **nullable** (older rows keep their files),
+    and new `wants_printed_copies` boolean, default false. Its `down()`
+    refuses while any row has no attachment.
+  * College Admin popup: the Take photo / Upload file block is gone; the
+    reason (10–500) stays and alone enables Send; new checkbox "The college
+    needs printed copies of the forms", unticked by default.
+    `StoreReleaseRequest` drops the attachment rule and adds
+    `wants_printed_copies` (`boolean`); a posted `attachment` is never stored.
+    The pending line adds "Printed copies requested."
+  * Director popup: the batch's signed memo (D-109, `director.batches.memo`,
+    `<x-hp.file-viewer>`) replaces the attachment, or "No memo on file —
+    submitted before memos were required."; plus "Printed copies: Yes / No".
+    The history adds "· printed copies" and links an older request's
+    attachment. `director.release-requests.attachment` now 404s for a request
+    without one instead of reaching `PrivateUpload::inline()` with NULLs.
+  * The clinic is not notified yet (D-125). `DemoBatchSeeder`'s release
+    requests have no attachment; BR-2026-911 (approved) and BR-2026-912
+    (pending) ask for printed copies.
+  * Tests: store without a file, with the box ticked, and with a stray
+    attachment (nothing written); memo thumbnail / PDF tile / no memo and the
+    copies line on the Director's popup; history marks; an old request's
+    attachment still opens, a new one 404s; new
+    `ReleaseRequestMigrationTest` (up on SQLite, `down()` refuses).
+
 * **The clinic screens 8 AM–4 PM in eight hourly slots, 160 a day** (D-122,
   overturns the hours and daily cap of D-37 / D-95; amends BR-01, BR-02,
   BR-20, BR-21, BR-22; PRD revision 2.06, 2026-10-08). Asked for by the

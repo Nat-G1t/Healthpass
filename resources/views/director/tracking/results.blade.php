@@ -48,7 +48,7 @@
 @include('director.tracking.partials.release-review', [
     'batch' => $batch,
     'pendingRelease' => $pendingRelease,
-    'attachmentSize' => $attachmentSize,
+    'memoSize' => $memoSize,
 ])
 
 </x-layout.sidebar>

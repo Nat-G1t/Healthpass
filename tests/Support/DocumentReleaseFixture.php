@@ -49,7 +49,7 @@ trait DocumentReleaseFixture
 
     private function setUpRelease(): void
     {
-        // Every attachment and every ZIP lands on a throwaway disk.
+        // Every memo, legacy attachment and ZIP lands on a throwaway disk.
         Storage::fake('local');
         // Nothing here should mail anyone; counted, never sent.
         Queue::fake();
@@ -223,28 +223,47 @@ trait DocumentReleaseFixture
         return $batch;
     }
 
-    /** A release request on $batch, with its attachment on the (fake) private disk. */
+    /** A release request on $batch as made since D-123 — no attachment. */
     private function release(BatchRequest $batch, string $status = 'pending', array $attributes = []): DocumentReleaseRequest
     {
-        static $seq = 1;
-        $path = 'release-requests/attachment-'.$seq++.'.png';
-        Storage::disk('local')->put($path, 'fake image bytes');
-
         $isDecided = $status !== 'pending';
 
         // forceCreate: a test may set created_at, which is not fillable.
         return $batch->releaseRequests()->forceCreate([
             'requested_by' => $this->admin->id,
             'reason' => 'The college needs the forms for the OJT partner companies.',
-            'attachment_path' => $path,
-            'attachment_original_name' => 'signed-request.png',
-            'attachment_mime' => 'image/png',
             'status' => $status,
             'reviewed_by' => $isDecided ? $this->director->id : null,
             'reviewed_at' => $isDecided ? now() : null,
             'rejection_message' => $status === 'rejected' ? 'Please attach the memo signed by the dean.' : null,
             ...$attributes,
         ]);
+    }
+
+    /** A request made BEFORE D-123, with its attachment on the (fake) private disk. */
+    private function legacyRelease(BatchRequest $batch, string $status = 'pending', array $attributes = []): DocumentReleaseRequest
+    {
+        static $seq = 1;
+        $path = 'release-requests/attachment-'.$seq++.'.png';
+        Storage::disk('local')->put($path, 'fake image bytes');
+
+        return $this->release($batch, $status, [
+            'attachment_path' => $path,
+            'attachment_original_name' => 'signed-request.png',
+            'attachment_mime' => 'image/png',
+            ...$attributes,
+        ]);
+    }
+
+    /** Give $batch its D-109 signed memo — an image unless told otherwise. */
+    private function withMemo(BatchRequest $batch, string $mime = 'image/png', string $name = 'signed-memo.png'): BatchRequest
+    {
+        $path = 'memos/memo-'.$batch->id.'.'.($mime === 'application/pdf' ? 'pdf' : 'png');
+        Storage::disk('local')->put($path, 'fake memo bytes');
+
+        $batch->update(['memo_path' => $path, 'memo_original_name' => $name, 'memo_mime' => $mime]);
+
+        return $batch;
     }
 
     /** The encoded visit behind a roster appointment. */

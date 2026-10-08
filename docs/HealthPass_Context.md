@@ -997,13 +997,17 @@ created_at, updated_at
 -- batch: a rejected request stays as history and the college may ask again,
 -- but at most ONE is pending at a time (checked under a lock on the batch
 -- row, not by the schema). Released = any request approved; never expires.
+-- D-123 (FLAGGED SCHEMA CHANGE): no attachment any more — the Director
+-- reviews the batch's own signed memo (D-109). The attachment_* columns are
+-- legacy (NULL on newer rows); wants_printed_copies is new.
 id                        bigint PK
 batch_request_id          bigint FK → batch_requests.id   -- cascade on delete
 requested_by              bigint FK → users.id            -- the College Admin who asked
 reason                    text                            -- 10–500 chars (Admin\StoreReleaseRequest)
-attachment_path           varchar(255)                    -- PRIVATE `local` disk, release-requests/<random name>
-attachment_original_name  varchar(255)                    -- shown; the browser's save-as name
-attachment_mime           varchar(255)                    -- detected by the SERVER at upload; the Director's route alone serves it
+wants_printed_copies      boolean NOT NULL DEFAULT false  -- D-123: "The college needs printed copies of the forms"; the clinic prints once approved
+attachment_path           varchar(255) NULL               -- legacy (pre-D-123 rows only): PRIVATE `local` disk, release-requests/<random name>
+attachment_original_name  varchar(255) NULL               -- legacy: shown; the browser's save-as name
+attachment_mime           varchar(255) NULL               -- legacy: detected by the SERVER at upload; the Director's route alone serves it
 status                    enum('pending','approved','rejected') DEFAULT 'pending'
 reviewed_by               bigint NULL FK → users.id       -- the Director
 reviewed_at               timestamp NULL

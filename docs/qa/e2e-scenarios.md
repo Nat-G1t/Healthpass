@@ -2207,7 +2207,7 @@ page separately; only the Director gets in.
 
 ---
 
-## E2E-36 — A college asks for its documents; the Director reviews; the forms download as a ZIP (D-113)
+## E2E-36 — A college asks for its documents; the Director reviews; the forms download as a ZIP (D-113, D-123)
 
 **Goal:** confirm that a College Admin can ask the Director to release a
 finished batch's documents, that the Director can reject (with a message) or
@@ -2216,34 +2216,34 @@ students' official forms as one ZIP — while before approval the tools are
 greyed out.
 
 **Accounts:** the CCS Admin `admin.ccs@healthpass.test`, the Director
-`director@healthpass.test` (passwords `password`). A **phone** (any camera
-phone) signed in as the CCS Admin for Part A.
+`director@healthpass.test` (passwords `password`).
 
-**Preconditions:** a CCS batch whose status is **Completed** or **Finished
-incomplete**, with **at least 3 encoded students** (Fit or Unfit) — and
-ideally one Unattended student, so you can see select mode hide them. Keep a
-sheet of paper to photograph (any "request letter"). Never run
-`migrate:fresh`.
+**Preconditions:** a CCS batch whose status is **Completed** or **Done /
+Incomplete**, with **at least 3 encoded students** (Fit or Unfit) — and
+ideally one Unattended student, so you can see select mode hide them. The
+batch should have a **signed memo** (every batch submitted since D-109 has
+one). Never run `migrate:fresh`.
 
 **Steps:**
 
-**Part A — before release, and the request (phone)**
+**Part A — before release, and the request**
 
 1. On a computer, sign in as the CCS Admin → **Batch Tracking** → **View** on
    the batch. → **Expect:** in the student card, **Select students**, **Select
    all** and **Download documents (0)** are shown but **greyed out**, with
    "Available after the Director releases the documents." Under the card, a
    large **Request release of documents** button.
-2. Open the same page on the **phone**. Tap **Request release of documents**.
-   → **Expect:** a popup with a **Reason** box (counter "0/500 — at least 10
-   characters") and **Take photo** / **Upload file**. **Send request** is
-   disabled.
+2. Click **Request release of documents**. → **Expect:** a popup with a
+   **Reason** box (counter "0/500 — at least 10 characters") and an
+   **unticked** box "The college needs printed copies of the forms" ("If the
+   Director approves, the clinic is asked to print them."). There is **no**
+   attachment, photo or upload (D-123). **Send request** is disabled.
 3. Type a reason (e.g. "Our OJT partner companies need the official forms.")
-   and tap **Take photo** — photograph the paper. → **Expect:** a thumbnail of
-   the photo with its name and size; **Send request** turns on.
-4. Tap **Send request**. → **Expect:** "Release requested — the Director will
+   and tick **The college needs printed copies of the forms**. → **Expect:**
+   **Send request** turns on as soon as the reason has 10 characters.
+4. Click **Send request**. → **Expect:** "Release requested — the Director will
    review it." The button is now greyed with "Release requested on {today} —
-   waiting for the Director."
+   waiting for the Director. Printed copies requested."
 
 **Part B — the Director rejects**
 
@@ -2255,27 +2255,32 @@ sheet of paper to photograph (any "request letter"). Never run
    already working, and a large **Review request of documents** button under
    the card ("CCS admin's name asked on {date}").
 7. Click **Review request of documents**. → **Expect:** a popup with who asked
-   and when, the reason, and the photo as a thumbnail.
-8. Click the thumbnail. → **Expect:** the photo full screen on a dark
-   background; **Zoom in** / **Zoom out** / **Reset** work; **X** (or Esc)
-   closes the viewer and leaves the popup open.
+   and when, the reason, **Printed copies: Yes**, and the batch's **signed
+   memo** (the same one as on its Review page) — a thumbnail for a photo, a
+   tile for a PDF. (A batch from before signed memos reads "No memo on file —
+   submitted before memos were required.")
+8. Click the memo. → **Expect:** it opens full screen on a dark background (a
+   photo can **Zoom in** / **Zoom out** / **Reset**; a PDF opens in the
+   browser's viewer); **X** (or Esc) closes the viewer and leaves the popup
+   open.
 9. Click **Reject**. → **Expect:** a **Message to the college** box with a
    counter; **Reject request** stays disabled under 10 characters. Type "Please
-   attach the memo signed by the dean." and click **Reject request**. →
+   name the partner companies the forms are for." and click **Reject request**. →
    **Expect:** "Request rejected — the college sees your message on its
    results page." The button is greyed again ("No release request from the
    college."), the badge is gone, and the history under it lists the request
-   as **Rejected**.
+   as **Rejected · printed copies**.
 
 **Part C — the college asks again; the Director approves**
 
 10. As the CCS Admin, reload the batch's results page. → **Expect:** a red
-    box "Not released: Please attach the memo signed by the dean." and a
-    **Request again** button.
-11. Click **Request again**, type a new reason and **Upload file** a PDF. Send
-    it. → **Expect:** "waiting for the Director" again.
-12. As the Director, open the batch → **Review request of documents** → the PDF
-    tile opens in the browser's PDF viewer; close it → **Approve**. →
+    box "Not released: Please name the partner companies the forms are for."
+    and a **Request again** button.
+11. Click **Request again**, type a new reason, leave the printed-copies box
+    **unticked**, and send it. → **Expect:** "waiting for the Director" again,
+    without "Printed copies requested."
+12. As the Director, open the batch → **Review request of documents** →
+    **Expect:** "Printed copies: No" and the same memo → **Approve**. →
     **Expect:** "Documents released — the college can now download its
     students' forms." The history lists **Rejected** then **Approved**.
 
@@ -2309,8 +2314,9 @@ sheet of paper to photograph (any "request letter"). Never run
 20. Sign in as a College Admin of **another** college and open
     `/admin/batches/{this batch's id}/results`. → **Expect:** **404**.
 
-**Pass criteria:** the request needs a reason and a file; the Director sees
-it (badge, tag, popup, zoomable attachment) and can reject with a message the
+**Pass criteria:** the request needs a reason and no file, and carries the
+printed-copies choice; the Director sees it (badge, tag, popup, the batch's
+signed memo, "Printed copies: Yes / No") and can reject with a message the
 college reads, then approve a new request; before approval the college's
 tools are greyed out and after it they download a ZIP with one official form
 per selected encoded student; the Director can always download.

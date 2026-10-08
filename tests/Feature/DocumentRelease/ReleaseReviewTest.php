@@ -6,7 +6,6 @@ namespace Tests\Feature\DocumentRelease;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -15,8 +14,9 @@ use Tests\TestCase;
 
 /**
  * D-113 (FR-DIRA-11) — the Director reviews a college's request to release a
- * batch's documents: opens the attached file (the Director ONLY), then
- * approves — the college may download, for good — or rejects with a written
+ * batch's documents (since D-123 against the batch's signed memo; a request
+ * from before then keeps its attached file, which the Director ONLY can
+ * open), then approves — the college may download, for good — or rejects with a written
  * message (10–500 characters) the college reads on its results page.
  *
  * Both decisions are terminal and re-read the request under a lock: a second
@@ -124,20 +124,19 @@ class ReleaseReviewTest extends TestCase
         $first = $this->release($batch);
 
         $this->actingAs($this->director)->post(route('director.release-requests.reject', $first), [
-            'rejection_message' => 'Please attach the memo <b>signed</b> by the dean.',
+            'rejection_message' => 'Please name the <b>partner</b> companies.',
         ]);
 
         // The admin sees the Director's words — escaped — and "Request again".
         $this->actingAs($this->admin)->get(route('admin.batches.results', $batch->id))
             ->assertOk()
             ->assertSee('Not released:')
-            ->assertSee('Please attach the memo &lt;b&gt;signed&lt;/b&gt; by the dean.', false)
-            ->assertDontSee('<b>signed</b>', false)
+            ->assertSee('Please name the &lt;b&gt;partner&lt;/b&gt; companies.', false)
+            ->assertDontSee('<b>partner</b>', false)
             ->assertSee('Request again');
 
         $this->actingAs($this->admin)->post(route('admin.batches.release-requests.store', $batch->id), [
-            'reason' => 'Re-sending with the dean-signed memo attached.',
-            'attachment' => UploadedFile::fake()->image('dean-memo.jpg'),
+            'reason' => 'For the OJT partners: Acme Corp and Beta Inc.',
         ])->assertSessionHas('status');
 
         $second = $batch->fresh()->latestReleaseRequest;
@@ -152,11 +151,11 @@ class ReleaseReviewTest extends TestCase
             ->assertDontSee('Not released:');
     }
 
-    // ── The attachment: the Director only ────────────────────────────────────
+    // ── A pre-D-123 request's attachment: the Director only ─────────────────
 
-    public function test_the_director_opens_the_attachment_inline(): void
+    public function test_the_director_opens_an_old_requests_attachment_inline(): void
     {
-        $release = $this->release($this->completedBatch());
+        $release = $this->legacyRelease($this->completedBatch());
 
         $response = $this->actingAs($this->director)
             ->get(route('director.release-requests.attachment', $release))
@@ -169,9 +168,18 @@ class ReleaseReviewTest extends TestCase
         $this->assertSame('fake image bytes', $response->streamedContent());
     }
 
-    public function test_nobody_else_can_open_the_attachment(): void
+    public function test_a_request_without_an_attachment_is_a_404(): void
     {
         $release = $this->release($this->completedBatch());
+
+        $this->actingAs($this->director)
+            ->get(route('director.release-requests.attachment', $release))
+            ->assertNotFound();
+    }
+
+    public function test_nobody_else_can_open_the_attachment(): void
+    {
+        $release = $this->legacyRelease($this->completedBatch());
         $url = route('director.release-requests.attachment', $release);
         $student = User::factory()->create(['role' => 'student']);
 
@@ -195,7 +203,7 @@ class ReleaseReviewTest extends TestCase
 
     public function test_a_missing_attachment_file_is_a_404(): void
     {
-        $release = $this->release($this->completedBatch());
+        $release = $this->legacyRelease($this->completedBatch());
         Storage::disk('local')->delete($release->attachment_path);
 
         $this->actingAs($this->director)

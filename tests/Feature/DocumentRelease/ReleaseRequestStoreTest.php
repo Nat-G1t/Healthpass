@@ -16,8 +16,9 @@ use Tests\TestCase;
 
 /**
  * D-113 (FR-ADM-15) — a College Admin asks the Director to release a finished
- * batch's documents: a reason (10–500 characters) and one attached photo,
- * image or PDF on the private disk.
+ * batch's documents: a reason (10–500 characters). D-123: no attachment any
+ * more (the Director reviews the batch's signed memo), and an optional
+ * "printed copies" tick.
  *
  * Only a batch whose students are all final may be asked for — Completed or
  * Finished incomplete — and only one request may wait at a time; once
@@ -45,7 +46,6 @@ class ReleaseRequestStoreTest extends TestCase
     {
         return [
             'reason' => 'Our OJT partners need the official forms before deployment.',
-            'attachment' => UploadedFile::fake()->image('signed-request.png', 600, 800),
             ...$overrides,
         ];
     }
@@ -64,13 +64,39 @@ class ReleaseRequestStoreTest extends TestCase
         $this->assertSame($this->admin->id, $release->requested_by);
         $this->assertSame('pending', $release->status);
         $this->assertSame('Our OJT partners need the official forms before deployment.', $release->reason);
-        $this->assertSame('signed-request.png', $release->attachment_original_name);
-        $this->assertSame('image/png', $release->attachment_mime);
         $this->assertNull($release->reviewed_by);
 
-        // On the PRIVATE disk, under release-requests/ — never public/.
-        $this->assertStringStartsWith('release-requests/', $release->attachment_path);
-        Storage::disk('local')->assertExists($release->attachment_path);
+        // D-123: no file, and the box left unticked means no printed copies.
+        $this->assertFalse($release->hasAttachment());
+        $this->assertFalse($release->wants_printed_copies);
+    }
+
+    public function test_ticking_printed_copies_is_stored(): void
+    {
+        $batch = $this->completedBatch();
+
+        $this->actingAs($this->admin)
+            ->post($this->storeUrl($batch->id), $this->payload(['wants_printed_copies' => '1']))
+            ->assertSessionHasNoErrors();
+
+        $this->assertTrue(DocumentReleaseRequest::sole()->wants_printed_copies);
+    }
+
+    public function test_a_posted_attachment_is_ignored_and_never_stored(): void
+    {
+        $batch = $this->completedBatch();
+
+        $this->actingAs($this->admin)
+            ->post($this->storeUrl($batch->id), $this->payload([
+                'attachment' => UploadedFile::fake()->image('signed-request.png', 600, 800),
+            ]))
+            ->assertSessionHasNoErrors();
+
+        $release = DocumentReleaseRequest::sole();
+        $this->assertNull($release->attachment_path);
+        $this->assertNull($release->attachment_original_name);
+        $this->assertNull($release->attachment_mime);
+        $this->assertSame([], Storage::disk('local')->allFiles());
     }
 
     public function test_a_finished_incomplete_batch_can_be_asked_for_too(): void
@@ -85,17 +111,6 @@ class ReleaseRequestStoreTest extends TestCase
             ->assertSessionHas('status');
 
         $this->assertSame(1, DocumentReleaseRequest::count());
-    }
-
-    public function test_a_pdf_attachment_is_accepted(): void
-    {
-        $batch = $this->completedBatch();
-
-        $this->actingAs($this->admin)->post($this->storeUrl($batch->id), $this->payload([
-            'attachment' => UploadedFile::fake()->create('Request memo.pdf', 300, 'application/pdf'),
-        ]))->assertSessionHasNoErrors();
-
-        $this->assertSame('application/pdf', DocumentReleaseRequest::sole()->attachment_mime);
     }
 
     public function test_a_batch_still_in_its_clinic_day_cannot_be_asked_for(): void
@@ -113,8 +128,6 @@ class ReleaseRequestStoreTest extends TestCase
             ->assertSessionHas('error', 'Documents can be requested once the batch is completed.');
 
         $this->assertSame(0, DocumentReleaseRequest::count());
-        // The refused request's file was removed again.
-        $this->assertSame([], Storage::disk('local')->allFiles('release-requests'));
     }
 
     public function test_a_batch_no_one_attended_cannot_be_asked_for(): void
@@ -140,7 +153,6 @@ class ReleaseRequestStoreTest extends TestCase
             ->assertSessionHas('error', 'A release request for this batch is already waiting for the Director.');
 
         $this->assertSame(1, DocumentReleaseRequest::count());
-        $this->assertCount(1, Storage::disk('local')->allFiles('release-requests'));
     }
 
     public function test_a_released_batch_cannot_be_asked_for_again(): void
@@ -178,13 +190,13 @@ class ReleaseRequestStoreTest extends TestCase
         }
 
         $this->assertSame(0, DocumentReleaseRequest::count());
-        $this->assertSame([], Storage::disk('local')->allFiles('release-requests'));
     }
 
     public function test_the_reason_is_required_and_between_10_and_500_characters(): void
     {
         $batch = $this->completedBatch();
 
+        // 'Too short' is 9 characters.
         foreach (['', 'Too short', Str::repeat('a', 501)] as $reason) {
             $this->actingAs($this->admin)
                 ->post($this->storeUrl($batch->id), $this->payload(['reason' => $reason]))
@@ -199,32 +211,15 @@ class ReleaseRequestStoreTest extends TestCase
         $this->assertSame(1, DocumentReleaseRequest::count());
     }
 
-    public function test_the_attachment_is_required_and_must_be_a_small_jpg_png_or_pdf(): void
+    public function test_printed_copies_must_be_a_yes_or_no(): void
     {
         $batch = $this->completedBatch();
 
         $this->actingAs($this->admin)
-            ->post($this->storeUrl($batch->id), ['reason' => 'Our OJT partners need the forms.'])
-            ->assertSessionHasErrors(['attachment' => 'Please attach a photo or PDF for the Director.']);
-
-        // A real text file renamed .pdf: `mimes` reads the content, not the name.
-        $renamed = tempnam(sys_get_temp_dir(), 'hp');
-        file_put_contents($renamed, 'just some text, not a PDF');
-        $this->actingAs($this->admin)
-            ->post($this->storeUrl($batch->id), $this->payload([
-                'attachment' => new UploadedFile($renamed, 'memo.pdf', 'application/pdf', null, true),
-            ]))
-            ->assertSessionHasErrors(['attachment' => 'The file must be a JPG, PNG or PDF.']);
-        @unlink($renamed);
-
-        $this->actingAs($this->admin)
-            ->post($this->storeUrl($batch->id), $this->payload([
-                'attachment' => UploadedFile::fake()->create('huge.pdf', 5121, 'application/pdf'),
-            ]))
-            ->assertSessionHasErrors(['attachment' => 'The file must be 5 MB or smaller.']);
+            ->post($this->storeUrl($batch->id), $this->payload(['wants_printed_copies' => 'please']))
+            ->assertSessionHasErrors('wants_printed_copies');
 
         $this->assertSame(0, DocumentReleaseRequest::count());
-        $this->assertSame([], Storage::disk('local')->allFiles('release-requests'));
     }
 
     public function test_other_roles_cannot_request_a_release(): void

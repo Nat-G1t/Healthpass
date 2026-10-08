@@ -10,21 +10,17 @@ use App\Http\Requests\Admin\StoreReleaseRequest;
 use App\Models\BatchRequest;
 use App\Services\BatchDocumentZip;
 use App\Support\BatchResults;
-use App\Support\PrivateUpload;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\Response;
-use Throwable;
 
 /**
  * D-113 — a College Admin's side of the document release, on the batch's
  * results page (FR-ADM-15):
  *
- *   store()     ask the Director to release the batch's documents — a reason
- *               and one attached photo / image / PDF
+ *   store()     ask the Director to release the batch's documents — a reason,
+ *               and whether the college needs printed copies (D-123)
  *   download()  once the Director has approved, the selected encoded
  *               students' official forms (one PDF, or a ZIP for two or more — D-118)
  *
@@ -37,10 +33,8 @@ class DocumentReleaseController extends Controller
     use ScopedToManagedCollege;
 
     /**
-     * The attachment is saved to the private disk FIRST — a file can't be
-     * part of a database transaction — and deleted again if the request is
-     * refused or the transaction fails, so no orphan file is left behind (the
-     * D-109 memo's pattern).
+     * D-123: no attachment — the Director reviews the batch's own signed memo
+     * (D-109). The college may ask for printed copies of the forms.
      *
      * The rules are checked on the LOCKED batch row, so two clicks (or two
      * admins of the same college) can't both create a pending request.
@@ -48,56 +42,35 @@ class DocumentReleaseController extends Controller
     public function store(StoreReleaseRequest $request, int $batchId): RedirectResponse
     {
         $batch = $this->approvedBatch($batchId);
-        $file = $request->file('attachment');
-        $path = $file->store('release-requests', 'local');
 
-        if ($path === false) {
-            Log::error('D-113: a release attachment could not be written to storage/app/private/release-requests.', [
-                'batch_request_id' => $batch->id,
-                'user_id' => $request->user()->id,
+        // null = created, otherwise why it was refused.
+        $refusal = DB::transaction(function () use ($request, $batch): ?string {
+            $locked = BatchRequest::whereKey($batch->id)->lockForUpdate()->firstOrFail();
+
+            if ($locked->releaseRequests()->where('status', 'approved')->exists()) {
+                return 'The Director has already released this batch’s documents.';
+            }
+
+            if ($locked->releaseRequests()->where('status', 'pending')->exists()) {
+                return 'A release request for this batch is already waiting for the Director.';
+            }
+
+            if (! $locked->load(BatchResults::statusRelations())->isReadyForRelease()) {
+                return 'Documents can be requested once the batch is completed.';
+            }
+
+            $locked->releaseRequests()->create([
+                'requested_by' => $request->user()->id,
+                'reason' => $request->validated('reason'),
+                // An unticked checkbox sends nothing — that means no.
+                'wants_printed_copies' => $request->boolean('wants_printed_copies'),
+                'status' => 'pending',
             ]);
 
-            return back()->withInput()->withErrors(['attachment' => 'The attachment could not be saved. Please try again.']);
-        }
-
-        try {
-            // null = created, otherwise why it was refused.
-            $refusal = DB::transaction(function () use ($request, $batch, $file, $path): ?string {
-                $locked = BatchRequest::whereKey($batch->id)->lockForUpdate()->firstOrFail();
-
-                if ($locked->releaseRequests()->where('status', 'approved')->exists()) {
-                    return 'The Director has already released this batch’s documents.';
-                }
-
-                if ($locked->releaseRequests()->where('status', 'pending')->exists()) {
-                    return 'A release request for this batch is already waiting for the Director.';
-                }
-
-                if (! $locked->load(BatchResults::statusRelations())->isReadyForRelease()) {
-                    return 'Documents can be requested once the batch is completed.';
-                }
-
-                $locked->releaseRequests()->create([
-                    'requested_by' => $request->user()->id,
-                    'reason' => $request->validated('reason'),
-                    'attachment_path' => $path,
-                    'attachment_original_name' => PrivateUpload::displayName($file->getClientOriginalName(), 'attachment'),
-                    // The type the SERVER detected from the content — never the browser's claim.
-                    'attachment_mime' => $file->getMimeType(),
-                    'status' => 'pending',
-                ]);
-
-                return null;
-            });
-        } catch (Throwable $e) {
-            Storage::disk('local')->delete($path);
-
-            throw $e;
-        }
+            return null;
+        });
 
         if ($refusal !== null) {
-            Storage::disk('local')->delete($path);
-
             return redirect()->route('admin.batches.results', $batch->id)->with('error', $refusal);
         }
 
