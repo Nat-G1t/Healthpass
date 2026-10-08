@@ -150,6 +150,7 @@ class ClinicCalendarTest extends TestCase
         $this->actingAs($this->nurse)->get(route('director.calendar.month', $month))->assertRedirect();
     }
 
+    /** D-125: the clinic's Past card moved to Batch Results, so there the calendar follows Upcoming. */
     public function test_the_card_sits_between_the_two_tables_on_both_pages(): void
     {
         $this->actingAs($this->director)->get(route('director.tracking.index'))
@@ -159,7 +160,8 @@ class ClinicCalendarTest extends TestCase
 
         $this->actingAs($this->nurse)->get(route('nurse.batches.index'))
             ->assertOk()
-            ->assertSeeInOrder(['>Upcoming<', 'Clinic Calendar', '>Past<'], false)
+            ->assertSeeInOrder(['>Upcoming<', 'Clinic Calendar'], false)
+            ->assertDontSee('>Past<', false)
             ->assertSee('data-clinic-calendar', false);
     }
 }

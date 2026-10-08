@@ -2337,12 +2337,14 @@ review button, and both Batch Results cards tag the batch **Approved Release**
 
 ---
 
-## E2E-37 — The clinic prints one student's form from a batch and downloads a ZIP of three (D-114)
+## E2E-37 — The clinic prints one student's form from a batch and downloads a ZIP of three (D-114, D-125)
 
-**Goal:** confirm that the nurse and the physician see every approved batch on
-**Upcoming Batches** (upcoming first), and that from a batch's results page
-they can print or save one student's official form and download several as
-one ZIP — with no release request.
+**Goal:** confirm that the nurse and the physician see the upcoming approved
+batches on **Upcoming Batches** and the finished ones on **Batch Results**,
+and that from a released batch's results page they can print or save one
+student's official form and download several as one ZIP. (D-125: the clinic
+prints only once the Director has released the batch — E2E-38 covers the
+printed-copies request.)
 
 **Accounts:** the nurse `nurse@healthpass.test`, the physician
 `physician@healthpass.test` (passwords `password`), and the CCS Admin
@@ -2352,8 +2354,9 @@ one ZIP — with no release request.
 later**, and one approved batch whose clinic day is **over** with **at least 3
 encoded students** (Fit or Unfit) — ideally one **Medical Assessment Form**
 batch and one **Medical Clearance** batch like that. Ideally also a past batch
-with a student on a **2nd-chance day** today or later (E2E-33). No release
-request is needed on any of them. Paper in the printer. Never run
+with a student on a **2nd-chance day** today or later (E2E-33). **The two
+over batches must be released** — the Director approved a release request for
+each (E2E-36). Paper in the printer. Never run
 `migrate:fresh`.
 
 **Steps:**
@@ -2362,24 +2365,26 @@ request is needed on any of them. Paper in the printer. Never run
 
 1. Sign in as the nurse. → **Expect:** **Upcoming Batches** in the sidebar,
    right under **Live Queue**, with a calendar icon. Click it.
-2. → **Expect:** two cards. **Upcoming** lists the batches with a clinic day
-   today or later, the soonest at the top; **Past** lists the others, newest
-   first. Columns: Batch ID · College · Form Type · Purpose · Date scheduled ·
-   Status · View. Only approved batches — no pending, rejected or cancelled
-   one.
+2. → **Expect:** one **Upcoming** card — the batches with a clinic day today
+   or later, the soonest at the top — and the **Clinic Calendar** under it; no
+   Past card (D-125 moved it). Columns: Batch ID · College · Form Type ·
+   Purpose · Date scheduled · Status · View. Only approved batches — no
+   pending, rejected or cancelled one. Then click **Batch Results** (right
+   under Upcoming Batches) → **Expect:** one **Completed batches** card with
+   the others, newest first, same columns.
 3. If you have the 2nd-chance batch: → **Expect:** it is in **Upcoming**, and
    under its first date a line "2nd chance: {date, time}".
-4. Each card has its **own** filter bar. In the **Past** card, type a Batch ID
-   in **Search Batch ID** → **Search**. → **Expect:** only that batch in Past;
-   the Upcoming card is unchanged. Then pick a college in the **Upcoming**
-   card's **All colleges** dropdown. → **Expect:** the page reloads at once,
-   Upcoming shows only that college, and Past still shows your search. Click
-   **Clear** in each card → each resets only itself.
+4. On **Completed batches**, type a Batch ID in **Search Batch ID** →
+   **Search**. → **Expect:** only that batch. Then pick a college in the
+   **All colleges** dropdown on **Upcoming Batches**. → **Expect:** the page
+   reloads at once and Upcoming shows only that college. **Clear** resets
+   each.
 
 **Part B — print one student**
 
-5. Click **View** on the past **Medical Assessment Form** batch. → **Expect:**
-   the same results page the college and the Director see (summary cards,
+5. On **Batch Results**, click **View** on the released **Medical Assessment
+   Form** batch. → **Expect:** the back link reads **← Batch Results**; the
+   same results page the college and the Director see (summary cards,
    filters, student table), **no** "Request release" or "Review request"
    button, and a **Document** column: **Print front**, **Print back** and
    **PDF** on every Fit / Unfit row, "—" on the others.
@@ -2400,7 +2405,7 @@ request is needed on any of them. Paper in the printer. Never run
 
 **Part C — a ZIP of three**
 
-10. Click **Select students** (it works straight away — nothing is greyed),
+10. Click **Select students** (the batch is released, so nothing is greyed),
     tick exactly **3** students, click **Download documents (3)**. →
     **Expect:** "Preparing…", then **BR-…-documents.zip** downloads. Open it →
     exactly **3 PDFs**, named **BR-…-{surname}-{student ID}.pdf**.
@@ -2413,12 +2418,86 @@ request is needed on any of them. Paper in the printer. Never run
 12. Sign in as the physician and repeat steps 1, 5, 6 and 10. → **Expect:** the
     same page and the same results.
 
-**Pass criteria:** both clinic roles reach Upcoming Batches from the sidebar;
-the cards list approved batches only, upcoming first, and each card filters by
-college and Batch ID on its own; Print opens the print dialog on the page like
-the encode screen — front and back separately for a Medical Assessment Form;
-PDF and every ZIP entry are named Batch ID-surname-student ID; no release
-request is involved, and the college's page is unchanged.
+**Pass criteria:** both clinic roles reach Upcoming Batches and Batch Results
+from the sidebar; the cards list approved batches only — upcoming first on one
+page, completed newest-first on the other — and each filters by college and
+Batch ID; Print opens the print dialog on the page like the encode screen —
+front and back separately for a Medical Assessment Form; PDF and every ZIP
+entry are named Batch ID-surname-student ID; the clinic's download does not
+release anything to the college.
+
+---
+
+## E2E-38 — The college asks for printed copies; the clinic sees Print Requested, prints, and marks them done (D-125)
+
+**Goal:** confirm the whole printed-copies loop: the college ticks "printed
+copies" on its release request, the Director approves, the nurse sees a dot
+and **Print Requested** on **Batch Results**, prints the forms (which only
+works after the approval), and presses **Mark as printed** — after which the
+row reads **Printed**. The physician keeps their own dot.
+
+**Accounts:** the CCS Admin `admin.ccs@healthpass.test`, the Director
+`director@healthpass.test`, the nurse `nurse@healthpass.test`, the physician
+`physician@healthpass.test` (passwords `password`).
+
+**Preconditions:** a CCS batch whose status is **Completed** or **Done /
+Incomplete**, with **at least 2 encoded students**, and **no release request
+yet**. Paper in the printer. Never run `migrate:fresh`.
+
+**Steps:**
+
+**Part A — before the approval, the clinic cannot print**
+
+1. Sign in as the nurse → **Batch Results** (sidebar, right under Upcoming
+   Batches; no number badge on it). → **Expect:** the batch in **Completed
+   batches**, with **no** tag under its Batch ID and **no** dot.
+2. Click **View**. → **Expect:** the back link reads **← Batch Results**; no
+   printed-copies banner; every row's **Print** / **PDF** and **Select
+   students** / **Select all** / **Download documents** are **greyed out**,
+   with "Available once the Director releases this batch's documents."
+3. Open a student's encode page from the **Clinic Dashboard** (View). →
+   **Expect:** Reprint (or Print front / back) and **Save as PDF** are greyed
+   out with the same sentence.
+
+**Part B — the request and the approval**
+
+4. Sign in as the CCS Admin → **Batch Tracking** → **View** on the batch →
+   **Request release of documents**. Type a reason, tick **The college needs
+   printed copies of the forms**, send it.
+5. Sign in as the Director → **Batch Tracking** → **View** on the batch →
+   **Review request of documents** → **Approve**. → **Expect:** "Documents
+   released on {today}. Printed copies requested."
+
+**Part C — the clinic sees it**
+
+6. Sign in as the nurse → **Batch Results**. → **Expect:** under the Batch ID
+   an orange **Print Requested** tag, and an orange **dot** after **View**.
+7. Click **View**. → **Expect:** at the top, a highlighted note: "The college
+   asked for printed copies — approved by the Director on {today}." with a
+   **Mark as printed** button. The row **Print** / **PDF** and the download
+   tools now work.
+8. Print each student's form with the row **Print** (front, then back, on a
+   Medical Assessment Form).
+9. Go back to **Batch Results**. → **Expect:** the dot is gone; **Print
+   Requested** is still there (it only goes when marked).
+10. Sign in as the physician → **Batch Results**. → **Expect:** the physician
+    still sees the dot (each person has their own). Sign back in as the nurse.
+
+**Part D — Mark as printed**
+
+11. **View** the batch → **Mark as printed**. → **Expect:** "Are all the
+    copies printed?" with **Yes, mark as printed** and **Cancel**. Click
+    **Cancel** → nothing changes. Click **Mark as printed** → **Yes, mark as
+    printed**. → **Expect:** "Printed copies marked done." and the note now
+    reads "Printed copies marked done by {nurse's name} on {today}." — no
+    button.
+12. Back on **Batch Results**. → **Expect:** the tag reads a grey **Printed**.
+
+**Pass criteria:** before the approval the clinic cannot print or download the
+batch (buttons greyed, the server refuses); after it, the nurse and the
+physician each get a dot that clears when they open the batch, Print Requested
+shows until Mark as printed, Mark as printed asks first and records who and
+when, and the tag then reads Printed. No email is sent to the clinic.
 
 ---
 

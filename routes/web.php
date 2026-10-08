@@ -233,16 +233,23 @@ Route::middleware(['auth', 'role:nurse,physician'])
         // guard as the page — it exposes the same captured-visit rows.
         Route::get('/queue/feed', [NurseQueueController::class, 'feed'])->name('queue.feed');
         // Upcoming Batches (FR-NRS-12, D-114): every college's approved
-        // batches, upcoming first. View opens a batch's results page (the
-        // D-111 body) with Print / PDF on each encoded student's row and the
-        // D-113 select & download, always on — the clinic already holds the
-        // full records. The ZIP route has its own throttle bucket (3rd arg):
-        // an authed throttle keys on the user id with no path.
+        // batches with a clinic day from today. Batch Results (FR-NRS-13,
+        // D-125): the rest — the "Completed batches" card, with the Print
+        // Requested tag and a row dot. ("batch-results", not "batches.results":
+        // that name is one batch's page.) View opens a batch's results page
+        // (the D-111 body) with Print / PDF on each encoded student's row and
+        // the D-113 select & download — both only once the Director has
+        // released the batch (D-125). The ZIP and Mark as printed routes have
+        // their own throttle buckets (3rd arg): an authed throttle keys on the
+        // user id with no path.
         Route::get('/batches', [NurseBatchController::class, 'index'])->name('batches.index');
+        Route::get('/batch-results', [NurseBatchController::class, 'completed'])->name('batch-results');
         Route::get('/batches/{batch}', [NurseBatchController::class, 'results'])
             ->whereNumber('batch')->name('batches.results');
         Route::post('/batches/{batch}/documents', [NurseBatchController::class, 'documents'])
             ->whereNumber('batch')->middleware('throttle:10,1,clinic-documents')->name('batches.documents');
+        Route::post('/batches/{batch}/copies-printed', [NurseBatchController::class, 'copiesPrinted'])
+            ->whereNumber('batch')->middleware('throttle:10,1,clinic-copies-printed')->name('batches.copies-printed');
         // Clinic Calendar card (D-119): the read-only month + day feeds the
         // Upcoming Batches page's calendar reads. The same controller serves
         // the Director's Batch Tracking card; each group checks its own role.

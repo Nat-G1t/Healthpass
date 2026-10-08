@@ -12,6 +12,7 @@ use App\Models\MedicalAssessment;
 use App\Support\AssessmentDocument;
 use App\Support\VisitDocument;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Arr;
@@ -48,12 +49,19 @@ use Illuminate\View\View;
  *
  * Either way the view data is built in ONE place, so the printed page and the
  * saved PDF cannot disagree about a single field.
+ *
+ * D-125 (O2): show, reprint and pdf print an ENCODED form, so they work only
+ * once the Director has released the visit's batch
+ * (ClinicVisit::isReleasedForPrint()); refused, a JSON caller gets a 403 and
+ * a page goes back with a plain message. The pre-save preview is not gated —
+ * nothing is encoded yet.
  */
 class PrintClearanceController extends Controller
 {
     public function show(Request $request, ClinicVisit $visit): View
     {
         abort_unless($visit->status === 'encoded', 404);
+        $this->ensureReleased($request, $visit);
 
         return $this->render($visit, side: $this->side($request));
     }
@@ -123,6 +131,7 @@ class PrintClearanceController extends Controller
     public function reprint(Request $request, ClinicVisit $visit): View
     {
         abort_unless($visit->status === 'encoded', 404);
+        $this->ensureReleased($request, $visit);
 
         $view = $this->render($visit, side: $this->side($request));
 
@@ -145,13 +154,32 @@ class PrintClearanceController extends Controller
      * No `printed_at` stamp: FR-NRS-05's column records when the document was
      * PRINTED, and saving a copy is a different act.
      */
-    public function pdf(ClinicVisit $visit): Response
+    public function pdf(Request $request, ClinicVisit $visit): Response
     {
         abort_unless($visit->status === 'encoded', 404);
+        $this->ensureReleased($request, $visit);
 
         return Pdf::loadView(VisitDocument::template($visit), VisitDocument::data($visit))
             ->setPaper(VisitDocument::paper($visit))
             ->download(VisitDocument::filename($visit));
+    }
+
+    /**
+     * D-125 — stop here unless the visit's batch is released. An
+     * HttpResponseException ends the request with the response it carries:
+     * a 403 for a JSON caller, else back to the page with the message (a
+     * Reprint posted into the hidden print frame lands that page in the frame,
+     * which never prints a page without data-hp-print-doc).
+     */
+    private function ensureReleased(Request $request, ClinicVisit $visit): void
+    {
+        if ($visit->isReleasedForPrint()) {
+            return;
+        }
+
+        throw new HttpResponseException($request->expectsJson()
+            ? response()->json(['message' => ClinicVisit::NOT_RELEASED_HINT], 403)
+            : redirect()->back(fallback: route('nurse.dashboard'))->with('error', ClinicVisit::NOT_RELEASED_HINT));
     }
 
     /** Render the official document for the browser's print frame. */

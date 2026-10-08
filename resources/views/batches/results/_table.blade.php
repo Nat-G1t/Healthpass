@@ -13,7 +13,9 @@
                    Left out, the card has no tools at all.
       $rowDocuments — optional (D-114, the clinic's page only):
                    ['twoSided' => is this batch's form the two-page Medical
-                    Assessment Form]
+                    Assessment Form,
+                    'enabled' => may the buttons be used now (D-125: only
+                    once the Director has released the batch; default true)]
                    A fifth column, Document, on every encoded row: Print
                    (Print front + Print back when two-sided) and PDF — the
                    encode page's own buttons. Print POSTs to the row's
@@ -23,6 +25,8 @@
                    partials.print-frame. PDF is the row's `pdf_url`. Both are
                    null on a row with no document. The College Admin's and the
                    Director's pages leave it out, so their table is unchanged.
+                   Not enabled, the buttons are drawn disabled (and the PDF
+                   as plain text) — $documents' hint says why.
 
     The whole roster is on the page, so filtering happens in the browser: the
     `batchResults` Alpine component (resources/js/shared/batch-results.js)
@@ -62,6 +66,7 @@
 
     $rowDocuments ??= null;
     $hasRowDocuments = $rowDocuments !== null;
+    $rowDocumentsEnabled = $rowDocuments['enabled'] ?? true;
     // D-71: the Medical Assessment Form is two pages and clinic printers
     // rarely duplex, so it prints one side at a time, as on the encode page.
     $printButtons = ($rowDocuments['twoSided'] ?? false)
@@ -191,6 +196,7 @@
                                  PDF downloads, so this page stays put and
                                  data-no-progress keeps the top progress bar still. --}}
                             <x-hp.table-cell label="Document">
+                                @if ($rowDocumentsEnabled)
                                 <form x-show="row.visit_id !== null" method="POST" :action="row.print_url"
                                       target="hp-print-frame" class="inline-flex flex-wrap items-center justify-end gap-2 md:justify-start"
                                       data-row-documents>
@@ -204,6 +210,20 @@
                                     <a :href="row.pdf_url" class="whitespace-nowrap {{ $rowLink }}" data-no-progress
                                        :aria-label="'Download the PDF of ' + row.name" data-row-pdf>PDF</a>
                                 </form>
+                                @else
+                                {{-- D-125: not released yet — the same pills, greyed
+                                     out and inert (no form, no link). --}}
+                                <span x-show="row.visit_id !== null"
+                                      class="inline-flex flex-wrap items-center justify-end gap-2 md:justify-start"
+                                      title="{{ $documents['hint'] ?? '' }}" data-disabled-row-documents>
+                                    @foreach ($printButtons as $side => $label)
+                                        <button type="button" disabled class="cursor-not-allowed whitespace-nowrap opacity-40 {{ $rowLink }}"
+                                                data-disabled-row-print>{{ $label }}</button>
+                                    @endforeach
+                                    <span class="cursor-not-allowed whitespace-nowrap opacity-40 {{ $rowLink }}" aria-disabled="true"
+                                          data-disabled-row-pdf>PDF</span>
+                                </span>
+                                @endif
                                 <span x-show="row.visit_id === null" class="text-hp-slate/50">&mdash;</span>
                             </x-hp.table-cell>
                         @endif

@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Models\VitalSigns;
 use App\Support\ClearanceDocument;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\ReleasesForPrint;
 use Tests\TestCase;
 
 /**
@@ -29,6 +30,7 @@ use Tests\TestCase;
 class PrintViewTest extends TestCase
 {
     use RefreshDatabase;
+    use ReleasesForPrint;
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -125,6 +127,8 @@ class PrintViewTest extends TestCase
         ], $overrides));
 
         $visit->update(['status' => 'encoded']);
+        // D-125: printing follows the release — these tests are about what prints.
+        $this->releaseForPrint($visit);
 
         return $record;
     }

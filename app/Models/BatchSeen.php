@@ -7,8 +7,10 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * D-120 — what one viewer (a College Admin or the Director) last saw of one
- * batch (table #13, `batch_seen`): the status they were shown and when.
+ * D-120 — what one viewer (a College Admin or the Director — and, since
+ * D-125, a nurse or physician) last saw of one batch (table #13,
+ * `batch_seen`): the status they were shown and when. The clinic's dot reads
+ * only `seen_at`.
  * Written and read only by App\Support\BatchNotifications.
  */
 class BatchSeen extends Model

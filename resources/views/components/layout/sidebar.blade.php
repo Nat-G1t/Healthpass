@@ -36,6 +36,9 @@
             // FR-NRS-12 (D-114): every college's approved batches, upcoming
             // first — a calendar, since the list is ordered by clinic day.
             ['Upcoming Batches',  'nurse.batches.index', 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z'],
+            // FR-NRS-13 (D-125): the completed batches, with Print Requested
+            // and row dots (no count badge — O4) — a checklist clipboard.
+            ['Batch Results',     'nurse.batch-results', 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01'],
             // FR-NRS-06 (D-27): device-enrollment page, not a raw kiosk link — the
             // terminal is trusted by an enrolled DEVICE token, not by being open.
             ['Enable Kiosk Mode', 'nurse.kiosk-devices', 'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2h-2'],

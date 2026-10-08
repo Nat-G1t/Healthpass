@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Models\VitalSigns;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Support\ReleasesForPrint;
 use Tests\TestCase;
 
 /**
@@ -26,6 +27,7 @@ use Tests\TestCase;
 class ClearancePdfTest extends TestCase
 {
     use RefreshDatabase;
+    use ReleasesForPrint;
 
     private function college(): College
     {
@@ -123,6 +125,8 @@ class ClearancePdfTest extends TestCase
         ]);
 
         $visit->update(['status' => 'encoded']);
+        // D-125: printing follows the release — these tests are about what prints.
+        $this->releaseForPrint($visit);
 
         return $record;
     }
@@ -140,8 +144,11 @@ class ClearancePdfTest extends TestCase
             ->assertOk()
             ->assertHeader('content-type', 'application/pdf');
 
+        // D-125: only a released batch's visit prints, so the file carries the
+        // batch naming (D-114) — {Batch ID}-{Surname}-{Student ID}.pdf.
+        $batch = $visit->fresh()->appointment->batchRequest;
         $this->assertStringContainsString(
-            'attachment; filename=HP-2026-T900-medical-clearance.pdf',
+            "attachment; filename={$batch->reference_no}-Cruz-2023-000111.pdf",
             (string) $response->headers->get('content-disposition')
         );
         $this->assertStringStartsWith('%PDF-', $response->getContent());

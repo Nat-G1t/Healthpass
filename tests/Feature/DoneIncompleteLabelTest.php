@@ -60,7 +60,8 @@ class DoneIncompleteLabelTest extends TestCase
 
     public function test_the_clinics_batch_card_reads_done_incomplete(): void
     {
-        $this->assertReadsDoneIncomplete($this->actingAs($this->nurse)->get(route('nurse.batches.index')));
+        // D-125: a finished batch sits on the clinic's Batch Results page.
+        $this->assertReadsDoneIncomplete($this->actingAs($this->nurse)->get(route('nurse.batch-results')));
     }
 
     public function test_the_release_request_is_open_and_its_not_ready_hint_is_hidden(): void

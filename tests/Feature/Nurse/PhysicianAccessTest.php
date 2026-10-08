@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Models\VitalSigns;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Tests\Support\ReleasesForPrint;
 use Tests\TestCase;
 
 /**
@@ -22,6 +23,7 @@ use Tests\TestCase;
 class PhysicianAccessTest extends TestCase
 {
     use RefreshDatabase;
+    use ReleasesForPrint;
 
     private function college(): College
     {
@@ -92,6 +94,8 @@ class PhysicianAccessTest extends TestCase
             'encoded_at' => now(),
         ]);
         $visit->update(['status' => 'encoded']);
+        // D-125: printing follows the release — these tests are about what prints.
+        $this->releaseForPrint($visit);
     }
 
     // ── Landing + access ─────────────────────────────────────────────────────
@@ -125,6 +129,8 @@ class PhysicianAccessTest extends TestCase
         $this->getJson(route('nurse.queue.feed'))->assertOk();
         $this->get(route('nurse.visits.encode', $captured))->assertOk()->assertSee('Student remarks');
         $this->get(route('nurse.visits.print', $encoded))->assertOk();
+        $this->get(route('nurse.batches.index'))->assertOk();
+        $this->get(route('nurse.batch-results'))->assertOk();
         $this->get(route('nurse.kiosk-devices'))->assertOk();
     }
 

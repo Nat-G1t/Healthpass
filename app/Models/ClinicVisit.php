@@ -14,6 +14,9 @@ class ClinicVisit extends Model
 {
     use HasFactory;
 
+    /** D-125: shown wherever the clinic's print / download is refused or disabled. */
+    public const NOT_RELEASED_HINT = 'Available once the Director releases this batch’s documents.';
+
     protected $fillable = [
         'reference_no',
         'student_id',
@@ -243,6 +246,24 @@ class ClinicVisit extends Model
     public function studentRemarks(): string
     {
         return $this->screeningResponse?->detailsAsNotes() ?? '';
+    }
+
+    // ── D-125 printing gate ──────────────────────────────────────────────────
+
+    /**
+     * D-125 (O2) — may the clinic print or download this visit's official
+     * form? Only once the Director has approved a release of its batch's
+     * documents (any approved request, BatchRequest::hasReleasedDocuments()).
+     * A legacy visit with no batch behind it (pre-D-61) is never released.
+     *
+     * The ONE rule every clinic print path asks: the batch results page's
+     * buttons, the read-only encode page, and the print / reprint / PDF
+     * routes. Prompt 07 adds its exception (the physician printing a form
+     * they encoded today) here.
+     */
+    public function isReleasedForPrint(): bool
+    {
+        return $this->appointment?->batchRequest?->hasReleasedDocuments() ?? false;
     }
 
     // ── Relationships ────────────────────────────────────────────────────────

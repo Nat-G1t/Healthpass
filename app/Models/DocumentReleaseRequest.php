@@ -21,6 +21,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * The attachment_* columns are LEGACY (D-123): requests made before then
  * carry one file on the private disk, which the Director can still open;
  * newer requests leave them NULL.
+ *
+ * D-125: once an approved request that asked for printed copies is printed,
+ * the clinic presses Mark as printed — `copies_printed_at` / `_by`.
  */
 class DocumentReleaseRequest extends Model
 {
@@ -36,6 +39,8 @@ class DocumentReleaseRequest extends Model
         'reviewed_by',
         'reviewed_at',
         'rejection_message',
+        'copies_printed_at',
+        'copies_printed_by',
     ];
 
     protected function casts(): array
@@ -43,6 +48,7 @@ class DocumentReleaseRequest extends Model
         return [
             'reviewed_at' => 'datetime',
             'wants_printed_copies' => 'boolean',
+            'copies_printed_at' => 'datetime',
         ];
     }
 
@@ -57,6 +63,14 @@ class DocumentReleaseRequest extends Model
         return $this->attachment_path !== null;
     }
 
+    /**
+     * D-125: does this request ask the clinic for printed copies — approved,
+     * copies wanted? (Whether they are done yet is `copies_printed_at`.)
+     */
+    public function asksClinicToPrint(): bool
+    {
+        return $this->status === 'approved' && $this->wants_printed_copies;
+    }
 
     // ── Relationships ────────────────────────────────────────────────────────
 
@@ -76,5 +90,11 @@ class DocumentReleaseRequest extends Model
     public function reviewer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reviewed_by');
+    }
+
+    /** D-125: the nurse or physician who pressed Mark as printed (null until then). */
+    public function copiesPrinter(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'copies_printed_by');
     }
 }

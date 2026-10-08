@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Models\VitalSigns;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Support\EncodePayload;
+use Tests\Support\ReleasesForPrint;
 use Tests\TestCase;
 
 /**
@@ -28,6 +29,7 @@ use Tests\TestCase;
 class PrintFlowTest extends TestCase
 {
     use RefreshDatabase;
+    use ReleasesForPrint;
 
     // ── Helpers (same shape as PrintViewTest) ────────────────────────────────
 
@@ -118,6 +120,8 @@ class PrintFlowTest extends TestCase
         ], $overrides));
 
         $visit->update(['status' => 'encoded']);
+        // D-125: printing follows the release — these tests are about what prints.
+        $this->releaseForPrint($visit);
 
         return $record;
     }
@@ -259,6 +263,7 @@ class PrintFlowTest extends TestCase
             ->assertRedirect(route('nurse.queue'));
 
         // …and the printed form carries it under REMARKS.
+        $this->releaseForPrint($visit);   // D-125: printing follows the release
         $html = $this->actingAs($nurse)
             ->get(route('nurse.visits.print', $visit))
             ->assertOk()

@@ -17,7 +17,8 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * D-120 — the notification DOTS on Batch Tracking rows, and the number on the
- * Batch Tracking sidebar badge, for the College Admin and the Director.
+ * Batch Tracking sidebar badge, for the College Admin and the Director. D-125
+ * adds the clinic's dots (nurse and physician) on its Completed batches card.
  *
  * A dot is a small circle at the end of a row whose batch has news the viewer
  * has not opened yet. It goes away when they click that row's View button,
@@ -35,6 +36,12 @@ use Illuminate\Support\Facades\DB;
  *     - Batch Results row: the status changed, or the college asked for the
  *       batch's documents
  *     - Rejected and Cancelled row: a college cancelled the batch
+ *   Clinic staff (D-125) — per user, so the nurse and the physician each
+ *   have their own
+ *     - Completed batches row: the Director approved a release request that
+ *       asks for PRINTED COPIES since this user last opened the batch (or
+ *       they never have). Nothing else makes a clinic dot, and the clinic
+ *       has no badge (count() is 0 — O4).
  *
  * The badge = the viewer's dots (+ the admin's approvals since they last
  * opened the page — NavBadges' "since last seen" stamp). An approved batch
@@ -141,11 +148,15 @@ final class BatchNotifications
      * One row's dot. $status works the approved batch's status out only when
      * it is needed — it is the expensive part.
      *
-     * @param  array{requested: ?Carbon, decided: ?Carbon}|null  $release
+     * @param  array{requested: ?Carbon, decided: ?Carbon, copies_approved: ?Carbon}|null  $release
      * @param  Closure(): string  $status
      */
     private static function hasDot(User $user, BatchRequest $batch, ?BatchSeen $seen, ?array $release, Closure $status): bool
     {
+        if ($user->isClinicStaff()) {
+            return self::hasPrintRequestNews($batch, $seen, $release);
+        }
+
         return match ($batch->status) {
             'approved' => self::hasReleaseNews($user, $batch, $seen, $release)
                 || $status() !== ($seen->seen_status ?? self::APPROVED_STATUS),
@@ -168,6 +179,21 @@ final class BatchNotifications
         $since = $seen?->seen_at ?? $batch->reviewed_at;
 
         return $news !== null && ($since === null || $news->gt($since));
+    }
+
+    /**
+     * D-125 — the clinic's only news: a printed-copies release approved after
+     * this user last opened the batch, or one they have never opened.
+     *
+     * @param  array{requested: ?Carbon, decided: ?Carbon, copies_approved: ?Carbon}|null  $release
+     */
+    private static function hasPrintRequestNews(BatchRequest $batch, ?BatchSeen $seen, ?array $release): bool
+    {
+        $approvedAt = $release['copies_approved'] ?? null;
+
+        return $batch->status === 'approved'
+            && $approvedAt !== null
+            && ($seen === null || $approvedAt->gt($seen->seen_at));
     }
 
     /**
@@ -252,22 +278,28 @@ final class BatchNotifications
     }
 
     /**
-     * Each batch's latest release request and latest decision on one, from ONE
-     * grouped query (MAX() is the same in MySQL and SQLite).
+     * Each batch's latest release request, latest decision on one, and (D-125)
+     * when a printed-copies request was approved — from ONE grouped query.
+     * MAX() and CASE WHEN are the same in MySQL and SQLite; the values are
+     * bound, and a boolean is stored as 1 in both.
      *
      * @param  list<int>  $batchIds
-     * @return Collection<int, array{requested: ?Carbon, decided: ?Carbon}>  keyed by batch id
+     * @return Collection<int, array{requested: ?Carbon, decided: ?Carbon, copies_approved: ?Carbon}>  keyed by batch id
      */
     private static function releaseTimes(array $batchIds): Collection
     {
+        $time = fn (?string $value): ?Carbon => $value !== null ? Carbon::parse($value) : null;
+
         return DocumentReleaseRequest::query()
             ->whereIn('batch_request_id', $batchIds)
             ->groupBy('batch_request_id')
             ->select('batch_request_id', DB::raw('MAX(created_at) as requested'), DB::raw('MAX(reviewed_at) as decided'))
+            ->selectRaw('MAX(CASE WHEN status = ? AND wants_printed_copies = ? THEN reviewed_at END) as copies_approved', ['approved', 1])
             ->get()
             ->mapWithKeys(fn ($row): array => [(int) $row->batch_request_id => [
-                'requested' => $row->requested !== null ? Carbon::parse($row->requested) : null,
-                'decided' => $row->decided !== null ? Carbon::parse($row->decided) : null,
+                'requested' => $time($row->requested),
+                'decided' => $time($row->decided),
+                'copies_approved' => $time($row->copies_approved),
             ]]);
     }
 }

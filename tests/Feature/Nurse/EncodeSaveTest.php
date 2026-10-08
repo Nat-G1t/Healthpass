@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Models\VitalSigns;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Support\EncodePayload;
+use Tests\Support\ReleasesForPrint;
 use Tests\TestCase;
 
 /**
@@ -30,6 +31,7 @@ use Tests\TestCase;
 class EncodeSaveTest extends TestCase
 {
     use RefreshDatabase;
+    use ReleasesForPrint;
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -474,6 +476,7 @@ class EncodeSaveTest extends TestCase
         $visit = $this->makeVisit($this->batchAppointment('clearance', 'outbound'));
 
         $this->save($nurse, $visit, EncodePayload::make());
+        $this->releaseForPrint($visit);   // D-125: printing follows the release
 
         $html = $this->actingAs($nurse)
             ->get(route('nurse.visits.print', $visit))

@@ -17,6 +17,7 @@ use App\Support\AssessmentDocument;
 use App\Support\ClearanceDocument;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Support\EncodePayload;
+use Tests\Support\ReleasesForPrint;
 use Tests\TestCase;
 
 /**
@@ -31,6 +32,7 @@ use Tests\TestCase;
 class AssessmentPrintTest extends TestCase
 {
     use RefreshDatabase;
+    use ReleasesForPrint;
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -160,6 +162,8 @@ class AssessmentPrintTest extends TestCase
         }
 
         $visit->update(['status' => 'encoded']);
+        // D-125: printing follows the release — these tests are about what prints.
+        $this->releaseForPrint($visit);
 
         return $record;
     }

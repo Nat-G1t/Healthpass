@@ -19,12 +19,14 @@ use ZipArchive;
 /**
  * The clinic's Upcoming Batches page (FR-NRS-12, D-114) — nurse and physician.
  *
- * Every college's APPROVED batches in two cards: Upcoming (a clinic day today
- * or later — the first day or a 2nd-chance day, D-110 — soonest first) and
- * Past (the rest, newest first). View opens the D-111 results page with a
- * Print and a PDF link on every encoded row and D-113's select & download,
- * always on. The ZIP goes through BatchDocumentZip, so the clinic is held to
- * the same 422 rule as the college and the Director.
+ * Every college's APPROVED batches with a clinic day today or later — the
+ * first day or a 2nd-chance day, D-110 — soonest first. (The rest, D-114's
+ * old Past card, moved to Batch Results by D-125: ClinicBatchResultsTest.)
+ * View opens the D-111 results page with a Print and a PDF link on every
+ * encoded row and D-113's select & download — once the Director has released
+ * the batch (D-125), so these tests release it first. The ZIP goes through
+ * BatchDocumentZip, so the clinic is held to the same 422 rule as the college
+ * and the Director.
  *
  * The fixture's clock: "now" is Friday Sep 11, 2026, 10 AM; the fixture's
  * batches run on Thursday Sep 10 (yesterday) unless a test moves them.
@@ -49,33 +51,6 @@ class UpcomingBatchesTest extends TestCase
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
-
-    /**
-     * Move $batch — and every appointment of its first day — to $date at $time.
-     * One model at a time, never a bulk query update: like every place the app
-     * writes an appointment, that goes through the `date` cast, so SQLite
-     * stores every date in one format and ORDER BY compares like with like.
-     */
-    private function moveTo(BatchRequest $batch, string $date, string $time = '09:00:00'): BatchRequest
-    {
-        $batch->update(['scheduled_date' => $date, 'scheduled_time' => $time]);
-        $batch->appointments()->get()->each->update(['scheduled_date' => $date, 'scheduled_time' => $time]);
-
-        return $batch->fresh();
-    }
-
-    /** An approved batch of $college (CCS by default) with $students booked students on $date at $time. */
-    private function batchOn(string $date, string $time = '09:00:00', int $students = 1, ?College $college = null): BatchRequest
-    {
-        $batch = $this->makeBatch(college: $college);
-
-        // A for loop, not range(1, $students): range(1, 0) is [1, 0].
-        for ($i = 0; $i < $students; $i++) {
-            $this->addStudent($batch, 'booked');
-        }
-
-        return $this->moveTo($batch, $date, $time);
-    }
 
     /** D-110: book $original's 2nd chance on $date and re-point the roster row, as the scheduler does. */
     private function secondChance(Appointment $original, string $date, string $time = '07:00:00'): Appointment
@@ -122,6 +97,7 @@ class UpcomingBatchesTest extends TestCase
                 ->assertSeeInOrder([
                     route('nurse.queue'),
                     route('nurse.batches.index'),
+                    route('nurse.batch-results'),
                     route('nurse.kiosk-devices'),
                 ], false);
 
@@ -157,7 +133,7 @@ class UpcomingBatchesTest extends TestCase
         $visit = $this->visitOf($this->addStudent($batch, 'Fit'));
         $student = $visit->student;
 
-        $pages = [route('nurse.batches.index'), route('nurse.batches.results', $batch)];
+        $pages = [route('nurse.batches.index'), route('nurse.batch-results'), route('nurse.batches.results', $batch)];
         $others = [
             [$this->admin, '/admin/dashboard'],
             [$this->director, '/director/dashboard'],
@@ -204,34 +180,11 @@ class UpcomingBatchesTest extends TestCase
             $tomorrow->reference_no,
             $later->reference_no,
         ], $this->listed($response, 'upcomingBatches'));
-        $this->assertSame([], $this->listed($response, 'pastBatches'));
 
         // The 2nd-chance day shows under the batch's own first date.
         $response->assertSee('data-batches-card="upcoming"', false)
             ->assertSee('data-second-chance', false)
             ->assertSee('2nd chance: Sep 12, 2026, 7:00 AM');
-    }
-
-    public function test_past_lists_the_rest_newest_clinic_date_first(): void
-    {
-        $older = $this->batchOn('2026-09-01');
-        $newest = $this->batchOn('2026-09-10');
-        $middle = $this->batchOn('2026-09-05');
-
-        // A 2nd chance that is itself over keeps the batch in Past.
-        $secondChanceOver = $this->batchOn('2026-09-03');
-        $this->secondChance($secondChanceOver->appointments()->first(), '2026-09-04');
-
-        $response = $this->indexPage($this->physician);
-
-        $this->assertSame([
-            $newest->reference_no,
-            $middle->reference_no,
-            $secondChanceOver->reference_no,
-            $older->reference_no,
-        ], $this->listed($response, 'pastBatches'));
-        $this->assertSame([], $this->listed($response, 'upcomingBatches'));
-        $response->assertSee('No upcoming batches.');
     }
 
     public function test_only_approved_batches_are_ever_listed(): void
@@ -240,88 +193,82 @@ class UpcomingBatchesTest extends TestCase
 
         foreach (['pending', 'rejected', 'cancelled'] as $status) {
             $this->makeBatch(status: $status)->update(['scheduled_date' => self::TOMORROW, 'scheduled_time' => '09:00:00']);
-            $this->makeBatch(status: $status)->update(['scheduled_date' => '2026-09-01', 'scheduled_time' => '09:00:00']);
         }
 
         $response = $this->indexPage($this->nurse);
 
         $this->assertSame([$approved->reference_no], $this->listed($response, 'upcomingBatches'));
-        $this->assertSame([], $this->listed($response, 'pastBatches'));
     }
 
-    public function test_each_card_has_its_own_search_and_college_dropdown(): void
+    /** D-125: the Past card moved to Batch Results — Upcoming Batches keeps Upcoming and the calendar. */
+    public function test_the_page_no_longer_has_a_past_or_completed_card(): void
     {
         $this->batchOn(self::TOMORROW);
         $this->batchOn('2026-09-01');
 
         $this->indexPage($this->nurse)
+            ->assertSee('data-batches-card="upcoming"', false)
+            ->assertSee('data-clinic-calendar', false)
+            ->assertDontSee('data-batches-card="past"', false)
+            ->assertDontSee('name="past_q"', false)
+            ->assertDontSee('Completed batches')
+            ->assertViewMissing('pastBatches');
+    }
+
+    public function test_the_card_has_its_search_and_college_dropdown(): void
+    {
+        $this->batchOn(self::TOMORROW);
+
+        $this->indexPage($this->nurse)
             ->assertSee('data-card-filters="upcoming"', false)
-            ->assertSee('data-card-filters="past"', false)
             ->assertSee('name="upcoming_q"', false)
             ->assertSee('name="upcoming_college"', false)
-            ->assertSee('name="past_q"', false)
-            ->assertSee('name="past_college"', false)
+            ->assertSee('action="'.route('nurse.batches.index').'"', false)
             ->assertSeeInOrder(['All colleges', 'CCS', 'COE'], false);
     }
 
-    public function test_each_cards_batch_id_search_filters_that_card_only(): void
+    public function test_the_batch_id_search_filters_the_card(): void
     {
         $upcoming = $this->batchOn(self::TOMORROW);
-        $otherUpcoming = $this->batchOn(self::TOMORROW);
-        $past = $this->batchOn('2026-09-01');
-        $otherPast = $this->batchOn('2026-09-02');
+        $this->batchOn(self::TOMORROW);
 
         $response = $this->indexPage($this->nurse, ['upcoming_q' => $upcoming->reference_no]);
         $this->assertSame([$upcoming->reference_no], $this->listed($response, 'upcomingBatches'));
-        $this->assertSame([$otherPast->reference_no, $past->reference_no], $this->listed($response, 'pastBatches'));
-
-        $response = $this->indexPage($this->nurse, ['past_q' => $past->reference_no]);
-        $this->assertSame([$upcoming->reference_no, $otherUpcoming->reference_no], $this->listed($response, 'upcomingBatches'));
-        $this->assertSame([$past->reference_no], $this->listed($response, 'pastBatches'));
 
         $this->indexPage($this->nurse, ['upcoming_q' => 'BR-1999'])
             ->assertSee('No batch here matches these filters.');
     }
 
-    public function test_each_cards_college_dropdown_filters_that_card_only(): void
+    public function test_the_college_dropdown_filters_the_card(): void
     {
         $ccsUpcoming = $this->batchOn(self::TOMORROW);
         $coeUpcoming = $this->batchOn(self::TOMORROW, college: $this->coe);
-        $ccsPast = $this->batchOn('2026-09-01');
-        $coePast = $this->batchOn('2026-09-02', college: $this->coe);
 
         $response = $this->indexPage($this->physician, ['upcoming_college' => $this->coe->id]);
         $this->assertSame([$coeUpcoming->reference_no], $this->listed($response, 'upcomingBatches'));
-        $this->assertSame([$coePast->reference_no, $ccsPast->reference_no], $this->listed($response, 'pastBatches'));
 
-        // Both cards filtered at once, each by its own college.
-        $response = $this->indexPage($this->physician, ['upcoming_college' => $this->ccs->id, 'past_college' => $this->coe->id]);
+        $response = $this->indexPage($this->physician, ['upcoming_college' => $this->ccs->id]);
         $this->assertSame([$ccsUpcoming->reference_no], $this->listed($response, 'upcomingBatches'));
-        $this->assertSame([$coePast->reference_no], $this->listed($response, 'pastBatches'));
     }
 
-    public function test_each_card_pages_at_ten_on_its_own_page_parameter(): void
+    public function test_the_card_pages_at_ten(): void
     {
         foreach (range(1, 11) as $i) {
             $this->batchOn(self::TOMORROW, students: 0);
         }
-        $past = $this->batchOn('2026-09-01', students: 0);
 
         $response = $this->indexPage($this->nurse);
         $this->assertCount(10, $response->viewData('upcomingBatches'));
         $this->assertSame(11, $response->viewData('upcomingBatches')->total());
         $response->assertSee('upcoming_page=2', false);
 
-        // Page 2 of Upcoming leaves Past on its first page.
         $response = $this->indexPage($this->nurse, ['upcoming_page' => 2]);
         $this->assertCount(1, $response->viewData('upcomingBatches'));
-        $this->assertSame([$past->reference_no], $this->listed($response, 'pastBatches'));
     }
 
     public function test_the_list_does_not_query_per_student(): void
     {
         $upcoming = $this->batchOn(self::TOMORROW);
-        $past = $this->batchOn('2026-09-01');
 
         $count = function (): int {
             $queries = 0;
@@ -337,12 +284,10 @@ class UpcomingBatchesTest extends TestCase
         $this->indexPage($this->nurse);
         $withOne = $count();
 
-        foreach ([$upcoming, $past] as $batch) {
-            foreach (range(1, 4) as $i) {
-                $this->addStudent($batch, 'booked');
-            }
-            $this->moveTo($batch, $batch->scheduled_date->toDateString());
+        foreach (range(1, 4) as $i) {
+            $this->addStudent($upcoming, 'booked');
         }
+        $this->moveTo($upcoming, self::TOMORROW);
 
         $this->assertSame($withOne, $count());
     }
@@ -357,6 +302,7 @@ class UpcomingBatchesTest extends TestCase
         $this->addStudent($batch, 'in_clinic', 'Cara Cruz');
         $this->addStudent($batch, 'resting', 'Dan Diaz');
         $this->addStudent($batch, 'booked', 'Eva Estrada');
+        $this->release($batch, 'approved');
 
         $response = $this->actingAs($this->nurse)->get(route('nurse.batches.results', $batch))
             ->assertOk()
@@ -390,6 +336,7 @@ class UpcomingBatchesTest extends TestCase
     {
         $batch = $this->makeBatch('clearance');
         $this->addStudent($batch, 'Fit');
+        $this->release($batch, 'approved');
 
         $this->actingAs($this->nurse)->get(route('nurse.batches.results', $batch))
             ->assertOk()
@@ -406,6 +353,7 @@ class UpcomingBatchesTest extends TestCase
     {
         $batch = $this->makeBatch('assessment');
         $this->addStudent($batch, 'Fit');
+        $this->release($batch, 'approved');
 
         $this->actingAs($this->nurse)->get(route('nurse.batches.results', $batch))
             ->assertOk()
@@ -420,6 +368,7 @@ class UpcomingBatchesTest extends TestCase
     {
         $batch = $this->makeBatch('assessment');
         $visit = $this->visitOf($this->addStudent($batch, 'Fit', 'Ana Abad'));
+        $this->release($batch, 'approved');
 
         $row = $this->actingAs($this->physician)->get(route('nurse.batches.results', $batch))
             ->viewData('results')['rows'][0];
@@ -439,11 +388,13 @@ class UpcomingBatchesTest extends TestCase
             ->assertDownload("{$batch->reference_no}-Abad-{$studentId}.pdf");
     }
 
-    public function test_there_is_no_release_button_and_the_download_tools_are_always_on(): void
+    /** The clinic neither asks for nor reviews a release; once released (D-125) its tools are on. */
+    public function test_there_is_no_release_button_and_the_download_tools_are_on_once_released(): void
     {
         $batch = $this->makeBatch();
         $this->addStudent($batch, 'Fit');
         $this->addStudent($batch, 'booked');
+        $this->release($batch, 'approved');
 
         $this->actingAs($this->nurse)->get(route('nurse.batches.results', $batch))
             ->assertOk()
@@ -500,6 +451,7 @@ class UpcomingBatchesTest extends TestCase
     {
         $batch = $this->makeBatch(college: $this->coe);
         $cruz = $this->visitOf($this->addStudent($batch, 'Fit', 'Ana Cruz'));
+        $this->release($batch, 'approved');
 
         // D-118: no ZIP around a single form.
         $this->download($this->nurse, $batch, [$cruz->id])
@@ -515,9 +467,7 @@ class UpcomingBatchesTest extends TestCase
         $reyes = $this->visitOf($this->addStudent($batch, 'Unfit', 'Ben Reyes'));
         $santos = $this->visitOf($this->addStudent($batch, 'Fit', 'Liza Santos'));
         $this->addStudent($batch, 'Fit', 'Not Selected');
-
-        // No release request anywhere: the clinic never needs one.
-        $this->assertSame(0, $batch->releaseRequests()->count());
+        $this->release($batch, 'approved');
 
         $response = $this->download($this->nurse, $batch, [$cruz->id, $reyes->id, $santos->id])
             ->assertOk()
@@ -561,6 +511,7 @@ class UpcomingBatchesTest extends TestCase
         $withdrawn = $this->addStudent($batch, 'withdrawn');
         $withdrawnVisit = $this->visit($withdrawn, 'Fit');
         $withdrawn->update(['status' => 'cancelled']);
+        $this->release($batch, 'approved');
 
         $refused = [
             [$captured->id],                         // not encoded

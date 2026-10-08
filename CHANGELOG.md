@@ -1159,6 +1159,50 @@
 
 ### Changed
 
+* **The clinic's Batch Results page lists completed batches with Print
+  Requested, row dots and Mark as printed — and the clinic prints a batch's
+  forms only after the Director releases them** (D-125, amends D-114 and
+  D-120, FR-NRS-12 amended, new FR-NRS-13; PRD revision 2.09, 2026-10-08).
+  Asked for by the Clinic Director. **FLAGGED SCHEMA CHANGE:**
+  `document_release_requests.copies_printed_at` (timestamp NULL) and
+  `copies_printed_by` (FK users NULL, nullOnDelete) — migration
+  `2026_10_08_000002_d125_release_requests_copies_printed`. No new package.
+  * **Batch Results** (`GET /nurse/batch-results`, `nurse.batch-results`) — a
+    new nurse/physician sidebar item after Upcoming Batches, no count badge.
+    Its one card, **Completed batches**, is the old Past card from Upcoming
+    Batches, unchanged (query, columns, filters, `past_*` keys, pager).
+    Upcoming Batches keeps Upcoming and the Clinic Calendar.
+  * **Print Requested** under the Batch ID while the batch's approved release
+    asks for printed copies; **Printed** (grey) once marked. Loaded with one
+    eager-load (`BatchRequest::approvedReleaseRequest()`).
+  * **Mark as printed** — a banner on the batch's clinic results page ("The
+    college asked for printed copies — approved by the Director on {date}.")
+    with a confirm step; `POST /nurse/batches/{batch}/copies-printed`
+    (`nurse.batches.copies-printed`, own throttle bucket) re-checks on the
+    locked release row and stamps who and when; a second press is a no-op.
+  * **Row dots for the clinic** — `BatchNotifications::dots()` gains a clinic
+    branch (one more `MAX(CASE …)` column in the existing grouped query):
+    per user, a printed-copies approval newer than their last View. Opening
+    the batch (`markSeen`) clears it. `count()` stays 0 for clinic roles.
+  * **Printing follows the release (O2)** — `ClinicVisit::isReleasedForPrint()`
+    (any approved request on the visit's batch; no batch → false). The batch
+    page's row Print / PDF and Select & download are disabled with "Available
+    once the Director releases this batch's documents." until then; the ZIP
+    route answers 403, and `nurse.visits.print` / `.print.reprint` / `.pdf`
+    answer 403 for JSON, else go back with that message. The read-only encode
+    page draws its print buttons disabled too. Preview & Print before saving
+    is unchanged.
+  * The results page's back link returns to the page that opened it
+    (`from=completed`, whitelisted).
+  * Tests: new `tests/Feature/Nurse/ClinicBatchResultsTest.php` (nav and
+    access; the ported Completed-card tests; tags; Mark as printed; per-user
+    dots; the print gate on every route, a no-batch visit, the encode page);
+    `UpcomingBatchesTest` keeps the Upcoming card and releases its batches
+    before printing; the print-content tests release their visits through
+    the new `tests/Support/ReleasesForPrint` trait.
+  * Not yet: the Clinic Dashboard's Reprint button still shows for an
+    un-released visit (its route refuses it) — a later change gates it.
+
 * **An approved release shows as "Approved Release" on both Batch Results
   cards and replaces the Director's review button** (D-124, amends FR-ADM-12,
   FR-ADM-15, FR-DIRA-10 and FR-DIRA-11; PRD revision 2.08, 2026-10-08).

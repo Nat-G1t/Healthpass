@@ -286,7 +286,7 @@ Home, Calendar, FileText, QrCode, Plus, List, Activity, Edit, BarChart, Alert, C
 |---|---|
 | Student | Dashboard · My Records (+ the D-73 Clinic Record page) · My ID (D-61 removed Book Appointment and My Appointments) |
 | College Admin | Dashboard · New Batch Request · Batch Tracking · Data Summary (FR-ADM-08; "Analytics" before D-103) |
-| Nurse | Live Queue · Upcoming Batches (D-114) · Encode Result · Enable Kiosk Mode (Kiosk Devices: enroll/revoke trusted terminals, D-27) |
+| Nurse | Live Queue · Upcoming Batches (D-114) · Batch Results (D-125) · Encode Result · Enable Kiosk Mode (Kiosk Devices: enroll/revoke trusted terminals, D-27) |
 | Clinic Director | Dashboard · Batch Approvals · Batch Tracking (D-112) · Data Summary (D-103; was "Analytics") · Flagged Anomalies |
 
 **Unread badges (D-57, FR-UI-05):** a solid orange badge on a menu item — a dot for 1, the number for 2–9, "9+" from 10, nothing at 0 — at the top-right of the item's label (expanded sidebar, phone drawer) or of its icon (collapsed rail). Orange even on the active item. Refreshed on page load only; no polling.
@@ -440,16 +440,25 @@ Every page in this section is shared by the nurse and the University Physician. 
 
 #### Upcoming Batches (`nurse-batches`, `/nurse/batches`) — D-114
 - In the sidebar right after **Live Queue**, with a calendar icon, for the nurse and the physician alike. No badge. Every college — no college scope. Another signed-in role is sent back to its own dashboard, like every `/nurse` page.
-- **Approved batches only** (pending, rejected and cancelled never show), in two cards, ten per page each under its own page parameter. **Each card has its own filter bar** at the right of its heading: a **College** dropdown ("All colleges" + every college's code — picking one applies it at once) and a **Batch ID search** (Search / Enter), both server-side over all pages. Filtering one card never changes the other; **Clear** resets that card only; no match → "No batch here matches these filters." (Same bar as the Director's Batch Tracking.) **D-119:** between the two cards, the read-only **Clinic Calendar** card — the same as the Director's Batch Tracking card 2.
-- **Card 1 — Upcoming:** every batch with a clinic day **today or later** — its first day **or** a 2nd-chance day (D-110) — **soonest clinic hour first** (`upcoming_page`). Empty: "No upcoming batches."
-- **Card 2 — Past:** every other approved batch, **newest clinic date first** (`past_page`). Empty: "No past batches yet."
-- Columns, as the Director's Batch Results card: **Batch ID / College** (code) **/ Form Type / Purpose** (cut to 60 characters) **/ Date scheduled** (date, hours beneath, and "2nd chance: Sep 12, 2026, 7:00 AM" beneath that when the batch has one — that is why a batch first seen last week can be in Upcoming) **/ Status** (D-111) **/ [View]**. Both tables re-flow into stacked cards below `md`.
+- **Approved batches only** (pending, rejected and cancelled never show), ten per page. The card has its own **filter bar** at the right of its heading: a **College** dropdown ("All colleges" + every college's code — picking one applies it at once) and a **Batch ID search** (Search / Enter), both server-side over all pages; **Clear** resets it; no match → "No batch here matches these filters." (Same bar as the Director's Batch Tracking.) **D-119:** under the card, the read-only **Clinic Calendar** card — the same as the Director's Batch Tracking card 2.
+- **Upcoming:** every batch with a clinic day **today or later** — its first day **or** a 2nd-chance day (D-110) — **soonest clinic hour first** (`upcoming_page`). Empty: "No upcoming batches."
+- ~~**Card 2 — Past**~~ — **moved to Batch Results by D-125** (below).
+- Columns, as the Director's Batch Results card: **Batch ID / College** (code) **/ Form Type / Purpose** (cut to 60 characters) **/ Date scheduled** (date, hours beneath, and "2nd chance: Sep 12, 2026, 7:00 AM" beneath that when the batch has one — that is why a batch first seen last week can be in Upcoming) **/ Status** (D-111) **/ [View]**. The table re-flows into stacked cards below `md`.
 
-#### Batch Results page — clinic (`nurse-batch-results`, `/nurse/batches/{batch}`) — D-114
-- An approved batch's **View** (anything else → 404). The **same page body** as the College Admin's and the Director's (header naming the college, back link "← Upcoming Batches", three summary cards, filters, ten-row scrolling table) from the same partials and `App\Support\BatchResults`. Still **outcome only** — no vitals on this page.
+#### Batch Results (`nurse-completed-batches`, `/nurse/batch-results`) — D-125
+- In the sidebar right after **Upcoming Batches**, with a clipboard icon, for the nurse and the physician alike. **No count badge** (row dots only). Every college. Another signed-in role is sent back to its own dashboard.
+- One card, **COMPLETED BATCHES** — the old Upcoming Batches "Past" card, unchanged: every other approved batch (no clinic day today or later), **newest clinic date first**, ten per page (`past_page`), with its College dropdown and Batch ID search (`past_college` / `past_q`). Empty: "No completed batches yet." Same columns as Upcoming.
+- **Print Requested** (solid orange) under the Batch ID when the batch's **approved** release asked for printed copies and the clinic has not pressed Mark as printed yet; afterwards a grey **Printed** stays. No tag for an approval without copies, a pending or rejected request, or no request.
+- A **dot** after View, **per user**, when the Director approved a printed-copies request after this user last opened the batch (or they never have). Opening the batch clears it — for that user only. Nothing else lights a clinic dot.
+- **View** opens the batch's results page with `from=completed`, so its back link reads "← Batch Results".
+
+#### A batch's results page — clinic (`nurse-batch-results`, `/nurse/batches/{batch}`) — D-114, D-125
+- An approved batch's **View** (anything else → 404). The **same page body** as the College Admin's and the Director's (header naming the college, back link "← Upcoming Batches" — or "← Batch Results" when opened from there (D-125), three summary cards, filters, ten-row scrolling table) from the same partials and `App\Support\BatchResults`. Still **outcome only** — no vitals on this page.
 - **No release button** — the clinic neither requests nor reviews releases.
+- **D-125 — printed copies banner:** when the batch's approved release asked for printed copies, a highlighted note at the top: "The college asked for printed copies — approved by the Director on {date}." with **Mark as printed** → "Are all the copies printed?" **Yes, mark as printed** / Cancel. Afterwards: "Printed copies marked done by {name} on {date}." Pressing it twice is harmless. Opening this page clears the user's Batch Results dot.
 - A fifth column, **Document**, on this page only, with the **encode screen's print buttons** on every **encoded** row: **Print** on a Medical Clearance; **Print front** and **Print back** on a Medical Assessment Form. Each is the clinic's Reprint posted into a hidden frame — the print dialog opens right on this page (no new tab) and `printed_at` is re-stamped, as any Reprint. After a Print front the card reads "Put {name}'s printed sheet back in the tray, then click Print back." Then **PDF** (`nurse.visits.pdf`, downloads as `{Batch ID}-{Surname}-{Student ID}.pdf`; the page stays put). Other rows show "—".
-- **Select students / Clear / Select all / Download documents (N)** — D-113's tools, **always enabled** (a college may ask the clinic to print its copies). The ZIP is `{Batch ID}-documents.zip`, one PDF per ticked student named `{Batch ID}-{Surname}-{Student ID}.pdf`, through the same `App\Services\BatchDocumentZip` rule (encoded, held row, this batch, at most 20 — anything else is refused with a 422).
+- **Select students / Clear / Select all / Download documents (N)** — D-113's tools, ~~always enabled~~ **enabled once the Director has released the batch (D-125)**. The ZIP is `{Batch ID}-documents.zip`, one PDF per ticked student named `{Batch ID}-{Surname}-{Student ID}.pdf`, through the same `App\Services\BatchDocumentZip` rule (encoded, held row, this batch, at most 20 — anything else is refused with a 422).
+- **D-125 — printing follows the release:** until the batch has an approved release request, the row Print / PDF and the download tools are drawn **disabled** with "Available once the Director releases this batch's documents." The server refuses them too (the download 403; the print / reprint / PDF routes 403 for JSON, else back with that message), and so does the read-only Encode Result screen's Reprint / Print front / back / Save as PDF. A visit with no batch is never released.
 
 #### Encode Result (`nurse-encode`)
 - **Two-column layout** (1fr + 1fr):
@@ -1000,6 +1009,8 @@ created_at, updated_at
 -- D-123 (FLAGGED SCHEMA CHANGE): no attachment any more — the Director
 -- reviews the batch's own signed memo (D-109). The attachment_* columns are
 -- legacy (NULL on newer rows); wants_printed_copies is new.
+-- D-125 (FLAGGED SCHEMA CHANGE): copies_printed_at / copies_printed_by
+-- record the clinic's Mark as printed on an approved copies request.
 id                        bigint PK
 batch_request_id          bigint FK → batch_requests.id   -- cascade on delete
 requested_by              bigint FK → users.id            -- the College Admin who asked
@@ -1012,6 +1023,8 @@ status                    enum('pending','approved','rejected') DEFAULT 'pending
 reviewed_by               bigint NULL FK → users.id       -- the Director
 reviewed_at               timestamp NULL
 rejection_message         text NULL                       -- 10–500 chars (Director\RejectReleaseRequest); the college reads it
+copies_printed_at         timestamp NULL                  -- D-125: the clinic pressed Mark as printed (NULL until then)
+copies_printed_by         bigint NULL FK → users.id       -- D-125: the nurse or physician who pressed it; null on delete
 created_at, updated_at
 INDEX (batch_request_id, status)
 ```

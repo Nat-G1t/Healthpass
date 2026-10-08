@@ -7,41 +7,53 @@ namespace App\Http\Controllers\Nurse;
 use App\Http\Controllers\Controller;
 use App\Models\Appointment;
 use App\Models\BatchRequest;
+use App\Models\ClinicVisit;
 use App\Models\College;
 use App\Services\BatchDocumentZip;
 use App\Support\BatchCardFilters;
+use App\Support\BatchNotifications;
 use App\Support\BatchResults;
+use Closure;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * The clinic's Upcoming Batches page (FR-NRS-12, D-114) — nurse and physician
- * alike, like every Clinic Dashboard page (D-64). Every college's batches, so
- * there is NO college scope here.
+ * The clinic's batch pages — nurse and physician alike, like every Clinic
+ * Dashboard page (D-64). Every college's batches, so there is NO college
+ * scope here.
  *
- * Clinic staff already hold the full records, so there is no release request
- * to wait for (the College Admin's D-113 path) and none to review (the
- * Director's): the download tools are always on.
+ *   index()         Upcoming Batches (FR-NRS-12, D-114): APPROVED batches
+ *                   with a clinic day today or later — the first day or a
+ *                   2nd-chance day, D-110 — soonest first, and the Clinic
+ *                   Calendar (D-119)
+ *   completed()     Batch Results (FR-NRS-13, D-125): one "Completed batches"
+ *                   card — every other approved batch, newest first — with
+ *                   the Print Requested / Printed tag and a per-user row dot
+ *   results()       an approved batch's results page — the D-111 body every
+ *                   role shares, plus the encode page's Print (front / back)
+ *                   and PDF buttons on each encoded row, and (D-125) the
+ *                   printed-copies banner with Mark as printed
+ *   documents()     the selected students' forms (one PDF, or a ZIP for two or
+ *                   more — D-118) — D-113's service, and so its one rule for
+ *                   which students may be in it
+ *   copiesPrinted() D-125's Mark as printed
  *
- *   index()     two cards of APPROVED batches: Upcoming (a clinic day today or
- *               later — the first day or a 2nd-chance day, D-110 — soonest
- *               first) and Past (the rest, newest first), each with its own
- *               College dropdown and Batch ID search
- *   results()   an approved batch's results page — the D-111 body every role
- *               shares, plus the encode page's Print (front / back) and PDF
- *               buttons on each encoded row
- *   documents() the selected students' forms (one PDF, or a ZIP for two or more — D-118) — D-113's service,
- *               and so its one rule for which students may be in it
+ * D-125 (O2): the clinic prints and downloads a batch's forms only once the
+ * Director has approved a release of that batch — the buttons are drawn
+ * disabled before then, and the server refuses them too (here for the
+ * download, PrintClearanceController for each form, both through the release
+ * rule ClinicVisit::isReleasedForPrint() reads).
  */
 class BatchController extends Controller
 {
     /**
-     * Both cards page at ten (FR-UI-06), each under its own page parameter so
-     * paging one never moves the other. Each card also has its OWN Batch ID
-     * search and College dropdown (BatchCardFilters, keys "upcoming_*" and
-     * "past_*"), applied on the server as bound parameters.
+     * Paged at ten (FR-UI-06) with its own Batch ID search and College
+     * dropdown (BatchCardFilters, keys "upcoming_*"), applied on the server
+     * as bound parameters.
      *
      * "Today" comes from the server clock and goes into the SQL as a plain
      * date string — no date function in raw SQL, so MySQL and the SQLite test
@@ -49,45 +61,56 @@ class BatchController extends Controller
      */
     public function index(Request $request): View
     {
-        $perPage = config('healthpass.ui.rows_per_page');
         $today = today()->toDateString();
-        $upcomingFilters = BatchCardFilters::fromRequest($request, 'upcoming');
-        $pastFilters = BatchCardFilters::fromRequest($request, 'past');
+        $filters = BatchCardFilters::fromRequest($request, 'upcoming');
 
-        // A clinic day today or later. A batch's appointments carry its first
-        // day AND any 2nd-chance day (D-110 books those on the same batch).
-        $hasClinicDayFromToday = fn (Builder $appointments) => $appointments->whereDate('scheduled_date', '>=', $today);
-
-        // Card 1: Upcoming, soonest clinic hour first.
-        $upcomingBatches = $this->approvedBatches($upcomingFilters)
+        $upcomingBatches = $this->approvedBatches($filters)
             ->where(fn (Builder $query) => $query
                 ->whereDate('scheduled_date', '>=', $today)
-                ->orWhereHas('appointments', $hasClinicDayFromToday))
+                ->orWhereHas('appointments', $this->hasClinicDayFrom($today)))
             ->orderBy($this->nextClinicHour($today, 'scheduled_date'))
             ->orderBy($this->nextClinicHour($today, 'scheduled_time'))
             ->orderBy('id')
-            ->paginate($perPage, pageName: $upcomingFilters->pageName())
-            ->withQueryString();
-
-        // Card 2: Past — exactly the approved batches card 1 leaves out,
-        // newest clinic date first. whereNull() keeps a batch with no date
-        // here rather than in neither card.
-        $pastBatches = $this->approvedBatches($pastFilters)
-            ->where(fn (Builder $query) => $query
-                ->whereNull('scheduled_date')
-                ->orWhereDate('scheduled_date', '<', $today))
-            ->whereDoesntHave('appointments', $hasClinicDayFromToday)
-            ->orderByDesc('scheduled_date')
-            ->orderByDesc('id')
-            ->paginate($perPage, pageName: $pastFilters->pageName())
+            ->paginate(config('healthpass.ui.rows_per_page'), pageName: $filters->pageName())
             ->withQueryString();
 
         return view('nurse.batches.index', [
             'upcomingBatches' => $upcomingBatches,
-            'pastBatches' => $pastBatches,
-            'upcomingFilters' => $upcomingFilters,
-            'pastFilters' => $pastFilters,
+            'upcomingFilters' => $filters,
             'colleges' => College::orderBy('code')->get(['id', 'code']),
+        ]);
+    }
+
+    /**
+     * D-125 — Batch Results: the "Completed batches" card, D-114's old Past
+     * card moved here unchanged — exactly the approved batches Upcoming
+     * leaves out, newest clinic date first, under the same "past_*" keys.
+     * whereNull() keeps a batch with no date here rather than on neither page.
+     *
+     * Each row's approved release request comes along in ONE query (the Print
+     * Requested / Printed tag), and its dot from BatchNotifications::dots().
+     */
+    public function completed(Request $request): View
+    {
+        $today = today()->toDateString();
+        $filters = BatchCardFilters::fromRequest($request, 'past');
+
+        $completedBatches = $this->approvedBatches($filters)
+            ->where(fn (Builder $query) => $query
+                ->whereNull('scheduled_date')
+                ->orWhereDate('scheduled_date', '<', $today))
+            ->whereDoesntHave('appointments', $this->hasClinicDayFrom($today))
+            ->with('approvedReleaseRequest')
+            ->orderByDesc('scheduled_date')
+            ->orderByDesc('id')
+            ->paginate(config('healthpass.ui.rows_per_page'), pageName: $filters->pageName())
+            ->withQueryString();
+
+        return view('nurse.batches.completed', [
+            'completedBatches' => $completedBatches,
+            'completedFilters' => $filters,
+            'colleges' => College::orderBy('code')->get(['id', 'code']),
+            'dots' => BatchNotifications::dots($request->user(), $completedBatches->getCollection()),
         ]);
     }
 
@@ -103,12 +126,20 @@ class BatchController extends Controller
      * page's hidden frame and re-stamps printed_at; a Medical Assessment posts
      * side=front / side=back) and Save as PDF (FR-PRT-06). Built here with
      * route(), so the browser never assembles a URL.
+     *
+     * D-125: opening the batch clears this user's row dot. The printing tools
+     * work only once the batch is released; the banner shows a printed-copies
+     * request and Mark as printed.
      */
-    public function results(BatchRequest $batch): View
+    public function results(Request $request, BatchRequest $batch): View
     {
         abort_unless($batch->status === 'approved', 404);
 
-        $batch->load('college:id,code,name')->load(BatchResults::pageRelations());
+        $batch->load('college:id,code,name')
+            ->load(BatchResults::pageRelations())
+            ->load('approvedReleaseRequest.copiesPrinter:id,name');
+
+        BatchNotifications::markSeen($request->user(), $batch, $batch->resultsStatus());
 
         $results = BatchResults::page($batch);
 
@@ -121,20 +152,61 @@ class BatchController extends Controller
         return view('nurse.batches.results', [
             'batch' => $batch,
             'results' => [...$results, 'rows' => $rows],
+            // The release rule, read off the relation loaded above (any
+            // approved request) — the same answer as hasReleasedDocuments().
+            'release' => $batch->approvedReleaseRequest,
+            'back' => $this->backLink($request),
+            'markPrintedUrl' => route('nurse.batches.copies-printed', ['batch' => $batch, ...$this->fromQuery($request)]),
         ]);
     }
 
     /**
-     * D-113's select & download for the clinic — always allowed for an
-     * approved batch (the clinic already sees every record, Q22: "what if the
-     * college requested to the clinic to print the copies?"). Which students
-     * may be in the ZIP is BatchDocumentZip's one shared rule.
+     * D-113's select & download for the clinic — once the Director has
+     * released the batch (D-125, O2), else a 403. Which students may be in
+     * the ZIP is BatchDocumentZip's one shared rule.
      */
     public function documents(Request $request, BatchRequest $batch, BatchDocumentZip $zip): Response
     {
         abort_unless($batch->status === 'approved', 404);
+        abort_unless($batch->hasReleasedDocuments(), 403, ClinicVisit::NOT_RELEASED_HINT);
 
         return $zip->download($batch, $request->input('visits'));
+    }
+
+    /**
+     * D-125 — Mark as printed: the clinic has printed the copies the college
+     * asked for. Re-checked on the LOCKED release row — lockForUpdate() holds
+     * it until the transaction ends, so two presses at once cannot both stamp
+     * it: the request must be approved, want copies, and not be marked yet.
+     * A second press is a friendly no-op.
+     */
+    public function copiesPrinted(Request $request, BatchRequest $batch): RedirectResponse
+    {
+        abort_unless($batch->status === 'approved', 404);
+
+        $outcome = DB::transaction(function () use ($request, $batch): string {
+            $release = $batch->approvedReleaseRequest()->lockForUpdate()->first();
+
+            if ($release === null || ! $release->asksClinicToPrint()) {
+                return 'refused';
+            }
+
+            if ($release->copies_printed_at !== null) {
+                return 'already';
+            }
+
+            $release->update(['copies_printed_at' => now(), 'copies_printed_by' => $request->user()->id]);
+
+            return 'marked';
+        });
+
+        $back = redirect()->route('nurse.batches.results', ['batch' => $batch, ...$this->fromQuery($request)]);
+
+        return match ($outcome) {
+            'marked' => $back->with('status', 'Printed copies marked done.'),
+            'already' => $back->with('status', 'The printed copies were already marked done.'),
+            'refused' => $back->with('error', 'This batch has no approved request for printed copies.'),
+        };
     }
 
     /**
@@ -148,6 +220,37 @@ class BatchController extends Controller
         return $filters->apply(BatchRequest::where('status', 'approved'))
             ->with('college:id,code')
             ->with(BatchResults::statusRelations());
+    }
+
+    /**
+     * D-125 — back to the page View was clicked on: Batch Results when the
+     * link said `from=completed`, else Upcoming Batches. Built only from route
+     * names — never from a queried URL or url()->previous() — so it cannot be
+     * turned into an open redirect (as EncodeController::backLink()).
+     *
+     * @return array{url: string, label: string}
+     */
+    private function backLink(Request $request): array
+    {
+        return $this->fromQuery($request) !== []
+            ? ['url' => route('nurse.batch-results'), 'label' => 'Batch Results']
+            : ['url' => route('nurse.batches.index'), 'label' => 'Upcoming Batches'];
+    }
+
+    /**
+     * The whitelisted `from` value, carried through Mark as printed and back.
+     *
+     * @return array{from?: string}
+     */
+    private function fromQuery(Request $request): array
+    {
+        return $request->query('from') === 'completed' ? ['from' => 'completed'] : [];
+    }
+
+    /** A batch's appointments on $today or later — its first day or a 2nd-chance day (D-110 books those on the same batch). */
+    private function hasClinicDayFrom(string $today): Closure
+    {
+        return fn (Builder $appointments) => $appointments->whereDate('scheduled_date', '>=', $today);
     }
 
     /**

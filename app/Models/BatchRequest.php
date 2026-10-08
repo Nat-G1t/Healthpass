@@ -492,4 +492,15 @@ class BatchRequest extends Model
     {
         return $this->hasOne(DocumentReleaseRequest::class)->latestOfMany();
     }
+
+    /**
+     * D-125: the batch's APPROVED release request, or null. There is at most
+     * one — approval is final and the college cannot ask again (D-113) — so
+     * the clinic's Completed batches card eager-loads it for every row in one
+     * query, for the Print Requested / Printed tag.
+     */
+    public function approvedReleaseRequest(): HasOne
+    {
+        return $this->hasOne(DocumentReleaseRequest::class)->where('status', 'approved');
+    }
 }

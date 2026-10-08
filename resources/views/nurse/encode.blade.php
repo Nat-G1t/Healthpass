@@ -191,6 +191,12 @@
         {{ session('status') }}
     </div>
 @endif
+{{-- D-125: a print the server refused (the batch is not released yet). --}}
+@if (session('error'))
+    <div data-hp-flash data-flash-sticky class="mb-5 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">
+        {{ session('error') }}
+    </div>
+@endif
 
 {{-- Read-only notice — encoding is one-time (BR-11 / FR-NRS-04). --}}
 @if ($readOnly)
@@ -634,7 +640,15 @@
                  own value, which is how the two reach the same endpoint and
                  ask for different pages. --}}
             <div class="flex flex-col gap-2.5 pt-1">
-                @if ($readOnly)
+                @if ($readOnly && ! $canPrint)
+                    {{-- D-125 (O2): not released yet — the buttons, greyed out,
+                         and why. The print routes refuse them too. --}}
+                    @foreach ($isAssessment ? ['Print front', 'Print back'] : ['Reprint'] as $label)
+                        <x-hp.button variant="soft" class="w-full" disabled data-print-disabled>{{ $label }}</x-hp.button>
+                    @endforeach
+                    <x-hp.button variant="ghost" class="w-full" disabled data-print-disabled>Save as PDF</x-hp.button>
+                    <p class="text-xs text-hp-slate/60" data-print-disabled-hint>{{ App\Models\ClinicVisit::NOT_RELEASED_HINT }}</p>
+                @elseif ($readOnly)
                     @if ($isAssessment)
                         @foreach (['front' => 'Print front', 'back' => 'Print back'] as $side => $label)
                             <x-hp.button type="submit" variant="soft" class="w-full"

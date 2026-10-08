@@ -66,6 +66,10 @@ class EncodeController extends Controller
         return view('nurse.encode', [
             'visit' => $visit,
             'readOnly' => $visit->status === 'encoded',
+            // D-125 (O2): the read-only page's Reprint / Print front / back and
+            // Save as PDF work only once the batch is released — the same rule
+            // the print routes enforce.
+            'canPrint' => $visit->isReleasedForPrint(),
             'studentRemarks' => $studentRemarks,
             'back' => $this->backLink($request),
         ]);

@@ -266,6 +266,33 @@ trait DocumentReleaseFixture
         return $batch;
     }
 
+    /**
+     * Move $batch — and every appointment of its first day — to $date at $time.
+     * One model at a time, never a bulk query update: like every place the app
+     * writes an appointment, that goes through the `date` cast, so SQLite
+     * stores every date in one format and ORDER BY compares like with like.
+     */
+    private function moveTo(BatchRequest $batch, string $date, string $time = '09:00:00'): BatchRequest
+    {
+        $batch->update(['scheduled_date' => $date, 'scheduled_time' => $time]);
+        $batch->appointments()->get()->each->update(['scheduled_date' => $date, 'scheduled_time' => $time]);
+
+        return $batch->fresh();
+    }
+
+    /** An approved batch of $college (CCS by default) with $students booked students on $date at $time. */
+    private function batchOn(string $date, string $time = '09:00:00', int $students = 1, ?College $college = null): BatchRequest
+    {
+        $batch = $this->makeBatch(college: $college);
+
+        // A for loop, not range(1, $students): range(1, 0) is [1, 0].
+        for ($i = 0; $i < $students; $i++) {
+            $this->addStudent($batch, 'booked');
+        }
+
+        return $this->moveTo($batch, $date, $time);
+    }
+
     /** The encoded visit behind a roster appointment. */
     private function visitOf(Appointment $appointment): ClinicVisit
     {

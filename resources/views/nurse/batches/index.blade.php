@@ -3,27 +3,26 @@
 {{--
     The clinic's Upcoming Batches (FR-NRS-12, D-114) — nurse and physician.
 
-    Every college's APPROVED batches, in two cards like the Director's Batch
-    Tracking, each paged at ten under its own page parameter (FR-UI-06):
+    Every college's APPROVED batches with a clinic day today or later — the
+    batch's first day or a 2nd-chance day (D-110) — soonest first, paged at
+    ten (FR-UI-06), with its own College dropdown and Batch ID search
+    (batches/_card-filters).
 
-      1. Upcoming — a clinic day today or later: the batch's first day or a
-                    2nd-chance day (D-110), soonest first
-      2. Past     — every other approved batch, newest clinic date first
-
-    D-119: between them, the read-only Clinic Calendar card
+    D-119: under it, the read-only Clinic Calendar card
     (batches/_clinic-calendar) — how full each day is, and the picked day's
     hours and batches.
 
-    Each card has its own College dropdown and Batch ID search
-    (batches/_card-filters). View opens the batch's results page, where the
-    clinic prints or downloads the students' forms.
+    D-125: the old Past card moved to its own page, Batch Results
+    ("Completed batches", nurse/batches/completed). View opens the batch's
+    results page, where the clinic prints or downloads the students' forms
+    once the Director has released them.
 --}}
 
 {{-- ── Page header ─────────────────────────────────────────────────────── --}}
 <div class="mb-6">
     <h2 class="text-xl font-semibold text-hp-slate">Upcoming Batches</h2>
     <p class="mt-0.5 text-sm text-hp-slate/50">
-        Every college’s approved batches — who is coming next, and each batch’s results and forms.
+        Every college’s approved batches that are still coming up — who is coming next, and how full each clinic day is.
     </p>
 </div>
 
@@ -31,6 +30,7 @@
     'batches' => $upcomingBatches,
     'filters' => $upcomingFilters,
     'colleges' => $colleges,
+    'action' => route('nurse.batches.index'),
     'title' => 'Upcoming',
     'caption' => 'Batches with a clinic day today or later — including a 2nd-chance day — soonest first.',
     'empty' => 'No upcoming batches.',
@@ -39,15 +39,6 @@
 @include('batches._clinic-calendar', [
     'monthUrl' => route('nurse.calendar.month'),
     'dayUrl' => route('nurse.calendar.day'),
-])
-
-@include('nurse.batches._card', [
-    'batches' => $pastBatches,
-    'filters' => $pastFilters,
-    'colleges' => $colleges,
-    'title' => 'Past',
-    'caption' => 'Batches whose clinic days are over, newest first.',
-    'empty' => 'No past batches yet.',
 ])
 
 </x-layout.sidebar>

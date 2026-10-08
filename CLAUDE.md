@@ -260,7 +260,10 @@ npm run dev                       # terminal 2
   written in dompdf-safe CSS (tables, no flex/grid, no JS).
 - Documents leave the clinic only through the clinic itself, the Director, or
   a Director-approved release to the batch's own college (D-113); students
-  never download (D-106).
+  never download (D-106). **Since D-125 the clinic also prints and downloads a
+  batch's forms only after that release** — one rule,
+  `ClinicVisit::isReleasedForPrint()`, enforced on the server by the clinic's
+  print / reprint / PDF routes and its batch download (no batch → refused).
 
 ## Database
 
@@ -273,7 +276,8 @@ visit, none for a Medical Clearance), `document_release_requests` (D-113 —
 a College Admin's request that the Director release a finished batch's
 documents; many per batch, at most one pending), `batch_seen` (D-120 —
 what a College Admin or the Director last saw of a batch, for the Batch
-Tracking notification dots; one row per viewer and batch).
+Tracking notification dots — and, since D-125, the clinic's Batch Results
+dots; one row per viewer and batch).
 (`clearance_case_categories`, added as table #11 by D-23, was **removed by
 D-32** with the case-category concept. The `kiosk_devices` device-auth
 table, D-27, is a flagged extension tracked in the PRD data dictionary.)
