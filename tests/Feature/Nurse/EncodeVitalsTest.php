@@ -45,9 +45,9 @@ class EncodeVitalsTest extends TestCase
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    private function nurse(): User
+    private function physician(): User
     {
-        return User::factory()->create(['role' => 'nurse']);
+        return User::factory()->physician()->create();
     }
 
     /** A captured visit whose kiosk BP tripped the §7.4 flag. */
@@ -117,7 +117,7 @@ class EncodeVitalsTest extends TestCase
         $payload = EncodePayload::make();
         unset($payload['respiratory_rate']);
 
-        $this->save($this->nurse(), $visit, $payload)
+        $this->save($this->physician(), $visit, $payload)
             ->assertSessionHasErrors('respiratory_rate');
 
         $this->assertDatabaseCount('clearance_records', 0);
@@ -127,7 +127,7 @@ class EncodeVitalsTest extends TestCase
     {
         $visit = $this->makeVisit();
 
-        $this->save($this->nurse(), $visit, ['result' => 'Fit'])
+        $this->save($this->physician(), $visit, ['result' => 'Fit'])
             ->assertSessionHasErrors(array_keys(ClearanceRecord::ENCODED_VITALS));
 
         $this->assertDatabaseCount('clearance_records', 0);
@@ -140,7 +140,7 @@ class EncodeVitalsTest extends TestCase
         $bounds = config('healthpass.validation.respiratory_rate');
 
         foreach ([$bounds['min'] - 1, $bounds['max'] + 1] as $outOfRange) {
-            $this->save($this->nurse(), $visit, EncodePayload::make(['respiratory_rate' => $outOfRange]))
+            $this->save($this->physician(), $visit, EncodePayload::make(['respiratory_rate' => $outOfRange]))
                 ->assertSessionHasErrors('respiratory_rate');
         }
 
@@ -151,7 +151,7 @@ class EncodeVitalsTest extends TestCase
     {
         $visit = $this->makeVisit();
 
-        $this->save($this->nurse(), $visit, EncodePayload::make(['temperature_c' => 12]))
+        $this->save($this->physician(), $visit, EncodePayload::make(['temperature_c' => 12]))
             ->assertSessionHasErrors('temperature_c');
 
         $this->assertDatabaseCount('clearance_records', 0);
@@ -161,7 +161,7 @@ class EncodeVitalsTest extends TestCase
     {
         $visit = $this->makeVisit();
 
-        $this->save($this->nurse(), $visit, EncodePayload::make([
+        $this->save($this->physician(), $visit, EncodePayload::make([
             'bp_systolic' => 90,
             'bp_diastolic' => 110,
         ]))->assertSessionHasErrors('bp_systolic');
@@ -173,11 +173,11 @@ class EncodeVitalsTest extends TestCase
 
     public function test_the_confirmed_vitals_are_stored_on_the_clearance_record(): void
     {
-        $nurse = $this->nurse();
+        $physician = $this->physician();
         $visit = $this->makeVisit();
 
         // The clinic re-took the BP and measured the respiratory rate.
-        $this->save($nurse, $visit, EncodePayload::make([
+        $this->save($physician, $visit, EncodePayload::make([
             'height_cm' => 170.0,
             'weight_kg' => 65.0,
             'temperature_c' => 36.6,
@@ -207,7 +207,7 @@ class EncodeVitalsTest extends TestCase
     {
         $visit = $this->makeVisit();
 
-        $this->save($this->nurse(), $visit, EncodePayload::make(['respiratory_rate' => 19]));
+        $this->save($this->physician(), $visit, EncodePayload::make(['respiratory_rate' => 19]));
 
         $this->assertSame(19, $visit->vitalSigns->fresh()->respiratory_rate);
     }
@@ -219,15 +219,15 @@ class EncodeVitalsTest extends TestCase
     public function test_the_respiratory_rate_flag_is_computed_at_encode(): void
     {
         $inRange = $this->makeVisit();
-        $this->save($this->nurse(), $inRange, EncodePayload::make(['respiratory_rate' => 16]));
+        $this->save($this->physician(), $inRange, EncodePayload::make(['respiratory_rate' => 16]));
         $this->assertFalse($inRange->vitalSigns->fresh()->is_rr_flagged);
 
         $tooFast = $this->makeVisit();
-        $this->save($this->nurse(), $tooFast, EncodePayload::make(['respiratory_rate' => 24]));
+        $this->save($this->physician(), $tooFast, EncodePayload::make(['respiratory_rate' => 24]));
         $this->assertTrue($tooFast->vitalSigns->fresh()->is_rr_flagged);
 
         $tooSlow = $this->makeVisit();
-        $this->save($this->nurse(), $tooSlow, EncodePayload::make(['respiratory_rate' => 9]));
+        $this->save($this->physician(), $tooSlow, EncodePayload::make(['respiratory_rate' => 9]));
         $this->assertTrue($tooSlow->vitalSigns->fresh()->is_rr_flagged);
     }
 
@@ -236,7 +236,7 @@ class EncodeVitalsTest extends TestCase
     {
         foreach ([11 => true, 12 => false, 20 => false, 21 => true] as $rate => $expected) {
             $visit = $this->makeVisit();
-            $this->save($this->nurse(), $visit, EncodePayload::make(['respiratory_rate' => $rate]));
+            $this->save($this->physician(), $visit, EncodePayload::make(['respiratory_rate' => $rate]));
 
             $this->assertSame(
                 $expected,
@@ -251,7 +251,7 @@ class EncodeVitalsTest extends TestCase
         $visit = $this->makeVisit();
 
         // Every measured value corrected, all seven at once.
-        $this->save($this->nurse(), $visit, EncodePayload::make([
+        $this->save($this->physician(), $visit, EncodePayload::make([
             'height_cm' => 155.5,
             'weight_kg' => 90.0,
             'temperature_c' => 38.4,
@@ -281,7 +281,7 @@ class EncodeVitalsTest extends TestCase
     {
         $visit = $this->makeVisit();
 
-        $this->save($this->nurse(), $visit, EncodePayload::make([
+        $this->save($this->physician(), $visit, EncodePayload::make([
             'height_cm' => 160.0,
             'weight_kg' => 64.0,
             'bmi' => 1.1,   // forged — never reaches validated()
@@ -297,7 +297,7 @@ class EncodeVitalsTest extends TestCase
     {
         $visit = $this->makeVisit();
 
-        $html = $this->actingAs($this->nurse())
+        $html = $this->actingAs($this->physician())
             ->post(route('nurse.visits.print.preview', $visit), EncodePayload::make([
                 'bp_systolic' => 132,
                 'bp_diastolic' => 84,
@@ -313,17 +313,17 @@ class EncodeVitalsTest extends TestCase
 
     public function test_the_printed_form_carries_the_confirmed_vitals_and_the_respiratory_rate(): void
     {
-        $nurse = $this->nurse();
+        $physician = $this->physician();
         $visit = $this->makeVisit();
 
-        $this->save($nurse, $visit, EncodePayload::make([
+        $this->save($physician, $visit, EncodePayload::make([
             'bp_systolic' => 132,
             'bp_diastolic' => 84,
             'respiratory_rate' => 17,
         ]));
         $this->releaseForPrint($visit);   // D-125: printing follows the release
 
-        $html = $this->actingAs($nurse)
+        $html = $this->actingAs($physician)
             ->get(route('nurse.visits.print', $visit))
             ->assertOk()
             ->getContent();
@@ -336,11 +336,11 @@ class EncodeVitalsTest extends TestCase
 
     public function test_the_read_only_view_shows_the_kiosk_hint_only_where_a_value_was_corrected(): void
     {
-        $nurse = $this->nurse();
+        $physician = $this->physician();
         $visit = $this->makeVisit();
 
         // BP corrected; height left exactly as the kiosk measured it.
-        $this->save($nurse, $visit, EncodePayload::make([
+        $this->save($physician, $visit, EncodePayload::make([
             'height_cm' => 170.0,
             'weight_kg' => 65.0,
             'temperature_c' => 36.6,
@@ -350,7 +350,7 @@ class EncodeVitalsTest extends TestCase
             'respiratory_rate' => 17,
         ]));
 
-        $html = $this->actingAs($nurse)
+        $html = $this->actingAs($physician)
             ->get(route('nurse.visits.encode', $visit))
             ->assertOk()
             ->getContent();

@@ -135,6 +135,30 @@ class KioskAlreadyScreenedTest extends TestCase
         $this->assertSame('encoded', $identity['screenedStatus']);
     }
 
+    /**
+     * D-126: an Assessment visit the nurse has interviewed waits for the
+     * physician — still submitted, so the slot is used and a second submit
+     * the same day is refused.
+     */
+    public function test_an_interviewed_visit_is_already_screened_and_a_second_submit_is_refused(): void
+    {
+        $student = $this->student('assessment');
+        $body = $this->payload([], [
+            'socialHistory' => ['smoking' => 'no', 'alcohol' => 'no', 'illicitDrugs' => 'no', 'sexuallyActive' => false],
+        ]);
+        $this->asKiosk($student, 'kiosk.submit', $body)->assertOk();
+        ClinicVisit::sole()->update(['status' => 'interviewed', 'interviewed_at' => now()]);
+
+        $identity = $this->scan($student);
+        $this->assertTrue($identity['alreadyScreenedToday']);
+        $this->assertSame('interviewed', $identity['screenedStatus']);
+
+        $this->asKiosk($student, 'kiosk.submit', $body)
+            ->assertStatus(422)
+            ->assertJsonPath('message', SubmitKioskVisit::ALREADY_SCREENED_MESSAGE);
+        $this->assertSame(1, ClinicVisit::count());
+    }
+
     public function test_a_resting_visit_is_not_already_screened(): void
     {
         $student = $this->student();

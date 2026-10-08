@@ -611,9 +611,11 @@
         </tr>
     </table>
 
-    {{-- ── Signature footer. "Interviewed/Assessed by" is the ENCODER —
-         nurse or physician (D-64). The University Physician's name and
-         licence print only on a record a PHYSICIAN encoded; a nurse's
+    {{-- ── Signature footer. "Interviewed/Assessed by" is the NURSE who
+         interviewed the student (D-126); a record from before D-126 has no
+         interviewer and prints its ENCODER, nurse or physician (D-64). The
+         University Physician's name and licence print only on a record a
+         PHYSICIAN encoded — every record since D-126; an older nurse's
          record leaves both for the physician to sign by hand. ─────────── --}}
     <table class="footer">
         <tr>

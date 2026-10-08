@@ -35,9 +35,9 @@ class EncodeSaveTest extends TestCase
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    private function nurse(): User
+    private function physician(): User
     {
-        return User::factory()->create(['role' => 'nurse']);
+        return User::factory()->physician()->create();
     }
 
     private function college(): College
@@ -112,11 +112,11 @@ class EncodeSaveTest extends TestCase
     }
 
     /** POST Save & Close as a nurse. @param array<string, mixed> $payload */
-    private function save(User $nurse, ClinicVisit $visit, ?array $payload = null)
+    private function save(User $physician, ClinicVisit $visit, ?array $payload = null)
     {
         // D-65: the seven confirmed vitals are required now, so the default
         // payload carries them unchanged from the kiosk's reading.
-        return $this->actingAs($nurse)
+        return $this->actingAs($physician)
             ->from(route('nurse.visits.encode', $visit))
             ->post(route('nurse.visits.encode.store', $visit), $payload ?? EncodePayload::make());
     }
@@ -151,7 +151,7 @@ class EncodeSaveTest extends TestCase
     {
         $visit = $this->makeVisit();
 
-        $this->save($this->nurse(), $visit, [])
+        $this->save($this->physician(), $visit, [])
             ->assertRedirect(route('nurse.visits.encode', $visit))
             ->assertSessionHasErrors('result');
 
@@ -163,7 +163,7 @@ class EncodeSaveTest extends TestCase
     {
         $visit = $this->makeVisit();
 
-        $this->save($this->nurse(), $visit, EncodePayload::make(['result' => 'Maybe']))
+        $this->save($this->physician(), $visit, EncodePayload::make(['result' => 'Maybe']))
             ->assertSessionHasErrors('result');
 
         $this->assertDatabaseCount('clearance_records', 0);
@@ -175,7 +175,7 @@ class EncodeSaveTest extends TestCase
         // so it cannot be saved; with no batch the record's purpose is NULL.
         $visit = $this->makeVisit();
 
-        $this->save($this->nurse(), $visit, [
+        $this->save($this->physician(), $visit, [
             ...EncodePayload::vitals(),
             'result' => 'Fit',
             'purpose' => 'Vacation',
@@ -193,7 +193,7 @@ class EncodeSaveTest extends TestCase
     {
         $visit = $this->makeVisit();
 
-        $this->save($this->nurse(), $visit, EncodePayload::make(['ps_skin' => '2']))
+        $this->save($this->physician(), $visit, EncodePayload::make(['ps_skin' => '2']))
             ->assertSessionHasErrors('ps_skin');
 
         $this->assertDatabaseCount('clearance_records', 0);
@@ -201,12 +201,12 @@ class EncodeSaveTest extends TestCase
 
     public function test_physical_signs_findings_persist_on_save(): void
     {
-        $nurse = $this->nurse();
+        $physician = $this->physician();
         $visit = $this->makeVisit();
 
         // D-22: the nurse records the physician's exam findings; answered
         // rows persist, unanswered rows stay NULL (print as blank bubbles).
-        $this->save($nurse, $visit, [
+        $this->save($physician, $visit, [
             ...EncodePayload::vitals(),
             'result' => 'Fit',
             'ps_skin' => '0',
@@ -223,23 +223,22 @@ class EncodeSaveTest extends TestCase
 
     public function test_a_visit_with_no_appointment_encodes_with_result_only(): void
     {
-        $nurse = $this->nurse();
+        $physician = $this->physician();
         $visit = $this->makeVisit(); // legacy row: no appointment
 
-        $this->save($nurse, $visit, EncodePayload::make())
+        $this->save($physician, $visit, EncodePayload::make())
             ->assertRedirect(route('nurse.queue'))
             ->assertSessionHas('status');
 
         $this->assertSame('encoded', $visit->fresh()->status);
-        // Purpose optional (BR-16); a NURSE's encode leaves the physician
-        // block blank (D-64) — both columns NULL.
+        // Purpose optional (BR-16). D-126: only the physician encodes, so the
+        // block is always theirs (D-64).
         $this->assertDatabaseHas('clearance_records', [
             'clinic_visit_id' => $visit->id,
-            'encoded_by' => $nurse->id,
+            'encoded_by' => $physician->id,
             'result' => 'Fit',
             'purpose' => null,
-            'physician_name' => null,
-            'physician_license_no' => null,
+            ...ClearanceRecord::physicianBlockFor($physician),
         ]);
         $this->assertNotNull($visit->fresh()->clearanceRecord->encoded_at);
     }
@@ -263,11 +262,11 @@ class EncodeSaveTest extends TestCase
 
     public function test_the_physician_block_is_not_client_settable(): void
     {
-        $nurse = $this->nurse();
+        $physician = $this->physician();
         $visit = $this->makeVisit();
 
-        // A forged post cannot put a physician's name on a nurse's record.
-        $this->save($nurse, $visit, [
+        // A forged post cannot replace the encoding physician's own block.
+        $this->save($physician, $visit, [
             ...EncodePayload::vitals(),
             'result' => 'Fit',
             'physician_name' => 'FORGED, MD',
@@ -275,16 +274,16 @@ class EncodeSaveTest extends TestCase
         ])->assertRedirect(route('nurse.queue'));
 
         $record = ClearanceRecord::firstWhere('clinic_visit_id', $visit->id);
-        $this->assertNull($record->physician_name);
-        $this->assertNull($record->physician_license_no);
+        $this->assertSame(ClearanceRecord::physicianBlockFor($physician)['physician_name'], $record->physician_name);
+        $this->assertSame($physician->license_number, $record->physician_license_no);
     }
 
     public function test_full_payload_is_saved(): void
     {
-        $nurse = $this->nurse();
+        $physician = $this->physician();
         $visit = $this->makeVisit();
 
-        $this->save($nurse, $visit, [
+        $this->save($physician, $visit, [
             ...EncodePayload::vitals(),
             'result' => 'Unfit',
             'nurse_notes' => 'Advised rest and follow-up in one week.',
@@ -299,12 +298,12 @@ class EncodeSaveTest extends TestCase
 
     public function test_encoded_visit_vanishes_from_the_queue_feed(): void
     {
-        $nurse = $this->nurse();
+        $physician = $this->physician();
         $visit = $this->makeVisit();
 
-        $this->save($nurse, $visit);
+        $this->save($physician, $visit);
 
-        $this->actingAs($nurse)
+        $this->actingAs($physician)
             ->get(route('nurse.queue.feed'))
             ->assertOk()
             ->assertJsonCount(0, 'visits');
@@ -317,7 +316,7 @@ class EncodeSaveTest extends TestCase
         $appointment = Appointment::factory()->medical()->create();
         $visit = $this->makeVisit($appointment);
 
-        $this->save($this->nurse(), $visit);
+        $this->save($this->physician(), $visit);
 
         $this->assertSame('completed', $appointment->fresh()->status);
     }
@@ -327,7 +326,7 @@ class EncodeSaveTest extends TestCase
         $appointment = Appointment::factory()->medical()->create();
         $visit = $this->makeVisit($appointment);
 
-        $this->save($this->nurse(), $visit, []);
+        $this->save($this->physician(), $visit, []);
 
         $this->assertSame('scheduled', $appointment->fresh()->status);
     }
@@ -336,14 +335,14 @@ class EncodeSaveTest extends TestCase
 
     public function test_double_encode_is_safe_and_redirects_to_the_read_only_view(): void
     {
-        $nurse = $this->nurse();
+        $physician = $this->physician();
         $visit = $this->makeVisit();
 
-        $this->save($nurse, $visit, EncodePayload::make());
+        $this->save($physician, $visit, EncodePayload::make());
 
         // Re-submit (stale tab / double click): friendly redirect, no 2nd row,
         // and the first record is untouched.
-        $this->save($nurse, $visit, EncodePayload::make(['result' => 'Unfit']))
+        $this->save($physician, $visit, EncodePayload::make(['result' => 'Unfit']))
             ->assertRedirect(route('nurse.visits.encode', $visit))
             ->assertSessionHas('status');
 
@@ -357,16 +356,16 @@ class EncodeSaveTest extends TestCase
         // exists while the visit still reads `captured`. The DB unique on
         // clinic_visit_id must win and the nurse must get the friendly
         // redirect, not a 500.
-        $nurse = $this->nurse();
+        $physician = $this->physician();
         $visit = $this->makeVisit();
         ClearanceRecord::create([
             'clinic_visit_id' => $visit->id,
-            'encoded_by' => $nurse->id,
+            'encoded_by' => $physician->id,
             'result' => 'Fit',
             'encoded_at' => now(),
         ]);
 
-        $this->save($nurse, $visit, EncodePayload::make(['result' => 'Unfit']))
+        $this->save($physician, $visit, EncodePayload::make(['result' => 'Unfit']))
             ->assertRedirect(route('nurse.visits.encode', $visit))
             ->assertSessionHas('status');
 
@@ -389,7 +388,7 @@ class EncodeSaveTest extends TestCase
             ->assertSeeText('Pending')
             ->assertDontSeeText('Fit');
 
-        $this->save($this->nurse(), $visit, EncodePayload::make());
+        $this->save($this->physician(), $visit, EncodePayload::make());
 
         $this->actingAs($student)
             ->get(route('student.records'))
@@ -408,7 +407,7 @@ class EncodeSaveTest extends TestCase
         $batch = BatchRequest::create([
             'reference_no' => sprintf('BR-2026-%03d', $seq++),
             'college_id' => $this->college()->id,
-            'requested_by' => $this->nurse()->id,
+            'requested_by' => $this->physician()->id,
             'form_type' => $formType,
             'reason' => $reason,
             'reason_detail' => $detail,
@@ -427,8 +426,11 @@ class EncodeSaveTest extends TestCase
     public function test_save_copies_the_batch_reason_label_as_the_purpose(): void
     {
         $visit = $this->makeVisit($this->batchAppointment('assessment', 'ojt'));
+        // D-126: an Assessment reaches the physician only once the nurse has
+        // submitted the interview.
+        $visit->update(['status' => 'interviewed']);
 
-        $this->save($this->nurse(), $visit, EncodePayload::make())
+        $this->save($this->physician(), $visit, EncodePayload::make())
             ->assertRedirect(route('nurse.queue'));
 
         $this->assertDatabaseHas('clearance_records', [
@@ -442,7 +444,7 @@ class EncodeSaveTest extends TestCase
     {
         $visit = $this->makeVisit($this->batchAppointment('clearance', 'others', 'Regional quiz bee at PSU Lubao'));
 
-        $this->save($this->nurse(), $visit, EncodePayload::make());
+        $this->save($this->physician(), $visit, EncodePayload::make());
 
         $this->assertDatabaseHas('clearance_records', [
             'clinic_visit_id' => $visit->id,
@@ -456,7 +458,7 @@ class EncodeSaveTest extends TestCase
         // A crafted request cannot re-pick the purpose the college chose.
         $visit = $this->makeVisit($this->batchAppointment('clearance', 'fieldtrip'));
 
-        $this->save($this->nurse(), $visit, [
+        $this->save($this->physician(), $visit, [
             ...EncodePayload::vitals(),
             'result' => 'Fit',
             'purpose' => 'On-the-job Training',
@@ -472,13 +474,13 @@ class EncodeSaveTest extends TestCase
 
     public function test_the_batch_purpose_reaches_the_printed_form(): void
     {
-        $nurse = $this->nurse();
+        $physician = $this->physician();
         $visit = $this->makeVisit($this->batchAppointment('clearance', 'outbound'));
 
-        $this->save($nurse, $visit, EncodePayload::make());
+        $this->save($physician, $visit, EncodePayload::make());
         $this->releaseForPrint($visit);   // D-125: printing follows the release
 
-        $html = $this->actingAs($nurse)
+        $html = $this->actingAs($physician)
             ->get(route('nurse.visits.print', $visit))
             ->assertOk()
             ->getContent();
@@ -490,10 +492,10 @@ class EncodeSaveTest extends TestCase
     public function test_the_print_preview_uses_the_batch_purpose_too(): void
     {
         // Preview & Print (before save) must show exactly what Save stores.
-        $nurse = $this->nurse();
+        $physician = $this->physician();
         $visit = $this->makeVisit($this->batchAppointment('clearance', 'others', 'Quiz bee'));
 
-        $html = $this->actingAs($nurse)
+        $html = $this->actingAs($physician)
             ->post(route('nurse.visits.print.preview', $visit), EncodePayload::make(['purpose' => 'On-the-job Training']))
             ->assertOk()
             ->getContent();

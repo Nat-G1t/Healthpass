@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Nurse;
 use App\Http\Controllers\Controller;
 use App\Models\ClearanceRecord;
 use App\Models\ClinicVisit;
+use App\Models\User;
 use App\Support\VisitMonths;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -67,7 +68,7 @@ class DashboardController extends Controller
         $search = trim((string) $request->query('q', ''));
 
         return view('nurse.dashboard', [
-            'stats' => $this->stats(),
+            'stats' => $this->stats($request->user()),
             'records' => $this->history($this->dateBounds($selectedYear, $selectedMonth), $selectedResult, $search),
             // 2021 to this year, the same list the Analytics year picker offers.
             'years' => VisitMonths::years(),
@@ -90,7 +91,7 @@ class DashboardController extends Controller
      *
      * @return array{encodedToday: int, encodedMonth: int, awaitingEncode: int, flaggedMonth: int}
      */
-    private function stats(): array
+    private function stats(User $viewer): array
     {
         $now = CarbonImmutable::now();
         $today = [$now->startOfDay(), $now->endOfDay()];
@@ -99,11 +100,11 @@ class DashboardController extends Controller
         return [
             'encodedToday' => ClearanceRecord::whereBetween('encoded_at', $today)->count(),
             'encodedMonth' => ClearanceRecord::whereBetween('encoded_at', $month)->count(),
-            // The Live Queue's own count (BR-11): visits captured at the kiosk
-            // and still waiting for an assessment.
-            // D-72: 'captured' already excludes a resting visit by itself -
-            // it is neither captured nor encoded until the re-check releases it.
-            'awaitingEncode' => ClinicVisit::where('status', 'captured')->count(),
+            // The Live Queue's own count (BR-11) — D-126: the VIEWER's own
+            // queue (the nurse's interviews, or the physician's results).
+            // reorder() drops the queue's ORDER BY, which a count has no use
+            // for. A resting visit is in neither queue (D-72).
+            'awaitingEncode' => ClinicVisit::liveQueue($viewer)->reorder()->count(),
             // Flags surface from CAPTURE (FR-ANL-07), so an un-encoded visit
             // counts here too — that is the point of the tile.
             'flaggedMonth' => ClinicVisit::flagged()->whereBetween('checked_in_at', $month)->count(),

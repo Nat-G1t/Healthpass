@@ -367,17 +367,21 @@ class NavBadgesTest extends TestCase
 
     public function test_the_live_queue_counts_waiting_visits_and_opening_it_does_not_clear_them(): void
     {
+        // D-126: no Assessment batch, so these are Medical Clearances — the
+        // physician's queue; the nurse's (Assessments only) stays empty.
+        $physician = User::factory()->physician()->create();
         $visits = collect(range(1, 3))->map(fn (): ClinicVisit => $this->captureVisit($this->makeStudent()));
-        $this->assertSame(3, $this->badges($this->nurse)['nurse.queue']);
+        $this->assertSame(3, $this->badges($physician)['nurse.queue']);
+        $this->assertSame(0, $this->badges($this->nurse)['nurse.queue']);
 
         $this->encode($visits->first());
-        $this->assertSame(2, $this->badges($this->nurse)['nurse.queue']);
+        $this->assertSame(2, $this->badges($physician)['nurse.queue']);
 
-        $this->actingAs($this->nurse)->get(route('nurse.queue'))
+        $this->actingAs($physician)->get(route('nurse.queue'))
             ->assertOk()
             ->assertSee('data-nav-badge-for="nurse.queue"', false);
 
-        $this->assertSame(2, $this->badges($this->nurse)['nurse.queue']);
+        $this->assertSame(2, $this->badges($physician)['nurse.queue']);
     }
 
     // ── Director ─────────────────────────────────────────────────────────────

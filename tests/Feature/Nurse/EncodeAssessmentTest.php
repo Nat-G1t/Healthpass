@@ -20,6 +20,10 @@ use Tests\TestCase;
 /**
  * FR-NRS-10 / D-69 — the Medical Assessment Form's own encode sections.
  *
+ * D-126: the nurse fills them at the interview and the physician saves Fit /
+ * Unfit after — save() below walks that whole path, so these assertions still
+ * read the record's sections at the end of it.
+ *
  * A visit whose batch chose the Medical Assessment Form (D-62) records the
  * paper's histories, immunization profile, family planning access and surgical
  * history in `medical_assessments` — one row per Assessment encode, and none at
@@ -35,6 +39,11 @@ class EncodeAssessmentTest extends TestCase
     private function nurse(): User
     {
         return User::factory()->create(['role' => 'nurse']);
+    }
+
+    private function physician(): User
+    {
+        return User::factory()->physician()->create();
     }
 
     private function college(): College
@@ -147,10 +156,29 @@ class EncodeAssessmentTest extends TestCase
         ]);
     }
 
-    /** POST Save & Close as a nurse. @param array<string, mixed> $payload */
+    /**
+     * The whole clinic path for $payload (D-126): an Assessment visit is first
+     * the NURSE's interview (Submit to physician — where the sections are
+     * validated and written), then the PHYSICIAN's Save & Close with the same
+     * payload; a Clearance goes straight to the physician. Returns the first
+     * response that did not land on the Live Queue — a validation failure —
+     * or the physician's.
+     *
+     * @param  array<string, mixed>  $payload
+     */
     private function save(ClinicVisit $visit, array $payload)
     {
-        return $this->actingAs($this->nurse())
+        if ($visit->formType() === 'assessment') {
+            $interview = $this->actingAs($this->nurse())
+                ->from(route('nurse.visits.encode', $visit))
+                ->post(route('nurse.visits.interview', $visit), $payload);
+
+            if (! $interview->isRedirect(route('nurse.queue'))) {
+                return $interview;
+            }
+        }
+
+        return $this->actingAs($this->physician())
             ->from(route('nurse.visits.encode', $visit))
             ->post(route('nurse.visits.encode.store', $visit), $payload);
     }
@@ -342,7 +370,8 @@ class EncodeAssessmentTest extends TestCase
             ->assertSee('Physical Signs Disorder of (Self Assessment)')
             ->assertDontSee('name="ps_skin"', false);
 
-        $this->actingAs($nurse)
+        // D-126: a Medical Clearance opens for the physician only.
+        $this->actingAs($this->physician())
             ->get(route('nurse.visits.encode', $clearance))
             ->assertOk()
             ->assertDontSee('II. Immunization Profile')
@@ -652,7 +681,7 @@ class EncodeAssessmentTest extends TestCase
     {
         $visit = $this->makeVisit('clearance', 'F');
 
-        $this->actingAs($this->nurse())
+        $this->actingAs($this->physician())
             ->get(route('nurse.visits.encode', $visit))
             ->assertOk()
             ->assertDontSee('Pertinent Physical Examination')

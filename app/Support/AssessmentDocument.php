@@ -60,10 +60,13 @@ final class AssessmentDocument
         $screening = $visit->screeningResponse;
         $vitals = $record->printedVitals($visit->vitalSigns);
 
-        // Who encoded it — "Interviewed/Assessed by" on the back page. On a
-        // preview the controller has already set this relation to the
+        // "Interviewed/Assessed by" on the back page. D-126: the NURSE who
+        // interviewed the student. A record from before D-126 has no
+        // interviewer, so it keeps the old rule: whoever encoded it. On a
+        // preview the controller has already set the encoder relation to the
         // signed-in user, so loadMissing() leaves it alone.
         $record->loadMissing('encoder');
+        $visit->loadMissing('interviewer');
 
         return [
             ...$shared,
@@ -90,7 +93,7 @@ final class AssessmentDocument
                 'dateDone' => (string) ($sections?->surgical_history['date_done'] ?? ''),
             ],
             'examColumns' => self::examColumns($sections),
-            'encoderName' => (string) ($record->encoder?->name ?? ''),
+            'encoderName' => (string) ($visit->interviewer?->name ?? $record->encoder?->name ?? ''),
         ];
     }
 

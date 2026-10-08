@@ -33,6 +33,10 @@ class ClinicVisit extends Model
         // D-72: when a resting student may come back and re-take the flagged
         // reading. Server clock only; NULL on every visit that never rested.
         'resting_until',
+        // D-126: the nurse who interviewed a Medical Assessment visit and
+        // submitted it to the physician, and when. NULL on every other visit.
+        'interviewed_by',
+        'interviewed_at',
     ];
 
     protected function casts(): array
@@ -41,6 +45,7 @@ class ClinicVisit extends Model
             'privacy_consent_at' => 'datetime',
             'checked_in_at' => 'datetime',
             'resting_until' => 'datetime',
+            'interviewed_at' => 'datetime',
         ];
     }
 
@@ -53,9 +58,12 @@ class ClinicVisit extends Model
      * sit down and re-take a high temperature, blood pressure or heart rate.
      * It holds real answers, but the clinic has never been told about it: it is
      * not in the queue, not in any analytics count, not on the student's
-     * records. Only these two statuses are.
+     * records. Only these statuses are.
+     *
+     * D-126: `interviewed` is a submitted visit too — the nurse has seen the
+     * student and handed them to the physician; only the result is missing.
      */
-    public const SUBMITTED_STATUSES = ['captured', 'encoded'];
+    public const SUBMITTED_STATUSES = ['captured', 'interviewed', 'encoded'];
 
     /**
      * What D-76 pre-filled Student remarks with when the student typed no YES
@@ -80,26 +88,44 @@ class ClinicVisit extends Model
     }
 
     /**
-     * FR-NRS-01/02 — the Live Queue query, shared by the page (initial render)
-     * and the JSON feed (polling) so the two can NEVER disagree on order.
+     * FR-NRS-01/02 — the Live Queue query, shared by the page (initial render),
+     * the JSON feed (polling) and the nav badge, so they can NEVER disagree on
+     * which rows show or in what order.
      *
-     * Captured visits, oldest first (FCFS): the top row is the longest-waiting
-     * student. `id` breaks ties for two visits checked in the same second.
+     * D-126: there are two queues, and each clinic role sees only its own (Q1):
+     *  - the NURSE's: `captured` Medical Assessment visits, waiting for the
+     *    interview;
+     *  - the PHYSICIAN's: `captured` Medical Clearance visits (they never pass
+     *    through the nurse) plus every `interviewed` visit the nurse submitted.
+     * A legacy visit with no batch behind it is a Medical Clearance
+     * (ClinicVisit::formType()), so "not an assessment" is written as "has no
+     * assessment batch" — whereDoesntHave also matches a visit with no batch.
      *
-     * Index note: the `(status, created_at)` composite index (§6.4) serves the
-     * `status = 'captured'` filter via its leading column. The FCFS sort key is
-     * `checked_in_at` (per FR-NRS-01), not `created_at`, so the index's second
-     * column doesn't cover the ORDER BY — but the queue is only unencoded
-     * visits (a handful of rows), so the sort over that tiny set is free.
+     * Order: first come, first served by when the visit entered THIS queue —
+     * the nurse's submit time for an interviewed visit, the kiosk check-in
+     * otherwise. COALESCE (the first non-NULL value) is plain SQL that MySQL
+     * and SQLite both run. `id` breaks ties for two visits in the same second.
      */
-    public function scopeLiveQueue(Builder $query): Builder
+    public function scopeLiveQueue(Builder $query, User $viewer): Builder
     {
+        $isAssessment = fn (Builder $batch) => $batch->where('form_type', 'assessment');
+
+        if ($viewer->isPhysician()) {
+            $query->where(fn (Builder $physician) => $physician
+                ->where('status', 'interviewed')
+                ->orWhere(fn (Builder $clearance) => $clearance
+                    ->where('status', 'captured')
+                    ->whereDoesntHave('appointment.batchRequest', $isAssessment)));
+        } else {
+            $query->where('status', 'captured')
+                ->whereHas('appointment.batchRequest', $isAssessment);
+        }
+
         return $query
-            ->where('status', 'captured')
             // appointment.batchRequest: the D-62 form-type badge on every row,
             // loaded here so the page and the feed never query per row (N+1).
             ->with(['student:id,name', 'college:id,name', 'vitalSigns', 'appointment:id,batch_request_id', 'appointment.batchRequest:id,form_type'])
-            ->orderBy('checked_in_at')
+            ->orderByRaw('COALESCE(interviewed_at, checked_in_at)')
             ->orderBy('id');
     }
 
@@ -160,8 +186,8 @@ class ClinicVisit extends Model
     }
 
     /**
-     * FR-KSK-03b — the student's latest SUBMITTED visit (`captured` or
-     * `encoded`) on an appointment dated today, or null.
+     * FR-KSK-03b — the student's latest SUBMITTED visit (`captured`,
+     * `interviewed` — D-126 — or `encoded`) on an appointment dated today, or null.
      *
      * Anchored on the APPOINTMENT's date, not the visit's timestamp, because
      * "used today's slot" is a fact about the appointment: it is what
@@ -248,6 +274,59 @@ class ClinicVisit extends Model
         return $this->screeningResponse?->detailsAsNotes() ?? '';
     }
 
+    // ── D-126 two queues ─────────────────────────────────────────────────────
+
+    /**
+     * D-126 — which clinic role's queue this visit is waiting in: `nurse` for
+     * a captured Medical Assessment (the interview), `physician` for a
+     * captured Medical Clearance or an interviewed visit (the result), or
+     * null once it is encoded (or still resting). The values are `users.role`
+     * names, so a controller can compare it with the signed-in user's role.
+     *
+     * The ONE rule every guard asks — opening the page, submitting the
+     * interview, encoding, previewing, removing — and the same split
+     * scopeLiveQueue() writes in SQL.
+     */
+    public function queueRole(): ?string
+    {
+        return match (true) {
+            $this->status === 'interviewed' => 'physician',
+            $this->status !== 'captured' => null,
+            $this->formType() === 'assessment' => 'nurse',
+            default => 'physician',
+        };
+    }
+
+    /** D-126 — is this visit waiting in $user's own queue? */
+    public function isInQueueOf(User $user): bool
+    {
+        return $this->queueRole() !== null && $this->queueRole() === $user->role;
+    }
+
+    /**
+     * D-126 — the plain sentence a clinic user sees when they open or post to
+     * a visit that is not in their own queue (they land back on the Live
+     * Queue with it). Never a 403 or 404 page.
+     */
+    public function queueRefusal(User $user): string
+    {
+        $name = $this->student->name ?? 'That student';
+
+        return match ($this->queueRole()) {
+            null => "{$name} is no longer waiting in a queue.",
+            'physician' => $user->isPhysician()
+                ? "Only the nurse submits interviews — {$name} is already in your queue."
+                : "{$name} is in the physician's queue — only the physician can open it.",
+            default => "{$name} is waiting for the nurse's interview. They reach your queue once the nurse submits them.",
+        };
+    }
+
+    /** D-126 — the Live Queue row's action for this viewer: the nurse interviews, the physician encodes. */
+    public static function queueActionLabel(User $viewer): string
+    {
+        return $viewer->isPhysician() ? 'Encode Result' : 'Interview';
+    }
+
     // ── D-125 printing gate ──────────────────────────────────────────────────
 
     /**
@@ -302,9 +381,25 @@ class ClinicVisit extends Model
         return $this->hasOne(ScreeningResponse::class);
     }
 
-    /** 1:0..1 nurse-encoded clearance result (null until nurse encodes). */
+    /** 1:0..1 clearance result (null until the physician encodes — D-126). */
     public function clearanceRecord(): HasOne
     {
         return $this->hasOne(ClearanceRecord::class);
+    }
+
+    /**
+     * D-69/D-126 — the Medical Assessment Form's own sections, keyed by the
+     * visit since D-126: the nurse saves them at the interview, before any
+     * clearance record exists. NULL on every Medical Clearance visit.
+     */
+    public function medicalAssessment(): HasOne
+    {
+        return $this->hasOne(MedicalAssessment::class);
+    }
+
+    /** D-126 — the nurse who interviewed this visit (prints as "Interviewed/Assessed by"). */
+    public function interviewer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'interviewed_by');
     }
 }

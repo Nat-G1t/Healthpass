@@ -266,7 +266,7 @@ class HistoricalClearanceSeeder extends DemoClinicVisitSeeder
 
         $this->createSpreadVitalsAndScreening($visit, $n, $batch->form_type);
 
-        $record = ClearanceRecord::create([
+        ClearanceRecord::create([
             'clinic_visit_id' => $visit->id,
             'encoded_by' => $nurse->id,
             ...$this->encodedVitals($visit, $n % 19 === 5 ? 26 : 12 + ($n % 9)),
@@ -276,7 +276,7 @@ class HistoricalClearanceSeeder extends DemoClinicVisitSeeder
             'encoded_at' => $checkedIn->copy()->addHours(2),
         ]);
 
-        $this->medicalAssessment($record, $batch->form_type, $n);
+        $this->medicalAssessment($visit, $batch->form_type, $n);
     }
 
     /** The next reference number of this kind in $year (1, 2, 3 …). */

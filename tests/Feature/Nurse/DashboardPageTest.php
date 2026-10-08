@@ -430,15 +430,16 @@ class DashboardPageTest extends TestCase
             : now()->startOfMonth();
         $this->encodedVisit('Earlier Encode', $nurse, encodedAt: $earlierThisMonth->toDateTimeString());
 
-        // Awaiting encode = the Live Queue's captured count. One of them is
-        // flagged, so it also counts on the flag tile (flags surface from
-        // CAPTURE, FR-ANL-07 — encoding is not required).
+        // Awaiting encode = the VIEWER's Live Queue count (D-126): these two
+        // have no batch, so they are Medical Clearances in the physician's
+        // queue. One of them is flagged, so it also counts on the flag tile
+        // (flags surface from CAPTURE, FR-ANL-07 — encoding is not required).
         $this->capturedVisit('Waiting One');
         $this->capturedVisit('Waiting Two', vitals: ['bp_systolic' => 150, 'bp_diastolic' => 95, 'is_bp_flagged' => true]);
 
         $expectedMonth = $earlierThisMonth->isSameMonth(now()) ? 3 : 2;
 
-        $this->actingAs($nurse)
+        $this->actingAs(User::factory()->physician()->create())
             ->get(route('nurse.dashboard'))
             ->assertOk()
             ->assertViewHas('stats', function (array $stats) use ($expectedMonth): bool {

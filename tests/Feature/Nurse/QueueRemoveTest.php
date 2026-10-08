@@ -26,14 +26,14 @@ class QueueRemoveTest extends TestCase
 
     private College $college;
 
-    private User $nurse;
+    private User $physician;
 
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->college = College::create(['code' => 'CCS', 'name' => 'College of Computing Studies']);
-        $this->nurse = User::factory()->create(['role' => 'nurse']);
+        $this->physician = User::factory()->physician()->create();
     }
 
     /** A student with an appointment today and a visit in the given status, with vitals + answers. */
@@ -85,7 +85,7 @@ class QueueRemoveTest extends TestCase
 
     private function remove(ClinicVisit $visit, ?User $as = null): TestResponse
     {
-        return $this->actingAs($as ?? $this->nurse)->delete(route('nurse.visits.remove', $visit));
+        return $this->actingAs($as ?? $this->physician)->delete(route('nurse.visits.remove', $visit));
     }
 
     // ── The happy path ───────────────────────────────────────────────────────
@@ -110,7 +110,7 @@ class QueueRemoveTest extends TestCase
 
         $this->remove($visit);
 
-        $this->actingAs($this->nurse)->getJson(route('nurse.queue.feed'))
+        $this->actingAs($this->physician)->getJson(route('nurse.queue.feed'))
             ->assertOk()
             ->assertJson(['count' => 0, 'visits' => []]);
     }
@@ -179,7 +179,7 @@ class QueueRemoveTest extends TestCase
         $visit = $this->makeVisit();
         $this->remove($visit);
 
-        $this->actingAs($this->nurse)->get(route('nurse.visits.encode', $visit))
+        $this->actingAs($this->physician)->get(route('nurse.visits.encode', $visit))
             ->assertRedirect(route('nurse.queue'))
             ->assertSessionHas('error', fn (string $message): bool => str_contains($message, 'removed from the queue'));
     }
@@ -205,7 +205,7 @@ class QueueRemoveTest extends TestCase
     {
         $visit = $this->makeVisit();
 
-        $this->actingAs($this->nurse)->get(route('nurse.queue'))
+        $this->actingAs($this->physician)->get(route('nurse.queue'))
             ->assertOk()
             ->assertSee('data-queue-remove', false)
             ->assertSee('data-remove-url="'.route('nurse.visits.remove', $visit).'"', false)
@@ -217,7 +217,7 @@ class QueueRemoveTest extends TestCase
     {
         $visit = $this->makeVisit();
 
-        $this->actingAs($this->nurse)->getJson(route('nurse.queue.feed'))
+        $this->actingAs($this->physician)->getJson(route('nurse.queue.feed'))
             ->assertOk()
             ->assertJsonPath('visits.0.remove_url', route('nurse.visits.remove', $visit));
     }

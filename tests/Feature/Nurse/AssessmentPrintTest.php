@@ -41,6 +41,21 @@ class AssessmentPrintTest extends TestCase
         return User::factory()->create(['role' => 'nurse', 'name' => 'Jane Dela Cruz']);
     }
 
+    /**
+     * D-126: what the nurse's Submit to physician leaves behind — the
+     * interview row, `interviewed`, and who / when. The visit is then in the
+     * physician's queue.
+     */
+    private function interview(ClinicVisit $visit, User $nurse): void
+    {
+        $visit->medicalAssessment()->create([
+            'medical_history' => ['patient' => [], 'family' => [], 'specify' => []],
+            'immunizations' => ['given' => [], 'others' => null],
+            'surgical_history' => ['procedures' => null, 'date_done' => null],
+        ]);
+        $visit->update(['status' => 'interviewed', 'interviewed_by' => $nurse->id, 'interviewed_at' => now()]);
+    }
+
     private function college(): College
     {
         return College::firstOrCreate(['code' => 'CCS'], ['name' => 'College of Computing Studies']);
@@ -153,7 +168,7 @@ class AssessmentPrintTest extends TestCase
         ]);
 
         if ($visit->formType() === 'assessment') {
-            $record->medicalAssessment()->create([
+            $record->medicalAssessment()->updateOrCreate([], [
                 'medical_history' => ['patient' => [], 'family' => [], 'specify' => []],
                 'immunizations' => ['given' => [], 'others' => null],
                 'surgical_history' => ['procedures' => null, 'date_done' => null],
@@ -515,8 +530,31 @@ class AssessmentPrintTest extends TestCase
         );
     }
 
-    // ── 5. Who signs it (D-64) ───────────────────────────────────────────────
+    // ── 5. Who signs it (D-64, D-126) ────────────────────────────────────────
 
+    public function test_a_new_record_names_the_interviewing_nurse_and_the_physician(): void
+    {
+        // D-126: the nurse interviewed, the physician encoded.
+        $nurse = $this->nurse();
+        $physician = User::factory()->physician('Reynaldo S. Alipio', '60252')->create();
+        $visit = $this->makeVisit();
+        $this->interview($visit, $nurse);
+        $this->encode($visit, $physician, ClearanceRecord::physicianBlockFor($physician));
+
+        $html = $this->print($nurse, $visit, 'back');
+
+        $this->assertMatchesRegularExpression(
+            '~<div class="name">Jane Dela Cruz</div>\s*<div class="center">Interviewed/Assessed by:</div>~u',
+            $html
+        );
+        $this->assertMatchesRegularExpression(
+            '~<div class="name">REYNALDO S\. ALIPIO, MD</div>\s*<div class="center">University Physician</div>~u',
+            $html
+        );
+        $this->assertStringContainsString('60252', $html);
+    }
+
+    /** Before D-126 (no interviewer) the encoder prints, exactly as it did. */
     public function test_a_nurse_record_names_the_nurse_and_leaves_the_physician_blank(): void
     {
         $nurse = $this->nurse();
@@ -569,12 +607,13 @@ class AssessmentPrintTest extends TestCase
             ->assertSee('Put the printed sheet back in the tray');
     }
 
-    public function test_a_captured_assessment_offers_the_two_pre_save_prints(): void
+    public function test_an_interviewed_assessment_offers_the_physician_the_two_pre_save_prints(): void
     {
-        $nurse = $this->nurse();
+        // D-126: the physician's page — the nurse's interview page has none.
         $visit = $this->makeVisit();
+        $this->interview($visit, $this->nurse());
 
-        $this->actingAs($nurse)
+        $this->actingAs(User::factory()->physician()->create())
             ->get(route('nurse.visits.encode', $visit))
             ->assertOk()
             ->assertSee('Print front')
@@ -585,10 +624,10 @@ class AssessmentPrintTest extends TestCase
     /** A Medical Clearance keeps its D-67 buttons untouched. */
     public function test_a_clearance_visit_keeps_preview_and_print(): void
     {
-        $nurse = $this->nurse();
         $visit = $this->makeVisit('clearance');
 
-        $this->actingAs($nurse)
+        // D-126: a Medical Clearance is the physician's.
+        $this->actingAs(User::factory()->physician()->create())
             ->get(route('nurse.visits.encode', $visit))
             ->assertOk()
             ->assertSee('Preview &amp; Print', false)
@@ -604,10 +643,10 @@ class AssessmentPrintTest extends TestCase
      */
     public function test_the_pre_save_print_renders_the_posted_sections(): void
     {
-        $nurse = $this->nurse();
         $visit = $this->makeVisit();
+        $this->interview($visit, $this->nurse());
 
-        $html = $this->actingAs($nurse)
+        $html = $this->actingAs(User::factory()->physician()->create())
             ->post(route('nurse.visits.print.preview', $visit), [
                 'result' => 'Fit',
                 'side' => 'front',
@@ -623,16 +662,17 @@ class AssessmentPrintTest extends TestCase
         // Front only, with the posted specify text in its blank.
         $this->assertSame(1, substr_count($html, AssessmentDocument::FORM_CODE));
         $this->assertStringContainsString('Allergy (Specify: peanuts)', $html);
-        // "Interviewed/Assessed by" is the signed-in encoder, pre-save too.
         $this->assertStringContainsString('MEDICAL ASSESSMENT FORM', $html);
     }
 
-    public function test_the_pre_save_back_print_names_the_signed_in_encoder(): void
+    public function test_the_pre_save_back_print_names_the_interviewing_nurse_and_the_signed_in_physician(): void
     {
-        $nurse = $this->nurse();
+        // D-126: "Interviewed/Assessed by" is the nurse, pre-save too; the
+        // physician block is the signed-in physician who will encode.
         $visit = $this->makeVisit();
+        $this->interview($visit, $this->nurse());
 
-        $this->actingAs($nurse)
+        $this->actingAs(User::factory()->physician('Ana B. Cruz', '123456')->create())
             ->post(route('nurse.visits.print.preview', $visit), [
                 'result' => 'Fit',
                 'side' => 'back',
@@ -640,7 +680,8 @@ class AssessmentPrintTest extends TestCase
                 'physical_exam' => ['heent' => ['findings' => ['normal'], 'others' => null]],
             ])
             ->assertOk()
-            ->assertSee('Jane Dela Cruz');
+            ->assertSee('Jane Dela Cruz')
+            ->assertSee('ANA B. CRUZ, MD');
     }
 
     /** Every print re-stamps printed_at, front or back (FR-NRS-05). */

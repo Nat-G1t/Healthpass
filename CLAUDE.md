@@ -90,7 +90,7 @@ Do not silently reconcile conflicts.
 - **Rest & re-check (D-72):** a first pass with high temp/BP/HR is saved as a
   `resting` visit (never queued, never counted); the student re-scans after the
   rest time and re-takes only those readings; the server keeps the first reading
-  in `vital_signs.first_reading`. The "Bypass the nurse queue flow" rule still
+  in `vital_signs.first_reading`. The "Bypass the clinic queues" rule still
   holds — a resting visit reaches the clinic only through the queue. Every count
   of visits goes through `ClinicVisit::scopeSubmitted()`.
 - **Five-sample capture (D-74, D-80):** height, weight and temperature buffer 5
@@ -191,8 +191,10 @@ npm run dev                       # terminal 2
   heart rate > 100 and respiratory rate < 12 / > 20 (D-66); other
   thresholds per PRD business rules.)
 - **Five roles:** Student, College Admin, Nurse, Physician (D-64), Clinic
-  Director. Nurse and Physician share the Clinic Dashboard (`/nurse/*`) and
-  encode Fit/Unfit; the physician's name/license print only on records a
+  Director. Nurse and Physician share the Clinic Dashboard (`/nurse/*`) but
+  have **separate queues** (D-126): the nurse interviews Medical Assessment
+  students and submits them to the physician; only the physician encodes
+  Fit/Unfit. The physician's name/license print only on records a
   physician encoded. (Case categories were dropped by D-32.) Check clinic
   access with `User::isClinicStaff()`, never `role === 'nurse'`.
 - **Kiosk never shows Fit/Unfit to the student.** It captures vitals +
@@ -271,8 +273,9 @@ npm run dev                       # terminal 2
 `colleges`, `users`, `student_profiles`, `appointments`, `batch_requests`,
 `batch_request_students`, `clinic_visits`, `vital_signs`,
 `screening_responses`, `clearance_records`, `medical_assessments` (D-69 —
-the Medical Assessment Form's own sections, one row per ENCODED `assessment`
-visit, none for a Medical Clearance), `document_release_requests` (D-113 —
+the Medical Assessment Form's own sections, one row per INTERVIEWED
+assessment visit, keyed by `clinic_visit_id` (D-126), none for a Medical
+Clearance), `document_release_requests` (D-113 —
 a College Admin's request that the Director release a finished batch's
 documents; many per batch, at most one pending), `batch_seen` (D-120 —
 what a College Admin or the Director last saw of a batch, for the Batch
@@ -292,5 +295,5 @@ schema change explicitly.
 - Use `localhost` in URLs (use `127.0.0.1`; the Pi deployment is the
   only localhost exception, and it's handled by config)
 - Show clearance outcomes on the kiosk UI
-- Bypass the nurse queue flow
+- Bypass the clinic queues (nurse → physician)
 - Commit `.env`, credentials, or real student data

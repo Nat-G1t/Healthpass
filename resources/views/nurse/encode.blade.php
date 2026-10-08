@@ -1,9 +1,13 @@
-<x-layout.sidebar title="Doctor's Assessment">
+<x-layout.sidebar :title="$mode === 'interview' ? 'Interview' : 'Doctor\'s Assessment'">
 
 {{-- ── Encode Result — "Doctor's Assessment" (FR-NRS-03, BR-15) ─────────────────
-     One screen, two modes (see EncodeController):
-       $readOnly = false → captured visit, editable assessment form
-       $readOnly = true  → encoded visit, same screen locked + Reprint
+     One screen, three modes since D-126 (see EncodeController), in $mode:
+       'interview' → the NURSE on a captured Medical Assessment: every field but
+                     the Result, and Submit to physician
+       'encode'    → the PHYSICIAN on a captured Clearance or an interviewed
+                     Assessment (the nurse's entries pre-filled, editable — Q3)
+       'view'      → an encoded visit, same screen locked + Reprint
+     $readOnly is true in 'view' only.
 
      Left column: everything the nurse assesses FROM (identity, vitals,
      questionnaire, and on an Assessment visit the Personal / Social History —
@@ -34,29 +38,34 @@
     // Shown only for an `assessment` visit, and always from the SERVER's own
     // form-type resolution (D-62) — never from anything the page posts.
     $isAssessment = $visit->formType() === 'assessment';
-    $assessment   = $record?->medicalAssessment;
+    // D-126: keyed by the visit — the nurse's interview on an interviewed
+    // visit, the saved row once encoded, nothing on the nurse's fresh form.
+    $assessment   = $visit->medicalAssessment;
 
     // What each box opens with: a failed submit's own input first, then the
-    // saved row in read-only mode, then nothing on a fresh form.
-    $conditionChecked = fn (string $column, string $key) => $readOnly
-        ? (bool) $assessment?->hasCondition($column, $key)
-        : in_array($key, (array) old("medical_history.{$column}", []), true);
+    // saved row (the encoded record, or the nurse's interview the physician
+    // is reviewing — D-126), then nothing on a fresh form.
+    $fromOld = ! $readOnly && session()->hasOldInput();
 
-    $specifyValue = fn (string $key) => $readOnly
-        ? $assessment?->specifyFor($key)
-        : old("medical_history.specify.{$key}");
+    $conditionChecked = fn (string $column, string $key) => $fromOld
+        ? in_array($key, (array) old("medical_history.{$column}", []), true)
+        : (bool) $assessment?->hasCondition($column, $key);
 
-    $immunizationChecked = fn (string $key) => $readOnly
-        ? (bool) $assessment?->hasImmunization($key)
-        : in_array($key, (array) old('immunizations.given', []), true);
+    $specifyValue = fn (string $key) => $fromOld
+        ? old("medical_history.specify.{$key}")
+        : $assessment?->specifyFor($key);
 
-    $immunizationOthers = fn () => $readOnly
-        ? ($assessment?->immunizations['others'] ?? null)
-        : old('immunizations.others');
+    $immunizationChecked = fn (string $key) => $fromOld
+        ? in_array($key, (array) old('immunizations.given', []), true)
+        : (bool) $assessment?->hasImmunization($key);
+
+    $immunizationOthers = fn () => $fromOld
+        ? old('immunizations.others')
+        : ($assessment?->immunizations['others'] ?? null);
 
     // '1' / '0' / null — null is "not answered", which is not the same as No.
-    $familyPlanning = function () use ($readOnly, $assessment) {
-        if (! $readOnly) {
+    $familyPlanning = function () use ($fromOld, $assessment) {
+        if ($fromOld) {
             return old('family_planning_access');
         }
 
@@ -65,46 +74,47 @@
             : (string) (int) $assessment->family_planning_access;
     };
 
-    $surgical = fn (string $key) => $readOnly
-        ? ($assessment?->surgical_history[$key] ?? null)
-        : old("surgical_history.{$key}");
+    $surgical = fn (string $key) => $fromOld
+        ? old("surgical_history.{$key}")
+        : ($assessment?->surgical_history[$key] ?? null);
 
     // ── Sections V, VI and the physical examination (D-70) ───────────────────
     // V and VI are for female students only; the greyed inputs are a courtesy,
     // the rule is the server's (StoreClearanceRequest ignores them otherwise).
     $isFemale = $visit->studentIsFemale();
 
-    // The LMP box opens with the kiosk's own answer when the student gave one;
-    // every other box opens empty.
+    // On a fresh form the LMP box opens with the kiosk's own answer when the
+    // student gave one; every other box opens empty.
     // data_get() reads a key out of an array that may itself be null —
     // which menstrual_history and ob_history are for a male student.
-    $menstrual = fn (string $key) => $readOnly
-        ? data_get($assessment?->menstrual_history, $key)
-        : old("menstrual_history.{$key}", $key === 'lmp'
-            ? $sr?->last_menstrual_period?->format('Y-m-d')
-            : null);
+    $menstrual = fn (string $key) => match (true) {
+        $fromOld => old("menstrual_history.{$key}"),
+        $assessment !== null => data_get($assessment->menstrual_history, $key),
+        $key === 'lmp' => $sr?->last_menstrual_period?->format('Y-m-d'),
+        default => null,
+    };
 
-    $ob = fn (string $key) => $readOnly
-        ? data_get($assessment?->ob_history, $key)
-        : old("ob_history.{$key}");
+    $ob = fn (string $key) => $fromOld
+        ? old("ob_history.{$key}")
+        : data_get($assessment?->ob_history, $key);
 
     // '1' / '0' / null for a Yes / No pair inside one of those JSON sections —
     // same string comparison the Family Planning pair uses.
-    $yesNo = function (string $section, string $key) use ($readOnly, $assessment) {
-        $answer = $readOnly
-            ? data_get($assessment?->{$section}, $key)
-            : old("{$section}.{$key}");
+    $yesNo = function (string $section, string $key) use ($fromOld, $assessment) {
+        $answer = $fromOld
+            ? old("{$section}.{$key}")
+            : data_get($assessment?->{$section}, $key);
 
         return $answer === null ? null : (string) (int) $answer;
     };
 
-    $finding = fn (string $group, string $key) => $readOnly
-        ? (bool) $assessment?->hasFinding($group, $key)
-        : in_array($key, (array) old("physical_exam.{$group}.findings", []), true);
+    $finding = fn (string $group, string $key) => $fromOld
+        ? in_array($key, (array) old("physical_exam.{$group}.findings", []), true)
+        : (bool) $assessment?->hasFinding($group, $key);
 
-    $findingOthers = fn (string $group) => $readOnly
-        ? $assessment?->findingOthers($group)
-        : old("physical_exam.{$group}.others");
+    $findingOthers = fn (string $group) => $fromOld
+        ? old("physical_exam.{$group}.others")
+        : $assessment?->findingOthers($group);
 
     // ── Vital Signs card (D-65) ──────────────────────────────────────────────
     // Normalize every number to ONE string shape before it is displayed or
@@ -119,9 +129,11 @@
     $confirmed = $record?->printedVitals($vs) ?? [];
 
     // What an editable input opens with: a failed submit's own value first,
-    // then the kiosk's reading. Respiratory rate has no kiosk counterpart, so
-    // it opens empty.
-    $vitalValue = fn (string $field) => old($field, $vs?->{$field});
+    // then the vitals the nurse confirmed at the interview (D-126), then the
+    // kiosk's reading. Respiratory rate has no kiosk counterpart, so on the
+    // nurse's fresh form it opens empty.
+    $interviewVitals = $assessment?->interview_vitals ?? [];
+    $vitalValue = fn (string $field) => old($field, $interviewVitals[$field] ?? $vs?->{$field});
 
     // The kiosk's screening flag (BR-14) that belongs beside a given input.
     // D-66: heart rate is flagged at capture like the others. The respiratory
@@ -167,13 +179,15 @@
         ← {{ $back['label'] }}
     </a>
     <div class="mt-2 flex flex-wrap items-center gap-2.5">
-        <h2 class="text-xl font-semibold text-hp-slate">Doctor's Assessment</h2>
+        <h2 class="text-xl font-semibold text-hp-slate">{{ $mode === 'interview' ? 'Interview' : "Doctor's Assessment" }}</h2>
         {{-- D-62: the official form this student's batch uses. --}}
         <x-hp.badge variant="neutral" data-form-type="{{ $visit->formType() }}">
             {{ \App\Models\BatchRequest::FORM_TYPES[$visit->formType()] }}
         </x-hp.badge>
         @if ($readOnly)
             <x-hp.badge variant="neutral">Encoded</x-hp.badge>
+        @elseif ($mode === 'interview')
+            <x-hp.badge variant="flagged">Awaiting interview</x-hp.badge>
         @else
             <x-hp.badge variant="flagged">Awaiting encode</x-hp.badge>
         @endif
@@ -182,6 +196,7 @@
         <span class="font-mono">{{ $visit->reference_no }}</span>
         · captured {{ $capturedAt?->diffForHumans() ?? '—' }}
     </p>
+    @include('nurse.encode.interviewed-by')
 </div>
 
 {{-- Re-submit flash (FR-NRS-04) — a Save on an already-encoded visit lands
@@ -221,8 +236,10 @@
 
 {{-- ONE form around both columns (D-65): the Vital Signs card on the left is
      now part of the assessment, so Save & Close and Preview & Print post the
-     confirmed vitals together with the result. --}}
-<form method="POST" action="{{ route('nurse.visits.encode.store', $visit) }}"
+     confirmed vitals together with the result. D-126: the nurse's interview
+     posts the same fields, minus the Result, to Submit to physician. --}}
+<form method="POST"
+      action="{{ $mode === 'interview' ? route('nurse.visits.interview', $visit) : route('nurse.visits.encode.store', $visit) }}"
       class="grid items-start gap-5 lg:grid-cols-3">
     @csrf
 
@@ -498,7 +515,12 @@
     <x-hp.card class="lg:sticky lg:top-20">
         <h3 class="text-sm font-bold text-hp-slate">Assessment</h3>
         <p class="mt-0.5 text-xs text-hp-slate/50">
-            Result is required; notes are optional. The purpose comes from the batch.
+            @if ($mode === 'interview')
+                {{-- D-126: only the physician decides Fit / Unfit. --}}
+                The physician decides Fit or Unfit after your interview. The purpose comes from the batch.
+            @else
+                Result is required; notes are optional. The purpose comes from the batch.
+            @endif
         </p>
 
         {{-- Save & Close POSTs the assessment (FR-NRS-04). Fields re-populate
@@ -508,7 +530,9 @@
             {{-- Result — Fit / Unfit, the one required field (BR-16).
                  Radios are visually-hidden (.sr-only) siblings of the styled
                  tiles; Tailwind's peer-checked does the "toggle" look with no
-                 JS. Kiosk colour language: green = clear, orange = attention. --}}
+                 JS. Kiosk colour language: green = clear, orange = attention.
+                 D-126: the physician's alone — not on the nurse's interview. --}}
+            @unless ($mode === 'interview')
             <div>
                 <span class="text-sm font-semibold text-hp-slate">
                     Result <span class="text-hp-orange">*</span>
@@ -539,6 +563,7 @@
                     <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
                 @enderror
             </div>
+            @endunless
 
             {{-- Purpose (D-62) — the College Admin's batch reason IS the
                  printed purpose, so the nurse no longer picks one. Shown
@@ -633,106 +658,7 @@
             </div>
             @endunless
 
-            {{-- The Medical Assessment Form is TWO Letter pages printed
-                 back-to-back on one sheet (D-71/D-83), and clinic printers rarely
-                 duplex — so it gets Print front and Print back instead of one
-                 button. `name="side"` on a submit BUTTON posts that button's
-                 own value, which is how the two reach the same endpoint and
-                 ask for different pages. --}}
-            <div class="flex flex-col gap-2.5 pt-1">
-                @if ($readOnly && ! $canPrint)
-                    {{-- D-125 (O2): not released yet — the buttons, greyed out,
-                         and why. The print routes refuse them too. --}}
-                    @foreach ($isAssessment ? ['Print front', 'Print back'] : ['Reprint'] as $label)
-                        <x-hp.button variant="soft" class="w-full" disabled data-print-disabled>{{ $label }}</x-hp.button>
-                    @endforeach
-                    <x-hp.button variant="ghost" class="w-full" disabled data-print-disabled>Save as PDF</x-hp.button>
-                    <p class="text-xs text-hp-slate/60" data-print-disabled-hint>{{ App\Models\ClinicVisit::NOT_RELEASED_HINT }}</p>
-                @elseif ($readOnly)
-                    @if ($isAssessment)
-                        @foreach (['front' => 'Print front', 'back' => 'Print back'] as $side => $label)
-                            <x-hp.button type="submit" variant="soft" class="w-full"
-                                         data-print-trigger data-print-side="{{ $side }}"
-                                         name="side" value="{{ $side }}"
-                                         formaction="{{ route('nurse.visits.print.reprint', $visit) }}"
-                                         formtarget="hp-print-frame">
-                                {{ $label }}
-                            </x-hp.button>
-                        @endforeach
-                    @else
-                    {{-- Reprint (FR-NRS-05): formaction re-routes this submit to
-                         the reprint endpoint, which re-stamps printed_at and
-                         returns the official form INTO the hidden iframe below
-                         (formtarget); the script then prints the iframe. --}}
-                    <x-hp.button type="submit" variant="soft" class="w-full"
-                                 data-print-trigger
-                                 formaction="{{ route('nurse.visits.print.reprint', $visit) }}"
-                                 formtarget="hp-print-frame">
-                        Reprint
-                    </x-hp.button>
-                    @endif
-
-                    {{-- Save as PDF (FR-PRT-06, D-67): a plain GET link, not a
-                         submit — the response is the same document rendered by
-                         dompdf and sent as a download, so nothing on this page
-                         navigates and printed_at is NOT re-stamped. --}}
-                    <a href="{{ route('nurse.visits.pdf', $visit) }}"
-                       class="inline-flex w-full items-center justify-center gap-2 rounded-full
-                              border-[1.5px] border-hp-slate/30 px-6 py-2.5 text-sm font-semibold
-                              text-hp-slate transition-colors duration-hp-fast hover:bg-hp-slate/8
-                              focus-visible:outline-none focus-visible:ring-2
-                              focus-visible:ring-hp-slate focus-visible:ring-offset-1">
-                        Save as PDF
-                    </a>
-                @else
-                    {{-- Flipped to 1 once Preview & Print fires, so Save & Close
-                         can stamp printed_at (FR-NRS-05) — the clearance row
-                         doesn't exist yet at pre-save print time. --}}
-                    <input type="hidden" name="printed" id="hp-printed-flag" value="{{ old('printed', '0') }}">
-
-                    {{-- Preview & Print (FR-NRS-05): posts the CURRENT (unsaved)
-                         assessment to the preview route, targeted at the hidden
-                         iframe — Chrome's print dialog is the preview. The
-                         required Result radio gates this submit too. An
-                         Assessment posts the same way, once per side (D-71). --}}
-                    @if ($isAssessment)
-                        @foreach (['front' => 'Print front', 'back' => 'Print back'] as $side => $label)
-                            <x-hp.button type="submit" variant="ghost" class="w-full"
-                                         data-print-trigger data-print-side="{{ $side }}"
-                                         name="side" value="{{ $side }}"
-                                         formaction="{{ route('nurse.visits.print.preview', $visit) }}"
-                                         formtarget="hp-print-frame">
-                                {{ $label }}
-                            </x-hp.button>
-                        @endforeach
-                    @else
-                        <x-hp.button type="submit" variant="ghost" class="w-full"
-                                     data-print-trigger
-                                     formaction="{{ route('nurse.visits.print.preview', $visit) }}"
-                                     formtarget="hp-print-frame">
-                            Preview &amp; Print
-                        </x-hp.button>
-                    @endif
-                    {{-- data-pending-label: spinner + disable while the save
-                         navigates (§5.6) — belt-and-braces double-submit
-                         protection on top of the controller's one-shot guard.
-                         The print buttons above are exempt automatically:
-                         their formtarget posts into the iframe, and
-                         page-motion.js keys off the SUBMITTER's target. --}}
-                    <x-hp.button type="submit" variant="primary" class="w-full"
-                                 data-pending-label="Saving…">Save &amp; Close</x-hp.button>
-                @endif
-
-                {{-- Shown once a FRONT print has fired (D-71): the two pages
-                     go on one sheet, so the sheet has to be fed back in. Which
-                     way up depends on the printer — see docs/qa. --}}
-                @if ($isAssessment)
-                    <p id="hp-flip-hint" hidden
-                       class="rounded-xl border border-hp-peach bg-hp-peach/30 px-3 py-2 text-xs text-hp-slate">
-                        Put the printed sheet back in the tray, then click <span class="font-semibold">Print back</span>.
-                    </p>
-                @endif
-            </div>
+            @include('nurse.encode.actions')
         </div>
     </x-hp.card>
 

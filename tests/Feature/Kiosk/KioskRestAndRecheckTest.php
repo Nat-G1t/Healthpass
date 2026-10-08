@@ -162,7 +162,7 @@ class KioskRestAndRecheckTest extends TestCase
         $this->resting($student);
 
         // The Live Queue.
-        $this->assertSame(0, ClinicVisit::liveQueue()->count());
+        $this->assertSame(0, ClinicVisit::liveQueue(User::factory()->physician()->create())->count());
 
         // Flagged Anomalies + the Director dashboard preview + the nav badge.
         $this->assertSame(0, ClinicVisit::flagged()->count());
@@ -383,7 +383,7 @@ class KioskRestAndRecheckTest extends TestCase
         $visit->refresh();
         $this->assertSame('captured', $visit->status);
         $this->assertTrue($visit->vitalSigns->is_bp_flagged);
-        $this->assertSame(1, ClinicVisit::liveQueue()->count());
+        $this->assertSame(1, ClinicVisit::liveQueue(User::factory()->physician()->create())->count());
 
         // A replayed re-check of the same visit finds it is no longer resting.
         $this->recheck($student, $visit, [
@@ -489,7 +489,7 @@ class KioskRestAndRecheckTest extends TestCase
 
         $appointment = Appointment::where('student_id', $student->id)->firstOrFail();
         $this->assertSame('in_clinic', $appointment->fresh()->clearanceProgress());
-        $this->assertSame(1, ClinicVisit::liveQueue()->count());
+        $this->assertSame(1, ClinicVisit::liveQueue(User::factory()->physician()->create())->count());
     }
 
     // ── The student sees nothing for a resting visit ─────────────────────────
@@ -517,9 +517,8 @@ class KioskRestAndRecheckTest extends TestCase
             'systolic' => 124, 'diastolic' => 80, 'heartRate' => 74,
         ])->assertOk();
 
-        $nurse = User::factory()->create(['role' => 'nurse']);
-
-        $this->actingAs($nurse)
+        // D-126: a Medical Clearance opens for the physician.
+        $this->actingAs(User::factory()->physician()->create())
             ->get(route('nurse.visits.encode', $visit))
             ->assertOk()
             ->assertSee('First reading')

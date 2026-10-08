@@ -1159,6 +1159,59 @@
 
 ### Changed
 
+* **Two clinic queues: the nurse interviews Medical Assessment students and
+  submits them to the physician, who alone decides Fit / Unfit** (D-126,
+  PARTLY SUPERSEDES the locked D-64; §2.3, §2.3a, §3, FR-NRS-01…04/09/11,
+  FR-PRT-04/07, BR-11, BR-15, §6.1, §6.2, §17 amended; PRD revision 2.10,
+  2026-10-09). Asked for by the Clinic Director. **FLAGGED SCHEMA CHANGE:**
+  `clinic_visits.status` gains `interviewed`; new `clinic_visits.interviewed_by`
+  (FK users NULL, nullOnDelete) and `interviewed_at`; `medical_assessments`
+  re-keyed from `clearance_record_id` to `clinic_visit_id` (unique, restrict,
+  backfilled) plus `interview_vitals` JSON — migrations
+  `2026_10_09_000001_d126_add_interviewed_status_to_clinic_visits` and
+  `2026_10_09_000002_d126_rekey_medical_assessments_to_clinic_visits` (both
+  down() methods refuse when data would be lost). No new package.
+  * **Routing:** a Medical Assessment visit waits in the nurse's queue, a
+    Medical Clearance in the physician's. One Live Queue page / feed / nav
+    badge, contents by role (`ClinicVisit::scopeLiveQueue($viewer)`), FCFS by
+    `COALESCE(interviewed_at, checked_in_at)`; row action **Interview** or
+    **Encode Result**; dashboard tile **Awaiting Interview** / **Awaiting
+    Encode**.
+  * **Nurse:** the encode page without the Result block or print buttons, and
+    **Submit to physician** (`POST /nurse/visits/{visit}/interview`,
+    `Nurse\InterviewController`, `SubmitInterviewRequest`) — one locked
+    transaction writes the sections + `interview_vitals`, the respiratory rate
+    and its flag, and `interviewed` / `interviewed_by` / `interviewed_at`. A
+    double submit is a friendly no-op.
+  * **Physician:** an interviewed visit opens with the nurse's entries
+    pre-filled (editable) and "Interviewed by {nurse} · {time}"; Save writes
+    the clearance record and updates the same `medical_assessments` row.
+  * **Guards:** the Form Requests' `authorize()` refuses a wrong role or state
+    before validation, and the page GET does the same — back to the Live
+    Queue with a plain message. Remove from queue only works on your own
+    queue and deletes an interviewed visit's assessment row first.
+  * **Shared rules:** the vitals + Assessment rules moved from
+    `StoreClearanceRequest` into the new abstract `VisitFormRequest`;
+    `VitalSigns::recordRespiratoryRate()` writes the rate + flag for both.
+  * **Print:** the Medical Assessment Form's "Interviewed/Assessed by" is the
+    interviewing nurse (older records keep their encoder); the physician's
+    name and license print on every new record.
+  * **Counting:** `interviewed` is in `ClinicVisit::SUBMITTED_STATUSES` — the
+    kiosk's "all done for today", Batch Results' "In clinic" and every count.
+    The Director's anomaly detail reads "With the physician".
+  * **Seed:** `DemoBatchSeeder` — every encode is the physician's, encoded
+    Assessments carry the nurse as interviewer; today: 4 waiting for the
+    nurse, 2 interviewed (BR-2026-921) and 3 Clearances for the physician
+    (new BR-2026-923).
+  * Tests: new `tests/Feature/Nurse/TwoQueuesTest.php` (21) and
+    `tests/Support/ClinicQueueFixture.php`; the migration test now
+    round-trips the re-key; rewritten for the new roles —
+    `EncodeAssessmentTest`, `EncodeSaveTest`, `EncodePageTest`,
+    `EncodeVitalsTest`, `PrintFlowTest`, `AssessmentPrintTest`,
+    `QueueFeedTest`, `QueuePageTest`, `QueueRemoveTest`, `QueueGhostRowTest`,
+    `DashboardPageTest`, `DemoBatchSeederTest`, `KioskAlreadyScreenedTest`,
+    `KioskRestAndRecheckTest`, `NavBadgesTest`.
+
 * **The clinic's Batch Results page lists completed batches with Print
   Requested, row dots and Mark as printed — and the clinic prints a batch's
   forms only after the Director releases them** (D-125, amends D-114 and

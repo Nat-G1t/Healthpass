@@ -123,8 +123,9 @@ function buildRow(visit) {
         // encode_url comes from the feed (QueueController::toRow), so the JS
         // never has to guess the route shape.
         '<td class="py-4 pr-4 text-right whitespace-nowrap">' +
-        `<span class="queue-btn-next"><a href="${esc(visit.encode_url)}" class="${BTN_BASE} ${BTN_PRIMARY}">Encode Result</a></span>` +
-        `<span class="queue-btn-rest"><a href="${esc(visit.encode_url)}" class="${BTN_BASE} ${BTN_GHOST}">Encode Result</a></span>` +
+        // D-126: action_label is "Interview" (nurse) or "Encode Result" (physician).
+        `<span class="queue-btn-next"><a href="${esc(visit.encode_url)}" class="${BTN_BASE} ${BTN_PRIMARY}">${esc(visit.action_label)}</a></span>` +
+        `<span class="queue-btn-rest"><a href="${esc(visit.encode_url)}" class="${BTN_BASE} ${BTN_GHOST}">${esc(visit.action_label)}</a></span>` +
         // D-93: Remove — opens the confirm popup (see the click listener in init()).
         `<button type="button" data-queue-remove data-remove-url="${esc(visit.remove_url)}" ` +
         `data-remove-name="${esc(visit.name)}" data-remove-ref="${esc(visit.reference_no)}" ` +

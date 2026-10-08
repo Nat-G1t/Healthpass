@@ -154,16 +154,26 @@ Student arrives at clinic (scheduled by their college)
                                        recomputed, status: resting → captured,
                                        checked_in_at = now() (back of the queue)
 
-Nurse sees visit in Live Queue
+The visit's FORM picks its queue (D-126 — two Live Queues, one per role)
          │
-         └── Opens Encode Result screen
-                    │ (views vitals with flags, questionnaire answers)
-                    │
-                    └── Sets Fit/Unfit + case categories (0..n) + notes (purpose = the batch reason, D-62)
-                    │
-                    └── Preview & Print clearance form (official PamSU form)
-                    │
-                    └── Save & Close → Clinic Visit (status: encoded), Clearance Record created
+         ├── Medical Assessment → NURSE's queue
+         │      └── Opens the visit ("Interview"): confirms the vitals,
+         │          measures the respiratory rate, fills every Assessment
+         │          section (Pertinent Physical Examination included)
+         │      └── Submit to physician → status: interviewed,
+         │          medical_assessments row written → PHYSICIAN's queue
+         │
+         └── Medical Clearance → straight to the PHYSICIAN's queue
+
+Physician opens the visit ("Doctor's Assessment")
+         │ (views vitals with flags, questionnaire answers, and on an
+         │  Assessment the nurse's interview — editable)
+         │
+         └── Sets Fit/Unfit (purpose = the batch reason, D-62)
+         │
+         └── Preview & Print (official PamSU form)
+         │
+         └── Save & Close → Clinic Visit (status: encoded), Clearance Record created
 
 8:00 PM on the clinic day — the healthpass:second-chances job (D-110)
          │  (scheduler, every 5 min; cron must run schedule:run)
@@ -428,12 +438,13 @@ Students are scheduled only through their college (a batch request the Clinic Di
 
 ### NURSE + PHYSICIAN — the Clinic Dashboard (D-64)
 
-Every page in this section is shared by the nurse and the University Physician. The sidebar's first item is **Clinic Dashboard** (the stat tiles + the clinic-wide encode history, D-44), and the sidebar role label reads "Nurse" or "Physician". The history's **Encoded by** column shows the encoder's name plus a **Nurse / Physician** badge; both roles see the same rows. (A separate clinic logs page was considered and dropped — this history is the log.) Opening a record with View shows '← Back to Clinic Dashboard', returning to the dashboard with the same year / month / result / search filters and page; opened from the Live Queue, the page links back to the Live Queue (2026-09-23). **(D-100)** The history filters by **Year** (All years, 2021 → now) then **Month** (All months, January–December — usable once a year is picked, months with no encoded results greyed out) and Result, applied with Apply; the search box matches the **reference number or student ID** (not the name), and a **Student ID** column sits beside the student's name.
+Every page in this section is shared by the nurse and the University Physician — **except that each has its own Live Queue (D-126)**: the nurse interviews Medical Assessment students and submits them to the physician; only the physician encodes Fit / Unfit. The sidebar's first item is **Clinic Dashboard** (the stat tiles + the clinic-wide encode history, D-44), and the sidebar role label reads "Nurse" or "Physician". The history's **Encoded by** column shows the encoder's name plus a **Nurse / Physician** badge; both roles see the same rows. (A separate clinic logs page was considered and dropped — this history is the log.) Opening a record with View shows '← Back to Clinic Dashboard', returning to the dashboard with the same year / month / result / search filters and page; opened from the Live Queue, the page links back to the Live Queue (2026-09-23). **(D-100)** The history filters by **Year** (All years, 2021 → now) then **Month** (All months, January–December — usable once a year is picked, months with no encoded results greyed out) and Result, applied with Apply; the search box matches the **reference number or student ID** (not the name), and a **Student ID** column sits beside the student's name.
 
 #### Live Queue (`nurse-dashboard`)
 - **Header**: blinking LIVE dot + "LIVE QUEUE" pill (peach bg, orange text) + "{n} students waiting · updated just now".
 - **Queue table** (full-width card, no outer padding): Student (avatar initials + name; first row tagged "NEXT" badge + highlighted peach-35 row — the longest-waiting student), College, **Vitals Summary** (all values inline, flagged values bold orange), **Flags** (flagged-variant badges for temp/bp/bmi **and HR since D-66**, or "—" — there is no RR badge here: that vital is only measured at encode), Time (waiting since), Action ("Encode Result" button — primary for row 1, ghost for others).
 - Queue = clinic visits with status `captured`, ordered by `checked_in_at` asc (oldest first = top row — **first come, first served**). The top row is the next student to serve; new kiosk submissions append at the bottom.
+- **Two queues, one page (D-126).** Same URL, route and 4 s feed; the contents depend on who is logged in (`ClinicVisit::scopeLiveQueue($viewer)`): the **nurse** sees `captured` Medical Assessment visits; the **physician** sees `captured` Medical Clearance visits plus every `interviewed` visit, ordered by `COALESCE(interviewed_at, checked_in_at)`, then `id` (when the visit entered that queue). Each role sees only its own. The row action reads **Interview** (nurse) or **Encode Result** (physician); Remove works only on the remover's own queue.
 - **A `resting` visit is never here (D-72)** — the `captured` filter excludes it on its own, and there is deliberately **no Resting list** for the clinic: a student re-taking a high reading has not submitted anything yet, so nobody is waiting on them. When their re-check releases the visit, `checked_in_at` is re-stamped, so they appear at the **bottom** of the queue rather than jumping it with their original arrival time.
 - Refresh by **polling** (every 3–5 seconds via `setInterval` + `fetch`) — meets SM-2 (queue reflects a submission within ≤ 5 s).
 - Sidebar "Enable Kiosk Mode" opens the nurse **Kiosk Devices** page (D-27): enroll the current browser/terminal as a trusted kiosk device, list enrolled devices, and revoke each. Reaching `/kiosk` requires a device-enrolled token **OR** an active nurse **OR** config-allowed loopback; everyone else sees a friendly branded restricted-access page (see the KioskAccess middleware).
@@ -479,7 +490,8 @@ Every page in this section is shared by the nurse and the University Physician. 
     - "Preview & Print Medical Clearance" button (ghost style, full width, Download icon).
     - "← Back" (ghost) + "Save & Close Appointment" (primary, flex-2) — Save disabled until Fit/Unfit chosen.
 
-- **On Save**: update clinic visit `status` → `encoded`, create `clearance_records` row, return to queue. **D-69:** on an `assessment` visit the same transaction also creates the one `medical_assessments` row; a Medical Clearance visit creates none. **D-70:** that row also carries `menstrual_history` and `ob_history` (**NULL unless the student is female**) and `physical_exam` (all eight groups, always). **D-65:** the same transaction stores the confirmed vitals in `clearance_records.encoded_vitals` (BMI recomputed) and the measured `vital_signs.respiratory_rate`; **no other `vital_signs` column or flag is ever touched** — the kiosk's reading is what the flags and the analytics describe (BR-14). **D-64:** the physician block is stamped from the encoder — a physician's own name (`UPPER(name), MD`) and license, NULL for a nurse. An encoded visit's read-only notice reads "encoded by <name> (<role>)".
+- **D-126 — three modes.** The **nurse** on a captured Medical Assessment sees this screen titled **Interview**, with no Result block and no print buttons, and **Submit to physician** (`POST /nurse/visits/{visit}/interview`) in place of Save & Close: one locked transaction writes the `medical_assessments` row (sections + `interview_vitals`), the respiratory rate + flag, and `status = interviewed` with `interviewed_by` / `interviewed_at`. The **physician** on a captured Medical Clearance sees the screen unchanged; on an interviewed Assessment it opens with the nurse's interview pre-filled and editable, "Interviewed by {nurse} · {time}", and Fit / Unfit. A wrong role or state goes back to the Live Queue with a plain message.
+- **On Save** (physician only since D-126): update clinic visit `status` → `encoded`, create `clearance_records` row, return to queue. **D-126:** on an interviewed Assessment the save **updates** the nurse's `medical_assessments` row with the posted sections. **D-69:** on an `assessment` visit the same transaction also creates the one `medical_assessments` row; a Medical Clearance visit creates none. **D-70:** that row also carries `menstrual_history` and `ob_history` (**NULL unless the student is female**) and `physical_exam` (all eight groups, always). **D-65:** the same transaction stores the confirmed vitals in `clearance_records.encoded_vitals` (BMI recomputed) and the measured `vital_signs.respiratory_rate`; **no other `vital_signs` column or flag is ever touched** — the kiosk's reading is what the flags and the analytics describe (BR-14). **D-64:** the physician block is stamped from the encoder — a physician's own name (`UPPER(name), MD`) and license, NULL for a nurse. An encoded visit's read-only notice reads "encoded by <name> (<role>)".
 
 #### Print Medical Clearance (modal)
 - Fixed overlay (z-index 2000), modal 92% wide / 92vh.
@@ -695,7 +707,7 @@ Review → Complete (12s auto-reset → Welcome)
 - An appointment at **any hour** today skips this screen and goes straight to Privacy Consent. The screen is a courtesy, not the gate: submit refuses a student with no `scheduled` appointment today on the server (422, nothing written).
 
 #### Screen 3a′ — You're all done for today (FR-KSK-03b)
-- Shown instead of Screen 3a when today's appointment already has a **submitted** visit (`captured` or `encoded`) — server-decided `alreadyScreenedToday`; a `resting` visit (D-72) does not count and the re-check branch still comes first. Key `already-screened`; partial `kiosk/screens/already-screened.blade.php`, same layout as 3a. Shows the visit reference (`screenedReference`) and one line by `screenedStatus` — captured: *"Please proceed to the clinic and wait to be called."*, encoded: *"The clinic has already seen you today."* **Never Fit/Unfit.** One **Back to start** button. Submit refuses a second visit on that appointment on the server, under a row lock.
+- Shown instead of Screen 3a when today's appointment already has a **submitted** visit (`captured`, `interviewed` — D-126 — or `encoded`) — server-decided `alreadyScreenedToday`; a `resting` visit (D-72) does not count and the re-check branch still comes first. Key `already-screened`; partial `kiosk/screens/already-screened.blade.php`, same layout as 3a. Shows the visit reference (`screenedReference`) and one line by `screenedStatus` — captured: *"Please proceed to the clinic and wait to be called."*, encoded: *"The clinic has already seen you today."* **Never Fit/Unfit.** One **Back to start** button. Submit refuses a second visit on that appointment on the server, under a row lock.
 
 #### Screen 3b — Privacy Consent
 - Shield icon (orange stroke on peach bg).
@@ -877,9 +889,11 @@ college_id            bigint FK → colleges.id   -- SCHEMA ADD: snapshot of the
 course                varchar(120) NULL     -- SCHEMA ADD (D-43): snapshot of the student's PROGRAM at capture time, frozen beside college_id above. student_profiles.course stays live, so without this a program shift would restate every past per-program report. NULLABLE and NEVER BACKFILLED — a pre-D-43 visit has no honest answer and renders "—" (the pattern appointments.scheduled_time uses for pre-D-37 rows); a profile with no program also stores NULL rather than blocking the kiosk.
 appointment_id        bigint NULL FK → appointments.id   -- always set since D-61 (no walk-ins); NULL only on legacy walk-in rows
 login_method          enum('qr','email')
-status                enum('resting','captured','encoded') DEFAULT 'captured'  -- SCHEMA ADD (D-72): 'resting' = a first pass whose temp/BP/HR was flagged, parked while the student rests. Not a submitted visit — ClinicVisit::scopeSubmitted() (captured|encoded) is the one definition every count uses. resting → captured → encoded, at most once, never in reverse.
+status                enum('resting','captured','interviewed','encoded') DEFAULT 'captured'  -- SCHEMA ADD (D-126): 'interviewed' = a Medical Assessment visit the nurse submitted, waiting in the PHYSICIAN's queue; a submitted visit. SCHEMA ADD (D-72): 'resting' = a first pass whose temp/BP/HR was flagged, parked while the student rests. Not a submitted visit — ClinicVisit::scopeSubmitted() (captured|encoded) is the one definition every count uses. resting → captured → encoded, at most once, never in reverse.
 privacy_consent_at    timestamp NULL
 checked_in_at         timestamp NULL        -- re-stamped by the D-72 re-check, so a returning student joins the BACK of the FCFS queue
+interviewed_by        bigint NULL FK → users.id  -- SCHEMA ADD (D-126), null on delete: the nurse who submitted the interview; prints as "Interviewed/Assessed by"
+interviewed_at        timestamp NULL        -- SCHEMA ADD (D-126): when the nurse submitted it; the physician queue orders by COALESCE(interviewed_at, checked_in_at)
 resting_until         timestamp NULL        -- SCHEMA ADD (D-72): when a resting student may come back, now() + healthpass.kiosk.recheck_rest_minutes (10). Written once by POST /kiosk/rest, cleared by the re-check, NULL on every visit that never rested; never backfilled. The Rest screen shows THIS time — never a browser clock.
 created_at, updated_at
 ```
@@ -980,13 +994,15 @@ created_at, updated_at
 ### `medical_assessments`
 ```sql
 -- D-69 — the Medical Assessment Form's (PSU-QSP-OSS-004-FO010-R00) own
--- sections. ONE row per ENCODED `assessment` visit; a Medical Clearance
--- encode creates none, and that absence is the honest record.
+-- sections. ONE row per INTERVIEWED `assessment` visit, keyed by the visit
+-- since D-126 (the nurse writes it at Submit to physician, before any
+-- clearance record exists; the physician's encode updates it). A Medical
+-- Clearance visit has none, and that absence is the honest record.
 -- One JSON column per section: the sections are recorded and printed whole,
 -- nothing filters or aggregates on a single condition, and no analytics read
 -- them. The keys are validated against MedicalAssessment's constants.
 id                     bigint PK
-clearance_record_id    bigint UNIQUE FK → clearance_records.id  -- restrict on delete
+clinic_visit_id        bigint UNIQUE FK → clinic_visits.id  -- restrict on delete. D-126: re-keyed from clearance_record_id (backfilled through clearance_records.clinic_visit_id, then dropped)
 medical_history        json NULL   -- {"patient": [condition keys], "family": [condition keys], "specify": {key: text ≤ 60}}
 immunizations          json NULL   -- {"given": [keys], "others": text|null ≤ 120}; child_none / adult_none are separate keys
 family_planning_access boolean NULL -- NULL = not answered (NOT a No)
@@ -996,6 +1012,7 @@ surgical_history       json NULL   -- {"procedures": text|null ≤ 200, "date_do
 menstrual_history      json NULL
 ob_history             json NULL
 physical_exam          json NULL
+interview_vitals       json NULL   -- D-126: the vitals + respiratory rate the nurse confirmed, clearance_records.encoded_vitals' shape; the physician's page pre-fills from it (encoded_vitals is what prints)
 created_at, updated_at
 ```
 
@@ -1053,7 +1070,9 @@ appointments ──|── clinic_visits (appointment_id, nullable)
 
 clinic_visits ──|| vital_signs          (1:1)
               ──|| screening_responses  (1:1)
-              ──|  clearance_records    (1:0..1)  ──|  medical_assessments (1:0..1 — `assessment` visits only, D-69)
+              ──|  clearance_records    (1:0..1)
+              ──|  medical_assessments  (1:0..1 — interviewed `assessment` visits only, D-69; keyed by the visit since D-126)
+clinic_visits >── users (interviewed_by, nullable — D-126)
 ```
 
 ---

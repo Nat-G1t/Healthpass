@@ -61,6 +61,7 @@ class DemoBatchSeederTest extends TestCase
             '915' => 'completed',
             '921' => 'in_progress',
             '922' => 'in_progress',
+            '923' => 'in_progress',
             '931' => 'scheduled',
             '934' => 'scheduled',
         ];
@@ -77,7 +78,35 @@ class DemoBatchSeederTest extends TestCase
 
     public function test_no_past_clinic_day_holds_a_visit_the_clinic_never_encoded(): void
     {
-        $this->assertSame(0, ClinicVisit::where('status', 'captured')->where('checked_in_at', '<', today())->count());
+        // D-126: an interviewed visit is still waiting on the clinic, too.
+        $this->assertSame(0, ClinicVisit::whereIn('status', ['captured', 'interviewed'])->where('checked_in_at', '<', today())->count());
+    }
+
+    /** D-126: today's demo fills both queues, and every encode is the physician's. */
+    public function test_both_queues_have_todays_students_and_encoded_assessments_carry_the_nurse(): void
+    {
+        $todays = fn (User $viewer) => ClinicVisit::liveQueue($viewer)
+            ->whereHas('appointment.batchRequest', fn ($batch) => $batch->whereIn('reference_no', ['BR-2026-921', 'BR-2026-923']))
+            ->get();
+
+        $nurseQueue = $todays(User::where('role', 'nurse')->firstOrFail());
+        $this->assertCount(4, $nurseQueue);
+        $this->assertTrue($nurseQueue->every(fn (ClinicVisit $visit): bool => $visit->status === 'captured' && $visit->formType() === 'assessment'));
+
+        $physicianQueue = $todays(User::where('role', 'physician')->firstOrFail());
+        $this->assertSame(['clearance' => 3, 'interviewed' => 2], $physicianQueue
+            ->countBy(fn (ClinicVisit $visit): string => $visit->status === 'interviewed' ? 'interviewed' : $visit->formType())
+            ->sortKeys()->all());
+        $this->assertTrue($physicianQueue->where('status', 'interviewed')
+            ->every(fn (ClinicVisit $visit): bool => $visit->medicalAssessment?->interview_vitals !== null));
+
+        $encoded = $this->batch('921')->batchRequestStudents
+            ->map(fn ($row) => ClinicVisit::where('appointment_id', $row->appointment_id)->where('status', 'encoded')->first())
+            ->filter();
+        $this->assertCount(12, $encoded);
+        $this->assertTrue($encoded->every(fn (ClinicVisit $visit): bool => $visit->interviewer?->role === 'nurse'
+            && $visit->clearanceRecord->encoder->role === 'physician'
+            && $visit->clearanceRecord->physician_license_no !== null));
     }
 
     public function test_todays_batch_has_every_stage_of_a_clinic_day(): void

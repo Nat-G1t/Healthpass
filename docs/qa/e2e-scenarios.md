@@ -1,4 +1,4 @@
-# HealthPass — End-to-End UAT Scenarios (E2E-1…E2E-20)
+# HealthPass — End-to-End UAT Scenarios (E2E-1…E2E-39)
 
 Source: `docs/HealthPass_PRD.md` §13 (Acceptance & UAT). These are the
 Week-11 end-to-end acceptance runs, written as step-by-step checklists a
@@ -32,8 +32,8 @@ to use, what to click, and what you should see.
 
 | Role | Email | Notes |
 |---|---|---|
-| Nurse | `nurse@healthpass.test` | Clinic Dashboard (encode history) + Live Queue + Encode |
-| Physician (D-64) | `physician@healthpass.test` | Same pages as the nurse; name + license print on records they encode |
+| Nurse | `nurse@healthpass.test` | Clinic Dashboard (encode history) + **the nurse's** Live Queue (Medical Assessment students) + Interview → Submit to physician (D-126) |
+| Physician (D-64) | `physician@healthpass.test` | Same pages as the nurse, but **the physician's** Live Queue (Medical Clearance students + students the nurse submitted) and the **only** role that encodes Fit/Unfit (D-126); name + license print on records they encode |
 | Clinic Director | `director@healthpass.test` | Approvals + Data Summary |
 | CCS College Admin | `admin.ccs@healthpass.test` | Pattern: `admin.<code>@healthpass.test` |
 | CEA College Admin | `admin.cea@healthpass.test` | For cross-college tests |
@@ -67,6 +67,11 @@ students never book for themselves and never walk in.
 **Account:** CCS Admin `admin.ccs@healthpass.test`, Director
 `director@healthpass.test`, Student `juan.santos@psu.edu.ph`, then Nurse
 `nurse@healthpass.test`.
+
+> **D-126:** a Medical Clearance student goes **straight to the physician's
+> queue** — wherever the clinic steps below say "nurse", sign in as
+> `physician@healthpass.test` instead (the nurse's queue only lists Medical
+> Assessment students). The Medical Assessment path is E2E-39.
 
 **Steps:**
 
@@ -424,6 +429,11 @@ D-61 there is no student booking to refuse).
 
 **Goal:** confirm the Nurse Dashboard (FR-NRS-09, D-44) shows what the nurse
 just encoded, attributed to the right nurse and carrying the right **program**.
+
+> **D-126:** only the physician encodes now. Run this scenario as
+> `physician@healthpass.test` with a **Medical Clearance** student; the tile
+> reads **Awaiting Encode** for the physician (**Awaiting Interview** for the
+> nurse, counting only the nurse's queue).
 
 **Accounts:** the nurse `nurse@healthpass.test`, and any student with a program
 on their profile, e.g. `juan.santos@psu.edu.ph` (CCS).
@@ -2498,6 +2508,72 @@ batch (buttons greyed, the server refuses); after it, the nurse and the
 physician each get a dot that clears when they open the batch, Print Requested
 shows until Mark as printed, Mark as printed asks first and records who and
 when, and the tag then reads Printed. No email is sent to the clinic.
+
+---
+
+## E2E-39 — Two queues: the nurse interviews, the physician decides (D-126)
+
+**Goal:** a Medical Assessment student goes kiosk → **nurse** (interview,
+Submit to physician) → **physician** (Fit / Unfit); a Medical Clearance
+student goes kiosk → **physician** directly. Each role sees only its own
+queue, and the printed Assessment names both.
+
+**Accounts:** `nurse@healthpass.test`, `physician@healthpass.test`, and two
+students scheduled **today** — one on a **Medical Assessment** batch, one on a
+**Medical Clearance** batch (the D-120 demo seed has both: BR-2026-921 and
+BR-2026-923). The Director must have released BR-2026-921's documents for
+step 12 (Batch Tracking → its results page → approve a release request).
+
+**Part A — the assessment path**
+
+1. Put the **Assessment** student through the kiosk (or use a waiting one
+   from the demo seed).
+2. Sign in as the **nurse** → **Live Queue**. → **Expect:** only Medical
+   Assessment students, each with an **Interview** button; no Clearance
+   student is listed. The dashboard tile reads **Awaiting Interview**.
+3. Click **Interview**. → **Expect:** the page is titled **Interview**: the
+   vitals card (editable, Respiratory Rate empty), the self-assessment and
+   social-history cards and every Assessment section, **no Fit / Unfit**, **no
+   print buttons**, and one button: **Submit to physician**.
+4. Type a respiratory rate, tick a condition, fill a surgical history and a
+   physical-exam finding, then **Submit to physician**. → **Expect:** back on
+   the Live Queue with "Submitted to the physician — HP-…"; the row animates
+   out with **Submitted ✓**.
+5. Press the browser's Back and submit again. → **Expect:** "HP-… was already
+   submitted to the physician." — nothing changes.
+6. Sign in as the **physician** → **Live Queue**. → **Expect:** the student is
+   listed with **Encode Result**, alongside the Clearance students; the order
+   is first come, first served by when each **entered this queue** (the
+   nurse's submit time for this one).
+7. Open them. → **Expect:** "Interviewed by {nurse} · {time}" under the
+   header; the nurse's entries and vitals are filled in and still editable;
+   **Fit / Unfit** is there.
+8. Correct one section, choose **Fit**, **Save & Close**. → **Expect:** back on
+   the queue; the row leaves.
+
+**Part B — the clearance path**
+
+9. Put the **Clearance** student through the kiosk. → **Expect:** they never
+   appear in the nurse's queue, and appear in the physician's within ~5 s.
+10. As the physician, encode them **Fit**. → **Expect:** unchanged from
+    before D-126.
+
+**Part C — guards and print**
+
+11. As the nurse, paste the URL of a Clearance student's encode page (or one
+    the nurse already submitted). → **Expect:** back on the Live Queue with
+    "… is in the physician's queue — only the physician can open it." As the
+    physician, paste a waiting Assessment student's URL. → **Expect:** "…
+    is waiting for the nurse's interview." Neither sees an error page.
+12. Open the encoded Assessment (Clinic Dashboard → View) and **Print back**.
+    → **Expect:** the **nurse's** name above "Interviewed/Assessed by:" and the
+    **physician's** name, "University Physician" and license number in the
+    physician block.
+
+**Pass criteria:** the nurse only ever sees Assessment students and can't
+encode or print them; the physician sees Clearance students and submitted
+Assessments and alone decides Fit / Unfit; the printed Assessment carries the
+nurse as interviewer and the physician's name and license.
 
 ---
 

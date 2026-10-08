@@ -9,9 +9,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * D-69 — the Medical Assessment Form's own sections, one row per Assessment
- * encode (`clearance_records` 1:0..1). A Medical Clearance encode creates no
- * row: that paper has none of these sections.
+ * D-69 — the Medical Assessment Form's own sections. Since D-126 one row per
+ * INTERVIEWED Assessment visit (`clinic_visits` 1:0..1): the nurse writes it
+ * at Submit to physician, and the physician's encode updates it. A Medical
+ * Clearance visit has no row: that paper has none of these sections.
  *
  * The lists below are the form's labels VERBATIM (PSU-QSP-OSS-004-FO010-R00).
  * They are constants so the encode screen, the validation and — from prompt 12
@@ -300,7 +301,7 @@ class MedicalAssessment extends Model
     }
 
     protected $fillable = [
-        'clearance_record_id',
+        'clinic_visit_id',
         'medical_history',
         'immunizations',
         'family_planning_access',
@@ -309,6 +310,9 @@ class MedicalAssessment extends Model
         'menstrual_history',
         'ob_history',
         'physical_exam',
+        // D-126: the vitals + respiratory rate the nurse confirmed at the
+        // interview — the physician's page pre-fills from them.
+        'interview_vitals',
     ];
 
     /**
@@ -326,6 +330,8 @@ class MedicalAssessment extends Model
             'menstrual_history' => 'array',
             'ob_history' => 'array',
             'physical_exam' => 'array',
+            // D-126: the nurse's confirmed vitals, encoded_vitals' shape.
+            'interview_vitals' => 'array',
         ];
     }
 
@@ -367,9 +373,9 @@ class MedicalAssessment extends Model
 
     // ── Relationships ────────────────────────────────────────────────────────
 
-    /** The encoded clearance record these sections belong to. */
-    public function clearanceRecord(): BelongsTo
+    /** D-126 — the visit these sections belong to (the interview comes before any record). */
+    public function clinicVisit(): BelongsTo
     {
-        return $this->belongsTo(ClearanceRecord::class);
+        return $this->belongsTo(ClinicVisit::class);
     }
 }

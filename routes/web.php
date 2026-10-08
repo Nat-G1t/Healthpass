@@ -25,6 +25,7 @@ use App\Http\Controllers\Kiosk\KioskController;
 use App\Http\Controllers\Nurse\BatchController as NurseBatchController;
 use App\Http\Controllers\Nurse\DashboardController as NurseDashboardController;
 use App\Http\Controllers\Nurse\EncodeController as NurseEncodeController;
+use App\Http\Controllers\Nurse\InterviewController as NurseInterviewController;
 use App\Http\Controllers\Nurse\KioskDeviceController as NurseKioskDeviceController;
 use App\Http\Controllers\Nurse\PrintClearanceController as NursePrintClearanceController;
 use App\Http\Controllers\Nurse\QueueController as NurseQueueController;
@@ -219,7 +220,9 @@ Route::middleware(['auth', 'role:college_admin', 'college.scope'])
 
 // ── Clinic Dashboard: Nurse + Physician (FR-AUTH-03, D-64) ────────────────────
 // Both clinic roles share every page below. The URLs and route names stay
-// `/nurse/...` / `nurse.*` — only the labels say "Clinic".
+// `/nurse/...` / `nurse.*` — only the labels say "Clinic". D-126: each role
+// sees its OWN Live Queue (same URL), the nurse interviews Medical Assessment
+// students and only the physician encodes Fit / Unfit.
 
 Route::middleware(['auth', 'role:nurse,physician'])
     ->prefix('nurse')
@@ -271,9 +274,17 @@ Route::middleware(['auth', 'role:nurse,physician'])
             ->missing($removedFromQueue)->name('visits.encode');
         // Save & Close (FR-NRS-04): creates the clearance record and flips the
         // visit to encoded — one-time, guarded in the controller + DB unique.
+        // D-126: the physician's only — StoreClearanceRequest refuses a nurse.
         Route::post('/visits/{visit}/encode', [NurseEncodeController::class, 'store'])
             ->missing($removedFromQueue)
             ->middleware('throttle:40,1,encode-store')->name('visits.encode.store');
+        // Submit to physician (D-126): the nurse's interview of a Medical
+        // Assessment visit — moves it to the physician's queue. The nurse's
+        // only (SubmitInterviewRequest refuses a physician); its own throttle
+        // bucket (3rd arg) so it never shares encode-store's counter.
+        Route::post('/visits/{visit}/interview', [NurseInterviewController::class, 'store'])
+            ->missing($removedFromQueue)
+            ->middleware('throttle:40,1,interview-store')->name('visits.interview');
         // Remove from queue (D-93): deletes a still-waiting (`captured`) visit
         // and its readings, for a student who left without being seen. Its own
         // throttle bucket — an authed throttle keys on the user id with no

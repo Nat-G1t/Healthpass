@@ -38,6 +38,12 @@ class PrintFlowTest extends TestCase
         return User::factory()->create(['role' => 'nurse']);
     }
 
+    /** D-126: only the physician previews and saves a result. */
+    private function physician(): User
+    {
+        return User::factory()->physician()->create();
+    }
+
     private function college(): College
     {
         return College::firstOrCreate(['code' => 'CCS'], ['name' => 'College of Computing Studies']);
@@ -132,7 +138,7 @@ class PrintFlowTest extends TestCase
     {
         $visit = $this->makeVisit();
 
-        $this->actingAs($this->nurse())
+        $this->actingAs($this->physician())
             ->post(route('nurse.visits.print.preview', $visit), [
                 ...EncodePayload::vitals(),
                 'result' => 'Unfit',
@@ -142,13 +148,22 @@ class PrintFlowTest extends TestCase
             ->assertOk()
             ->assertSee('MEDICAL CLEARANCE')
             ->assertSee('Preview-only observation.')
-            // D-64: a nurse is previewing, so the physician block is blank —
-            // an empty name line and an empty licence line to fill in by hand.
-            ->assertSee('<div class="name"></div>', false)
             ->assertSee('University Physician')
-            ->assertDontSee(', MD')
             // The marker the encode screen's print script keys on.
             ->assertSee('data-hp-print-doc', false);
+    }
+
+    public function test_a_nurse_cannot_preview_a_result(): void
+    {
+        // D-126: the preview is the physician's — a nurse is sent back to the
+        // Live Queue, and the hidden print frame never prints a page without
+        // data-hp-print-doc.
+        $visit = $this->makeVisit();
+
+        $this->actingAs($this->nurse())
+            ->post(route('nurse.visits.print.preview', $visit), EncodePayload::make())
+            ->assertRedirect(route('nurse.queue'))
+            ->assertSessionHas('error');
     }
 
     public function test_a_physician_preview_prints_their_own_name_and_license(): void
@@ -169,7 +184,7 @@ class PrintFlowTest extends TestCase
     {
         $visit = $this->makeVisit();
 
-        $html = $this->actingAs($this->nurse())
+        $html = $this->actingAs($this->physician())
             ->post(route('nurse.visits.print.preview', $visit), [
                 ...EncodePayload::vitals(),
                 'result' => 'Unfit',
@@ -194,7 +209,7 @@ class PrintFlowTest extends TestCase
     {
         $visit = $this->makeVisit();
 
-        $this->actingAs($this->nurse())
+        $this->actingAs($this->physician())
             ->post(route('nurse.visits.print.preview', $visit), EncodePayload::make())
             ->assertOk();
 
@@ -206,7 +221,7 @@ class PrintFlowTest extends TestCase
     {
         $visit = $this->makeVisit();
 
-        $this->actingAs($this->nurse())
+        $this->actingAs($this->physician())
             ->from(route('nurse.visits.encode', $visit))
             ->post(route('nurse.visits.print.preview', $visit), [])
             ->assertRedirect(route('nurse.visits.encode', $visit))
@@ -241,7 +256,7 @@ class PrintFlowTest extends TestCase
 
     public function test_a_kiosk_yes_detail_reaches_remarks_through_nurse_notes(): void
     {
-        $nurse = $this->nurse();
+        $nurse = $this->physician();
         $visit = $this->makeVisit([
             'skin' => true,
             'details' => ['skin' => 'Itchy rash on left arm'],
@@ -341,7 +356,7 @@ class PrintFlowTest extends TestCase
     {
         $visit = $this->makeVisit();
 
-        $this->actingAs($this->nurse())
+        $this->actingAs($this->physician())
             ->post(route('nurse.visits.encode.store', $visit), [
                 ...EncodePayload::vitals(),
                 'result' => 'Fit',
@@ -356,7 +371,7 @@ class PrintFlowTest extends TestCase
     {
         $visit = $this->makeVisit();
 
-        $this->actingAs($this->nurse())
+        $this->actingAs($this->physician())
             ->post(route('nurse.visits.encode.store', $visit), [
                 ...EncodePayload::vitals(),
                 'result' => 'Fit',

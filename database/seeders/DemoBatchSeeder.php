@@ -49,10 +49,15 @@ use RuntimeException;
  *                                         2nd chance in 2 days (D-110)
  *     BR-2026-915  CCS   5 days ago   20  Completed — release REJECTED
  *
- *   Today (Clinic Dashboard, Live Queue, kiosk)
- *     BR-2026-921  CCS  8 AM   30  12 encoded, 6 waiting in the queue, 2
+ *   Today (Clinic Dashboard, both Live Queues, kiosk)
+ *     BR-2026-921  CCS  8 AM   30  Medical Assessment: 12 encoded, 4 waiting
+ *                                  for the nurse's interview, 2 interviewed
+ *                                  and waiting for the physician (D-126), 2
  *                                  resting (D-72), 10 not here yet
  *     BR-2026-922  CIT  10 AM  20  nobody here yet
+ *     BR-2026-923  CIT  9 AM    5  Medical Clearance: 3 waiting for the
+ *                                  physician (they skip the nurse, D-126), 2
+ *                                  not here yet
  *
  *   Upcoming (calendar rings, Upcoming Batches)
  *     BR-2026-931  CCS  +2 days  9 AM   50
@@ -231,15 +236,25 @@ class DemoBatchSeeder extends DemoClinicVisitSeeder
 
         foreach ($this->seatsOf($batch) as $i => $seat) {
             match (true) {
-                $i === 0 => $this->captureVisit($seat, $batch, $i),               // Carlo — waiting
+                $i === 0 => $this->captureVisit($seat, $batch, $i),               // Carlo — waiting for the nurse
                 $i <= 12 => $this->encodeVisit($seat, $batch, $i, $i % 6 === 5 ? 'Unfit' : 'Fit'),
-                $i <= 17 => $this->captureVisit($seat, $batch, $i),               // the Live Queue
+                $i <= 15 => $this->captureVisit($seat, $batch, $i),               // the nurse's queue
+                $i <= 17 => $this->interviewVisit($seat, $batch, $i),             // the physician's queue (D-126)
                 $i <= 19 => $this->restVisit($seat, $batch, $i),                  // D-72
                 default => null,                                                  // not here yet
             };
         }
 
         $this->approved('922', $this->cit, 'clearance', 'fieldtrip', $this->day(0), '10:00:00', $this->citStudents->slice(100, 20));
+
+        // D-126: a Medical Clearance never passes through the nurse — these
+        // land straight in the physician's queue, beside 921's interviewed two.
+        $clearance = $this->approved('923', $this->cit, 'clearance', 'sports', $this->day(0), '09:00:00', $this->citStudents->slice(120, 5));
+        foreach ($this->seatsOf($clearance) as $i => $seat) {
+            if ($i < 3) {
+                $this->captureVisit($seat, $clearance, $i);
+            }
+        }
     }
 
     private function seedUpcoming(): void
@@ -488,25 +503,51 @@ class DemoBatchSeeder extends DemoClinicVisitSeeder
         $visit->vitalSigns->update(['bp_systolic' => 148, 'bp_diastolic' => 96, 'is_bp_flagged' => true]);
     }
 
-    /** Captured, then encoded by the nurse or (every fourth) the physician, half an hour later. */
+    /**
+     * D-126: a Medical Assessment visit the nurse interviewed a quarter of an
+     * hour after the kiosk — sections + confirmed vitals saved, waiting in the
+     * physician's queue.
+     */
+    private function interviewVisit(Appointment $seat, BatchRequest $batch, int $seq, string $status = 'interviewed'): ClinicVisit
+    {
+        $visit = $this->kioskVisit($seat, $batch, $seq, $status);
+        $vitals = $this->encodedVitals($visit, 14 + $seq % 5)['encoded_vitals'];
+
+        $visit->update([
+            'interviewed_by' => $this->nurse->id,
+            'interviewed_at' => $visit->checked_in_at->copy()->addMinutes(15),
+        ]);
+        $this->medicalAssessment($visit, $batch->form_type, $seq, $vitals); // D-69 / D-126
+
+        return $visit;
+    }
+
+    /**
+     * Encoded by the physician half an hour after the kiosk (D-126: only the
+     * physician decides Fit / Unfit, so the name and license always print). A
+     * Medical Assessment visit went through the nurse's interview first, so it
+     * carries an interviewer; a Medical Clearance went straight to the
+     * physician.
+     */
     private function encodeVisit(Appointment $seat, BatchRequest $batch, int $seq, string $result): void
     {
-        $visit = $this->kioskVisit($seat, $batch, $seq, 'encoded');
-        $encoder = $seq % 4 === 3 ? $this->physician : $this->nurse;
+        $visit = $batch->form_type === 'assessment'
+            ? $this->interviewVisit($seat, $batch, $seq, 'encoded')
+            : $this->kioskVisit($seat, $batch, $seq, 'encoded');
 
-        $record = ClearanceRecord::create([
+        ClearanceRecord::create([
             'clinic_visit_id' => $visit->id,
-            'encoded_by' => $encoder->id,
+            'encoded_by' => $this->physician->id,
             ...$visit->batchPurpose(),              // D-62
+            // The physician confirms the same vitals the nurse did.
             ...$this->encodedVitals($visit, 14 + $seq % 5),
             'result' => $result,
             'nurse_notes' => $result === 'Unfit'
                 ? 'Blood pressure above threshold on two readings. Advised to consult before clearance is re-issued.'
                 : null,
-            ...ClearanceRecord::physicianBlockFor($encoder), // D-64
+            ...ClearanceRecord::physicianBlockFor($this->physician), // D-64
             'encoded_at' => $visit->checked_in_at->copy()->addMinutes(30),
         ]);
-        $this->medicalAssessment($record, $batch->form_type, $seq); // D-69
 
         $seat->update(['status' => 'completed']);
     }

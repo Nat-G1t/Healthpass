@@ -76,7 +76,10 @@ class PrintClearanceController extends Controller
      */
     public function preview(StoreClearanceRequest $request, ClinicVisit $visit): View
     {
-        abort_unless($visit->status === 'captured', 404);
+        // D-126: the physician's page only — StoreClearanceRequest already
+        // refused anyone whose queue this visit is not in. An interviewed
+        // Assessment previews like a captured Clearance: nothing is saved yet.
+        abort_unless(in_array($visit->status, ['captured', 'interviewed'], true), 404);
 
         // `printed` is a screen flag and the seven vitals (D-65) are their own
         // JSON column — neither is a plain clearance_records field.
@@ -108,10 +111,11 @@ class PrintClearanceController extends Controller
             'encoded_at' => now(),
         ]);
 
-        // "Interviewed/Assessed by" on the Assessment's back page (D-71). The
-        // transient record has no `encoded_by` row to read the relation from,
-        // so hand it the signed-in user — who IS the encoder Save & Close will
-        // record. setRelation() fills a relationship in memory without a query.
+        // The transient record has no `encoded_by` row to read the relation
+        // from, so hand it the signed-in user — who IS the encoder Save & Close
+        // will record. setRelation() fills a relationship in memory without a
+        // query. (Since D-126 "Interviewed/Assessed by" prints the visit's
+        // interviewer; the encoder is only the fallback for older records.)
         $record->setRelation('encoder', $request->user());
 
         // D-71: the Assessment's own sections, built by the SAME request

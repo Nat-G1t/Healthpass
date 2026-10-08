@@ -238,7 +238,8 @@ class Appointment extends Model
      *   rest_retake — D-72: the kiosk caught a high temperature, blood pressure
      *                 or heart rate and the student is resting before re-taking
      *                 it, before the cutoff (was `rechecking`)
-     *   in_clinic   — vitals captured at the kiosk, waiting on the nurse — ALSO
+     *   in_clinic   — vitals captured at the kiosk, waiting on the nurse or (an
+     *                 `interviewed` visit, D-126) the physician — ALSO
      *                 after the cutoff: an un-encoded student is the clinic's
      *                 delay, not the student's (replaces D-86's did_not_finish)
      *   completed   — the nurse has encoded it; clearanceResult() has a value

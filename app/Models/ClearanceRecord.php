@@ -83,7 +83,8 @@ class ClearanceRecord extends Model
      * encodes. A physician's own encode prints their name and license; a
      * nurse's prints nothing, leaving a blank line for a wet signature. Used
      * by Save & Close, the print preview and the demo seeder, so the rule
-     * lives in one place.
+     * lives in one place. Since D-126 only the physician encodes, so every new
+     * record carries the block; records a nurse encoded before keep NULLs.
      *
      * @return array{physician_name: ?string, physician_license_no: ?string}
      */
@@ -227,12 +228,17 @@ class ClearanceRecord extends Model
 
     /**
      * D-69 — the Medical Assessment Form's own sections. `hasOne` is Laravel's
-     * one-to-one relation: this record has at most one row over there, found
-     * by its `clearance_record_id`. It is NULL on every Medical Clearance
-     * record, because that form has none of those sections.
+     * one-to-one relation: this record has at most one row over there. It is
+     * NULL on every Medical Clearance record, because that form has none of
+     * those sections.
+     *
+     * D-126: the row is keyed by the VISIT now (the nurse saves it before this
+     * record exists), so the relation matches medical_assessments.clinic_visit_id
+     * against THIS record's clinic_visit_id — the 2nd and 3rd arguments. Every
+     * `clearanceRecord.medicalAssessment` eager load keeps working unchanged.
      */
     public function medicalAssessment(): HasOne
     {
-        return $this->hasOne(MedicalAssessment::class);
+        return $this->hasOne(MedicalAssessment::class, 'clinic_visit_id', 'clinic_visit_id');
     }
 }

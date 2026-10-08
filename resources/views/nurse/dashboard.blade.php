@@ -30,8 +30,9 @@
         </x-hp.card>
 
         <x-hp.card>
+            {{-- D-126: the viewer's own queue — the nurse interviews, the physician encodes. --}}
             <p class="hp-card-title">
-                Awaiting Encode
+                {{ auth()->user()->isPhysician() ? 'Awaiting Encode' : 'Awaiting Interview' }}
             </p>
             <p class="mt-3 text-3xl font-bold leading-none text-hp-slate" data-hp-countup>{{ $stats['awaitingEncode'] }}</p>
             <p class="mt-2 text-xs text-hp-slate/50">

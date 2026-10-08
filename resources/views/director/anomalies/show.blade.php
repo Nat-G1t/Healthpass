@@ -13,6 +13,9 @@
                 <h3 class="text-sm font-semibold text-hp-orange">{{ $visit->reference_no }}</h3>
                 @if ($visit->status === 'captured')
                     <x-hp.badge variant="pending">Pending encode</x-hp.badge>
+                @elseif ($visit->status === 'interviewed')
+                    {{-- D-126: the nurse has interviewed them; the result is the physician's. --}}
+                    <x-hp.badge variant="pending">With the physician</x-hp.badge>
                 @else
                     <x-hp.badge variant="positive">Encoded</x-hp.badge>
                 @endif

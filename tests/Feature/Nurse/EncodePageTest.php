@@ -29,6 +29,12 @@ class EncodePageTest extends TestCase
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
+    private function physician(): User
+    {
+        return User::factory()->physician()->create();
+    }
+
+    /** D-126: a captured Medical Assessment visit is the nurse's (the interview page). */
     private function nurse(): User
     {
         return User::factory()->create(['role' => 'nurse']);
@@ -110,11 +116,11 @@ class EncodePageTest extends TestCase
     }
 
     /** Flip a visit to encoded with its 1:1 clearance record (FR-NRS-04 shape). */
-    private function encode(ClinicVisit $visit, User $nurse, array $overrides = []): ClearanceRecord
+    private function encode(ClinicVisit $visit, User $physician, array $overrides = []): ClearanceRecord
     {
         $record = ClearanceRecord::create(array_merge([
             'clinic_visit_id' => $visit->id,
-            'encoded_by' => $nurse->id,
+            'encoded_by' => $physician->id,
             'result' => 'Fit',
             'purpose' => 'On-the-job Training',
             'nurse_notes' => 'Advised rest and hydration.',
@@ -136,7 +142,7 @@ class EncodePageTest extends TestCase
         $batch = BatchRequest::create([
             'reference_no' => sprintf('BR-2026-%03d', $seq++),
             'college_id' => $this->college()->id,
-            'requested_by' => $this->nurse()->id,
+            'requested_by' => $this->physician()->id,
             'form_type' => $formType,
             'reason' => $reason,
             'reason_detail' => $detail,
@@ -176,7 +182,7 @@ class EncodePageTest extends TestCase
     {
         // D-93: a missing id is usually a visit a colleague removed from the
         // queue, so the route's missing() handler explains instead of a 404.
-        $this->actingAs($this->nurse())
+        $this->actingAs($this->physician())
             ->get(route('nurse.visits.encode', 999999))
             ->assertRedirect(route('nurse.queue'))
             ->assertSessionHas('error');
@@ -188,7 +194,7 @@ class EncodePageTest extends TestCase
     {
         $visit = $this->makeVisit('Ana Cruz');
 
-        $this->actingAs($this->nurse())
+        $this->actingAs($this->physician())
             ->get(route('nurse.visits.encode', $visit))
             ->assertOk()
             ->assertSee("Doctor's Assessment")
@@ -216,7 +222,7 @@ class EncodePageTest extends TestCase
     {
         $visit = $this->makeVisit();
 
-        $response = $this->actingAs($this->nurse())
+        $response = $this->actingAs($this->physician())
             ->get(route('nurse.visits.encode', $visit))
             ->assertOk()
             ->assertSee('Health Questionnaire')
@@ -241,7 +247,7 @@ class EncodePageTest extends TestCase
             'details' => ['skin' => 'Itchy rash on left arm'],
         ]);
 
-        $this->actingAs($this->nurse())
+        $this->actingAs($this->physician())
             ->get(route('nurse.visits.encode', $visit))
             ->assertOk()
             ->assertSeeInOrder(['Health Questionnaire', 'SKIN', 'Yes', 'Itchy rash on left arm', 'HEAD']);
@@ -254,7 +260,7 @@ class EncodePageTest extends TestCase
             'is_temp_flagged' => true,
         ]);
 
-        $this->actingAs($this->nurse())
+        $this->actingAs($this->physician())
             ->get(route('nurse.visits.encode', $visit))
             ->assertOk()
             ->assertSee('38.4')
@@ -268,7 +274,7 @@ class EncodePageTest extends TestCase
             'last_menstrual_period' => '2026-05-20',
         ]);
 
-        $this->actingAs($this->nurse())
+        $this->actingAs($this->physician())
             ->get(route('nurse.visits.encode', $visit))
             ->assertOk()
             ->assertSee('May 20, 2026');
@@ -298,7 +304,7 @@ class EncodePageTest extends TestCase
         // row opens pre-checked YES for the nurse to confirm or correct.
         $visit = $this->makeVisit('Prefilled Student', [], ['skin' => true]);
 
-        $html = $this->actingAs($this->nurse())
+        $html = $this->actingAs($this->physician())
             ->get(route('nurse.visits.encode', $visit))
             ->assertOk()
             ->getContent();
@@ -313,7 +319,7 @@ class EncodePageTest extends TestCase
         // pre-fills for the nurse to confirm or correct).
         $visit = $this->makeVisit();
 
-        $html = $this->actingAs($this->nurse())
+        $html = $this->actingAs($this->physician())
             ->get(route('nurse.visits.encode', $visit))
             ->assertOk()
             ->getContent();
@@ -329,7 +335,7 @@ class EncodePageTest extends TestCase
         $allYes = array_fill_keys(array_keys(ScreeningResponse::QUESTIONS), true);
         $visit = $this->makeVisit('All Yes', [], $allYes);
 
-        $html = $this->actingAs($this->nurse())
+        $html = $this->actingAs($this->physician())
             ->get(route('nurse.visits.encode', $visit))
             ->assertOk()
             ->getContent();
@@ -345,7 +351,7 @@ class EncodePageTest extends TestCase
         $allNo = array_fill_keys(array_keys(ScreeningResponse::QUESTIONS), false);
         $visit = $this->makeVisit('All No', [], $allNo);
 
-        $html = $this->actingAs($this->nurse())
+        $html = $this->actingAs($this->physician())
             ->get(route('nurse.visits.encode', $visit))
             ->assertOk()
             ->getContent();
@@ -370,7 +376,7 @@ class EncodePageTest extends TestCase
         }
         $visit = $this->makeVisit('Alternating', [], $answers);
 
-        $html = $this->actingAs($this->nurse())
+        $html = $this->actingAs($this->physician())
             ->get(route('nurse.visits.encode', $visit))
             ->assertOk()
             ->getContent();
@@ -395,7 +401,7 @@ class EncodePageTest extends TestCase
         // pre-fill, so its row opens fully blank instead of guessing NO.
         $visit = $this->makeVisit('Unanswered Rows', [], ['kidney_bladder' => null, 'mental_disorder' => null]);
 
-        $html = $this->actingAs($this->nurse())
+        $html = $this->actingAs($this->physician())
             ->get(route('nurse.visits.encode', $visit))
             ->assertOk()
             ->getContent();
@@ -422,7 +428,7 @@ class EncodePageTest extends TestCase
             ],
         ]);
 
-        $html = $this->actingAs($this->nurse())
+        $html = $this->actingAs($this->physician())
             ->get(route('nurse.visits.encode', $visit))
             ->assertOk()
             ->getContent();
@@ -440,7 +446,7 @@ class EncodePageTest extends TestCase
             'details' => ['skin' => 'Itchy rash on left arm'],
         ]);
 
-        $this->actingAs($this->nurse())
+        $this->actingAs($this->physician())
             ->withSession(['_old_input' => ['nurse_notes' => 'Nurse rewrote this.']])
             ->get(route('nurse.visits.encode', $visit))
             ->assertOk()
@@ -450,14 +456,14 @@ class EncodePageTest extends TestCase
 
     public function test_an_encoded_record_shows_its_saved_notes_not_the_prefill(): void
     {
-        $nurse = $this->nurse();
+        $physician = $this->physician();
         $visit = $this->makeVisit('Encoded Notes', [], [
             'skin' => true,
             'details' => ['skin' => 'Itchy rash on left arm'],
         ]);
-        $this->encode($visit, $nurse, ['nurse_notes' => null]);
+        $this->encode($visit, $physician, ['nurse_notes' => null]);
 
-        $html = $this->actingAs($nurse)
+        $html = $this->actingAs($physician)
             ->get(route('nurse.visits.encode', $visit))
             ->assertOk()
             ->assertSee('Itchy rash on left arm') // still on the questionnaire card
@@ -473,7 +479,7 @@ class EncodePageTest extends TestCase
     {
         $visit = $this->makeVisit('Remarks Label');
 
-        $this->actingAs($this->nurse())
+        $this->actingAs($this->physician())
             ->get(route('nurse.visits.encode', $visit))
             ->assertOk()
             ->assertSee('Student remarks')
@@ -488,7 +494,7 @@ class EncodePageTest extends TestCase
         // A Yes with no detail (a pre-D-75 visit) still has nothing to quote.
         $visit = $this->makeVisit('No Details', [], ['skin' => true]);
 
-        $html = $this->actingAs($this->nurse())
+        $html = $this->actingAs($this->physician())
             ->get(route('nurse.visits.encode', $visit))
             ->assertOk()
             ->getContent();
@@ -499,14 +505,14 @@ class EncodePageTest extends TestCase
 
     public function test_a_saved_value_wins_over_the_regenerated_default(): void
     {
-        $nurse = $this->nurse();
+        $physician = $this->physician();
         $visit = $this->makeVisit('Edited Remarks', [], [
             'skin' => true,
             'details' => ['skin' => 'Itchy rash on left arm'],
         ]);
-        $this->encode($visit, $nurse, ['nurse_notes' => 'SKIN: rash on left arm, advised ointment']);
+        $this->encode($visit, $physician, ['nurse_notes' => 'SKIN: rash on left arm, advised ointment']);
 
-        $html = $this->actingAs($nurse)
+        $html = $this->actingAs($physician)
             ->get(route('nurse.visits.encode', $visit))
             ->assertOk()
             ->getContent();
@@ -539,7 +545,7 @@ class EncodePageTest extends TestCase
     {
         $visit = $this->makeVisit();
 
-        $response = $this->actingAs($this->nurse())
+        $response = $this->actingAs($this->physician())
             ->get(route('nurse.visits.encode', $visit))
             ->assertOk()
             ->assertSee('Physical Signs Disorder of');
@@ -557,7 +563,7 @@ class EncodePageTest extends TestCase
         // A legacy visit with no appointment: Medical Clearance, "Not specified".
         $visit = $this->makeVisit();
 
-        $this->actingAs($this->nurse())
+        $this->actingAs($this->physician())
             ->get(route('nurse.visits.encode', $visit))
             ->assertOk()
             ->assertSee('data-form-type="clearance"', false)
@@ -569,13 +575,13 @@ class EncodePageTest extends TestCase
 
     public function test_encoded_visit_shows_saved_physical_signs(): void
     {
-        $nurse = $this->nurse();
+        $physician = $this->physician();
         // Kiosk says chest/lungs YES, but the nurse saved NOTHING for that
         // row — read-only must show the record, never the prefill.
         $visit = $this->makeVisit('Examined Student', [], ['chest_lungs' => true]);
-        $this->encode($visit, $nurse, ['ps_skin' => true, 'ps_eyes' => false]);
+        $this->encode($visit, $physician, ['ps_skin' => true, 'ps_eyes' => false]);
 
-        $html = $this->actingAs($nurse)
+        $html = $this->actingAs($physician)
             ->get(route('nurse.visits.encode', $visit))
             ->assertOk()
             ->getContent();
@@ -589,15 +595,15 @@ class EncodePageTest extends TestCase
 
     public function test_encoded_visit_renders_read_only_with_reprint(): void
     {
-        $nurse = $this->nurse();
+        $physician = $this->physician();
         $visit = $this->makeVisit('Encoded Student');
-        $this->encode($visit, $nurse);
+        $this->encode($visit, $physician);
 
-        $this->actingAs($nurse)
+        $this->actingAs($physician)
             ->get(route('nurse.visits.encode', $visit))
             ->assertOk()
             ->assertSee('already been encoded')
-            ->assertSee($nurse->name)
+            ->assertSee($physician->name)
             ->assertSee('Reprint')
             ->assertSee('Advised rest and hydration.')
             ->assertDontSee('Save & Close')
@@ -610,7 +616,7 @@ class EncodePageTest extends TestCase
     {
         $visit = $this->makeVisit();
 
-        $this->actingAs($this->nurse())
+        $this->actingAs($this->physician())
             ->get(route('nurse.queue'))
             ->assertOk()
             ->assertSee(route('nurse.visits.encode', $visit));
@@ -620,7 +626,7 @@ class EncodePageTest extends TestCase
     {
         $visit = $this->makeVisit();
 
-        $this->actingAs($this->nurse())
+        $this->actingAs($this->physician())
             ->get(route('nurse.queue.feed'))
             ->assertOk()
             ->assertJsonPath('visits.0.encode_url', route('nurse.visits.encode', $visit));
@@ -630,9 +636,11 @@ class EncodePageTest extends TestCase
     {
         $assessment = $this->makeVisit('Assessment Student');
         $this->attachBatch($assessment, 'assessment', 'ojt');
+        // D-126: an Assessment reaches the physician's queue once interviewed.
+        $assessment->update(['status' => 'interviewed', 'interviewed_at' => $assessment->checked_in_at]);
         $this->makeVisit('Legacy Student'); // no batch → clearance
 
-        $this->actingAs($this->nurse())
+        $this->actingAs($this->physician())
             ->get(route('nurse.queue.feed'))
             ->assertOk()
             ->assertJsonPath('visits.0.form_type', 'assessment')
@@ -643,9 +651,11 @@ class EncodePageTest extends TestCase
     {
         $visit = $this->makeVisit('Assessment Student');
         $this->attachBatch($visit, 'assessment', 'ojt');
+        // D-126: an Assessment reaches the physician's queue once interviewed.
+        $visit->update(['status' => 'interviewed', 'interviewed_at' => $visit->checked_in_at]);
         $this->makeVisit('Legacy Student');
 
-        $this->actingAs($this->nurse())
+        $this->actingAs($this->physician())
             ->get(route('nurse.queue'))
             ->assertOk()
             ->assertSeeInOrder(['Assessment Student', 'Assessment', 'Legacy Student', 'Clearance']);
@@ -654,7 +664,8 @@ class EncodePageTest extends TestCase
     public function test_the_queue_feed_does_not_query_per_row_for_the_form_type(): void
     {
         // Eager-loaded in scopeLiveQueue: the query count must not grow with
-        // the number of rows (no N+1 on appointment → batchRequest).
+        // the number of rows (no N+1 on appointment → batchRequest). D-126:
+        // the nurse's queue — the two Assessment rows below.
         $nurse = $this->nurse();
         $count = function () use ($nurse): int {
             DB::flushQueryLog();
@@ -690,7 +701,7 @@ class EncodePageTest extends TestCase
             ],
         ]);
 
-        $this->actingAs($this->nurse())
+        $this->actingAs($this->physician())
             ->get(route('nurse.visits.encode', $visit))
             ->assertOk()
             ->assertSee('Irregular pulse')
@@ -701,7 +712,7 @@ class EncodePageTest extends TestCase
     {
         $visit = $this->makeVisit();
 
-        $this->actingAs($this->nurse())
+        $this->actingAs($this->physician())
             ->get(route('nurse.visits.encode', $visit))
             ->assertOk()
             ->assertDontSee('Irregular pulse');
@@ -737,7 +748,7 @@ class EncodePageTest extends TestCase
         $visit = $this->makeVisit();
         $this->attachBatch($visit, 'clearance', 'fieldtrip');
 
-        $this->actingAs($this->nurse())
+        $this->actingAs($this->physician())
             ->get(route('nurse.visits.encode', $visit))
             ->assertOk()
             ->assertDontSee('Personal / Social History');

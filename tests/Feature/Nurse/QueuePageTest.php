@@ -22,9 +22,9 @@ class QueuePageTest extends TestCase
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    private function nurse(): User
+    private function physician(): User
     {
-        return User::factory()->create(['role' => 'nurse']);
+        return User::factory()->physician()->create();
     }
 
     private function college(): College
@@ -88,7 +88,7 @@ class QueuePageTest extends TestCase
 
     public function test_nurse_can_access_queue(): void
     {
-        $this->actingAs($this->nurse())
+        $this->actingAs($this->physician())
             ->get(route('nurse.queue'))
             ->assertOk();
     }
@@ -97,7 +97,7 @@ class QueuePageTest extends TestCase
 
     public function test_empty_queue_shows_clear_state(): void
     {
-        $this->actingAs($this->nurse())
+        $this->actingAs($this->physician())
             ->get(route('nurse.queue'))
             ->assertOk()
             ->assertSee('Queue is clear')
@@ -108,7 +108,7 @@ class QueuePageTest extends TestCase
     {
         $this->makeVisit('Ana Cruz', now()->subMinutes(5)->toDateTimeString());
 
-        $this->actingAs($this->nurse())
+        $this->actingAs($this->physician())
             ->get(route('nurse.queue'))
             ->assertOk()
             ->assertSee('Ana Cruz')
@@ -120,7 +120,7 @@ class QueuePageTest extends TestCase
         $visit = $this->makeVisit('Encoded Student', now()->subMinutes(5)->toDateTimeString());
         $visit->update(['status' => 'encoded']);
 
-        $this->actingAs($this->nurse())
+        $this->actingAs($this->physician())
             ->get(route('nurse.queue'))
             ->assertOk()
             ->assertDontSee('Encoded Student')
@@ -136,7 +136,7 @@ class QueuePageTest extends TestCase
         $this->makeVisit('Oldest Student', now()->subMinutes(30)->toDateTimeString());
         $this->makeVisit('Middle Student', now()->subMinutes(10)->toDateTimeString());
 
-        $this->actingAs($this->nurse())
+        $this->actingAs($this->physician())
             ->get(route('nurse.queue'))
             ->assertOk()
             ->assertSeeInOrder(['Oldest Student', 'Middle Student', 'Newest Student']);
@@ -148,7 +148,7 @@ class QueuePageTest extends TestCase
         $this->makeVisit('Second In Line', now()->subMinutes(2)->toDateTimeString());
 
         // "Next" must render before the second student → it tags the top row.
-        $this->actingAs($this->nurse())
+        $this->actingAs($this->physician())
             ->get(route('nurse.queue'))
             ->assertOk()
             ->assertSee('Next')
@@ -167,7 +167,7 @@ class QueuePageTest extends TestCase
             'is_bp_flagged' => true,
         ]);
 
-        $this->actingAs($this->nurse())
+        $this->actingAs($this->physician())
             ->get(route('nurse.queue'))
             ->assertOk()
             ->assertSee('Temp')

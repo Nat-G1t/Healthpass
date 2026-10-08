@@ -22,9 +22,9 @@ class QueueFeedTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function nurse(): User
+    private function physician(): User
     {
-        return User::factory()->create(['role' => 'nurse']);
+        return User::factory()->physician()->create();
     }
 
     private function college(): College
@@ -87,7 +87,7 @@ class QueueFeedTest extends TestCase
 
     public function test_nurse_can_read_the_feed(): void
     {
-        $this->actingAs($this->nurse())
+        $this->actingAs($this->physician())
             ->getJson(route('nurse.queue.feed'))
             ->assertOk()
             ->assertJson(['count' => 0, 'visits' => []]);
@@ -102,7 +102,7 @@ class QueueFeedTest extends TestCase
         $this->makeVisit('Oldest Student', now()->subMinutes(30)->toDateTimeString());
         $this->makeVisit('Middle Student', now()->subMinutes(10)->toDateTimeString());
 
-        $response = $this->actingAs($this->nurse())
+        $response = $this->actingAs($this->physician())
             ->getJson(route('nurse.queue.feed'))
             ->assertOk()
             ->assertJsonPath('count', 3);
@@ -116,7 +116,7 @@ class QueueFeedTest extends TestCase
         $visit = $this->makeVisit('Encoded Student', now()->subMinutes(5)->toDateTimeString());
         $visit->update(['status' => 'encoded']);
 
-        $this->actingAs($this->nurse())
+        $this->actingAs($this->physician())
             ->getJson(route('nurse.queue.feed'))
             ->assertOk()
             ->assertJson(['count' => 0, 'visits' => []]);
@@ -131,7 +131,7 @@ class QueueFeedTest extends TestCase
             'is_temp_flagged' => true,
         ]);
 
-        $response = $this->actingAs($this->nurse())
+        $response = $this->actingAs($this->physician())
             ->getJson(route('nurse.queue.feed'))
             ->assertOk()
             ->assertJsonPath('visits.0.name', 'Ana Cruz')
@@ -156,7 +156,7 @@ class QueueFeedTest extends TestCase
             'is_hr_flagged' => true,
         ]);
 
-        $this->actingAs($this->nurse())
+        $this->actingAs($this->physician())
             ->getJson(route('nurse.queue.feed'))
             ->assertOk()
             ->assertJsonPath('visits.0.vitals.heart_rate_bpm', 118)

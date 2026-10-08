@@ -376,7 +376,8 @@ final class KioskController extends Controller
             // screens — submit re-reads sex from the session student's profile.
             'isFemale' => $profile->isFemale(),
             'alreadyScreenedToday' => $screened !== null,
-            // 'captured' or 'encoded' — it picks one sentence on the screen.
+            // 'captured', 'interviewed' (D-126) or 'encoded' — it picks one
+            // sentence on the screen: only 'encoded' reads as "seen today".
             ...($screened === null ? [] : [
                 'screenedReference' => $screened->reference_no,
                 'screenedStatus' => $screened->status,

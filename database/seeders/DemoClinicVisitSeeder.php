@@ -396,7 +396,7 @@ class DemoClinicVisitSeeder extends Seeder
             ...$this->socialHistory($v2->formType(), 1), // D-68: assessment
             'is_pregnant' => false,
         ]);
-        $r2 = ClearanceRecord::create([
+        ClearanceRecord::create([
             'clinic_visit_id' => $v2->id,
             'encoded_by' => $physician->id,
             ...$v2->batchPurpose(),   // D-62: as the real encode copies it
@@ -409,7 +409,7 @@ class DemoClinicVisitSeeder extends Seeder
             ...ClearanceRecord::physicianBlockFor($physician), // D-64: name + license print
             'encoded_at' => Carbon::parse('2026-03-05 10:45:00'),
         ]);
-        $this->medicalAssessment($r2, $v2->formType(), 1); // D-69
+        $this->medicalAssessment($v2, $v2->formType(), 1); // D-69
 
         // ── Encoded visit 3 — Maria Reyes, Fit ───────────────────────────────
         $v3 = ClinicVisit::create([
@@ -444,7 +444,7 @@ class DemoClinicVisitSeeder extends Seeder
             ...$this->socialHistory($v3->formType(), 2), // D-68: assessment
             'is_pregnant' => false,
         ]);
-        $r3 = ClearanceRecord::create([
+        ClearanceRecord::create([
             'clinic_visit_id' => $v3->id,
             'encoded_by' => $nurse->id,
             ...$v3->batchPurpose(),   // D-62: as the real encode copies it
@@ -453,7 +453,7 @@ class DemoClinicVisitSeeder extends Seeder
             ...ClearanceRecord::physicianBlockFor($nurse), // D-64: nurse → blank block
             'encoded_at' => Carbon::parse('2026-02-03 12:15:00'),
         ]);
-        $this->medicalAssessment($r3, $v3->formType(), 2); // D-69
+        $this->medicalAssessment($v3, $v3->formType(), 2); // D-69
 
         // ── Encoded visit 4 — Juan Santos, Fit, normal vitals ────────────────
         $v4 = ClinicVisit::create([
@@ -563,7 +563,7 @@ class DemoClinicVisitSeeder extends Seeder
 
         // Visits 4–6 encoded the same morning they were captured.
         foreach ([[$v4, 'Fit', '2026-06-15 10:05:00', 3], [$v5, 'Unfit', '2026-05-10 10:20:00', 4], [$v6, 'Fit', '2026-06-20 09:40:00', 5]] as [$visit, $result, $encodedAt, $seq]) {
-            $record = ClearanceRecord::create([
+            ClearanceRecord::create([
                 'clinic_visit_id' => $visit->id,
                 'encoded_by' => $nurse->id,
                 ...$visit->batchPurpose(),            // D-62: as the real encode copies it
@@ -572,7 +572,7 @@ class DemoClinicVisitSeeder extends Seeder
                 ...ClearanceRecord::physicianBlockFor($nurse), // D-64: nurse → blank block
                 'encoded_at' => Carbon::parse($encodedAt),
             ]);
-            $this->medicalAssessment($record, $visit->formType(), $seq); // D-69
+            $this->medicalAssessment($visit, $visit->formType(), $seq); // D-69
         }
 
         $this->command->info('DemoClinicVisitSeeder: 6 demo visits created (HP-2026-9001 – HP-2026-9006).');
@@ -698,8 +698,8 @@ class DemoClinicVisitSeeder extends Seeder
      * Purge stale pre-rework demo bands (single-month 91xx spread and the
      * Apr–Jun 9200–9399 bands) so re-seeding an old dev DB starts clean. Only
      * touches the synthetic HP-2026-91xx/92xx reference band — never real
-     * visits. medical_assessments restricts clearance_record deletes and
-     * clearance_records restricts visit deletes, so they go innermost-first;
+     * visits. medical_assessments and clearance_records both restrict visit
+     * deletes (D-126), so they go first;
      * vital_signs / screening_responses cascade with the visit.
      */
     private function purgeStaleAnalyticsBands(): void
@@ -715,11 +715,10 @@ class DemoClinicVisitSeeder extends Seeder
             return;
         }
 
-        // D-69: medical_assessments restricts clearance_record deletes the
-        // same way clearance_records restricts visit deletes — so the chain
-        // unwinds innermost-first.
+        // D-69/D-126: medical_assessments restricts visit deletes the same
+        // way clearance_records does — so both go before the visits.
         $staleRecordIds = ClearanceRecord::whereIn('clinic_visit_id', $staleIds)->pluck('id');
-        MedicalAssessment::whereIn('clearance_record_id', $staleRecordIds)->delete();
+        MedicalAssessment::whereIn('clinic_visit_id', $staleIds)->delete();
 
         ClearanceRecord::whereKey($staleRecordIds->all())->delete();
         ClinicVisit::whereKey($staleIds->all())->delete();
@@ -779,7 +778,7 @@ class DemoClinicVisitSeeder extends Seeder
         $this->createSpreadVitalsAndScreening($visit, $visitSeq, $batch->form_type);
 
         if (! $isCaptured) {
-            $record = ClearanceRecord::create([
+            ClearanceRecord::create([
                 'clinic_visit_id' => $visit->id,
                 'encoded_by' => $encoder->id,
                 // D-65: 12-20 breaths/min, with roughly one in nineteen above
@@ -792,7 +791,7 @@ class DemoClinicVisitSeeder extends Seeder
             ]);
 
             // D-69: the Assessment form's own sections; a Clearance gets none.
-            $this->medicalAssessment($record, $batch->form_type, $visitSeq);
+            $this->medicalAssessment($visit, $batch->form_type, $visitSeq);
         }
     }
 
@@ -970,11 +969,17 @@ class DemoClinicVisitSeeder extends Seeder
 
     /**
      * D-69 — the Medical Assessment Form's own sections for a demo visit: one
-     * `medical_assessments` row per ASSESSMENT encode, and none at all for a
-     * Medical Clearance, exactly as Save & Close behaves. $seq varies the
-     * answers so the demo screens show ticked and untouched rows alike.
+     * `medical_assessments` row per ASSESSMENT visit, and none at all for a
+     * Medical Clearance, exactly as the app behaves. $seq varies the answers
+     * so the demo screens show ticked and untouched rows alike.
+     *
+     * D-126: keyed by the VISIT (the nurse's interview comes before any
+     * clearance record), and $interviewVitals is what the nurse confirmed —
+     * `medical_assessments.interview_vitals`.
+     *
+     * @param  ?array<string, int|float>  $interviewVitals
      */
-    protected function medicalAssessment(ClearanceRecord $record, string $formType, int $seq = 0): void
+    protected function medicalAssessment(ClinicVisit $visit, string $formType, int $seq = 0, ?array $interviewVitals = null): void
     {
         if ($formType !== 'assessment') {
             return;
@@ -988,9 +993,10 @@ class DemoClinicVisitSeeder extends Seeder
         $reportsNothing = $seq % 3 === 2;
 
         // Sections V and VI belong to female students only (D-70).
-        $isFemale = $record->clinicVisit?->studentIsFemale() ?? false;
+        $isFemale = $visit->studentIsFemale();
 
-        $record->medicalAssessment()->create([
+        $visit->medicalAssessment()->create([
+            'interview_vitals' => $interviewVitals,
             'medical_history' => $reportsNothing
                 ? ['patient' => [], 'family' => [], 'specify' => []]
                 : [

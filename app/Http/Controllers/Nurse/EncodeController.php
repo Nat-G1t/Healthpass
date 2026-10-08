@@ -8,7 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Nurse\StoreClearanceRequest;
 use App\Models\ClearanceRecord;
 use App\Models\ClinicVisit;
-use App\Models\VitalSigns;
+use App\Models\MedicalAssessment;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -19,14 +19,19 @@ use Illuminate\View\View;
 /**
  * FR-NRS-03 — Encode Result ("Doctor's Assessment", BR-15).
  *
- * One screen, two modes, decided by the visit's status (BR-11):
+ * One screen, three modes since D-126 (separate nurse and physician queues),
+ * decided by the visit's status (BR-11) and who is looking:
  *
- *  - `captured` → the editable assessment form (Result required, Notes
- *    optional; the Purpose is the batch reason, shown read-only — D-62).
- *    Save & Close and Preview & Print are wired in FR-NRS-04/05.
- *  - `encoded`  → the SAME screen read-only, showing the saved clearance
- *    record with a Reprint button. Encoding is one-time (FR-NRS-04), so an
- *    encoded visit can never be edited back into the queue.
+ *  - `interview` — the NURSE on a captured Medical Assessment visit: every
+ *    field except the Result, and "Submit to physician" (InterviewController).
+ *  - `encode`    — the PHYSICIAN on a captured Medical Clearance or an
+ *    interviewed Assessment (the nurse's entries pre-filled, still editable —
+ *    Q3): the full form with Fit / Unfit and Save & Close.
+ *  - `view`      — anyone on an ENCODED visit: the same screen read-only, with
+ *    the print buttons. Encoding is one-time (FR-NRS-04).
+ *
+ * A clinic user who opens a visit waiting in the OTHER role's queue is sent
+ * back to their Live Queue with a plain sentence — never a 403 or 404 page.
  *
  * The flags shown are the server-frozen capture-time booleans — never
  * recomputed, same trust rule as the Live Queue. The vitals THEMSELVES are
@@ -36,11 +41,17 @@ use Illuminate\View\View;
  */
 class EncodeController extends Controller
 {
-    public function show(Request $request, ClinicVisit $visit): View
+    public function show(Request $request, ClinicVisit $visit): View|RedirectResponse
     {
-        // Only the two lifecycle states BR-11 defines can be opened here;
-        // anything else means a hand-edited URL or bad data — 404, not a crash.
-        abort_unless(in_array($visit->status, ['captured', 'encoded'], true), 404);
+        // Only the lifecycle states BR-11 lets the clinic open; a resting visit
+        // or bad data means a hand-edited URL — 404, not a crash.
+        abort_unless(in_array($visit->status, ['captured', 'interviewed', 'encoded'], true), 404);
+
+        // D-126: a waiting visit opens only for the role whose queue it is in.
+        // The read-only view of an ENCODED visit stays open to both.
+        if ($visit->status !== 'encoded' && ! $visit->isInQueueOf($request->user())) {
+            return redirect()->route('nurse.queue')->with('error', $visit->queueRefusal($request->user()));
+        }
 
         $visit->load([
             'student.studentProfile',
@@ -49,14 +60,17 @@ class EncodeController extends Controller
             'vitalSigns',
             'screeningResponse',
             'clearanceRecord.encoder',
-            // D-69: the Assessment sections, shown read-only once encoded.
-            'clearanceRecord.medicalAssessment',
+            // D-69/D-126: the Assessment sections, keyed by the visit — the
+            // nurse's interview on an interviewed visit, the saved row once
+            // encoded — and who interviewed.
+            'medicalAssessment',
+            'interviewer',
         ]);
 
         // D-76: what the Student remarks box opens with — a saved record's own
         // value (even an empty one) always wins over the regenerated default,
-        // or a nurse's edit would be thrown away on the next load. The view
-        // puts old() ahead of both. An Assessment visit has no such box.
+        // or an edit would be thrown away on the next load. The view puts
+        // old() ahead of both. An Assessment visit has no such box.
         $studentRemarks = match (true) {
             $visit->formType() === 'assessment' => null,
             $visit->clearanceRecord !== null => $visit->clearanceRecord->nurse_notes,
@@ -65,6 +79,11 @@ class EncodeController extends Controller
 
         return view('nurse.encode', [
             'visit' => $visit,
+            'mode' => match (true) {
+                $visit->status === 'encoded' => 'view',
+                $visit->queueRole() === 'nurse' => 'interview',
+                default => 'encode',
+            },
             'readOnly' => $visit->status === 'encoded',
             // D-125 (O2): the read-only page's Reprint / Print front / back and
             // Save as PDF work only once the batch is released — the same rule
@@ -98,27 +117,26 @@ class EncodeController extends Controller
     }
 
     /**
-     * FR-NRS-04 — Save & Close. One transaction: create the 1:1 clearance
-     * record, flip the visit `captured` → `encoded` (BR-11) and, if the visit
-     * came from a booked appointment, mark it `completed` (FR-NRS-07). The
-     * next queue poll no longer sees the visit (scopeLiveQueue filters on
-     * `captured`), so the row vanishes on its own.
+     * FR-NRS-04 — Save & Close, the PHYSICIAN's encode (D-126: only the
+     * physician decides Fit / Unfit — StoreClearanceRequest::mayActOn() turns
+     * anyone else, or a visit outside the physician's queue, away before
+     * validation). One transaction: create the 1:1 clearance record, save the
+     * Assessment sections, flip the visit to `encoded` (BR-11) and mark its
+     * appointment `completed` (FR-NRS-07). The next queue poll no longer sees
+     * the visit, so the row vanishes on its own.
      *
      * Encoding is one-time. Two guards, both needed:
      *  - application: an already-`encoded` visit short-circuits to the
      *    read-only view — the everyday double-click / stale-tab case;
      *  - database: the UNIQUE on clearance_records.clinic_visit_id catches
-     *    the race two guards can't see (two nurses saving the same visit in
-     *    the same instant) — the loser's transaction rolls back wholesale.
+     *    the race two guards can't see (two saves of the same visit in the
+     *    same instant) — the loser's transaction rolls back wholesale.
      */
     public function store(StoreClearanceRequest $request, ClinicVisit $visit): RedirectResponse
     {
         if ($visit->status === 'encoded') {
             return $this->alreadyEncoded($visit);
         }
-
-        // Same lifecycle rule as show(): only `captured` visits can be encoded.
-        abort_unless($visit->status === 'captured', 404);
 
         try {
             DB::transaction(function () use ($request, $visit): void {
@@ -144,13 +162,13 @@ class EncodeController extends Controller
                 // screening measured, and the flags still describe it.
                 $encodedVitals = $request->encodedVitals();
 
-                $record = ClearanceRecord::create([
+                ClearanceRecord::create([
                     ...$validated,
                     'encoded_vitals' => $encodedVitals,
-                    // D-64: a physician's own encode prints their name and
-                    // license; a nurse's leaves the block blank (both NULL).
+                    // D-64/D-126: the encoder is always the physician now, so
+                    // their name and license always print.
                     ...ClearanceRecord::physicianBlockFor($request->user()),
-                    // D-62: the purpose is the batch reason, never nurse input —
+                    // D-62: the purpose is the batch reason, never form input —
                     // its printed label (+ specify text). NULL with no batch.
                     ...$visit->batchPurpose(),
                     'clinic_visit_id' => $visit->id,
@@ -162,28 +180,24 @@ class EncodeController extends Controller
                     'printed_at' => $request->boolean('printed') ? now() : null,
                 ]);
 
-                // D-69: a Medical Assessment Form visit records the paper's
-                // own sections (histories, immunizations, family planning) in
-                // `medical_assessments` — one row per Assessment encode, and
-                // none at all for a Medical Clearance, whose form has no such
-                // sections. Same transaction, so a record can never exist
-                // without them.
+                // D-69/D-126: a Medical Assessment visit's own sections. The
+                // nurse wrote the row at Submit to physician; the physician
+                // may have corrected any of it (Q3), so the posted sections
+                // replace it — the nurse's `interview_vitals` stay as they
+                // were. updateOrCreate() creates it if there is none (a visit
+                // interviewed before D-126 cannot exist, but it costs nothing).
+                // A Medical Clearance writes no row: its form has no sections.
                 if ($visit->formType() === 'assessment') {
-                    $record->medicalAssessment()->create($request->medicalAssessmentAttributes());
+                    MedicalAssessment::updateOrCreate(
+                        ['clinic_visit_id' => $visit->id],
+                        $request->medicalAssessmentAttributes(),
+                    );
                 }
 
-                // D-65: the respiratory rate is a vital like any other — the
-                // kiosk simply has no sensor for it, so encode is where it is
-                // written. It and its own flag are the ONLY vitals columns
-                // encode may change.
-                //
-                // D-66: is_rr_flagged is derived HERE, from the value being
-                // written, through the same VitalSigns helper the kiosk submit
-                // and the seeders use — never posted by the form.
-                $visit->vitalSigns?->update([
-                    'respiratory_rate' => $encodedVitals['respiratory_rate'],
-                    'is_rr_flagged' => VitalSigns::isRespiratoryRateFlagged($encodedVitals['respiratory_rate']),
-                ]);
+                // D-65/D-66: the respiratory rate is a vital like any other —
+                // the kiosk simply has no sensor for it — and its flag is
+                // derived from the value being written.
+                $visit->vitalSigns?->recordRespiratoryRate($encodedVitals['respiratory_rate']);
 
                 $visit->update(['status' => 'encoded']);
 
@@ -193,13 +207,13 @@ class EncodeController extends Controller
             return $this->alreadyEncoded($visit);
         }
 
-        // `encoded_visit_id` powers the queue's "reverse-stack" exit animation:
-        // a session flash lives for exactly ONE request (and is gone on reload
-        // by design), so the queue page can render the just-encoded visit once
-        // as a leaving "ghost" row and animate it out.
+        // `left_queue_visit_id` powers the queue's "reverse-stack" exit
+        // animation: a session flash lives for exactly ONE request (and is gone
+        // on reload by design), so the queue page can render the visit once as
+        // a leaving "ghost" row and animate it out.
         return redirect()->route('nurse.queue')
             ->with('status', "Assessment saved — {$visit->reference_no} encoded.")
-            ->with('encoded_visit_id', $visit->id);
+            ->with('left_queue_visit_id', $visit->id);
     }
 
     /** Friendly landing for a re-submit: the same screen, now read-only. */

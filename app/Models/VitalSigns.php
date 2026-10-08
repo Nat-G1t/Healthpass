@@ -121,6 +121,21 @@ class VitalSigns extends Model
             || $rate > (int) $thresholds['respiratory_rate_max'];
     }
 
+    /**
+     * D-65/D-66 — write the respiratory rate the clinic measured, with its
+     * flag derived HERE from that value (never posted by a form). The ONLY
+     * vitals columns the clinic may change: the rest stay what the kiosk
+     * measured (BR-14). Used by the nurse's interview and the physician's
+     * encode (D-126), whichever confirms the rate.
+     */
+    public function recordRespiratoryRate(int $rate): void
+    {
+        $this->update([
+            'respiratory_rate' => $rate,
+            'is_rr_flagged' => self::isRespiratoryRateFlagged($rate),
+        ]);
+    }
+
     // ── Rest & re-check (D-72) ───────────────────────────────────────────────
 
     /**

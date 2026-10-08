@@ -14,11 +14,14 @@ use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 /**
- * FR-NRS-01/02 — Nurse Live Queue.
+ * FR-NRS-01/02 — the clinic's Live Queue.
  *
- * Lists every clinic visit still awaiting encoding (status = 'captured'),
- * oldest first (first come, first served): the top row is the longest-waiting
- * student and is tagged "NEXT". Encoded visits have already left the queue.
+ * D-126: two queues behind one page — each clinic role sees only its own
+ * (ClinicVisit::scopeLiveQueue): the nurse, the captured Medical Assessment
+ * visits waiting for the interview; the physician, the captured Medical
+ * Clearance visits plus every visit the nurse submitted (`interviewed`).
+ * Oldest first (first come, first served into THAT queue): the top row is the
+ * longest-waiting student and is tagged "NEXT".
  *
  * `index()` server-renders the queue on page load; `feed()` returns the same
  * rows as lean JSON for the front-end poll (every 4 s, FR-NRS-02) that updates
@@ -34,34 +37,40 @@ class QueueController extends Controller
     /** Server-rendered queue (initial paint). */
     public function index(Request $request): View
     {
-        $visits = ClinicVisit::liveQueue()->get();
+        $viewer = $request->user();
+        $visits = ClinicVisit::liveQueue($viewer)->get();
 
         // "Reverse-stack" ghost row (motion pass §6.1b): after Save & Close the
-        // visit is already `encoded`, so it is no longer in the queue query by
-        // the time the nurse lands back here — its row would just be silently
-        // gone. EncodeController flashes the id for exactly one request; we
+        // visit is already `encoded` (after the nurse's Submit to physician,
+        // `interviewed` — D-126), so it is no longer in the queue query by
+        // the time the user lands back here — its row would just be silently
+        // gone. The controller flashes the id for exactly one request; we
         // re-fetch that visit and hand it to the view separately so it can be
         // rendered once, in its original position, marked `data-leaving`, and
         // the front-end animates it out (fade + rows sliding up).
         //
-        // Fail-safe: an unknown id, or one that is not actually encoded, simply
-        // yields no ghost — never an error.
+        // Fail-safe: an unknown id, or one that has not actually left a queue,
+        // simply yields no ghost — never an error.
         $ghost = null;
         $ghostIndex = 0;
-        $encodedId = $request->session()->get('encoded_visit_id');
-        if ($encodedId !== null) {
+        $leftId = $request->session()->get('left_queue_visit_id');
+        if ($leftId !== null) {
             $ghost = ClinicVisit::query()
-                ->where('status', 'encoded')
+                ->whereIn('status', ['interviewed', 'encoded'])
                 ->with(['student:id,name', 'college:id,name', 'vitalSigns', 'appointment:id,batch_request_id', 'appointment.batchRequest:id,form_type'])
-                ->find($encodedId);
+                ->find($leftId);
         }
         if ($ghost !== null) {
-            // Original FCFS slot: how many still-waiting visits checked in
-            // before the ghost did (same ordering as scopeLiveQueue).
-            $ghostAnchor = $ghost->checked_in_at ?? $ghost->created_at;
+            // Original FCFS slot: how many still-waiting visits entered this
+            // queue before the ghost did (same ordering as scopeLiveQueue). In
+            // the nurse's queue that is the kiosk check-in; in the physician's,
+            // the nurse's submit time when there is one.
+            $queuedAt = fn (ClinicVisit $visit) => ($viewer->isPhysician() ? $visit->interviewed_at : null)
+                ?? $visit->checked_in_at ?? $visit->created_at;
+            $ghostAnchor = $queuedAt($ghost);
             $ghostIndex = $visits
-                ->takeWhile(function (ClinicVisit $visit) use ($ghostAnchor, $ghost): bool {
-                    $anchor = $visit->checked_in_at ?? $visit->created_at;
+                ->takeWhile(function (ClinicVisit $visit) use ($ghostAnchor, $ghost, $queuedAt): bool {
+                    $anchor = $queuedAt($visit);
 
                     return $anchor < $ghostAnchor
                         || ($anchor == $ghostAnchor && $visit->id < $ghost->id);
@@ -77,15 +86,17 @@ class QueueController extends Controller
      *
      * Lean by design: only the fields a row needs to render, oldest first.
      * The front-end keys rows by `id` to update in place — new arrivals append
-     * at the bottom, encoded visits drop out — with no full-page reload.
+     * at the bottom, visits that left drop out — with no full-page reload.
      */
-    public function feed(): JsonResponse
+    public function feed(Request $request): JsonResponse
     {
-        $visits = ClinicVisit::liveQueue()->get();
+        $viewer = $request->user();
+        $visits = ClinicVisit::liveQueue($viewer)->get();
+        $actionLabel = ClinicVisit::queueActionLabel($viewer);
 
         return response()->json([
             'count' => $visits->count(),
-            'visits' => $visits->map(fn (ClinicVisit $visit) => $this->toRow($visit))->all(),
+            'visits' => $visits->map(fn (ClinicVisit $visit) => $this->toRow($visit, $actionLabel))->all(),
         ]);
     }
 
@@ -103,19 +114,25 @@ class QueueController extends Controller
      * Appointment::todayFor() offers it again — if they come back, they simply
      * go through the kiosk again.
      *
-     * Only a `captured` visit can be removed — one still WAITING in the queue.
-     * The status is re-read under a row lock, so a colleague who encoded this
+     * Only a visit still WAITING in the remover's OWN queue can be removed
+     * (D-126: each role removes only from its own queue). The status is
+     * re-read under a row lock, so a colleague who submitted or encoded this
      * visit a moment ago wins, and an encoded record can never be deleted.
+     *
+     * D-126: an `interviewed` visit also has the nurse's `medical_assessments`
+     * row, whose foreign key RESTRICTS the visit's delete — so it is deleted
+     * explicitly first, inside the same transaction.
      */
-    public function remove(ClinicVisit $visit): RedirectResponse
+    public function remove(Request $request, ClinicVisit $visit): RedirectResponse
     {
-        $removed = DB::transaction(function () use ($visit): bool {
+        $removed = DB::transaction(function () use ($request, $visit): bool {
             $locked = ClinicVisit::whereKey($visit->id)->lockForUpdate()->first();
 
-            if ($locked === null || $locked->status !== 'captured') {
+            if ($locked === null || ! $locked->isInQueueOf($request->user())) {
                 return false;
             }
 
+            $locked->medicalAssessment()->delete();
             $locked->delete();
 
             return true;
@@ -125,7 +142,7 @@ class QueueController extends Controller
 
         if (! $removed) {
             return redirect()->route('nurse.queue')
-                ->with('error', "{$name} is no longer waiting in the queue, so nothing was removed.");
+                ->with('error', "{$name} is no longer waiting in your queue, so nothing was removed.");
         }
 
         return redirect()->route('nurse.queue')
@@ -138,7 +155,7 @@ class QueueController extends Controller
      *
      * @return array<string, mixed>
      */
-    private function toRow(ClinicVisit $visit): array
+    private function toRow(ClinicVisit $visit, string $actionLabel): array
     {
         $vs = $visit->vitalSigns;
         $capturedAt = $visit->checked_in_at ?? $visit->created_at;
@@ -162,14 +179,17 @@ class QueueController extends Controller
                 'is_temp_flagged' => (bool) $vs->is_temp_flagged,
                 'is_bp_flagged' => (bool) $vs->is_bp_flagged,
                 'is_bmi_flagged' => (bool) $vs->is_bmi_flagged,
-                // D-66. No is_rr_flagged: the respiratory rate is measured at
-                // encode (D-65), so the queue never has one to show.
+                // D-66. No is_rr_flagged: the respiratory rate is measured by
+                // the clinic (D-65), so the queue never shows one.
                 'is_hr_flagged' => (bool) $vs->is_hr_flagged,
             ] : null,
             'time_human' => $capturedAt?->diffForHumans(),
-            // Where the row's "Encode Result" link points (FR-NRS-03) — built
+            // Where the row's action link points (FR-NRS-03) — built
             // server-side so the JS poller never guesses the route shape.
             'encode_url' => route('nurse.visits.encode', $visit),
+            // D-126: "Interview" in the nurse's queue, "Encode Result" in the
+            // physician's — the same page, a different job.
+            'action_label' => $actionLabel,
             // D-93: where the row's Remove confirmation posts, for the same reason.
             'remove_url' => route('nurse.visits.remove', $visit),
         ];

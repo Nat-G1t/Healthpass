@@ -105,7 +105,7 @@
         {{ $capturedAt?->diffForHumans() ?? '—' }}
     </td>
 
-    {{-- Encode Result — opens the Doctor's Assessment screen (FR-NRS-03).
+    {{-- Interview / Encode Result — opens the Doctor's Assessment screen (FR-NRS-03).
          Primary on the top row, ghost on the rest (FR-NRS-01). Anchors styled
          with the x-hp.button classes (a real <a> so middle-click/new-tab work);
          live-queue.js copies these class strings verbatim — keep in step. --}}
@@ -118,13 +118,18 @@
     <td class="py-4 pr-4 text-right whitespace-nowrap">
         @if ($leaving)
             {{-- Not a link on purpose: the ghost is about to animate away. --}}
+            {{-- D-126: a nurse's ghost has just been submitted, not encoded. --}}
             <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-4 py-1.5
-                         text-xs font-semibold text-emerald-600">Encoded ✓</span>
+                         text-xs font-semibold text-emerald-600">{{ $visit->status === 'interviewed' ? 'Submitted ✓' : 'Encoded ✓' }}</span>
         @else
+            {{-- D-126: "Interview" for the nurse, "Encode Result" for the physician. --}}
+            @php
+                $actionLabel = \App\Models\ClinicVisit::queueActionLabel(auth()->user());
+            @endphp
             <span class="queue-btn-next"><a href="{{ route('nurse.visits.encode', $visit) }}"
-                class="{{ $btnBase }} bg-hp-orange text-white hover:bg-orange-500 focus-visible:ring-hp-orange">Encode Result</a></span>
+                class="{{ $btnBase }} bg-hp-orange text-white hover:bg-orange-500 focus-visible:ring-hp-orange">{{ $actionLabel }}</a></span>
             <span class="queue-btn-rest"><a href="{{ route('nurse.visits.encode', $visit) }}"
-                class="{{ $btnBase }} bg-transparent text-hp-slate border-[1.5px] border-hp-slate/30 hover:bg-hp-slate/8 focus-visible:ring-hp-slate">Encode Result</a></span>
+                class="{{ $btnBase }} bg-transparent text-hp-slate border-[1.5px] border-hp-slate/30 hover:bg-hp-slate/8 focus-visible:ring-hp-slate">{{ $actionLabel }}</a></span>
             {{-- D-93: Remove from queue. It only opens the confirm popup in
                  queue.blade.php (live-queue.js listens for data-queue-remove),
                  so the payload rides in data attributes — the same shape the
