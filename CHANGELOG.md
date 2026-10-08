@@ -1159,6 +1159,35 @@
 
 ### Changed
 
+* **The clinic screens 8 AM–4 PM in eight hourly slots, 160 a day** (D-122,
+  overturns the hours and daily cap of D-37 / D-95; amends BR-01, BR-02,
+  BR-20, BR-21, BR-22; PRD revision 2.06, 2026-10-08). Asked for by the
+  Clinic Director. No schema change, no new package, no new route.
+  * `config/healthpass.php`: `clinic_hours` 07:00–17:00 → **08:00–16:00**
+    (slots `08:00:00` … `15:00:00`, lunch included), `daily_capacity` 200 →
+    **160**, `closing_hour` 17 → **16**. `hourly_capacity` stays 20 and
+    arrival times stay 3 minutes apart. The 8 PM absent cutoff, the
+    2nd-chance job, the status rules and the kiosk are unchanged.
+  * The Director's hour picker offers only 8–9 AM … 3–4 PM; approval refuses
+    a span past 4 PM and a day over 160.
+  * **Bookings made before this keep their hours.** New
+    `ClinicScheduleService::spanFrom()` reads a stored span back without
+    checking today's grid, and `BatchRequest::scheduledSpan()` uses it — so a
+    7 AM or 4 PM batch still shows its hours on Batch Tracking, the batch
+    results header and the clinic's batch cards, still counts its first hour
+    for the College Admin's cancel (D-92), and still names its hours in a
+    clash. New `bookedBySlotWithLegacy()` keeps a 7 AM / 4 PM row in the
+    Clinic Calendar's day view. A day already above 160 draws a full ring and
+    takes no new seats.
+  * `DemoBatchSeeder` seats its batches from 8 AM, and its full-day batch
+    BR-2026-934 is now 160 students.
+  * Server: if `.env` sets `HEALTHPASS_DAILY_CAPACITY`, change it to `160` —
+    a `.env` value wins over the new default.
+  * Tests: `ClinicScheduleServiceTest` asserts the eight slots, 160, legacy
+    labels and `spanFrom()`; approval, review-page, schedule-feed, calendar
+    and seeder tests updated to the new day; new
+    `tests/Feature/ClinicHoursEightToFourTest.php`.
+
 * **The "Finished incomplete" batch status reads "Done / Incomplete"** (D-121,
   amends FR-ADM-12 and FR-ADM-15; PRD revision 2.05, 2026-10-08). Asked for by
   the Clinic Director. Label only — no schema change, no new package, no new

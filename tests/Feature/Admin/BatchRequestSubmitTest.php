@@ -38,9 +38,10 @@ class BatchRequestSubmitTest extends TestCase
         parent::setUp();
 
         // Written around D-37's 12 an hour and 120 a day, which these tests'
-        // numbers (13 → 12 + 1, a full hour of 12, a 121-student batch …)
-        // still exercise. The D-95 default of 20 is asserted in
-        // the unit test ClinicScheduleServiceTest.
+        // numbers (13 → 12 + 1, a full hour of 12 …) still exercise; over
+        // D-122's eight hours one day holds 12 × 8 = 96. The D-95 / D-122
+        // defaults (20, 160) are asserted in the unit test
+        // ClinicScheduleServiceTest.
         config(['healthpass.hourly_capacity' => 12, 'healthpass.daily_capacity' => 120]);
 
         // D-109: every submission carries a signed memo; keep it off the real disk.
@@ -149,20 +150,20 @@ class BatchRequestSubmitTest extends TestCase
 
     // ── The one schedule rule left at submission: one clinic day ────────────
 
-    public function test_a_batch_of_121_students_is_rejected(): void
+    public function test_a_batch_bigger_than_one_clinic_day_is_rejected(): void
     {
-        // 121 > 12 × 10 — no start hour the Director could pick fits it in one day.
-        $this->submitBatch(121)->assertSessionHasErrors('students');
+        // 97 > 12 × 8 (D-122) — no start hour the Director could pick fits it in one day.
+        $this->submitBatch(97)->assertSessionHasErrors('students');
 
         $this->assertDatabaseCount('batch_requests', 0);
         $this->assertDatabaseCount('batch_request_students', 0);
     }
 
-    public function test_a_batch_of_exactly_120_students_is_accepted(): void
+    public function test_a_batch_of_exactly_one_clinic_day_is_accepted(): void
     {
-        $this->submitBatch(120)->assertSessionHasNoErrors();
+        $this->submitBatch(96)->assertSessionHasNoErrors();
 
-        $this->assertDatabaseCount('batch_request_students', 120);
+        $this->assertDatabaseCount('batch_request_students', 96);
     }
 
     // ── D-108: capacity and clashes are the Director's to check ─────────────
@@ -170,7 +171,7 @@ class BatchRequestSubmitTest extends TestCase
     /** A full clinic day is no reason to refuse a request that has no day yet. */
     public function test_a_full_clinic_day_does_not_block_a_submission(): void
     {
-        Appointment::factory()->count(120)->inSlot('07:00:00')->create([
+        Appointment::factory()->count(120)->inSlot('08:00:00')->create([
             'scheduled_date' => now()->addDays(7)->toDateString(),
             'status' => 'scheduled',
         ]);

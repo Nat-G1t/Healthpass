@@ -211,7 +211,7 @@ class BatchResultsTest extends TestCase
 
     /**
      * 8:00 PM on the clinic day: D-110's real job books every missed student a
-     * 2nd chance (the earliest free hour of NEXT_DAY — 7:00 AM here).
+     * 2nd chance (the earliest free hour of NEXT_DAY — 8:00 AM here).
      */
     private function runSecondChanceJobAtTheCutoff(): void
     {
@@ -689,7 +689,7 @@ class BatchResultsTest extends TestCase
 
         $this->runSecondChanceJobAtTheCutoff();
 
-        $this->results($batch)->assertOk()->assertSee('2nd chance: Sep 11, 2026, 7:00 AM');
+        $this->results($batch)->assertOk()->assertSee('2nd chance: Sep 11, 2026, 8:00 AM');
     }
 
     public function test_another_colleges_batch_is_not_found(): void

@@ -180,6 +180,9 @@ class BatchRequest extends Model
      * D-92 first-hour rule, the BR-25 clash description and the college's
      * pages. The legacy requested_* span is never read for it.
      *
+     * D-122: read as stored (spanFrom()), not through today's grid — a batch
+     * booked at 7 AM or 4 PM before the day became 8–4 keeps its hours.
+     *
      * @return list<string>
      */
     public function scheduledSpan(): array
@@ -189,7 +192,7 @@ class BatchRequest extends Model
         }
 
         return app(ClinicScheduleService::class)
-            ->span($this->scheduled_time, (int) $this->scheduled_blocks);
+            ->spanFrom($this->scheduled_time, (int) $this->scheduled_blocks);
     }
 
     /** "7:00 AM – 10:00 AM (3 slots)", or "—" for a batch with no scheduled span. */

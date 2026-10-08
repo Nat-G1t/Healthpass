@@ -62,8 +62,8 @@ class SecondChanceSchedulerTest extends TestCase
         $this->assertNotSame($original->reference_no, $secondChance->reference_no);
         $this->assertStringStartsWith('APT-', $secondChance->reference_no);
         // Q4: the earliest free hour, and its first arrival time (D-96).
-        $this->assertSame('07:00:00', $secondChance->scheduled_time);
-        $this->assertSame('07:00:00', $secondChance->arrival_time);
+        $this->assertSame('08:00:00', $secondChance->scheduled_time);
+        $this->assertSame('08:00:00', $secondChance->arrival_time);
 
         // The roster row now points at the 2nd chance; the missed one is untouched.
         $this->assertTrue($this->rosterAppointment($batch, $original->student_id)->is($secondChance));
@@ -89,7 +89,7 @@ class SecondChanceSchedulerTest extends TestCase
         $mail->assertDontSeeInHtml($secondChance->reference_no);
         $mail->assertSeeInHtml('Monday, October 5, 2026');   // the day they missed
         $mail->assertSeeInHtml('This is your last chance.');
-        $mail->assertSeeInHtml('7:00 AM – 8:00 AM');
+        $mail->assertSeeInHtml('8:00 AM – 9:00 AM');
         $mail->assertSeeInHtml('Arrive at');
     }
 
@@ -193,8 +193,8 @@ class SecondChanceSchedulerTest extends TestCase
 
     public function test_the_group_takes_the_earliest_free_hours_with_free_arrival_times(): void
     {
-        // Tomorrow 7–8 AM already holds 18 of 20, on its first 18 arrival times.
-        $this->fill($this->day(1), '07:00:00', 18);
+        // Tomorrow 8–9 AM already holds 18 of 20, on its first 18 arrival times.
+        $this->fill($this->day(1), '08:00:00', 18);
 
         $batch = $this->makeBatch(3);
 
@@ -206,9 +206,9 @@ class SecondChanceSchedulerTest extends TestCase
             ->all();
 
         $this->assertSame([
-            ['07:00:00', '07:54:00'],
-            ['07:00:00', '07:57:00'],
-            ['08:00:00', '08:00:00'],
+            ['08:00:00', '08:54:00'],
+            ['08:00:00', '08:57:00'],
+            ['09:00:00', '09:00:00'],
         ], $booked);
     }
 
@@ -218,8 +218,8 @@ class SecondChanceSchedulerTest extends TestCase
             'healthpass.second_chance.search_days' => 2,
             'healthpass.daily_capacity' => 5,
         ]);
-        $this->fill($this->day(1), '07:00:00', 5);
-        $this->fill($this->day(2), '07:00:00', 4);   // room for one, the group is two
+        $this->fill($this->day(1), '08:00:00', 5);
+        $this->fill($this->day(2), '08:00:00', 4);   // room for one, the group is two
 
         $batch = $this->makeBatch(2);
         Log::spy();

@@ -30,8 +30,8 @@ class BatchReviewPageTest extends TestCase
     {
         parent::setUp();
 
-        // The D-95 figures, pinned: 20 an hour, 200 a day.
-        config(['healthpass.hourly_capacity' => 20, 'healthpass.daily_capacity' => 200]);
+        // The D-95 / D-122 figures, pinned: 20 an hour, 160 a day.
+        config(['healthpass.hourly_capacity' => 20, 'healthpass.daily_capacity' => 160]);
 
         $this->ccs = College::create(['code' => 'CCS', 'name' => 'College of Computing Studies']);
         $this->director = User::factory()->create(['role' => 'director']);
@@ -109,7 +109,7 @@ class BatchReviewPageTest extends TestCase
             ->assertSee(route('director.batches.reject', $batch))
             ->assertSee('name="scheduled_date"', false)
             ->assertSee('name="start_time"', false)
-            ->assertSee('Ring = how full the day is (out of 200 students)');
+            ->assertSee('Ring = how full the day is (out of 160 students)');
     }
 
     public function test_only_a_legacy_batch_shows_what_it_originally_requested(): void
@@ -153,19 +153,19 @@ class BatchReviewPageTest extends TestCase
 
     public function test_a_refused_approve_comes_back_with_the_picked_day_and_hour(): void
     {
-        // 25 students need two hours, so a 4 PM start runs past closing.
+        // 25 students need two hours, so a 3 PM start runs past the 4 PM close.
         $big = $this->makeBatch(25);
         $date = now()->addDays(3)->toDateString();
 
         $refused = $this->actingAs($this->director)
             ->followingRedirects()
-            ->post("/director/batches/{$big->id}/approve", ['scheduled_date' => $date, 'start_time' => '16:00:00'])
+            ->post("/director/batches/{$big->id}/approve", ['scheduled_date' => $date, 'start_time' => '15:00:00'])
             ->assertOk()
-            ->assertSee('it would run past 5:00 PM');
+            ->assertSee('it would run past 4:00 PM');
 
         // The page config brings the picked day and hour back (Js::from escapes each quote).
         $this->assertMatchesRegularExpression('/oldDate.{1,8}:.{1,8}'.$date.'/', $refused->getContent());
-        $this->assertMatchesRegularExpression('/oldStart.{1,8}:.{1,8}16:00:00/', $refused->getContent());
+        $this->assertMatchesRegularExpression('/oldStart.{1,8}:.{1,8}15:00:00/', $refused->getContent());
     }
 
     public function test_a_decided_batch_goes_back_to_the_queue(): void

@@ -19,8 +19,8 @@ use Illuminate\Support\Str;
  * between the batch form and the Director's approval (the student calendar
  * went with self-booking in D-61).
  *
- * The grid is DERIVED from `healthpass.clinic_hours` (7 AM–5 PM → ten slots,
- * lunch included) and the caps from `healthpass.hourly_capacity` /
+ * The grid is DERIVED from `healthpass.clinic_hours` (8 AM–4 PM → eight slots,
+ * lunch included, since D-122) and the caps from `healthpass.hourly_capacity` /
  * `daily_capacity`. Nothing here is hardcoded — change the config, the whole
  * app follows.
  *
@@ -37,8 +37,12 @@ class ClinicScheduleService
     /**
      * Every bookable slot of a clinic day, in order.
      *
-     * One slot per open hour: open 07:00, close 17:00 → 07:00:00 … 16:00:00
-     * (ten slots; the 4–5 PM slot is the last one that ends by closing time).
+     * One slot per open hour: open 08:00, close 16:00 → 08:00:00 … 15:00:00
+     * (eight slots; the 3–4 PM slot is the last one that ends by closing time).
+     *
+     * This is the grid for NEW bookings. A row booked before D-122 may sit at
+     * 07:00:00 or 16:00:00, outside it — read such a row's hours with
+     * spanFrom() / bookedBySlotWithLegacy(), never by looking it up here.
      *
      * @return list<string>
      */
@@ -216,6 +220,32 @@ class ClinicScheduleService
     }
 
     /**
+     * The hours a STORED span covers — $blocks consecutive hours from
+     * $startSlot — WITHOUT checking them against today's grid (D-122).
+     *
+     * span() is the rule for a new booking and refuses anything outside the
+     * clinic day; this is for reading back a booking already made. A batch
+     * booked at 7 AM, or 3 PM for two hours, before the day became 8–4 keeps
+     * those hours (Q14), so its label, its first hour (D-92) and its clash
+     * description must still see them.
+     *
+     * @return list<string>
+     */
+    public function spanFrom(string $startSlot, int $blocks): array
+    {
+        if ($blocks < 1) {
+            return [];
+        }
+
+        $start = Carbon::createFromFormat(self::SLOT_FORMAT, $startSlot);
+
+        return array_map(
+            fn (int $offset): string => $start->copy()->addHours($offset)->format(self::SLOT_FORMAT),
+            range(0, $blocks - 1),
+        );
+    }
+
+    /**
      * The span of a batch, straight from its student count.
      *
      * @return list<string>
@@ -285,14 +315,7 @@ class ClinicScheduleService
      */
     public function bookedBySlot(string $date): array
     {
-        $counts = Appointment::query()
-            ->whereDate('scheduled_date', $date)
-            ->whereNotNull('scheduled_time')
-            ->where('status', '!=', 'cancelled')
-            ->select('scheduled_time', DB::raw('COUNT(*) as cnt'))
-            ->groupBy('scheduled_time')
-            ->pluck('cnt', 'scheduled_time')
-            ->all();
+        $counts = $this->countsByTime($date);
 
         $bySlot = [];
         foreach ($this->slots() as $slot) {
@@ -300,6 +323,41 @@ class ClinicScheduleService
         }
 
         return $bySlot;
+    }
+
+    /**
+     * bookedBySlot() plus any hour OUTSIDE today's grid that still holds
+     * bookings — a 7 AM or 4 PM batch booked before D-122 — in time order.
+     * For read-only day views (the Clinic Calendar), so those seats are not
+     * hidden; a picker keeps using bookedBySlot(), which offers only today's
+     * hours.
+     *
+     * @return array<string, int>
+     */
+    public function bookedBySlotWithLegacy(string $date): array
+    {
+        $bySlot = $this->bookedBySlot($date) + array_map('intval', $this->countsByTime($date));
+        ksort($bySlot);   // 'H:i:s' keys sort as times
+
+        return $bySlot;
+    }
+
+    /**
+     * Non-cancelled appointments on $date per stored scheduled_time, NULL-time
+     * rows left out.
+     *
+     * @return array<string, int|string>
+     */
+    private function countsByTime(string $date): array
+    {
+        return Appointment::query()
+            ->whereDate('scheduled_date', $date)
+            ->whereNotNull('scheduled_time')
+            ->where('status', '!=', 'cancelled')
+            ->select('scheduled_time', DB::raw('COUNT(*) as cnt'))
+            ->groupBy('scheduled_time')
+            ->pluck('cnt', 'scheduled_time')
+            ->all();
     }
 
     // ── Arrival times (D-96) ─────────────────────────────────────────────────

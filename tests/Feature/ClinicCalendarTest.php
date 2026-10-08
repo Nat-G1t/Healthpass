@@ -18,7 +18,7 @@ use Tests\TestCase;
  * clinic's Upcoming Batches page.
  *
  * The month feed gives each day's booked count (the ring) and whether it can
- * be opened — today onward, on a clinic weekday. The day feed lists the ten
+ * be opened — today onward, on a clinic weekday. The day feed lists the eight
  * clinic hours with their booked count and the batches holding them. Both are
  * read-only and answer the Director and clinic staff only.
  */
@@ -120,7 +120,7 @@ class ClinicCalendarTest extends TestCase
             ->json();
 
         $this->assertSame(5, $day['booked']);
-        $this->assertCount(10, $day['hours']);
+        $this->assertCount(8, $day['hours']);
 
         $nine = collect($day['hours'])->firstWhere('slot', '09:00:00');
         $this->assertSame(5, $nine['booked']);

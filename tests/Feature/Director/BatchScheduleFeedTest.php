@@ -35,8 +35,9 @@ class BatchScheduleFeedTest extends TestCase
     {
         parent::setUp();
 
-        // The D-95 figures, pinned: 20 an hour, 200 a day, ten hours 7 AM–5 PM.
-        config(['healthpass.hourly_capacity' => 20, 'healthpass.daily_capacity' => 200]);
+        // The D-95 / D-122 figures, pinned: 20 an hour, 160 a day, eight hours
+        // 8 AM–4 PM.
+        config(['healthpass.hourly_capacity' => 20, 'healthpass.daily_capacity' => 160]);
         Carbon::setTestNow(Carbon::parse('2026-10-05 08:30', 'Asia/Manila'));   // a Monday
 
         $this->ccs = College::create(['code' => 'CCS', 'name' => 'College of Computing Studies']);
@@ -108,7 +109,7 @@ class BatchScheduleFeedTest extends TestCase
         $this->assertCount(31, $days);
         $this->assertSame('2026-10-01', $days[0]['date']);
         $this->assertSame('2026-10-31', $days[30]['date']);
-        $this->assertSame(200, $days[0]['capacity']);
+        $this->assertSame(160, $days[0]['capacity']);
     }
 
     public function test_booked_counts_every_non_cancelled_appointment_that_day(): void
@@ -143,7 +144,7 @@ class BatchScheduleFeedTest extends TestCase
 
         $day = $this->day($this->calendar($this->batch($this->cea, 2)), '2026-10-22');
 
-        $this->assertSame(200, $day['booked']);
+        $this->assertSame(160, $day['booked']);
         $this->assertFalse($day['fits']);
         $this->assertSame('No hour can fit 2 students', $day['why']);
     }
@@ -152,7 +153,7 @@ class BatchScheduleFeedTest extends TestCase
     {
         // Every other hour full: 25 students need two hours in a row, and no
         // two consecutive hours both have room.
-        foreach (['07:00:00', '09:00:00', '11:00:00', '13:00:00', '15:00:00'] as $slot) {
+        foreach (['08:00:00', '10:00:00', '12:00:00', '14:00:00'] as $slot) {
             $this->booked($this->ccs, '2026-10-23', $slot, 20);
         }
 
@@ -163,19 +164,19 @@ class BatchScheduleFeedTest extends TestCase
 
     public function test_today_stops_fitting_once_every_possible_start_has_ended(): void
     {
-        $batch = $this->batch($this->ccs, 25);   // needs 2 hours: the last start is 3 PM
+        $batch = $this->batch($this->ccs, 25);   // needs 2 hours: the last start is 2 PM (D-122)
 
-        $this->travelTo(Carbon::parse('2026-10-05 15:59', 'Asia/Manila'));
+        $this->travelTo(Carbon::parse('2026-10-05 14:59', 'Asia/Manila'));
         $this->assertTrue($this->day($this->calendar($batch), '2026-10-05')['fits']);
 
-        // 4 PM: the 3–4 PM hour has ended, and a 4 PM start would run past 5.
-        $this->travelTo(Carbon::parse('2026-10-05 16:00', 'Asia/Manila'));
+        // 3 PM: the 2–3 PM hour has ended, and a 3 PM start would run past 4.
+        $this->travelTo(Carbon::parse('2026-10-05 15:00', 'Asia/Manila'));
         $day = $this->day($this->calendar($batch), '2026-10-05');
         $this->assertFalse($day['fits']);
         $this->assertSame('No hour can fit 25 students', $day['why']);
 
-        // After closing, today reads as closed (BR-20).
-        $this->travelTo(Carbon::parse('2026-10-05 17:00', 'Asia/Manila'));
+        // At the 4 PM close, today reads as closed (BR-20, closing_hour 16).
+        $this->travelTo(Carbon::parse('2026-10-05 16:00', 'Asia/Manila'));
         $this->assertSame('Closed for today', $this->day($this->calendar($batch), '2026-10-05')['why']);
     }
 
@@ -198,7 +199,7 @@ class BatchScheduleFeedTest extends TestCase
 
         $response = $this->hours($this->batch($this->ccs, 5), '2026-10-20')->assertOk();
 
-        $this->assertCount(10, $response->json('hours'));
+        $this->assertCount(8, $response->json('hours'));
         $nine = $this->hour($response, '09:00:00');
         $this->assertSame('9:00 AM – 10:00 AM', $nine['label']);
         $this->assertSame(13, $nine['booked']);
@@ -248,9 +249,9 @@ class BatchScheduleFeedTest extends TestCase
     {
         $response = $this->hours($this->batch($this->ccs, 45), '2026-10-20');   // 3 hours
 
-        $this->assertTrue($this->hour($response, '14:00:00')['selectable']);
-        $this->assertFalse($this->hour($response, '15:00:00')['selectable']);
-        $this->assertSame('runs past 5:00 PM', $this->hour($response, '15:00:00')['why']);
+        $this->assertTrue($this->hour($response, '13:00:00')['selectable']);
+        $this->assertFalse($this->hour($response, '14:00:00')['selectable']);
+        $this->assertSame('runs past 4:00 PM', $this->hour($response, '14:00:00')['why']);
     }
 
     public function test_clash_lists_the_students_already_scheduled_that_day(): void

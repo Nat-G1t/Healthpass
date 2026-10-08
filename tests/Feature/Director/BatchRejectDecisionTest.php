@@ -90,7 +90,7 @@ class BatchRejectDecisionTest extends TestCase
     {
         return $this->actingAs($this->director)->post("/director/batches/{$batch->id}/approve", [
             'scheduled_date' => now()->addDays(7)->toDateString(),
-            'start_time' => '07:00:00',
+            'start_time' => '08:00:00',
         ]);
     }
 

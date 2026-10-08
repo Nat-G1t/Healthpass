@@ -1854,16 +1854,17 @@ CCS student's mailbox (Resend test address or the log mailer).
    scrolls after ten rows, and a **Schedule** card.
 4. Look at the calendar. → **Expect:** past days greyed and not clickable; a
    day that already has bookings shows its number inside a **ring** that
-   fills clockwise with how full the day is (e.g. 100 of 200 = half a ring);
+   fills clockwise with how full the day is (e.g. 80 of 160 = half a ring);
    a day with no bookings has no ring; the legend "Ring = how full the day is
-   (out of 200 students)". Hover a greyed day → its reason ("Past", "No hour
+   (out of 160 students)". Hover a greyed day → its reason ("Past", "No hour
    can fit 25 students").
 5. Click a day at least two days ahead. → **Expect:** it turns solid orange
    with a white number, and its ring (if any) stays visible in white. The
    **Start hour** list appears.
-6. Open the list. → **Expect:** each hour reads like "9:00 AM – 10:00 AM ·
+6. Open the list. → **Expect:** the list runs **8:00 AM … 3:00 PM** (eight
+   hours, D-122) and each hour reads like "9:00 AM – 10:00 AM ·
    open" or "… ~ scheduled for CEA (5/20)"; hours this batch **can't** start
-   at are greyed out and say why ("— runs past 5:00 PM" for 4:00 PM). Pick
+   at are greyed out and say why ("— runs past 4:00 PM" for 3:00 PM). Pick
    **9:00 AM**. → **Expect:** "25 students → 9:00 AM – 11:00 AM (2 hours)".
 7. Click **Approve**. → **Expect:** "Approve BR-… for <day>, 9:00 AM – 11:00
    AM?". Click **Confirm & Approve**. → **Expect:** back on the queue with
@@ -1871,7 +1872,7 @@ CCS student's mailbox (Resend test address or the log mailer).
    CCS batch has left the queue and the **Next** highlight moved to the CEA
    batch.
 8. Review the CEA batch and click **the same day**. → **Expect:** the day's
-   ring now shows 25 of 200; in the list **9:00 AM** reads "~ scheduled for
+   ring now shows 25 of 160; in the list **9:00 AM** reads "~ scheduled for
    CCS (20/20)" and is greyed out, while **11:00 AM** and the other open hours
    are selectable. **10:00 AM** ("CCS (5/20)") is selectable too — the 3 CEA
    students still fit there.

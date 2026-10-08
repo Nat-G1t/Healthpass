@@ -95,7 +95,7 @@ class DemoBatchSeederTest extends TestCase
         $perHour = Appointment::whereDate('scheduled_date', $date)->where('status', '!=', 'cancelled')
             ->get()->countBy('scheduled_time');
 
-        $this->assertCount(10, $perHour);
+        $this->assertCount(8, $perHour);   // D-122: eight hours, 8 AM–4 PM
         $this->assertTrue($perHour->every(fn (int $count): bool => $count === (int) config('healthpass.hourly_capacity')));
     }
 

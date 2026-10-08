@@ -87,7 +87,7 @@ class AppointmentEmailTest extends TestCase
     }
 
     /** D-108: the Director picks the date and the start hour. */
-    private function approve(BatchRequest $batch, ?string $date = null, string $start = '07:00:00'): TestResponse
+    private function approve(BatchRequest $batch, ?string $date = null, string $start = '08:00:00'): TestResponse
     {
         return $this->actingAs($this->director)->post("/director/batches/{$batch->id}/approve", [
             'scheduled_date' => $date ?? now()->addDays(7)->toDateString(),
@@ -124,7 +124,7 @@ class AppointmentEmailTest extends TestCase
         Mail::fake();
 
         $date = now()->addDays(7)->toDateString();
-        // 13 students at 12/hour spans two hours: 12 at 07:00, 1 at 08:00 —
+        // 13 students at 12/hour spans two hours: 12 at 08:00, 1 at 09:00 —
         // so this also proves each student gets THEIR OWN slot, not the batch's
         // start hour pasted onto everyone.
         $batch = $this->makeBatchWithStudents(13);
@@ -145,21 +145,21 @@ class AppointmentEmailTest extends TestCase
         }
 
         // The rendered body carries the date and the student's own hour.
-        $first = $appointments->firstWhere('scheduled_time', '07:00:00');
-        $last = $appointments->firstWhere('scheduled_time', '08:00:00');
-        $this->assertNotNull($first, 'expected students in the 07:00 slot');
-        $this->assertNotNull($last, 'expected the 13th student to spill into 08:00');
+        $first = $appointments->firstWhere('scheduled_time', '08:00:00');
+        $last = $appointments->firstWhere('scheduled_time', '09:00:00');
+        $this->assertNotNull($first, 'expected students in the 08:00 slot');
+        $this->assertNotNull($last, 'expected the 13th student to spill into 09:00');
 
         $firstBody = (new AppointmentScheduledMail($first))->render();
         $this->assertStringContainsString($first->scheduled_date->format('l, F j, Y'), $firstBody);
-        $this->assertStringContainsString('7:00 AM – 8:00 AM', $firstBody);
+        $this->assertStringContainsString('8:00 AM – 9:00 AM', $firstBody);
         // D-101: the Batch ID, never the appointment's own APT reference.
         $this->assertStringContainsString('Batch ID', $firstBody);
         $this->assertStringContainsString($batch->reference_no, $firstBody);
         $this->assertStringNotContainsString($first->reference_no, $firstBody);
 
         $lastBody = (new AppointmentScheduledMail($last))->render();
-        $this->assertStringContainsString('8:00 AM – 9:00 AM', $lastBody);
+        $this->assertStringContainsString('9:00 AM – 10:00 AM', $lastBody);
     }
 
     public function test_a_rejected_batch_queues_nothing(): void
@@ -222,7 +222,7 @@ class AppointmentEmailTest extends TestCase
         Appointment::factory()
             ->count(app(ClinicScheduleService::class)->hourlyCapacity())
             ->onDate($date)
-            ->inSlot('07:00:00')
+            ->inSlot('08:00:00')
             ->create();
 
         $this->approve($batch, $date)->assertRedirect("/director/batches/{$batch->id}/review");

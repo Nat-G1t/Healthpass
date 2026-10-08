@@ -28,7 +28,7 @@ use RuntimeException;
  *
  * Every date is RELATIVE to the day it runs, so re-seeding before a demo
  * keeps it current. Seed on the demo morning: "today's" batch reads In
- * progress from its first hour (7 AM) to the 8 PM cutoff.
+ * progress from its first hour (8 AM) to the 8 PM cutoff.
  *
  *   Director pipeline (Batch Approvals, Batch Tracking)
  *     BR-2026-941  CCS  pending    45  Medical Clearance, field trip   — yesterday
@@ -50,15 +50,15 @@ use RuntimeException;
  *     BR-2026-915  CCS   5 days ago   20  Completed — release REJECTED
  *
  *   Today (Clinic Dashboard, Live Queue, kiosk)
- *     BR-2026-921  CCS  7 AM   30  12 encoded, 6 waiting in the queue, 2
+ *     BR-2026-921  CCS  8 AM   30  12 encoded, 6 waiting in the queue, 2
  *                                  resting (D-72), 10 not here yet
  *     BR-2026-922  CIT  10 AM  20  nobody here yet
  *
  *   Upcoming (calendar rings, Upcoming Batches)
  *     BR-2026-931  CCS  +2 days  9 AM   50
- *     BR-2026-932  CIT  +4 days  7 AM  100
+ *     BR-2026-932  CIT  +4 days  8 AM  100
  *     BR-2026-933  CCS  +8 days  1 PM   20
- *     BR-2026-934  CIT  +11 days 7 AM  200  — a FULL day (the whole ring)
+ *     BR-2026-934  CIT  +11 days 8 AM  160  — a FULL day (the whole ring)
  *
  * Notification dots (D-120): the history from DemoClinicVisitSeeder and the
  * older batches here are marked SEEN by the Director and their college's
@@ -169,7 +169,7 @@ class DemoBatchSeeder extends DemoClinicVisitSeeder
         // 912 — Finished incomplete: 5 missed day 1, 3 of them came on their
         // 2nd chance two days later, 2 missed that too. Release pending.
         $date = $this->day(-9);
-        $batch = $this->approved('912', $this->cit, 'assessment', 'ojt', $date, '07:00:00', $this->citStudents->slice(0, 60));
+        $batch = $this->approved('912', $this->cit, 'assessment', 'ojt', $date, '08:00:00', $this->citStudents->slice(0, 60));
         $seats = $this->seatsOf($batch);
         foreach ($seats as $i => $seat) {
             if ($i < 55) {
@@ -186,7 +186,7 @@ class DemoBatchSeeder extends DemoClinicVisitSeeder
 
         // 913 — No one attended: 5 missed, and missed their 2nd chance too.
         $batch = $this->approved('913', $this->ccs, 'clearance', 'outbound', $this->day(-6), '13:00:00', $this->ccsStudents->slice(40, 5));
-        $this->secondChances($batch, $this->seatsOf($batch), $this->day(-4), '07:00:00');
+        $this->secondChances($batch, $this->seatsOf($batch), $this->day(-4), '08:00:00');
 
         // 914 — Still in progress: 37 encoded, 3 missed and booked for a 2nd
         // chance in two days.
@@ -197,7 +197,7 @@ class DemoBatchSeeder extends DemoClinicVisitSeeder
                 $this->encodeVisit($seat, $batch, $i, 'Fit');
             }
         }
-        $this->secondChances($batch, $seats->slice(37), $this->day(2), '07:00:00');
+        $this->secondChances($batch, $seats->slice(37), $this->day(2), '08:00:00');
 
         // 915 — Completed; the college asked for the documents and was told
         // to attach the dean's memo.
@@ -226,7 +226,7 @@ class DemoBatchSeeder extends DemoClinicVisitSeeder
         // Carlo Cruz and Angel Garcia (named CCS demo students) lead the
         // roster, so their My Records show today's Pending and Fit.
         $roster = $this->ccsStudents->slice(0, 2)->concat($this->ccsStudents->slice(65, 28));
-        $batch = $this->approved('921', $this->ccs, 'assessment', 'ojt', $this->day(0), '07:00:00', $roster);
+        $batch = $this->approved('921', $this->ccs, 'assessment', 'ojt', $this->day(0), '08:00:00', $roster);
 
         foreach ($this->seatsOf($batch) as $i => $seat) {
             match (true) {
@@ -244,9 +244,9 @@ class DemoBatchSeeder extends DemoClinicVisitSeeder
     private function seedUpcoming(): void
     {
         $this->approved('931', $this->ccs, 'clearance', 'fieldtrip', $this->day(2), '09:00:00', $this->ccsStudents->slice(93, 50));
-        $this->approved('932', $this->cit, 'assessment', 'ojt', $this->day(4), '07:00:00', $this->citStudents->slice(100, 100));
+        $this->approved('932', $this->cit, 'assessment', 'ojt', $this->day(4), '08:00:00', $this->citStudents->slice(100, 100));
         $this->approved('933', $this->ccs, 'assessment', 'rle', $this->day(8), '13:00:00', $this->ccsStudents->slice(143, 20));
-        $this->approved('934', $this->cit, 'clearance', 'outbound', $this->day(11), '07:00:00', $this->citStudents);
+        $this->approved('934', $this->cit, 'clearance', 'outbound', $this->day(11), '08:00:00', $this->citStudents->slice(0, $this->schedule->maxBatchSize()));
     }
 
     /** What waits on the Director, and what the Director and colleges turned down. */

@@ -5,22 +5,27 @@ return [
     // BR-02, D-4/D-37: clinic load caps, counted against non-cancelled appointments.
     // Clinic staff update these values without touching any controller or view.
     //
-    // D-37 made the clinic day TEN one-hour booking slots (clinic_hours below,
-    // 7 AM–5 PM, lunch included). D-95 sets a slot at 20 students: the kiosk's
-    // measured average is 2:20 from QR scan to submit, and each student is
-    // budgeted 3 minutes (60 ÷ 20) — so the ONE kiosk is busy ~47 minutes an
-    // hour and the slack absorbs hand-offs and rest & re-checks (D-72). 30 an
-    // hour would need 70 kiosk-minutes an hour and the queue would grow all
-    // day. There is ONE counter per hour; with a second kiosk, raise this.
+    // D-37 made the clinic day one-hour booking slots; since D-122 there are
+    // EIGHT (clinic_hours below, 8 AM–4 PM, lunch included). D-95 sets a slot
+    // at 20 students: the kiosk's measured average is 2:20 from QR scan to
+    // submit, and each student is budgeted 3 minutes (60 ÷ 20) — so the ONE
+    // kiosk is busy ~47 minutes an hour and the slack absorbs hand-offs and
+    // rest & re-checks (D-72). 30 an hour would need 70 kiosk-minutes an hour
+    // and the queue would grow all day. There is ONE counter per hour; with a
+    // second kiosk, raise this.
     //
     // The same number sets each student's arrival time inside the hour
     // (D-96): 3600 s ÷ hourly_capacity apart — ClinicScheduleService.
     'hourly_capacity' => env('HEALTHPASS_HOURLY_CAPACITY', 20),
 
-    // The outer daily cap. It equals hourly_capacity × the number of slots, and
-    // is still enforced separately because it is the only cap that sees legacy
-    // pre-D-37 appointments (scheduled_time NULL), which belong to no slot.
-    'daily_capacity' => env('HEALTHPASS_DAILY_CAPACITY', 200),
+    // The outer daily cap. It equals hourly_capacity × the number of slots —
+    // 20 × 8 = 160 since D-122 (200 over ten slots before) — and is still
+    // enforced separately because it is the only cap that sees legacy
+    // pre-D-37 appointments (scheduled_time NULL), which belong to no slot,
+    // and the 7 AM / 4 PM bookings made before D-122, which sit outside today's
+    // grid. A day already booked past 160 keeps its bookings and simply takes
+    // no more. A .env HEALTHPASS_DAILY_CAPACITY wins over this default.
+    'daily_capacity' => env('HEALTHPASS_DAILY_CAPACITY', 160),
 
     // FR-UI-06: rows per page on every table that can run past ten (Batch
     // Tracking, the batch roster, the activity log, the Director's staff list),
@@ -54,13 +59,15 @@ return [
         'email_domain' => env('HEALTHPASS_STAFF_EMAIL_DOMAIN', 'healthpass.test'),
     ],
 
-    // BR-01 (updated): Clinic open daily, 7 AM–5 PM. Since D-37 this is also the
-    // source of the bookable slot list — App\Services\ClinicScheduleService derives
-    // one one-hour slot per open hour (07:00 … 16:00), so the slot grid is never
-    // hardcoded in a view. Whole hours only.
+    // BR-01 (D-122): the clinic SCREENS daily, 8 AM–4 PM (staff stay until 8 PM,
+    // so absent_cutoff below is unchanged). Since D-37 this is also the source of
+    // the bookable slot list — App\Services\ClinicScheduleService derives one
+    // one-hour slot per open hour (08:00 … 15:00, eight slots), so the slot grid
+    // is never hardcoded in a view. Whole hours only. Bookings made at 7 AM or
+    // 4 PM before D-122 keep their hours; they are never moved.
     'clinic_hours' => [
-        'open' => '07:00',
-        'close' => '17:00',
+        'open' => '08:00',
+        'close' => '16:00',
         'days' => ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
     ],
 
@@ -78,9 +85,9 @@ return [
     // BR-20 (pending adviser sign-off): same-day batch cutoff. Once the local clock
     // (Asia/Manila) reaches this hour, TODAY is greyed out in the College Admin's batch
     // calendar — the clinic is closing. Integer hour, 24h, matches clinic_hours.close
-    // ('17:00') above; keep the two in sync. Consumed server-side by
+    // ('16:00') above; keep the two in sync. Consumed server-side by
     // ClinicScheduleService::cutoffDaysForMonth() (D-61: batches only).
-    'closing_hour' => 17,
+    'closing_hour' => 16,
 
     // FR-ADM-12 (D-55): when a batch student who never reached the kiosk stops
     // reading "Scheduled" and becomes "Unattended" on the Batch Results popup

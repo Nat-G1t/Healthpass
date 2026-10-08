@@ -82,13 +82,13 @@ class BatchApprovalDecisionTest extends TestCase
         return $batch;
     }
 
-    /** The default pick: a week ahead, from 7 AM. */
+    /** The default pick: a week ahead, from 8 AM (D-122). */
     private function inAWeek(): string
     {
         return now()->addDays(7)->toDateString();
     }
 
-    private function approve(BatchRequest $batch, ?string $date = null, ?string $start = '07:00:00', array $extra = []): TestResponse
+    private function approve(BatchRequest $batch, ?string $date = null, ?string $start = '08:00:00', array $extra = []): TestResponse
     {
         return $this->actingAs($this->director)->post(
             "/director/batches/{$batch->id}/approve",
@@ -204,7 +204,8 @@ class BatchApprovalDecisionTest extends TestCase
     {
         $batch = $this->makeBatchWithStudents(3);
 
-        foreach (['07:00', '06:00:00', '17:00:00', '07:30:00'] as $start) {
+        // D-122: 7 AM and 4 PM were clinic hours before; they are not now.
+        foreach (['08:00', '07:00:00', '16:00:00', '17:00:00', '08:30:00'] as $start) {
             $this->approve($batch, null, $start)->assertSessionHasErrors('start_time');
         }
 
@@ -216,7 +217,7 @@ class BatchApprovalDecisionTest extends TestCase
     {
         $batch = $this->makeBatchWithStudents(13);
 
-        $this->approve($batch, null, '07:00:00', ['scheduled_blocks' => 1])->assertRedirect('/director/batches');
+        $this->approve($batch, null, '08:00:00', ['scheduled_blocks' => 1])->assertRedirect('/director/batches');
 
         $this->assertSame(2, (int) $batch->fresh()->scheduled_blocks);
     }
@@ -266,7 +267,7 @@ class BatchApprovalDecisionTest extends TestCase
         $batch->refresh();
         $this->assertSame('approved', $batch->status);
         $this->assertSame($this->inAWeek(), $batch->scheduled_date->toDateString());
-        $this->assertSame('07:00:00', $batch->scheduled_time);
+        $this->assertSame('08:00:00', $batch->scheduled_time);
         $this->assertEquals($firstReviewedAt, $batch->reviewed_at);
     }
 
@@ -334,10 +335,10 @@ class BatchApprovalDecisionTest extends TestCase
 
     public function test_the_fan_out_puts_twelve_students_in_each_hour_and_the_remainder_last(): void
     {
-        // 25 students → 3 hours from 7 AM: 12 + 12 + 1.
+        // 25 students → 3 hours from 8 AM: 12 + 12 + 1.
         $batch = $this->makeBatchWithStudents(25);
 
-        $this->approve($batch, null, '07:00:00')->assertRedirect('/director/batches');
+        $this->approve($batch, null, '08:00:00')->assertRedirect('/director/batches');
 
         $perSlot = Appointment::where('batch_request_id', $batch->id)
             ->get()
@@ -346,7 +347,7 @@ class BatchApprovalDecisionTest extends TestCase
             ->all();
 
         $this->assertSame(
-            ['07:00:00' => 12, '08:00:00' => 12, '09:00:00' => 1],
+            ['08:00:00' => 12, '09:00:00' => 12, '10:00:00' => 1],
             $perSlot,
         );
     }
@@ -373,12 +374,13 @@ class BatchApprovalDecisionTest extends TestCase
 
     public function test_a_start_hour_whose_span_runs_past_closing_is_refused(): void
     {
-        // 25 students need 3 hours; from 3 PM that runs to 6 PM.
+        // 25 students need 3 hours; from 2 PM that runs to 5 PM, past the
+        // 4 PM close (D-122).
         $batch = $this->makeBatchWithStudents(25);
 
-        $this->approve($batch, null, '15:00:00')
+        $this->approve($batch, null, '14:00:00')
             ->assertRedirect($this->reviewUrl($batch))
-            ->assertSessionHas('error', "{$batch->reference_no} needs 3 clinic hours for 25 students — starting at 3:00 PM it would run past 5:00 PM. Pick an earlier start hour.");
+            ->assertSessionHas('error', "{$batch->reference_no} needs 3 clinic hours for 25 students — starting at 2:00 PM it would run past 4:00 PM. Pick an earlier start hour.");
 
         $this->assertNotApproved($batch);
     }
@@ -387,7 +389,7 @@ class BatchApprovalDecisionTest extends TestCase
     {
         $batch = $this->makeBatchWithStudents(25);
 
-        $this->approve($batch, null, '14:00:00')->assertRedirect('/director/batches');
+        $this->approve($batch, null, '13:00:00')->assertRedirect('/director/batches');
 
         $this->assertSame('approved', $batch->fresh()->status);
     }
@@ -400,9 +402,9 @@ class BatchApprovalDecisionTest extends TestCase
 
         $batch = $this->makeBatchWithStudents(25);
 
-        $this->approve($batch, today()->toDateString(), '07:00:00')
+        $this->approve($batch, today()->toDateString(), '08:00:00')
             ->assertRedirect($this->reviewUrl($batch))
-            ->assertSessionHas('error', fn (string $e) => str_contains($e, '7:00 AM – 8:00 AM')
+            ->assertSessionHas('error', fn (string $e) => str_contains($e, '8:00 AM – 9:00 AM')
                 && str_contains($e, 'already passed'));
 
         $this->assertNotApproved($batch);
@@ -442,7 +444,7 @@ class BatchApprovalDecisionTest extends TestCase
 
         $batch = $this->makeBatchWithStudents(5);
 
-        $this->approve($batch, today()->addDay()->toDateString(), '07:00:00')->assertRedirect('/director/batches');
+        $this->approve($batch, today()->addDay()->toDateString(), '08:00:00')->assertRedirect('/director/batches');
 
         $this->assertSame('approved', $batch->fresh()->status);
     }
@@ -454,12 +456,12 @@ class BatchApprovalDecisionTest extends TestCase
         $date = $this->inAWeek();
         $batch = $this->makeBatchWithStudents(25);
 
-        // 8–9 AM sits inside the 7–10 AM span and is already at 12.
-        Appointment::factory()->count(12)->inSlot('08:00:00')->create(['scheduled_date' => $date, 'status' => 'scheduled']);
+        // 9–10 AM sits inside the 8–11 AM span and is already at 12.
+        Appointment::factory()->count(12)->inSlot('09:00:00')->create(['scheduled_date' => $date, 'status' => 'scheduled']);
 
-        $this->approve($batch, $date, '07:00:00')
+        $this->approve($batch, $date, '08:00:00')
             ->assertRedirect($this->reviewUrl($batch))
-            ->assertSessionHas('error', fn (string $error) => str_contains($error, '8:00 AM – 9:00 AM slot in its span')
+            ->assertSessionHas('error', fn (string $error) => str_contains($error, '9:00 AM – 10:00 AM slot in its span')
                 && str_contains($error, 'is already fully booked'));
 
         $this->assertNotApproved($batch, appointmentsBefore: 12);
@@ -470,10 +472,10 @@ class BatchApprovalDecisionTest extends TestCase
         $date = $this->inAWeek();
         $batch = $this->makeBatchWithStudents(8);
 
-        Appointment::factory()->count(8)->inSlot('07:00:00')->create(['scheduled_date' => $date, 'status' => 'scheduled']);
+        Appointment::factory()->count(8)->inSlot('08:00:00')->create(['scheduled_date' => $date, 'status' => 'scheduled']);
 
-        $this->approve($batch, $date, '07:00:00')
-            ->assertSessionHas('error', fn (string $error) => str_contains($error, '7:00 AM – 8:00 AM slot in its span')
+        $this->approve($batch, $date, '08:00:00')
+            ->assertSessionHas('error', fn (string $error) => str_contains($error, '8:00 AM – 9:00 AM slot in its span')
                 && str_contains($error, 'has only 4 seats left'));
 
         $this->assertNotApproved($batch, appointmentsBefore: 8);
@@ -484,11 +486,11 @@ class BatchApprovalDecisionTest extends TestCase
         $date = $this->inAWeek();
         $batch = $this->makeBatchWithStudents(4);
 
-        Appointment::factory()->count(8)->inSlot('07:00:00')->create(['scheduled_date' => $date, 'status' => 'scheduled']);
+        Appointment::factory()->count(8)->inSlot('08:00:00')->create(['scheduled_date' => $date, 'status' => 'scheduled']);
 
-        $this->approve($batch, $date, '07:00:00')->assertSessionHas('status');
+        $this->approve($batch, $date, '08:00:00')->assertSessionHas('status');
 
-        $this->assertSame(12, Appointment::whereDate('scheduled_date', $date)->where('scheduled_time', '07:00:00')->count());
+        $this->assertSame(12, Appointment::whereDate('scheduled_date', $date)->where('scheduled_time', '08:00:00')->count());
     }
 
     public function test_an_hour_other_colleges_use_still_takes_a_batch_that_fits(): void
@@ -511,7 +513,7 @@ class BatchApprovalDecisionTest extends TestCase
 
         Appointment::factory()->count(12)->inSlot('15:00:00')->create(['scheduled_date' => $date, 'status' => 'scheduled']);
 
-        $this->approve($batch, $date, '07:00:00')->assertRedirect('/director/batches');
+        $this->approve($batch, $date, '08:00:00')->assertRedirect('/director/batches');
 
         $this->assertSame('approved', $batch->fresh()->status);
     }
@@ -521,9 +523,9 @@ class BatchApprovalDecisionTest extends TestCase
         $date = $this->inAWeek();
         $batch = $this->makeBatchWithStudents(12);
 
-        Appointment::factory()->count(12)->inSlot('07:00:00')->create(['scheduled_date' => $date, 'status' => 'cancelled']);
+        Appointment::factory()->count(12)->inSlot('08:00:00')->create(['scheduled_date' => $date, 'status' => 'cancelled']);
 
-        $this->approve($batch, $date, '07:00:00')->assertRedirect('/director/batches');
+        $this->approve($batch, $date, '08:00:00')->assertRedirect('/director/batches');
 
         $this->assertSame('approved', $batch->fresh()->status);
     }
@@ -537,7 +539,7 @@ class BatchApprovalDecisionTest extends TestCase
         // seen only by the daily cap (BR-02).
         Appointment::factory()->count(119)->create(['scheduled_date' => $date, 'scheduled_time' => null, 'status' => 'scheduled']);
 
-        $this->approve($batch, $date, '07:00:00')
+        $this->approve($batch, $date, '08:00:00')
             ->assertRedirect($this->reviewUrl($batch))
             ->assertSessionHas('error', fn (string $error) => str_contains($error, 'the day has only 1 places left for its 2 students'));
 
@@ -547,7 +549,7 @@ class BatchApprovalDecisionTest extends TestCase
     // ── (4) BR-25: students already scheduled that day ──────────────────────
 
     /** An approved batch on $date holding the given students. */
-    private function approvedBatchOn(string $date, array $studentIds, string $start = '07:00:00', string $form = 'clearance'): BatchRequest
+    private function approvedBatchOn(string $date, array $studentIds, string $start = '08:00:00', string $form = 'clearance'): BatchRequest
     {
         static $seq = 900;
 
@@ -583,7 +585,7 @@ class BatchApprovalDecisionTest extends TestCase
 
         $names = User::whereIn('id', $clashing)->orderBy('name')->pluck('name');
 
-        $this->approve($batch, $date, '07:00:00')
+        $this->approve($batch, $date, '08:00:00')
             ->assertRedirect($this->reviewUrl($batch))
             ->assertSessionHas(
                 'error',
@@ -599,7 +601,7 @@ class BatchApprovalDecisionTest extends TestCase
         $batch = $this->makeBatchWithStudents(2);
         $this->approvedBatchOn('2030-03-05', $batch->batchRequestStudents()->pluck('student_id')->all());
 
-        $this->approve($batch, '2030-03-06', '07:00:00')->assertRedirect('/director/batches')->assertSessionMissing('error');
+        $this->approve($batch, '2030-03-06', '08:00:00')->assertRedirect('/director/batches')->assertSessionMissing('error');
 
         $this->assertSame('approved', $batch->fresh()->status);
     }
@@ -626,7 +628,7 @@ class BatchApprovalDecisionTest extends TestCase
         $studentId = $batch->batchRequestStudents()->value('student_id');
 
         $other = $this->approvedBatchOn($date, [$studentId]);
-        $appointment = Appointment::factory()->inSlot('07:00:00')->create([
+        $appointment = Appointment::factory()->inSlot('08:00:00')->create([
             'student_id' => $studentId, 'scheduled_date' => $date, 'status' => 'cancelled', 'batch_request_id' => $other->id,
         ]);
         $other->batchRequestStudents()->update(['appointment_id' => $appointment->id]);
@@ -659,7 +661,7 @@ class BatchApprovalDecisionTest extends TestCase
             $this->actingAs(User::factory()->create(['role' => $role]))
                 ->post("/director/batches/{$batch->id}/approve", [
                     'scheduled_date' => $this->inAWeek(),
-                    'start_time' => '07:00:00',
+                    'start_time' => '08:00:00',
                 ])
                 ->assertRedirect();
         }

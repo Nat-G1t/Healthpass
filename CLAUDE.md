@@ -214,9 +214,9 @@ npm run dev                       # terminal 2
   progressive enhancement. Every reading records `entry_method`.
 - **Clinic capacity is TWO config values, never constants in a controller
   (D-37):** `hourly_capacity` (**20** since D-95 — a 3-minute kiosk budget
-  against the measured 2:20 average) and `daily_capacity` (**200**). The
-  clinic day is **ten one-hour slots derived from `clinic_hours`**
-  (7–8 AM … 4–5 PM, **lunch included**) — never hardcode 7–5 in a view; ask
+  against the measured 2:20 average) and `daily_capacity` (**160**). The
+  clinic day is **eight one-hour slots derived from `clinic_hours`**
+  (8–9 AM … 3–4 PM, **lunch included**; D-122) — never hardcode 8–4 in a view; ask
   `App\Services\ClinicScheduleService`. Every appointment carries a
   `scheduled_time` slot key in canonical `'H:i:s'` form; there is **one
   counter per hour** (the constraint is clinic congestion, not kiosk

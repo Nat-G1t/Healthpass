@@ -14,7 +14,8 @@ class StudentSeeder extends Seeder
     /**
      * Demo roster size for the two colleges the defense walks through
      * (Nat, 2026-10-05): CCS and CIT get this many ACTIVE students each, so a
-     * full 200-student batch (the most one clinic day holds) can be picked.
+     * full-day batch (160 students since D-122, the most one clinic day
+     * holds) can be picked, with students to spare for other batches.
      * The named students below count toward it.
      */
     private const DEMO_ROSTER = ['CCS' => 200, 'CIT' => 200];

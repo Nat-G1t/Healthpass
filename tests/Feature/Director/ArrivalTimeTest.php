@@ -41,7 +41,7 @@ class ArrivalTimeTest extends TestCase
 
         // Pinned, so these tests describe the 3-minute budget (D-95) and not
         // whatever the config default happens to be.
-        config(['healthpass.hourly_capacity' => 20, 'healthpass.daily_capacity' => 200]);
+        config(['healthpass.hourly_capacity' => 20, 'healthpass.daily_capacity' => 160]);
 
         $this->ccs = College::create(['code' => 'CCS', 'name' => 'College of Computing Studies']);
         $this->director = User::factory()->create(['role' => 'director']);
@@ -50,7 +50,7 @@ class ArrivalTimeTest extends TestCase
     }
 
     /** A pending batch; $startSlot is the hour the Director will pick (D-108). */
-    private function makeBatch(int $studentCount, string $startSlot = '07:00:00'): BatchRequest
+    private function makeBatch(int $studentCount, string $startSlot = '08:00:00'): BatchRequest
     {
         static $seq = 500;
 
@@ -103,14 +103,14 @@ class ArrivalTimeTest extends TestCase
     public function test_a_batch_gets_times_in_roster_order_and_each_hour_starts_again(): void
     {
         Mail::fake();
-        $batch = $this->makeBatch(23);   // 20 at 7 AM, 3 at 8 AM
+        $batch = $this->makeBatch(23);   // 20 at 8 AM, 3 at 9 AM
 
         $this->approve($batch);
 
         $times = $this->arrivalTimesOf($batch);
-        $this->assertSame(['07:00:00', '07:03:00', '07:06:00'], array_slice($times, 0, 3));
-        $this->assertSame('07:57:00', $times[19]);
-        $this->assertSame(['08:00:00', '08:03:00', '08:06:00'], array_slice($times, 20));
+        $this->assertSame(['08:00:00', '08:03:00', '08:06:00'], array_slice($times, 0, 3));
+        $this->assertSame('08:57:00', $times[19]);
+        $this->assertSame(['09:00:00', '09:03:00', '09:06:00'], array_slice($times, 20));
         $this->assertCount(23, array_unique($times));
     }
 
@@ -123,7 +123,7 @@ class ArrivalTimeTest extends TestCase
         $this->approve($first);
         $this->approve($second);
 
-        $this->assertSame(['07:15:00', '07:18:00', '07:21:00'], $this->arrivalTimesOf($second));
+        $this->assertSame(['08:15:00', '08:18:00', '08:21:00'], $this->arrivalTimesOf($second));
     }
 
     public function test_a_cancelled_appointment_gives_its_time_back_and_nobody_is_doubled(): void
@@ -132,15 +132,15 @@ class ArrivalTimeTest extends TestCase
         $first = $this->makeBatch(3);
         $this->approve($first);
 
-        // The 7:03 student's appointment is cancelled (e.g. a D-92 cancel).
-        Appointment::where('batch_request_id', $first->id)->where('arrival_time', '07:03:00')
+        // The 8:03 student's appointment is cancelled (e.g. a D-92 cancel).
+        Appointment::where('batch_request_id', $first->id)->where('arrival_time', '08:03:00')
             ->update(['status' => 'cancelled']);
 
         $second = $this->makeBatch(2);
         $this->approve($second);
 
-        // The gap is filled first, then the first unused time after 7:06.
-        $this->assertSame(['07:03:00', '07:09:00'], $this->arrivalTimesOf($second));
+        // The gap is filled first, then the first unused time after 8:06.
+        $this->assertSame(['08:03:00', '08:09:00'], $this->arrivalTimesOf($second));
     }
 
     public function test_the_email_and_the_student_dashboard_show_the_arrival_time(): void
@@ -150,19 +150,19 @@ class ArrivalTimeTest extends TestCase
         $this->approve($batch);
 
         $appointment = Appointment::where('batch_request_id', $batch->id)
-            ->where('arrival_time', '07:03:00')->firstOrFail();
+            ->where('arrival_time', '08:03:00')->firstOrFail();
 
         Mail::assertSent(
             AppointmentScheduledMail::class,
             fn (AppointmentScheduledMail $mail): bool => $mail->appointment->is($appointment)
-                && str_contains($mail->render(), '7:03 AM')
+                && str_contains($mail->render(), '8:03 AM')
                 && str_contains($mail->render(), 'Arrive at'),
         );
 
         $this->actingAs($appointment->student)
             ->get(route('student.dashboard'))
             ->assertOk()
-            ->assertSeeInOrder(['Arrive at', '7:03 AM']);
+            ->assertSeeInOrder(['Arrive at', '8:03 AM']);
     }
 
     public function test_an_appointment_from_before_d96_shows_only_its_hour(): void

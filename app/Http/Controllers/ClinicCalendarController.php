@@ -86,7 +86,8 @@ class ClinicCalendarController extends Controller
         $batches = $this->schedule->batchesBySlot($date);
         $hours = [];
 
-        foreach ($this->schedule->bookedBySlot($date) as $slot => $booked) {
+        // D-122: a 7 AM / 4 PM booking from before the 8–4 day keeps its row.
+        foreach ($this->schedule->bookedBySlotWithLegacy($date) as $slot => $booked) {
             $hours[] = [
                 'slot' => $slot,
                 'label' => $this->schedule->label($slot),
