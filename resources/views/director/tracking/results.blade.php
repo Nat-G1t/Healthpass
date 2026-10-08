@@ -11,7 +11,8 @@
 
     D-113: the Director's select-and-download tools are always on (no release
     request needed), and "Review request of documents" under the card opens
-    the college's pending release request.
+    the college's pending release request. D-124: once a request is approved,
+    a dated "Documents released on …" note takes the button's place.
 --}}
 
 @if (session('status'))
@@ -48,6 +49,7 @@
 @include('director.tracking.partials.release-review', [
     'batch' => $batch,
     'pendingRelease' => $pendingRelease,
+    'approvedRelease' => $approvedRelease,
     'memoSize' => $memoSize,
 ])
 

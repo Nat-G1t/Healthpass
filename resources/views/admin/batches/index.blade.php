@@ -149,6 +149,10 @@
                 <x-hp.table-row>
                     <x-hp.table-cell label="Batch ID" class="font-semibold">
                         {{ $batch->reference_no }}
+                        {{-- D-124: the Director released this batch's documents. --}}
+                        @if ($batch->has_approved_release)
+                            @include('batches.results._approved-release-tag')
+                        @endif
                     </x-hp.table-cell>
 
                     <x-hp.table-cell label="Purpose">{{ Str::limit($batch->reasonText(), 60) }}</x-hp.table-cell>

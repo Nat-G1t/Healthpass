@@ -58,6 +58,9 @@ class BatchTrackingController extends Controller
             // D-113: the "Release requested" tag — a college is waiting for
             // the Director to review its document release request.
             ->withExists(['releaseRequests as release_requested' => fn ($query) => $query->where('status', 'pending')])
+            // D-124: the permanent "Approved Release" tag — the Director has
+            // released this batch's documents to its college.
+            ->withExists(['releaseRequests as has_approved_release' => fn ($query) => $query->where('status', 'approved')])
             ->orderByDesc('scheduled_date')
             ->orderByDesc('id')
             ->paginate($perPage, pageName: $resultsFilters->pageName())
@@ -100,7 +103,8 @@ class BatchTrackingController extends Controller
      * first — the pending one is what "Review request of documents" opens,
      * and all of them are the small history under the button. D-123: the
      * popup shows the batch's own signed memo (its columns are on $batch
-     * itself, so nothing more is loaded).
+     * itself, so nothing more is loaded). D-124: an approved request replaces
+     * the button with "Documents released on …" — approval is final.
      */
     public function results(Request $request, BatchRequest $batch): View
     {
@@ -119,6 +123,8 @@ class BatchTrackingController extends Controller
             'batch' => $batch,
             'results' => BatchResults::page($batch),
             'pendingRelease' => $pendingRelease,
+            // D-124: once released, the review button gives way to a dated note.
+            'approvedRelease' => $batch->releaseRequests->firstWhere('status', 'approved'),
             // Only the review popup shows the memo.
             'memoSize' => $pendingRelease !== null ? SignedMemo::sizeLabel($batch) : null,
         ]);

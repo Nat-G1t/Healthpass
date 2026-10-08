@@ -92,6 +92,9 @@ class BatchRequestController extends Controller
             // Only what each row's Status reads — the student names and the
             // rest of the clinical record are never loaded for this card.
             ->with(BatchResults::statusRelations())
+            // D-124: the "Approved Release" tag — one EXISTS subquery for the
+            // whole page, not one query per row.
+            ->withExists(['releaseRequests as has_approved_release' => fn ($query) => $query->where('status', 'approved')])
             ->orderByDesc('scheduled_date')
             ->orderByDesc('id')
             // FR-UI-06: ten per page. Its own page name, because the requests

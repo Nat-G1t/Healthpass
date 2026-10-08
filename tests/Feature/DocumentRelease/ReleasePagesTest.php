@@ -252,7 +252,8 @@ class ReleasePagesTest extends TestCase
         $this->directorPage($batch->id)
             ->assertSee('data-release-history', false)
             ->assertSeeInOrder(['Sep 11, 2026 · 7:00 AM', 'Rejected Sep 11, 2026', 'Sep 11, 2026 · 9:00 AM', 'Approved Sep 11, 2026'])
-            ->assertSee('No release request from the college.');
+            // D-124: approved, so the dated note stands where the button was.
+            ->assertSee('Documents released on Sep 11, 2026.');
     }
 
     public function test_the_history_marks_printed_copies_and_links_an_old_requests_attachment(): void

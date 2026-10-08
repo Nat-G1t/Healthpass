@@ -2207,7 +2207,7 @@ page separately; only the Director gets in.
 
 ---
 
-## E2E-36 — A college asks for its documents; the Director reviews; the forms download as a ZIP (D-113, D-123)
+## E2E-36 — A college asks for its documents; the Director reviews; the forms download as a ZIP (D-113, D-123, D-124)
 
 **Goal:** confirm that a College Admin can ask the Director to release a
 finished batch's documents, that the Director can reject (with a message) or
@@ -2283,12 +2283,23 @@ one). Never run `migrate:fresh`.
     **Expect:** "Printed copies: No" and the same memo → **Approve**. →
     **Expect:** "Documents released — the college can now download its
     students' forms." The history lists **Rejected** then **Approved**.
+    **(D-124)** The **Review request of documents** button is gone; in its
+    place a highlighted note reads "Documents released on {today}." (no
+    "Printed copies requested." — this request left the box unticked), with
+    the history under it.
+12a. **(D-124)** Click **← Batch Tracking**. → **Expect:** the batch's row
+    now carries a solid-orange **Approved Release** tag under its Batch ID,
+    and **no** "Release requested" tag. Other rows without an approved
+    release carry neither.
 
 **Part D — select and download**
 
 13. As the CCS Admin, reload the page. → **Expect:** "Documents released by
     the Director on {date}." in place of the button; the tools are no longer
     greyed.
+13a. **(D-124)** Click **← Batch Tracking**. → **Expect:** on the **Batch
+    Results** card, the batch's row carries the same solid-orange **Approved
+    Release** tag under its Batch ID.
 14. Click **Select students**. → **Expect:** only **encoded** students stay in
     the table (Unattended / Scheduled / At the clinic rows disappear), each
     with a checkbox at the left.
@@ -2319,7 +2330,10 @@ printed-copies choice; the Director sees it (badge, tag, popup, the batch's
 signed memo, "Printed copies: Yes / No") and can reject with a message the
 college reads, then approve a new request; before approval the college's
 tools are greyed out and after it they download a ZIP with one official form
-per selected encoded student; the Director can always download.
+per selected encoded student; the Director can always download; after the
+approval the Director's page shows "Documents released on …" instead of the
+review button, and both Batch Results cards tag the batch **Approved Release**
+(D-124).
 
 ---
 

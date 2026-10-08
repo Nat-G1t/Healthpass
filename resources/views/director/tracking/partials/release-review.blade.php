@@ -6,6 +6,7 @@
       $batch          — the approved BatchRequest, with `releaseRequests`
                         (oldest first) and each one's `requester` loaded
       $pendingRelease — the request waiting for a decision, or null
+      $approvedRelease — the approved request, or null (D-124)
       $memoSize       — the batch's signed memo's size label ("2.4 MB"), or null
 
     The button is enabled only while a request is pending; it opens a popup
@@ -21,6 +22,11 @@
 
     The memo loads from director.batches.memo. Both decisions are re-checked
     under a lock.
+
+    D-124: once a request is APPROVED the button, the line under it and the
+    popup are not rendered. In their place is the same highlighted note the
+    College Admin sees — "Documents released on {date}." — and the history
+    stays under it. Approval is final (D-113), so nothing can be pending then.
 --}}
 @php
     $messageMin = App\Http\Requests\Director\RejectReleaseRequest::MESSAGE_MIN;
@@ -38,17 +44,29 @@
             get messageIsValid() { return this.messageLength >= {{ $messageMin }} && this.messageLength <= {{ $messageMax }}; },
          }">
 
-    <x-hp.button size="xl" class="w-full" :disabled="$pendingRelease === null" @click="reviewOpen = true"
-                 data-release-review-open>
-        Review request of documents
-    </x-hp.button>
-    <p class="mt-2 text-center text-sm text-hp-slate/60">
-        @if ($pendingRelease === null)
-            No release request from the college.
-        @else
-            {{ $pendingRelease->requester?->name ?? 'The college' }} asked on {{ $pendingRelease->created_at->format('M j, Y · g:i A') }}.
-        @endif
-    </p>
+    @if ($approvedRelease !== null)
+        {{-- The College Admin's released note (admin/batches/partials/release-request), worded for the Director. --}}
+        <div class="rounded-2xl border border-hp-orange/30 bg-hp-peach/40 px-5 py-4 text-sm text-hp-slate" data-release-state="approved">
+            <p class="font-semibold">
+                Documents released on {{ $approvedRelease->reviewed_at?->format('M j, Y') }}.
+                @if ($approvedRelease->wants_printed_copies)
+                    Printed copies requested.
+                @endif
+            </p>
+        </div>
+    @else
+        <x-hp.button size="xl" class="w-full" :disabled="$pendingRelease === null" @click="reviewOpen = true"
+                     data-release-review-open>
+            Review request of documents
+        </x-hp.button>
+        <p class="mt-2 text-center text-sm text-hp-slate/60">
+            @if ($pendingRelease === null)
+                No release request from the college.
+            @else
+                {{ $pendingRelease->requester?->name ?? 'The college' }} asked on {{ $pendingRelease->created_at->format('M j, Y · g:i A') }}.
+            @endif
+        </p>
+    @endif
 
     {{-- The request history, small. --}}
     @if ($batch->releaseRequests->isNotEmpty())
@@ -82,7 +100,7 @@
         </div>
     @endif
 
-    @if ($pendingRelease !== null)
+    @if ($pendingRelease !== null && $approvedRelease === null)
         {{-- ── The review popup ────────────────────────────────────────────
              Teleported to <body> so no ancestor's overflow clips it. Esc closes
              it — unless the memo viewer is open on top, which handles

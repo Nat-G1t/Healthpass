@@ -1159,6 +1159,30 @@
 
 ### Changed
 
+* **An approved release shows as "Approved Release" on both Batch Results
+  cards and replaces the Director's review button** (D-124, amends FR-ADM-12,
+  FR-ADM-15, FR-DIRA-10 and FR-DIRA-11; PRD revision 2.08, 2026-10-08).
+  Asked for by the Clinic Director. No schema change, no new package, no new
+  route.
+  * Director's results page: once the batch has an approved release request,
+    "Review request of documents", the line under it and the popup are not
+    rendered. The College Admin's highlighted note takes their place —
+    "Documents released on {date}." (+ " Printed copies requested." when
+    asked). The request history stays under it.
+  * Both Batch Results cards (Director's Batch Tracking, College Admin's
+    Batch Tracking) tag the batch **Approved Release** under its Batch ID —
+    `<x-hp.badge variant="live">` (solid orange; `approved` is the same peach
+    as the `flagged` "Release requested" tag), shared partial
+    `batches/results/_approved-release-tag`. Permanent; a row shows at most
+    one of the two tags. Both queries use one `withExists` subquery
+    (`has_approved_release`).
+  * Unchanged: approval was already final (the college cannot ask again); the
+    D-120 dots.
+  * Tests: new `tests/Feature/DocumentRelease/ApprovedReleaseShownTest.php`
+    (note vs. button for approved / pending / rejected, the printed-copies
+    line, both cards' tags per state, query count flat in the row count);
+    `ReleasePagesTest`'s history test now expects the note.
+
 * **Release requests carry no attachment — the Director reviews the batch's
   signed memo, and the college can ask for printed copies** (D-123, amends
   D-113, FR-ADM-15, FR-DIRA-11 and §6.2; PRD revision 2.07, 2026-10-08).

@@ -80,8 +80,11 @@
                 <x-hp.table-row>
                     <x-hp.table-cell label="Batch ID" class="whitespace-nowrap font-semibold">
                         {{ $batch->reference_no }}
-                        {{-- D-113 (Q18): the college asked for this batch's documents — review it from View. --}}
-                        @if ($batch->release_requested)
+                        {{-- D-113 (Q18): the college asked for this batch's documents — review it from View.
+                             D-124: once approved, the row says so for good. At most one of the two. --}}
+                        @if ($batch->has_approved_release)
+                            @include('batches.results._approved-release-tag')
+                        @elseif ($batch->release_requested)
                             <span class="mt-1 block"><x-hp.badge variant="flagged" data-release-requested>Release requested</x-hp.badge></span>
                         @endif
                     </x-hp.table-cell>
