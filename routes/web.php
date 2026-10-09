@@ -295,16 +295,14 @@ Route::middleware(['auth', 'role:nurse,physician'])
             ->middleware('throttle:30,1,queue-remove')->name('visits.remove');
         // Medical Clearance document (Module PRT, FR-PRT-01..06 / FR-NRS-05) —
         // official form PSU-QSP-OSS-004-FO002-R04 (D-67) as a standalone
-        // document, rendered from one Blade template by both renderers.
-        //  GET  print         — plain view of an encoded visit's form, no side effects
-        //  POST print-preview — captured visit: the encode form posts its unsaved
-        //                       fields into the hidden print iframe (pre-save preview)
-        //  POST print         — encoded visit: Reprint — re-stamps printed_at and
-        //                       returns the form for the iframe to print
-        //  GET  pdf           — Save as PDF (FR-PRT-06): the same document via
-        //                       dompdf, as a download; never stamps printed_at
+        // document, rendered from one Blade template by both renderers. All
+        // three need an encoded visit — D-127 removed the pre-save preview.
+        //  GET  print — plain view of an encoded visit's form, no side effects
+        //  POST print — Print: re-stamps printed_at and returns the form for
+        //               the encode page's hidden iframe to print
+        //  GET  pdf   — Save as PDF (FR-PRT-06): the same document via
+        //               dompdf, as a download; never stamps printed_at
         Route::get('/visits/{visit}/print', [NursePrintClearanceController::class, 'show'])->name('visits.print');
-        Route::post('/visits/{visit}/print-preview', [NursePrintClearanceController::class, 'preview'])->name('visits.print.preview');
         Route::post('/visits/{visit}/print', [NursePrintClearanceController::class, 'reprint'])->name('visits.print.reprint');
         Route::get('/visits/{visit}/pdf', [NursePrintClearanceController::class, 'pdf'])->name('visits.pdf');
 

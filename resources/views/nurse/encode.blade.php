@@ -5,15 +5,17 @@
        'interview' → the NURSE on a captured Medical Assessment: every field but
                      the Result, and Submit to physician
        'encode'    → the PHYSICIAN on a captured Clearance or an interviewed
-                     Assessment (the nurse's entries pre-filled, editable — Q3)
-       'view'      → an encoded visit, same screen locked + Reprint
+                     Assessment — on the latter the nurse's work shows as a
+                     summary, with Edit interview to open the fields (D-127, Q3)
+       'view'      → an encoded visit, same screen locked + the print buttons
+                     (when the print rule allows) — Save lands here (D-127)
      $readOnly is true in 'view' only.
 
      Left column: everything the nurse assesses FROM (identity, vitals,
      questionnaire, and on an Assessment visit the Personal / Social History —
      D-68) — all server-frozen capture-time values. Right column:
-     the assessment form itself. Save & Close encodes (FR-NRS-04); Preview &
-     Print / Reprint post the form into a hidden print iframe (FR-NRS-05).
+     the assessment form itself. Save encodes (FR-NRS-04); after it, Print /
+     Print front / Print back post into a hidden print iframe (FR-NRS-05).
 ──────────────────────────────────────────────────────────────────────────────── --}}
 
 @php
@@ -82,6 +84,13 @@
     // V and VI are for female students only; the greyed inputs are a courtesy,
     // the rule is the server's (StoreClearanceRequest ignores them otherwise).
     $isFemale = $visit->studentIsFemale();
+
+    // ── D-127: the physician reviewing the nurse's interview ─────────────────
+    // The nurse's work shows as a read-only summary; Edit interview reveals
+    // the fields, which are in the form all along (only hidden). After a
+    // failed Save the fields open straight away so the error is visible.
+    $reviewing = $mode === 'encode' && $visit->status === 'interviewed' && $assessment !== null;
+    $editOpen  = $errors->any();
 
     // On a fresh form the LMP box opens with the kiosk's own answer when the
     // student gave one; every other box opens empty.
@@ -222,24 +231,29 @@
             by <span class="font-semibold">{{ $record->encoder->name ?? '—' }}</span>@if ($record->encoder) ({{ $record->encoder->roleLabel() }})@endif
             on {{ $record->encoded_at?->format('M j, Y g:i A') ?? '—' }}
         @endif
-        — the assessment below is read-only. Use
-        @if ($isAssessment)
-            {{-- D-71/D-83: two Letter pages, printed one side at a time. --}}
-            <span class="font-semibold">Print front</span> and
-            <span class="font-semibold">Print back</span>
-        @else
-            <span class="font-semibold">Reprint</span>
+        — the assessment below is read-only.
+        @if ($canPrint)
+            Use
+            @if ($isAssessment)
+                {{-- D-71/D-83: two Letter pages, printed one side at a time. --}}
+                <span class="font-semibold">Print front</span> and
+                <span class="font-semibold">Print back</span>
+            @else
+                <span class="font-semibold">Print</span>
+            @endif
+            to print it.
         @endif
-        for another copy.
     </div>
 @endif
 
 {{-- ONE form around both columns (D-65): the Vital Signs card on the left is
-     now part of the assessment, so Save & Close and Preview & Print post the
-     confirmed vitals together with the result. D-126: the nurse's interview
-     posts the same fields, minus the Result, to Submit to physician. --}}
+     now part of the assessment, so Save posts the confirmed vitals together
+     with the result. D-126: the nurse's interview posts the same fields, minus
+     the Result, to Submit to physician. D-127: `editing` (Alpine) is whether
+     the physician has opened the nurse's interview for editing. --}}
 <form method="POST"
       action="{{ $mode === 'interview' ? route('nurse.visits.interview', $visit) : route('nurse.visits.encode.store', $visit) }}"
+      @if ($reviewing) x-data="{ editing: {{ $editOpen ? 'true' : 'false' }} }" @endif
       class="grid items-start gap-5 lg:grid-cols-3">
     @csrf
 
@@ -279,6 +293,14 @@
             </dl>
         </x-hp.card>
 
+        {{-- D-127: the nurse's interview as a summary, for the physician. --}}
+        @if ($reviewing)
+            @include('nurse.encode.assessment._summary')
+        @endif
+
+        {{-- On a reviewed interview the card below is one of the nurse's
+             fields — hidden behind Edit interview, but still in the form. --}}
+        <div @if ($reviewing) x-show="editing" @unless ($editOpen) x-cloak @endunless @endif>
         {{-- ── Vital Signs (D-65) — the clinic confirms the kiosk's reading ───
              Editable: every value is pre-filled from the kiosk and the clinic
              corrects what it re-measured; Respiratory Rate starts empty
@@ -407,6 +429,7 @@
                 <p class="mt-3 text-sm text-hp-slate/40">The kiosk recorded no vitals for this visit — enter them here.</p>
             @endunless
         </x-hp.card>
+        </div>
 
         {{-- ── Questionnaire — the form's twelve rows (D-63) + pregnancy/LMP (FR-KSK-10) ── --}}
         <x-hp.card>
@@ -501,13 +524,17 @@
              else; "IV. Pertinent Physical Exam" is the Vital Signs card above
              (D-65), never a second set of inputs. --}}
         @if ($isAssessment)
-            @include('nurse.encode.assessment.medical-history')
-            @include('nurse.encode.assessment.immunizations')
-            @include('nurse.encode.assessment.family-planning')
-            @include('nurse.encode.assessment.surgical-history')
-            @include('nurse.encode.assessment.menstrual-history')
-            @include('nurse.encode.assessment.ob-history')
-            @include('nurse.encode.assessment.physical-exam')
+            {{-- D-127: hidden behind Edit interview when the physician is
+                 reviewing the nurse's interview (see the summary above). --}}
+            <div class="space-y-5" @if ($reviewing) x-show="editing" @unless ($editOpen) x-cloak @endunless @endif>
+                @include('nurse.encode.assessment.medical-history')
+                @include('nurse.encode.assessment.immunizations')
+                @include('nurse.encode.assessment.family-planning')
+                @include('nurse.encode.assessment.surgical-history')
+                @include('nurse.encode.assessment.menstrual-history')
+                @include('nurse.encode.assessment.ob-history')
+                @include('nurse.encode.assessment.physical-exam')
+            </div>
         @endif
     </div>
 
@@ -523,7 +550,7 @@
             @endif
         </p>
 
-        {{-- Save & Close POSTs the assessment (FR-NRS-04). Fields re-populate
+        {{-- Save POSTs the assessment (FR-NRS-04). Fields re-populate
              from old() after a validation failure, falling back to the saved
              record in read-only mode. --}}
         <div class="mt-5 space-y-5">
@@ -664,8 +691,8 @@
 
 </form>
 
-{{-- Hidden print frame (FR-NRS-05): both print buttons post the official form
-     in here. 0×0 instead of display:none — Chrome won't reliably print an
+{{-- Hidden print frame (FR-NRS-05): the print buttons (after Save, D-127)
+     post the official form in here. 0×0 instead of display:none — Chrome won't reliably print an
      unrendered frame. --}}
 <iframe name="hp-print-frame" id="hp-print-frame" title="Clearance print preview"
         style="position: fixed; right: 0; bottom: 0; width: 0; height: 0; border: 0;"></iframe>
@@ -679,7 +706,6 @@
     // redirect that landed this page back inside the iframe.
     (function () {
         const frame = document.getElementById('hp-print-frame');
-        const printedFlag = document.getElementById('hp-printed-flag');
         const flipHint = document.getElementById('hp-flip-hint');
         let armed = false;
         // Which side the last click asked for (D-71), so the "put the sheet
@@ -700,7 +726,6 @@
             const doc = frame.contentDocument;
             if (!doc || !doc.body || !doc.body.hasAttribute('data-hp-print-doc')) return;
 
-            if (printedFlag) printedFlag.value = '1';
             if (flipHint) flipHint.hidden = side !== 'front';
             frame.contentWindow.focus();
             frame.contentWindow.print();

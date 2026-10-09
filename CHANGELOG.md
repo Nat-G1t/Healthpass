@@ -1159,6 +1159,44 @@
 
 ### Changed
 
+* **The physician reviews the nurse's interview as a summary, saves without
+  leaving the page, prints after saving, and clicks Finished** (D-127, amends
+  D-125's print rule; FR-NRS-03…05 and FR-PRT-06 amended; PRD revision 2.11,
+  2026-10-09). Asked for by the Clinic Director. No schema change, no new
+  package.
+  * **Summary:** on an interviewed Medical Assessment the physician sees a
+    read-only **Nurse's interview** card (new
+    `resources/views/nurse/encode/assessment/_summary.blade.php`) — only what
+    was answered or ticked, "—" for an empty section, labels from the
+    `MedicalAssessment` constants (new `MENSTRUAL_LABELS`, `OB_LABELS`).
+    **Edit interview** (an Alpine toggle) reveals the fields, which stay in
+    the form, only hidden; a failed Save re-opens them.
+  * **Buttons:** before Save, **Back** and **Save** (was Save & Close) — no
+    print buttons. Save redirects to the same page, read-only, with
+    "Saved — {ref} is {Fit/Unfit}.", **Print** / **Print front · Print back**,
+    **Save as PDF** and **Finished** (→ Live Queue). Opened from the Clinic
+    Dashboard's View: no Finished, and print buttons only when allowed —
+    otherwise hidden (no longer greyed out) with the release hint.
+  * **Print rule:** `ClinicVisit::isReleasedForPrint(?User $user)` — a
+    released batch, or the physician who encoded the visit, on the day they
+    encoded it (server clock). The print / reprint / PDF routes pass the
+    signed-in user.
+  * **Removed:** Preview & Print — `POST /nurse/visits/{visit}/print-preview`
+    (`nurse.visits.print.preview`), `PrintClearanceController::preview()`,
+    the hidden `printed` flag (its `StoreClearanceRequest` rule and the
+    `printed_at` stamp in `EncodeController::store()`), and the unused
+    `$preview` / `$previewSections` parameters of `VisitDocument::data()`,
+    `AssessmentDocument::for()` and `ClearanceDocument::for()`.
+  * **Queue ghost:** Save no longer flashes `left_queue_visit_id`; only the
+    nurse's Submit to physician makes a ghost row, so `QueueController`'s
+    `encoded` and physician-anchor branches and the "Encoded ✓" chip are gone.
+  * Tests: new `tests/Feature/Nurse/PhysicianEncodePageTest.php` (15);
+    `QueueGhostRowTest` rewritten around the nurse's submit; preview tests
+    removed or rewritten as save-then-print in `PrintFlowTest`,
+    `AssessmentPrintTest`, `EncodeSaveTest`, `EncodeVitalsTest`; Save's
+    redirect updated in `EncodeAssessmentTest`, `EncodePageTest`,
+    `TwoQueuesTest`.
+
 * **Two clinic queues: the nurse interviews Medical Assessment students and
   submits them to the physician, who alone decides Fit / Unfit** (D-126,
   PARTLY SUPERSEDES the locked D-64; §2.3, §2.3a, §3, FR-NRS-01…04/09/11,

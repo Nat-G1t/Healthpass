@@ -337,12 +337,30 @@ class ClinicVisit extends Model
      *
      * The ONE rule every clinic print path asks: the batch results page's
      * buttons, the read-only encode page, and the print / reprint / PDF
-     * routes. Prompt 07 adds its exception (the physician printing a form
-     * they encoded today) here.
+     * routes.
+     *
+     * D-127 adds one exception for the person asking ($user): the physician
+     * who encoded this visit may print it on the day they encoded it, by the
+     * server clock — so they can hand the form over right after Save, and a
+     * reload keeps that working. Pass no user to ask about the release alone.
      */
-    public function isReleasedForPrint(): bool
+    public function isReleasedForPrint(?User $user = null): bool
     {
+        if ($user !== null && $this->wasEncodedTodayBy($user)) {
+            return true;
+        }
+
         return $this->appointment?->batchRequest?->hasReleasedDocuments() ?? false;
+    }
+
+    /** D-127 — true when $user saved this visit's encode today (server clock). */
+    private function wasEncodedTodayBy(User $user): bool
+    {
+        $record = $this->clearanceRecord;
+
+        return $record !== null
+            && (int) $record->encoded_by === $user->id
+            && $record->encoded_at?->isToday() === true;
     }
 
     // ── Relationships ────────────────────────────────────────────────────────

@@ -266,6 +266,8 @@ npm run dev                       # terminal 2
   batch's forms only after that release** — one rule,
   `ClinicVisit::isReleasedForPrint()`, enforced on the server by the clinic's
   print / reprint / PDF routes and its batch download (no batch → refused).
+  One exception (D-127), inside that same method: the physician who encoded a
+  visit may print it on the day they encoded it.
 
 ## Database
 

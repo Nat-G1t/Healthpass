@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace App\Support;
 
-use App\Models\ClearanceRecord;
 use App\Models\ClinicVisit;
-use App\Models\MedicalAssessment;
 use Illuminate\Support\Str;
 
 /**
@@ -16,7 +14,7 @@ use Illuminate\Support\Str;
  * student since D-114).
  *
  * Why its own class: the document has several callers — the clinic's print,
- * the pre-save preview, the clinic's Reprint and the clinic's Save as PDF
+ * the clinic's Reprint and the clinic's Save as PDF
  * (D-73 added a student Save as PDF; D-106 removed it). If each decided
  * "assessment → two pages, -medical-assessment.pdf" for itself, one copy
  * could one day disagree with another copy of the same visit. One definition
@@ -85,30 +83,25 @@ final class VisitDocument
 
     /**
      * Everything the document prints, built by the form type's own data class.
-     *
-     * $preview / $previewSections substitute transient, never-saved rows for
-     * the (not yet existing) saved ones — the clinic's pre-save Preview &
-     * Print. $side picks one page of the Assessment's two; null is both.
+     * $side picks one page of the Assessment's two; null is both.
      *
      * @return array<string, mixed>
      */
     public static function data(
         ClinicVisit $visit,
-        ?ClearanceRecord $preview = null,
-        ?MedicalAssessment $previewSections = null,
         ?string $side = null,
     ): array {
         // `encoded` without its 1:1 record means corrupted data, not a URL
         // someone can reach through the UI — fail closed rather than render
         // a half-empty official form.
-        abort_unless($preview !== null || $visit->clearanceRecord !== null, 404);
+        abort_unless($visit->clearanceRecord !== null, 404);
 
         if ($visit->formType() === 'assessment') {
-            return AssessmentDocument::for($visit, $preview, $previewSections, $side);
+            return AssessmentDocument::for($visit, $side);
         }
 
         // The Medical Clearance is one page and has no sides; `side` is
         // simply not part of that document.
-        return ClearanceDocument::for($visit, $preview);
+        return ClearanceDocument::for($visit);
     }
 }

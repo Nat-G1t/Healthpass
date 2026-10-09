@@ -10,8 +10,8 @@ use App\Models\User;
 use Illuminate\Validation\Rule;
 
 /**
- * FR-NRS-04 / BR-16 — the Save & Close payload: the physician's Fit / Unfit
- * (only the physician encodes since D-126).
+ * FR-NRS-04 / BR-16 — the Save payload: the physician's Fit / Unfit (only the
+ * physician encodes since D-126).
  *
  * `result` (Fit/Unfit) is required, and since D-65 so are the **seven vitals**
  * the clinic confirms on the Vital Signs card. Those rules, and the Medical
@@ -43,10 +43,6 @@ class StoreClearanceRequest extends VisitFormRequest
     {
         $rules = [
             'result' => ['required', Rule::in(ClearanceRecord::RESULTS)],
-            // Set to 1 by the encode screen once Preview & Print has fired, so
-            // Save & Close can stamp printed_at (FR-NRS-05) — the record row
-            // doesn't exist yet at pre-save print time.
-            'printed' => ['nullable', 'boolean'],
             ...$this->vitalsRules(),
         ];
 

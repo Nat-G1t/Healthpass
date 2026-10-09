@@ -211,7 +211,7 @@ class EncodeSaveTest extends TestCase
             'result' => 'Fit',
             'ps_skin' => '0',
             'ps_chest_lungs' => '1',
-        ])->assertRedirect(route('nurse.queue'));
+        ])->assertRedirect(route('nurse.visits.encode', $visit));
 
         $record = ClearanceRecord::firstWhere('clinic_visit_id', $visit->id);
         $this->assertFalse($record->ps_skin);
@@ -227,7 +227,7 @@ class EncodeSaveTest extends TestCase
         $visit = $this->makeVisit(); // legacy row: no appointment
 
         $this->save($physician, $visit, EncodePayload::make())
-            ->assertRedirect(route('nurse.queue'))
+            ->assertRedirect(route('nurse.visits.encode', $visit))
             ->assertSessionHas('status');
 
         $this->assertSame('encoded', $visit->fresh()->status);
@@ -249,7 +249,7 @@ class EncodeSaveTest extends TestCase
         $visit = $this->makeVisit();
 
         $this->save($physician, $visit, EncodePayload::make())
-            ->assertRedirect(route('nurse.queue'));
+            ->assertRedirect(route('nurse.visits.encode', $visit));
 
         // D-64: upper-cased name + ", MD", and the license, copied at encode time.
         $this->assertDatabaseHas('clearance_records', [
@@ -271,7 +271,7 @@ class EncodeSaveTest extends TestCase
             'result' => 'Fit',
             'physician_name' => 'FORGED, MD',
             'physician_license_no' => '99999',
-        ])->assertRedirect(route('nurse.queue'));
+        ])->assertRedirect(route('nurse.visits.encode', $visit));
 
         $record = ClearanceRecord::firstWhere('clinic_visit_id', $visit->id);
         $this->assertSame(ClearanceRecord::physicianBlockFor($physician)['physician_name'], $record->physician_name);
@@ -287,7 +287,7 @@ class EncodeSaveTest extends TestCase
             ...EncodePayload::vitals(),
             'result' => 'Unfit',
             'nurse_notes' => 'Advised rest and follow-up in one week.',
-        ])->assertRedirect(route('nurse.queue'));
+        ])->assertRedirect(route('nurse.visits.encode', $visit));
 
         $this->assertDatabaseHas('clearance_records', [
             'clinic_visit_id' => $visit->id,
@@ -431,7 +431,7 @@ class EncodeSaveTest extends TestCase
         $visit->update(['status' => 'interviewed']);
 
         $this->save($this->physician(), $visit, EncodePayload::make())
-            ->assertRedirect(route('nurse.queue'));
+            ->assertRedirect(route('nurse.visits.encode', $visit));
 
         $this->assertDatabaseHas('clearance_records', [
             'clinic_visit_id' => $visit->id,
@@ -487,20 +487,5 @@ class EncodeSaveTest extends TestCase
 
         // The saved label's bubble is the shaded one.
         $this->assertMatchesRegularExpression('~<span class="bb on"></span> Outbound Activities~', $html);
-    }
-
-    public function test_the_print_preview_uses_the_batch_purpose_too(): void
-    {
-        // Preview & Print (before save) must show exactly what Save stores.
-        $physician = $this->physician();
-        $visit = $this->makeVisit($this->batchAppointment('clearance', 'others', 'Quiz bee'));
-
-        $html = $this->actingAs($physician)
-            ->post(route('nurse.visits.print.preview', $visit), EncodePayload::make(['purpose' => 'On-the-job Training']))
-            ->assertOk()
-            ->getContent();
-
-        $this->assertMatchesRegularExpression('~<span class="bb on"></span> Others, Specify:~', $html);
-        $this->assertStringContainsString('Quiz bee', $html);
     }
 }

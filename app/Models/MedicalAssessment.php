@@ -131,6 +131,39 @@ class MedicalAssessment extends Model
     ];
 
     /**
+     * D-127 — the paper's labels for section V's boxes, in its order, as
+     * `key => [label, unit]`. The physician's summary of the nurse's
+     * interview reads them. (The Menopause Yes / No pair is its own line.)
+     *
+     * @var array<string, array{string, string}>
+     */
+    public const MENSTRUAL_LABELS = [
+        'menarche_age' => ['Menarche', 'yrs old'],
+        'first_intercourse_age' => ['Onset of sexual intercourse', 'yrs old'],
+        'lmp' => ['Last Menstrual Period', ''],
+        'period_days' => ['Period Duration', 'days'],
+        'pads_per_day' => ['No. of Pads per Day', ''],
+        'cycle_days' => ['Interval Cycle', 'days'],
+        'contraceptive' => ['Contraceptive Method Used', ''],
+        'menopause_age' => ['Menopause Age', 'yrs'],
+    ];
+
+    /**
+     * D-127 — section VI's "Gravida: __ Para: __ T: __ P: __ A: __ L: __"
+     * line, `key => label`, for the same summary.
+     *
+     * @var array<string, string>
+     */
+    public const OB_LABELS = [
+        'gravida' => 'Gravida',
+        'para' => 'Para',
+        'term' => 'T',
+        'preterm' => 'P',
+        'abortion' => 'A',
+        'living' => 'L',
+    ];
+
+    /**
      * "PERTINENT PHYSICAL EXAMINATION" — the eight groups A–H of the back
      * page, each a checkbox list plus its own "Others: ____" line. Group key
      * => the printed heading and the group's findings (key => label, verbatim

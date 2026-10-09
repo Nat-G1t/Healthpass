@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Tests\Support;
 
 /**
- * The Save & Close / Preview & Print payload (FR-NRS-04/05).
+ * The encode page's Save payload (FR-NRS-04).
  *
  * Since D-65 the encode form posts the seven vitals the clinic confirms
  * alongside the result, and all seven are required — so every test that saves
- * or previews needs them. One helper keeps that list in a single place.
+ * needs them. One helper keeps that list in a single place.
  */
 final class EncodePayload
 {

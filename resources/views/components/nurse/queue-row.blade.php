@@ -1,10 +1,12 @@
 @props([
     'visit',
     'isNext' => false,
-    {{-- Ghost mode (motion pass §6.1b): the just-encoded visit rendered ONE
-         last time so the front-end can animate it out. Marked data-leaving,
-         never NEXT, and its action button becomes a static "Encoded ✓" chip —
-         it is scenery, not a live queue entry. --}}
+    {{-- Ghost mode (motion pass §6.1b): the visit the nurse just submitted to
+         the physician (D-126), rendered ONE last time so the front-end can
+         animate it out. Marked data-leaving, never NEXT, and its action button
+         becomes a static "Submitted ✓" chip — it is scenery, not a live queue
+         entry. The physician's Save stays on the encode page (D-127), so it
+         has no ghost. --}}
     'leaving' => false,
 ])
 
@@ -118,9 +120,8 @@
     <td class="py-4 pr-4 text-right whitespace-nowrap">
         @if ($leaving)
             {{-- Not a link on purpose: the ghost is about to animate away. --}}
-            {{-- D-126: a nurse's ghost has just been submitted, not encoded. --}}
             <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-4 py-1.5
-                         text-xs font-semibold text-emerald-600">{{ $visit->status === 'interviewed' ? 'Submitted ✓' : 'Encoded ✓' }}</span>
+                         text-xs font-semibold text-emerald-600">Submitted ✓</span>
         @else
             {{-- D-126: "Interview" for the nurse, "Encode Result" for the physician. --}}
             @php

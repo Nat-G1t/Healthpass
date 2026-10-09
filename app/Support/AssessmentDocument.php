@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Support;
 
-use App\Models\ClearanceRecord;
 use App\Models\ClinicVisit;
 use App\Models\MedicalAssessment;
 use App\Models\ScreeningResponse;
@@ -38,33 +37,25 @@ final class AssessmentDocument
     /**
      * Every value the Medical Assessment template prints.
      *
-     * $preview / $previewSections substitute the transient, never-saved rows
-     * that the pre-save Print front / Print back builds from the encode form,
-     * so the preview goes down exactly this path.
-     *
      * @param  ?string  $side  'front' | 'back' | null (both pages)
      * @return array<string, mixed>
      */
     public static function for(
         ClinicVisit $visit,
-        ?ClearanceRecord $preview = null,
-        ?MedicalAssessment $previewSections = null,
         ?string $side = null,
     ): array {
         // The shared half of the document (D-67): letterhead, identity,
         // pregnancy, purposes, physician block, encode date.
-        $shared = ClearanceDocument::for($visit, $preview);
+        $shared = ClearanceDocument::for($visit);
 
         $record = $visit->clearanceRecord;
-        $sections = $previewSections ?? $record?->medicalAssessment;
+        $sections = $record?->medicalAssessment;
         $screening = $visit->screeningResponse;
         $vitals = $record->printedVitals($visit->vitalSigns);
 
         // "Interviewed/Assessed by" on the back page. D-126: the NURSE who
         // interviewed the student. A record from before D-126 has no
-        // interviewer, so it keeps the old rule: whoever encoded it. On a
-        // preview the controller has already set the encoder relation to the
-        // signed-in user, so loadMissing() leaves it alone.
+        // interviewer, so it keeps the old rule: whoever encoded it.
         $record->loadMissing('encoder');
         $visit->loadMissing('interviewer');
 

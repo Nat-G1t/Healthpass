@@ -286,7 +286,7 @@ class TwoQueuesTest extends TestCase
             'respiratory_rate' => 18,
             'medical_history' => ['patient' => ['asthma', 'diabetes'], 'family' => [], 'specify' => []],
             'surgical_history' => ['procedures' => 'Tonsillectomy', 'date_done' => '2015'],
-        ]))->assertRedirect(route('nurse.queue'));
+        ]))->assertRedirect(route('nurse.visits.encode', $visit));
 
         $visit->refresh();
         $this->assertSame('encoded', $visit->status);
@@ -313,7 +313,7 @@ class TwoQueuesTest extends TestCase
         $visit = $this->queueVisit('clearance');
 
         $this->actingAs($this->physician())->post(route('nurse.visits.encode.store', $visit), EncodePayload::make())
-            ->assertRedirect(route('nurse.queue'));
+            ->assertRedirect(route('nurse.visits.encode', $visit));
 
         $this->assertSame('encoded', $visit->fresh()->status);
         $this->assertSame(0, MedicalAssessment::count());

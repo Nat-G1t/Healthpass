@@ -14,7 +14,7 @@ use App\Models\ClinicVisit;
  * browser print and the dompdf PDF render.
  *
  * Why a class and not view logic: three callers render this same document —
- * the nurse's print, the pre-save preview and the clinic's Save as PDF (the
+ * the clinic's print, its Reprint and its Save as PDF (the
  * student's download, added by D-73, was removed by D-106). If each assembled
  * its own view data they could quietly disagree about an age, a purpose or a
  * physician name, and a clearance is an official record. One builder makes
@@ -50,13 +50,9 @@ final class ClearanceDocument
      * Every value the Medical Clearance template prints, for a visit and its
      * clearance record.
      *
-     * $preview substitutes a transient, never-saved record for the visit's own
-     * (the nurse's Preview & Print before Save & Close), so the preview goes
-     * down exactly this path.
-     *
      * @return array<string, mixed>
      */
-    public static function for(ClinicVisit $visit, ?ClearanceRecord $preview = null): array
+    public static function for(ClinicVisit $visit): array
     {
         $visit->load([
             'student.studentProfile',
@@ -66,16 +62,11 @@ final class ClearanceDocument
             'clearanceRecord',
         ]);
 
-        if ($preview !== null) {
-            $visit->setRelation('clearanceRecord', $preview);
-        }
-
         $record = $visit->clearanceRecord;
         $profile = $visit->student?->studentProfile;
         $screening = $visit->screeningResponse;
 
-        // The encode date — today on a pre-save preview, whose transient
-        // record is stamped with now(). Never an input on the form.
+        // The encode date. Never an input on the form.
         $issuedOn = $record->encoded_at ?? now();
 
         $vitals = $record->printedVitals($visit->vitalSigns);

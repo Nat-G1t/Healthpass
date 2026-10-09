@@ -25,10 +25,12 @@ use Illuminate\View\View;
  *  - `interview` — the NURSE on a captured Medical Assessment visit: every
  *    field except the Result, and "Submit to physician" (InterviewController).
  *  - `encode`    — the PHYSICIAN on a captured Medical Clearance or an
- *    interviewed Assessment (the nurse's entries pre-filled, still editable —
- *    Q3): the full form with Fit / Unfit and Save & Close.
+ *    interviewed Assessment: Fit / Unfit, Back and Save. On an interviewed
+ *    visit the nurse's work shows as a summary, with Edit interview to
+ *    correct it (D-127; Q3). No print buttons before Save.
  *  - `view`      — anyone on an ENCODED visit: the same screen read-only, with
- *    the print buttons. Encoding is one-time (FR-NRS-04).
+ *    the print buttons when the print rule allows. Encoding is one-time
+ *    (FR-NRS-04). Save lands here (D-127), with Finished back to the queue.
  *
  * A clinic user who opens a visit waiting in the OTHER role's queue is sent
  * back to their Live Queue with a plain sentence — never a 403 or 404 page.
@@ -85,10 +87,15 @@ class EncodeController extends Controller
                 default => 'encode',
             },
             'readOnly' => $visit->status === 'encoded',
-            // D-125 (O2): the read-only page's Reprint / Print front / back and
-            // Save as PDF work only once the batch is released — the same rule
-            // the print routes enforce.
-            'canPrint' => $visit->isReleasedForPrint(),
+            // D-125 (O2) + D-127: the read-only page's Print / Print front /
+            // back and Save as PDF show only when the print rule allows — a
+            // released batch, or the physician who encoded it, today. The
+            // same rule the print routes enforce.
+            'canPrint' => $visit->isReleasedForPrint($request->user()),
+            // D-127: Save lands on this page; Finished takes the physician
+            // back to the Live Queue. Not when the record was opened from the
+            // Clinic Dashboard's View — there the back link is the way out.
+            'showFinished' => $visit->status === 'encoded' && $request->query('from') !== 'dashboard',
             'studentRemarks' => $studentRemarks,
             'back' => $this->backLink($request),
         ]);
@@ -117,13 +124,16 @@ class EncodeController extends Controller
     }
 
     /**
-     * FR-NRS-04 — Save & Close, the PHYSICIAN's encode (D-126: only the
+     * FR-NRS-04 — Save, the PHYSICIAN's encode (D-126: only the
      * physician decides Fit / Unfit — StoreClearanceRequest::mayActOn() turns
      * anyone else, or a visit outside the physician's queue, away before
      * validation). One transaction: create the 1:1 clearance record, save the
      * Assessment sections, flip the visit to `encoded` (BR-11) and mark its
      * appointment `completed` (FR-NRS-07). The next queue poll no longer sees
      * the visit, so the row vanishes on its own.
+     *
+     * D-127: Save does not leave the page — it lands back on this visit's
+     * encode page, now read-only, where the print buttons and Finished are.
      *
      * Encoding is one-time. Two guards, both needed:
      *  - application: an already-`encoded` visit short-circuits to the
@@ -140,10 +150,9 @@ class EncodeController extends Controller
 
         try {
             DB::transaction(function () use ($request, $visit): void {
-                // `printed` is a screen flag and the seven vitals are their
-                // own JSON column — pull both out before the record create.
+                // The seven vitals are their own JSON column — pull them out
+                // before the record create.
                 $validated = Arr::except($request->validated(), [
-                    'printed',
                     ...array_keys(ClearanceRecord::ENCODED_VITALS),
                     // D-69: the Assessment sections are their own table.
                     'medical_history',
@@ -174,10 +183,6 @@ class EncodeController extends Controller
                     'clinic_visit_id' => $visit->id,
                     'encoded_by' => $request->user()->id,
                     'encoded_at' => now(),
-                    // FR-NRS-05: the pre-save Preview & Print happened before
-                    // this row existed — the screen flags it and the stamp
-                    // lands here. Reprints re-stamp via the print controller.
-                    'printed_at' => $request->boolean('printed') ? now() : null,
                 ]);
 
                 // D-69/D-126: a Medical Assessment visit's own sections. The
@@ -207,13 +212,10 @@ class EncodeController extends Controller
             return $this->alreadyEncoded($visit);
         }
 
-        // `left_queue_visit_id` powers the queue's "reverse-stack" exit
-        // animation: a session flash lives for exactly ONE request (and is gone
-        // on reload by design), so the queue page can render the visit once as
-        // a leaving "ghost" row and animate it out.
-        return redirect()->route('nurse.queue')
-            ->with('status', "Assessment saved — {$visit->reference_no} encoded.")
-            ->with('left_queue_visit_id', $visit->id);
+        // D-127: stay on the page — the same visit, now read-only, with the
+        // print buttons and Finished. `result` is validated as Fit / Unfit.
+        return redirect()->route('nurse.visits.encode', $visit)
+            ->with('status', "Saved — {$visit->reference_no} is {$request->validated('result')}.");
     }
 
     /** Friendly landing for a re-submit: the same screen, now read-only. */

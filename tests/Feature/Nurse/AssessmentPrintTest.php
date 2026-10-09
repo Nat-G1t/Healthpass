@@ -607,78 +607,81 @@ class AssessmentPrintTest extends TestCase
             ->assertSee('Put the printed sheet back in the tray');
     }
 
-    public function test_an_interviewed_assessment_offers_the_physician_the_two_pre_save_prints(): void
+    public function test_an_interviewed_assessment_has_no_print_buttons_before_save(): void
     {
-        // D-126: the physician's page — the nurse's interview page has none.
+        // D-127: the print buttons appear only after the physician saves.
         $visit = $this->makeVisit();
         $this->interview($visit, $this->nurse());
 
         $this->actingAs(User::factory()->physician()->create())
             ->get(route('nurse.visits.encode', $visit))
             ->assertOk()
-            ->assertSee('Print front')
-            ->assertSee('Print back')
+            ->assertDontSee('Print front')
+            ->assertDontSee('Save as PDF')
             ->assertDontSee('Preview &amp; Print', false);
     }
 
-    /** A Medical Clearance keeps its D-67 buttons untouched. */
-    public function test_a_clearance_visit_keeps_preview_and_print(): void
+    public function test_a_clearance_visit_has_no_print_button_before_save(): void
     {
         $visit = $this->makeVisit('clearance');
 
-        // D-126: a Medical Clearance is the physician's.
+        // D-126: a Medical Clearance is the physician's; D-127: no pre-save print.
         $this->actingAs(User::factory()->physician()->create())
             ->get(route('nurse.visits.encode', $visit))
             ->assertOk()
-            ->assertSee('Preview &amp; Print', false)
+            ->assertDontSee('Preview &amp; Print', false)
+            ->assertDontSee(route('nurse.visits.print.reprint', $visit), false)
             ->assertDontSee('Print front');
     }
 
-    // ── 7. The pre-save print (FR-NRS-05) ────────────────────────────────────
+    // ── 7. The physician's print right after Save (D-127) ────────────────────
 
     /**
-     * Print front / Print back before Save & Close post the UNSAVED encode
-     * form, so the sections have no row yet — they are rebuilt as a transient
-     * MedicalAssessment and must still print.
+     * Save, then Print front: the physician who just encoded the visit
+     * prints it the same day, release or not, with the saved sections.
      */
-    public function test_the_pre_save_print_renders_the_posted_sections(): void
+    public function test_the_print_after_save_renders_the_saved_sections(): void
     {
         $visit = $this->makeVisit();
         $this->interview($visit, $this->nurse());
+        $physician = User::factory()->physician()->create();
 
-        $html = $this->actingAs(User::factory()->physician()->create())
-            ->post(route('nurse.visits.print.preview', $visit), [
-                'result' => 'Fit',
-                'side' => 'front',
-                ...EncodePayload::vitals(),
-                'medical_history' => [
-                    'patient' => ['asthma'],
-                    'specify' => ['allergy' => 'peanuts'],
-                ],
-            ])
+        $this->actingAs($physician)->post(route('nurse.visits.encode.store', $visit), [
+            'result' => 'Fit',
+            ...EncodePayload::vitals(),
+            'medical_history' => [
+                'patient' => ['asthma'],
+                'specify' => ['allergy' => 'peanuts'],
+            ],
+        ])->assertSessionHasNoErrors();
+
+        $html = $this->actingAs($physician)
+            ->post(route('nurse.visits.print.reprint', $visit), ['side' => 'front'])
             ->assertOk()
             ->getContent();
 
-        // Front only, with the posted specify text in its blank.
+        // Front only, with the saved specify text in its blank.
         $this->assertSame(1, substr_count($html, AssessmentDocument::FORM_CODE));
         $this->assertStringContainsString('Allergy (Specify: peanuts)', $html);
         $this->assertStringContainsString('MEDICAL ASSESSMENT FORM', $html);
     }
 
-    public function test_the_pre_save_back_print_names_the_interviewing_nurse_and_the_signed_in_physician(): void
+    public function test_the_back_print_after_save_names_the_interviewing_nurse_and_the_encoding_physician(): void
     {
-        // D-126: "Interviewed/Assessed by" is the nurse, pre-save too; the
-        // physician block is the signed-in physician who will encode.
+        // D-126: "Interviewed/Assessed by" is the nurse; the physician block
+        // is the physician who encoded.
         $visit = $this->makeVisit();
         $this->interview($visit, $this->nurse());
+        $physician = User::factory()->physician('Ana B. Cruz', '123456')->create();
 
-        $this->actingAs(User::factory()->physician('Ana B. Cruz', '123456')->create())
-            ->post(route('nurse.visits.print.preview', $visit), [
-                'result' => 'Fit',
-                'side' => 'back',
-                ...EncodePayload::vitals(),
-                'physical_exam' => ['heent' => ['findings' => ['normal'], 'others' => null]],
-            ])
+        $this->actingAs($physician)->post(route('nurse.visits.encode.store', $visit), [
+            'result' => 'Fit',
+            ...EncodePayload::vitals(),
+            'physical_exam' => ['heent' => ['findings' => ['normal'], 'others' => null]],
+        ])->assertSessionHasNoErrors();
+
+        $this->actingAs($physician)
+            ->post(route('nurse.visits.print.reprint', $visit), ['side' => 'back'])
             ->assertOk()
             ->assertSee('Jane Dela Cruz')
             ->assertSee('ANA B. CRUZ, MD');

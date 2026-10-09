@@ -5,31 +5,25 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Nurse;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Nurse\StoreClearanceRequest;
-use App\Models\ClearanceRecord;
 use App\Models\ClinicVisit;
-use App\Models\MedicalAssessment;
 use App\Support\AssessmentDocument;
 use App\Support\VisitDocument;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Arr;
 use Illuminate\View\View;
 
 /**
  * Module PRT (FR-PRT-01..07, BR-17) + FR-NRS-05 — the clinic's official
- * printed document, reached four ways:
+ * printed document, reached three ways, all for an ENCODED visit (D-127
+ * removed the pre-save Preview & Print: the print buttons appear only after
+ * the physician saves):
  *
- *  - GET  show    — encoded visits, no side effects (a plain view of the form)
- *  - POST preview — captured visits: the encode form posts its UNSAVED field
- *    values here (into the hidden print iframe) so the nurse can Preview &
- *    Print BEFORE Save & Close, per the E2E flow. Renders the form from a
- *    transient ClearanceRecord — nothing is written to the database.
- *  - POST reprint — encoded visits: re-stamps `printed_at` and returns the
- *    form; the Reprint button targets this at the same hidden iframe
- *    (reprints allowed, FR-NRS-05).
+ *  - GET  show    — no side effects (a plain view of the form)
+ *  - POST reprint — re-stamps `printed_at` and returns the form; the encode
+ *    page's Print buttons target this at a hidden iframe (reprints allowed,
+ *    FR-NRS-05).
  *  - GET  pdf     — Save as PDF (FR-PRT-06): the SAME template rendered by
  *    dompdf and sent as a download. It does NOT stamp `printed_at` —
  *    saving a copy is not printing one.
@@ -50,11 +44,10 @@ use Illuminate\View\View;
  * Either way the view data is built in ONE place, so the printed page and the
  * saved PDF cannot disagree about a single field.
  *
- * D-125 (O2): show, reprint and pdf print an ENCODED form, so they work only
- * once the Director has released the visit's batch
- * (ClinicVisit::isReleasedForPrint()); refused, a JSON caller gets a 403 and
- * a page goes back with a plain message. The pre-save preview is not gated —
- * nothing is encoded yet.
+ * D-125 (O2): show, reprint and pdf work only once the Director has released
+ * the visit's batch (ClinicVisit::isReleasedForPrint()) — or, since D-127,
+ * for the physician who encoded the visit, on the day they encoded it.
+ * Refused, a JSON caller gets a 403 and a page goes back with a plain message.
  */
 class PrintClearanceController extends Controller
 {
@@ -63,72 +56,11 @@ class PrintClearanceController extends Controller
         abort_unless($visit->status === 'encoded', 404);
         $this->ensureReleased($request, $visit);
 
-        return $this->render($visit, side: $this->side($request));
+        return $this->render($visit, $this->side($request));
     }
 
     /**
-     * Preview & Print from the editable encode screen (FR-NRS-05). The visit
-     * is still `captured` — no clearance record exists yet — so the form is
-     * rendered from the posted assessment fields on a transient, never-saved
-     * record. Validation reuses the Save & Close rules: what previews is
-     * exactly what would save. `printed_at` cannot be stamped here (there is
-     * no row); the encode form flags the print and Save & Close stamps it.
-     */
-    public function preview(StoreClearanceRequest $request, ClinicVisit $visit): View
-    {
-        // D-126: the physician's page only — StoreClearanceRequest already
-        // refused anyone whose queue this visit is not in. An interviewed
-        // Assessment previews like a captured Clearance: nothing is saved yet.
-        abort_unless(in_array($visit->status, ['captured', 'interviewed'], true), 404);
-
-        // `printed` is a screen flag and the seven vitals (D-65) are their own
-        // JSON column — neither is a plain clearance_records field.
-        $validated = Arr::except($request->validated(), [
-            'printed',
-            ...array_keys(ClearanceRecord::ENCODED_VITALS),
-            // D-69/D-70: an Assessment visit also posts the form's own
-            // sections — they live in `medical_assessments`, not on this
-            // record, so they are rebuilt below as their own transient row.
-            'medical_history',
-            'immunizations',
-            'family_planning_access',
-            'surgical_history',
-            'menstrual_history',
-            'ob_history',
-            'physical_exam',
-        ]);
-
-        $record = new ClearanceRecord([
-            ...$validated,
-            // D-65: the vitals exactly as Save & Close would store them, so the
-            // preview prints what the nurse is looking at, not the kiosk's copy.
-            'encoded_vitals' => $request->encodedVitals(),
-            // D-62: the batch reason, exactly as Save & Close will store it.
-            ...$visit->batchPurpose(),
-            // D-64: the same physician-block rule Save & Close applies, for the
-            // signed-in user who will be the encoder.
-            ...ClearanceRecord::physicianBlockFor($request->user()),
-            'encoded_at' => now(),
-        ]);
-
-        // The transient record has no `encoded_by` row to read the relation
-        // from, so hand it the signed-in user — who IS the encoder Save & Close
-        // will record. setRelation() fills a relationship in memory without a
-        // query. (Since D-126 "Interviewed/Assessed by" prints the visit's
-        // interviewer; the encoder is only the fallback for older records.)
-        $record->setRelation('encoder', $request->user());
-
-        // D-71: the Assessment's own sections, built by the SAME request
-        // method Save & Close uses, so the preview prints what would save.
-        $sections = $visit->formType() === 'assessment'
-            ? new MedicalAssessment($request->medicalAssessmentAttributes())
-            : null;
-
-        return $this->render($visit, $record, $sections, $this->side($request));
-    }
-
-    /**
-     * Reprint from the read-only encode screen: stamp `printed_at` (every
+     * Print from the read-only encode screen: stamp `printed_at` (every
      * print re-stamps — the column answers "when was this last printed"),
      * then return the form for the iframe to print.
      */
@@ -137,7 +69,7 @@ class PrintClearanceController extends Controller
         abort_unless($visit->status === 'encoded', 404);
         $this->ensureReleased($request, $visit);
 
-        $view = $this->render($visit, side: $this->side($request));
+        $view = $this->render($visit, $this->side($request));
 
         $visit->clearanceRecord->update(['printed_at' => now()]);
 
@@ -169,15 +101,16 @@ class PrintClearanceController extends Controller
     }
 
     /**
-     * D-125 — stop here unless the visit's batch is released. An
-     * HttpResponseException ends the request with the response it carries:
-     * a 403 for a JSON caller, else back to the page with the message (a
-     * Reprint posted into the hidden print frame lands that page in the frame,
-     * which never prints a page without data-hp-print-doc).
+     * D-125 — stop here unless the visit's batch is released (or, D-127, the
+     * signed-in physician encoded it today). An HttpResponseException ends
+     * the request with the response it carries: a 403 for a JSON caller, else
+     * back to the page with the message (a Print posted into the hidden print
+     * frame lands that page in the frame, which never prints a page without
+     * data-hp-print-doc).
      */
     private function ensureReleased(Request $request, ClinicVisit $visit): void
     {
-        if ($visit->isReleasedForPrint()) {
+        if ($visit->isReleasedForPrint($request->user())) {
             return;
         }
 
@@ -187,16 +120,9 @@ class PrintClearanceController extends Controller
     }
 
     /** Render the official document for the browser's print frame. */
-    private function render(
-        ClinicVisit $visit,
-        ?ClearanceRecord $preview = null,
-        ?MedicalAssessment $previewSections = null,
-        ?string $side = null,
-    ): View {
-        return view(
-            VisitDocument::template($visit),
-            VisitDocument::data($visit, $preview, $previewSections, $side),
-        );
+    private function render(ClinicVisit $visit, ?string $side = null): View
+    {
+        return view(VisitDocument::template($visit), VisitDocument::data($visit, side: $side));
     }
 
     /**

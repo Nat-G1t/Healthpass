@@ -40,11 +40,11 @@ class QueueController extends Controller
         $viewer = $request->user();
         $visits = ClinicVisit::liveQueue($viewer)->get();
 
-        // "Reverse-stack" ghost row (motion pass §6.1b): after Save & Close the
-        // visit is already `encoded` (after the nurse's Submit to physician,
-        // `interviewed` — D-126), so it is no longer in the queue query by
-        // the time the user lands back here — its row would just be silently
-        // gone. The controller flashes the id for exactly one request; we
+        // "Reverse-stack" ghost row (motion pass §6.1b): after the nurse's
+        // Submit to physician the visit is already `interviewed` (D-126), so
+        // it is no longer in the nurse's queue query by the time they land
+        // back here — its row would just be silently gone. (The physician's
+        // Save stays on the encode page since D-127, so it has no ghost.) The controller flashes the id for exactly one request; we
         // re-fetch that visit and hand it to the view separately so it can be
         // rendered once, in its original position, marked `data-leaving`, and
         // the front-end animates it out (fade + rows sliding up).
@@ -56,17 +56,15 @@ class QueueController extends Controller
         $leftId = $request->session()->get('left_queue_visit_id');
         if ($leftId !== null) {
             $ghost = ClinicVisit::query()
-                ->whereIn('status', ['interviewed', 'encoded'])
+                ->where('status', 'interviewed')
                 ->with(['student:id,name', 'college:id,name', 'vitalSigns', 'appointment:id,batch_request_id', 'appointment.batchRequest:id,form_type'])
                 ->find($leftId);
         }
         if ($ghost !== null) {
-            // Original FCFS slot: how many still-waiting visits entered this
-            // queue before the ghost did (same ordering as scopeLiveQueue). In
-            // the nurse's queue that is the kiosk check-in; in the physician's,
-            // the nurse's submit time when there is one.
-            $queuedAt = fn (ClinicVisit $visit) => ($viewer->isPhysician() ? $visit->interviewed_at : null)
-                ?? $visit->checked_in_at ?? $visit->created_at;
+            // Original FCFS slot: how many still-waiting visits entered the
+            // nurse's queue before the ghost did (same ordering as
+            // scopeLiveQueue — the kiosk check-in).
+            $queuedAt = fn (ClinicVisit $visit) => $visit->checked_in_at ?? $visit->created_at;
             $ghostAnchor = $queuedAt($ghost);
             $ghostIndex = $visits
                 ->takeWhile(function (ClinicVisit $visit) use ($ghostAnchor, $ghost, $queuedAt): bool {

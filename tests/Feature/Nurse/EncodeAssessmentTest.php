@@ -189,7 +189,7 @@ class EncodeAssessmentTest extends TestCase
     {
         $visit = $this->makeVisit('assessment');
 
-        $this->save($visit, $this->assessmentPayload())->assertRedirect(route('nurse.queue'));
+        $this->save($visit, $this->assessmentPayload())->assertRedirect(route('nurse.visits.encode', $visit));
 
         $assessment = ClearanceRecord::firstOrFail()->medicalAssessment;
 
@@ -217,7 +217,7 @@ class EncodeAssessmentTest extends TestCase
         // vitals are required, so a student with nothing to report still saves.
         $visit = $this->makeVisit('assessment');
 
-        $this->save($visit, EncodePayload::make())->assertRedirect(route('nurse.queue'));
+        $this->save($visit, EncodePayload::make())->assertRedirect(route('nurse.visits.encode', $visit));
 
         $assessment = ClearanceRecord::firstOrFail()->medicalAssessment;
 
@@ -234,7 +234,7 @@ class EncodeAssessmentTest extends TestCase
 
         // Even when the sections are posted, a Medical Clearance stores none:
         // that paper has no such section, and the rules never validate them.
-        $this->save($visit, $this->assessmentPayload())->assertRedirect(route('nurse.queue'));
+        $this->save($visit, $this->assessmentPayload())->assertRedirect(route('nurse.visits.encode', $visit));
 
         $this->assertDatabaseCount('medical_assessments', 0);
     }
@@ -246,7 +246,7 @@ class EncodeAssessmentTest extends TestCase
         $visit = $this->makeVisit('assessment');
 
         $this->save($visit, $this->assessmentPayload(['ps_skin' => '1', 'ps_heart' => '0']))
-            ->assertRedirect(route('nurse.queue'));
+            ->assertRedirect(route('nurse.visits.encode', $visit));
 
         $record = ClearanceRecord::firstOrFail();
 
@@ -262,7 +262,7 @@ class EncodeAssessmentTest extends TestCase
 
         $this->save($visit, $this->assessmentPayload())
             ->assertSessionHasNoErrors()
-            ->assertRedirect(route('nurse.queue'));
+            ->assertRedirect(route('nurse.visits.encode', $visit));
 
         $this->assertNull(ClearanceRecord::firstOrFail()->nurse_notes);
     }
@@ -273,7 +273,7 @@ class EncodeAssessmentTest extends TestCase
         $visit = $this->makeVisit('assessment');
 
         $this->save($visit, $this->assessmentPayload(['nurse_notes' => 'Forged remark']))
-            ->assertRedirect(route('nurse.queue'));
+            ->assertRedirect(route('nurse.visits.encode', $visit));
 
         $this->assertNull(ClearanceRecord::firstOrFail()->nurse_notes);
     }
@@ -283,7 +283,7 @@ class EncodeAssessmentTest extends TestCase
         $visit = $this->makeVisit('clearance');
 
         $this->save($visit, EncodePayload::make(['ps_skin' => '1', 'ps_heart' => '0']))
-            ->assertRedirect(route('nurse.queue'));
+            ->assertRedirect(route('nurse.visits.encode', $visit));
 
         $record = ClearanceRecord::firstOrFail();
 
@@ -466,7 +466,7 @@ class EncodeAssessmentTest extends TestCase
     {
         $visit = $this->makeVisit('assessment', 'F');
 
-        $this->save($visit, $this->femalePayload())->assertRedirect(route('nurse.queue'));
+        $this->save($visit, $this->femalePayload())->assertRedirect(route('nurse.visits.encode', $visit));
 
         $assessment = ClearanceRecord::firstOrFail()->medicalAssessment;
 
@@ -501,7 +501,7 @@ class EncodeAssessmentTest extends TestCase
         // The greyed inputs are a courtesy; THIS is the rule (D-70).
         $visit = $this->makeVisit('assessment', 'M');
 
-        $this->save($visit, $this->femalePayload())->assertRedirect(route('nurse.queue'));
+        $this->save($visit, $this->femalePayload())->assertRedirect(route('nurse.visits.encode', $visit));
 
         $assessment = ClearanceRecord::firstOrFail()->medicalAssessment;
 
@@ -515,7 +515,7 @@ class EncodeAssessmentTest extends TestCase
     {
         $visit = $this->makeVisit('assessment', 'F');
 
-        $this->save($visit, EncodePayload::make())->assertRedirect(route('nurse.queue'));
+        $this->save($visit, EncodePayload::make())->assertRedirect(route('nurse.visits.encode', $visit));
 
         $assessment = ClearanceRecord::firstOrFail()->medicalAssessment;
 
@@ -572,7 +572,7 @@ class EncodeAssessmentTest extends TestCase
     {
         $visit = $this->makeVisit('assessment', 'F');
 
-        $this->save($visit, $this->femalePayload())->assertRedirect(route('nurse.queue'));
+        $this->save($visit, $this->femalePayload())->assertRedirect(route('nurse.visits.encode', $visit));
 
         $exam = ClearanceRecord::firstOrFail()->medicalAssessment->physical_exam;
 
@@ -593,7 +593,7 @@ class EncodeAssessmentTest extends TestCase
                 'heent' => ['findings' => ['normal', 'enlarged_prostate'], 'others' => null],
                 'wizardry' => ['findings' => ['normal'], 'others' => null],
             ],
-        ]))->assertRedirect(route('nurse.queue'));
+        ]))->assertRedirect(route('nurse.visits.encode', $visit));
 
         $exam = ClearanceRecord::firstOrFail()->medicalAssessment->physical_exam;
 
@@ -687,7 +687,7 @@ class EncodeAssessmentTest extends TestCase
             ->assertDontSee('Pertinent Physical Examination')
             ->assertDontSee('V. Menstrual History');
 
-        $this->save($visit, $this->femalePayload())->assertRedirect(route('nurse.queue'));
+        $this->save($visit, $this->femalePayload())->assertRedirect(route('nurse.visits.encode', $visit));
 
         $this->assertDatabaseCount('medical_assessments', 0);
     }

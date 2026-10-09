@@ -213,9 +213,11 @@ class EncodePageTest extends TestCase
             ->assertSee('Unfit')
             ->assertSee('Purpose')
             ->assertSee('Student remarks')
-            ->assertSee('Preview & Print')
-            ->assertSee('Save & Close')
-            ->assertDontSee('Reprint');
+            // D-127: Back + Save, and no print button until the visit is saved.
+            ->assertSee('data-encode-back', false)
+            ->assertSee('data-pending-label="Saving…"', false)
+            ->assertDontSee('Preview & Print')
+            ->assertDontSee(route('nurse.visits.print.reprint', $visit), false);
     }
 
     public function test_all_twelve_questionnaire_answers_are_shown(): void
@@ -593,7 +595,7 @@ class EncodePageTest extends TestCase
         $this->assertDoesNotMatchRegularExpression('~name="ps_chest_lungs" value="1"[^>]*checked~', $html);
     }
 
-    public function test_encoded_visit_renders_read_only_with_reprint(): void
+    public function test_encoded_visit_renders_read_only_with_print(): void
     {
         $physician = $this->physician();
         $visit = $this->makeVisit('Encoded Student');
@@ -604,9 +606,10 @@ class EncodePageTest extends TestCase
             ->assertOk()
             ->assertSee('already been encoded')
             ->assertSee($physician->name)
-            ->assertSee('Reprint')
+            // D-127: the encoding physician, the same day — Print shows.
+            ->assertSee(route('nurse.visits.print.reprint', $visit), false)
             ->assertSee('Advised rest and hydration.')
-            ->assertDontSee('Save & Close')
+            ->assertDontSee('data-pending-label="Saving…"', false)
             ->assertDontSee('Preview & Print');
     }
 

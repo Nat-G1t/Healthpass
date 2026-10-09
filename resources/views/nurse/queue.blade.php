@@ -2,7 +2,7 @@
 
 @php
     $count = $visits->count();
-    // The ghost (just-encoded visit, §6.1b) keeps the table on screen even
+    // The ghost (just-submitted visit, §6.1b) keeps the table on screen even
     // when it is the only row left — the JS collapses it, then fades the
     // empty state in.
     $hasRows = $count > 0 || $ghost !== null;
@@ -131,7 +131,7 @@
                 </tr>
             </thead>
             <tbody data-queue-body>
-                {{-- The ghost (just-encoded visit, §6.1b) renders ONCE in its
+                {{-- The ghost (just-submitted visit, §6.1b) renders ONCE in its
                      original FCFS slot; live-queue.js collapses it on load.
                      NEXT stays on the first REAL row — the ghost is scenery. --}}
                 @foreach ($visits as $visit)

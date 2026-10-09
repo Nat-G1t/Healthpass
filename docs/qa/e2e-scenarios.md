@@ -1,4 +1,4 @@
-# HealthPass — End-to-End UAT Scenarios (E2E-1…E2E-39)
+# HealthPass — End-to-End UAT Scenarios (E2E-1…E2E-40)
 
 Source: `docs/HealthPass_PRD.md` §13 (Acceptance & UAT). These are the
 Week-11 end-to-end acceptance runs, written as step-by-step checklists a
@@ -10,6 +10,15 @@ to use, what to click, and what you should see.
 > analytics) depend on modules still under construction — run those steps
 > only once the corresponding feature is merged. Mark any step you cannot
 > yet reach as **Blocked (not built)** rather than Fail.
+
+> **D-127 — reading older scenarios:** the encode page has **no Preview &
+> Print** any more, and **Save & Close** is now **Save**, which **stays on the
+> page**. Wherever a step below says "Preview & Print", then "Save & Close",
+> do it the other way round: choose Fit / Unfit, click **Save**, then use
+> **Print** (or **Print front / Print back**) on the same page, and click
+> **Finished** to return to the Live Queue. The physician's own print works
+> the same day without a release; any other print follows the release
+> (D-125). The physician's flow is E2E-40.
 
 ---
 
@@ -2546,10 +2555,12 @@ step 12 (Batch Tracking → its results page → approve a release request).
    is first come, first served by when each **entered this queue** (the
    nurse's submit time for this one).
 7. Open them. → **Expect:** "Interviewed by {nurse} · {time}" under the
-   header; the nurse's entries and vitals are filled in and still editable;
-   **Fit / Unfit** is there.
-8. Correct one section, choose **Fit**, **Save & Close**. → **Expect:** back on
-   the queue; the row leaves.
+   header; the nurse's entries and vitals appear as a **summary card** with
+   an **Edit interview** button (D-127); **Fit / Unfit** is there.
+8. Click **Edit interview**, correct one section, choose **Fit**, **Save**. →
+   **Expect:** the page stays, now read-only, with the print buttons and
+   **Finished** (E2E-40 covers this in detail). Click **Finished** → back on
+   the queue; the row is gone.
 
 **Part B — the clearance path**
 
@@ -2565,7 +2576,8 @@ step 12 (Batch Tracking → its results page → approve a release request).
     "… is in the physician's queue — only the physician can open it." As the
     physician, paste a waiting Assessment student's URL. → **Expect:** "…
     is waiting for the nurse's interview." Neither sees an error page.
-12. Open the encoded Assessment (Clinic Dashboard → View) and **Print back**.
+12. Open the encoded Assessment (Clinic Dashboard → View) and **Print back**
+    (as the physician who encoded it, today; anyone else needs the release).
     → **Expect:** the **nurse's** name above "Interviewed/Assessed by:" and the
     **physician's** name, "University Physician" and license number in the
     physician block.
@@ -2574,6 +2586,82 @@ step 12 (Batch Tracking → its results page → approve a release request).
 encode or print them; the physician sees Clearance students and submitted
 Assessments and alone decides Fit / Unfit; the printed Assessment carries the
 nurse as interviewer and the physician's name and license.
+
+---
+
+## E2E-40 — The physician reviews the interview, saves, prints, and clicks Finished (D-127)
+
+**Goal:** on an interviewed Medical Assessment the physician reads the
+nurse's work as a summary, can open it for editing, and saves without leaving
+the page; the print buttons appear only after Save; **Finished** returns to
+the Live Queue. The physician may print what they encoded **today** even
+before the Director releases the batch.
+
+**Accounts:** `nurse@healthpass.test`, `physician@healthpass.test`, a second
+clinic account (the nurse is fine), and two students scheduled **today** on
+**un-released** batches — one Medical Assessment, one Medical Clearance.
+
+**Part A — the interview as a summary**
+
+1. As the **nurse**, interview the Assessment student (E2E-39 steps 2–4):
+   tick **Asthma** under Patient, **Hypertension** under Family with a
+   Highest BP, and one physical-exam finding. Submit to physician.
+2. As the **physician**, open them from the Live Queue. → **Expect:**
+   "Interviewed by {nurse} · {time}" under the header and a **Nurse's
+   interview** card: *Vital signs* with the nurse's numbers, *Medical
+   history — Patient: Asthma · Family: Hypertension (Highest BP: …)*, one
+   line per examined group under *Physical examination*, and **—** for every
+   section the nurse left empty. The editable vitals card and section cards
+   are **not** shown.
+3. → **Expect:** the buttons are **Back** and **Save** only — **no Print, no
+   Print front / back, no Save as PDF, no Preview & Print**.
+4. Click **Save** without choosing Fit / Unfit. → **Expect:** the browser asks
+   you to pick Fit or Unfit and nothing is saved. (If the server ever refuses
+   a Save, the page comes back with the editable sections **open** so the
+   error is visible — a feature test covers that path.)
+
+**Part B — edit, save, print, finish**
+
+5. Reload the page (summary again). Click **Edit interview**. → **Expect:**
+   the summary is replaced by the editable vitals and every section, filled
+   in with the nurse's answers.
+6. Untick one finding, choose **Unfit**, click **Save**. → **Expect:** the
+   **same page** comes back read-only with "Saved — HP-… is Unfit." and the
+   buttons **Print front**, **Print back**, **Save as PDF** and **Finished**.
+   Nothing redirects by itself, and leaving is never blocked by a pop-up.
+7. Click **Print front**. → **Expect:** Chrome's print dialog opens on the
+   form's front page (no release needed — this is your own encode, today).
+   Close it; the "put the sheet back in the tray" hint shows. **Print back**
+   prints the back page, without the finding you unticked.
+8. Reload the page. → **Expect:** the print buttons and **Finished** are still
+   there.
+9. Click **Finished**. → **Expect:** the Live Queue; the student is gone.
+
+**Part C — a Medical Clearance**
+
+10. As the physician, open the Clearance student. → **Expect:** no summary
+    card (there is no interview); vitals, physical signs, student remarks,
+    Fit / Unfit, **Back** and **Save**.
+11. Choose **Fit**, **Save**. → **Expect:** "Saved — HP-… is Fit." and a single
+    **Print** button, **Save as PDF** and **Finished**. **Print** opens the
+    one-page Medical Clearance.
+
+**Part D — who else can print**
+
+12. As the physician, open one of these records from the **Clinic Dashboard
+    → View**. → **Expect:** the print buttons show (today), the back link reads
+    **Back to Clinic Dashboard**, and there is **no Finished** button.
+13. Sign in as the **nurse** and open the same record from the dashboard. →
+    **Expect:** **no** print or PDF buttons, only "Available once the Director
+    releases this batch's documents."
+14. (Next day, or after the Director releases the batch.) → **Expect:**
+    without a release, the physician's buttons are gone too; once the
+    release is approved, everyone on staff can print.
+
+**Pass criteria:** the physician reviews the nurse's work as a summary and can
+correct it; Save keeps them on the page; no print button exists before Save;
+after Save the physician prints immediately and leaves with Finished; anyone
+else, or any later day, follows the release.
 
 ---
 

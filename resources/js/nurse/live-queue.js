@@ -13,9 +13,10 @@
  * Motion (docs/ui-motion-inventory.md, Nurse table): every queue change is
  * animated — arrivals fade up with a peach highlight, departures collapse
  * (fade + rows sliding up, FLIP), NEXT promotion pops its tag, and the count
- * counts up/down. The flagship "reverse-stack": returning from Save & Close,
- * the server renders the just-encoded visit once as a `data-leaving` ghost
- * row; after a short hold we collapse it so the nurse SEES the queue advance.
+ * counts up/down. The flagship "reverse-stack": returning from the nurse's
+ * Submit to physician, the server renders the just-submitted visit once as a
+ * `data-leaving` ghost row; after a short hold we collapse it so the nurse
+ * SEES the queue advance.
  * Rows mid-collapse keep `data-leaving`, and the reconciler ignores them
  * completely — the poll can never double-remove or resurrect one.
  */
@@ -276,9 +277,9 @@ function init() {
         '[data-queue-body] tr[data-visit-id]:not([data-leaving])',
     ).length;
 
-    // FLAGSHIP reverse-stack (§6.1b): the server rendered the just-encoded
+    // FLAGSHIP reverse-stack (§6.1b): the server rendered the just-submitted
     // visit as a data-leaving ghost. Hold ~600 ms so the nurse's eye lands on
-    // "Encoded ✓", then collapse it — the rows below visibly close ranks.
+    // "Submitted ✓", then collapse it — the rows below visibly close ranks.
     // Under reduced motion collapseRow removes it instantly, so skip the hold
     // too. Done well before the first 4 s poll tick, and the reconciler
     // ignores data-leaving rows anyway, so the poll can neither double-remove

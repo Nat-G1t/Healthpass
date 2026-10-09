@@ -5,121 +5,50 @@ declare(strict_types=1);
 namespace Tests\Feature\Nurse;
 
 use App\Models\ClinicVisit;
-use App\Models\College;
-use App\Models\ScreeningResponse;
 use App\Models\User;
-use App\Models\VitalSigns;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Testing\TestResponse;
+use Tests\Support\ClinicQueueFixture;
 use Tests\Support\EncodePayload;
 use Tests\TestCase;
 
 /**
  * Live Queue "ghost row" (motion pass §6.1b — the reverse-stack flagship).
  *
- * Save & Close flashes `left_queue_visit_id` for exactly one request (D-126:
- * so does the nurse's Submit to physician — TwoQueuesTest); the queue
- * page then renders the just-encoded visit ONE last time as a `data-leaving`
- * ghost (static "Encoded ✓" chip, never the NEXT row) so the front-end can
- * animate it out. A plain reload must not show it again, and a bogus or
- * not-actually-encoded id in the flash slot must fail safe: no ghost, no error.
+ * The nurse's Submit to physician (D-126) flashes `left_queue_visit_id` for
+ * exactly one request; the nurse's queue page then renders the just-submitted
+ * visit ONE last time as a `data-leaving` ghost (static "Submitted ✓" chip,
+ * never the NEXT row) so the front-end can animate it out. A plain reload must
+ * not show it again, and a bogus, still-waiting or encoded id in the flash
+ * slot must fail safe: no ghost, no error. (The physician's Save stays on the
+ * encode page since D-127, so it makes no ghost — PhysicianEncodePageTest.)
  */
 class QueueGhostRowTest extends TestCase
 {
+    use ClinicQueueFixture;
     use RefreshDatabase;
 
-    private function physician(): User
+    private function submit(User $nurse, ClinicVisit $visit): TestResponse
     {
-        return User::factory()->physician()->create();
+        return $this->actingAs($nurse)->post(route('nurse.visits.interview', $visit), EncodePayload::vitals());
     }
 
-    private function college(): College
+    public function test_queue_after_submit_shows_ghost_row_exactly_once(): void
     {
-        return College::firstOrCreate(['code' => 'CCS'], ['name' => 'College of Computing Studies']);
-    }
+        $nurse = $this->nurse();
+        $visit = $this->queueVisit('assessment');
 
-    /** A captured visit with vitals + questionnaire, checked in $minutesAgo. */
-    private function makeVisit(int $minutesAgo = 5, string $name = 'Ana Cruz'): ClinicVisit
-    {
-        $student = User::factory()->create(['role' => 'student', 'name' => $name]);
-        $student->studentProfile()->create([
-            'college_id' => $this->college()->id,
-            'student_number' => fake()->unique()->numerify('2023-######'),
-            'first_name' => explode(' ', $name)[0],
-            'last_name' => explode(' ', $name)[1] ?? 'Cruz',
-            'sex' => 'F',
-            'course' => 'Bachelor of Science in Information Technology',
-            'year_level' => '3rd Year',
-            'date_of_birth' => '2004-05-10',
-            'place_of_birth' => 'San Fernando',
-            'civil_status' => 'Single',
-            'address' => 'Bacolor, Pampanga',
-            'qr_token' => fake()->unique()->sha256(),
-        ]);
-
-        $visit = ClinicVisit::create([
-            'reference_no' => 'HP-2026-'.fake()->unique()->numerify('T###'),
-            'student_id' => $student->id,
-            'college_id' => $this->college()->id,
-            'appointment_id' => null,
-            'login_method' => 'qr',
-            'status' => 'captured',
-            'privacy_consent_at' => now(),
-            'checked_in_at' => now()->subMinutes($minutesAgo),
-        ]);
-
-        VitalSigns::create([
-            'clinic_visit_id' => $visit->id,
-            'height_cm' => 165.0,
-            'weight_kg' => 60.0,
-            'bmi' => 22.0,
-            'temperature_c' => 36.5,
-            'heart_rate_bpm' => 75,
-            'bp_systolic' => 115,
-            'bp_diastolic' => 75,
-            'entry_method' => 'manual',
-            'is_temp_flagged' => false,
-            'is_bp_flagged' => false,
-            'is_bmi_flagged' => false,
-        ]);
-
-        ScreeningResponse::create([
-            'clinic_visit_id' => $visit->id,
-            'skin' => false,
-            'head' => false,
-            'eyes' => false,
-            'ears' => false,
-            'nose' => false,
-            'throat' => false,
-            'chest_lungs' => false,
-            'heart' => false,
-            'abdomen' => false,
-            'kidney_bladder' => false,
-            'brain' => false,
-            'mental_disorder' => false,
-            'is_pregnant' => false,
-            'last_menstrual_period' => null,
-        ]);
-
-        return $visit;
-    }
-
-    public function test_queue_after_encode_shows_ghost_row_exactly_once(): void
-    {
-        $physician = $this->physician();
-        $visit = $this->makeVisit();
-
-        $encode = $this->actingAs($physician)
-            ->post(route('nurse.visits.encode.store', $visit), EncodePayload::make());
-        $encode->assertRedirect(route('nurse.queue'));
-        $encode->assertSessionHas('left_queue_visit_id', $visit->id);
+        $this->submit($nurse, $visit)
+            ->assertRedirect(route('nurse.queue'))
+            ->assertSessionHas('left_queue_visit_id', $visit->id);
 
         // The redirect target renders the ghost: data-leaving, the static chip,
-        // and the visit's reference — even though the visit is now `encoded`
-        // and out of the live-queue query.
-        $page = $this->actingAs($physician)->get(route('nurse.queue'));
+        // and the visit's reference — even though the visit is now
+        // `interviewed` and out of the nurse's queue query.
+        $page = $this->actingAs($nurse)->get(route('nurse.queue'));
         $page->assertOk();
         $page->assertSee('data-leaving', false);
-        $page->assertSee('Encoded ✓');
+        $page->assertSee('Submitted ✓');
         $page->assertSee($visit->reference_no);
         $this->assertSame(
             1,
@@ -130,15 +59,13 @@ class QueueGhostRowTest extends TestCase
 
     public function test_ghost_is_never_the_next_row_and_real_queue_keeps_next(): void
     {
-        $physician = $this->physician();
-        $oldest = $this->makeVisit(minutesAgo: 30, name: 'Bea Santos'); // encoded → ghost
-        $waiting = $this->makeVisit(minutesAgo: 10, name: 'Carla Reyes');
+        $nurse = $this->nurse();
+        $oldest = $this->queueVisit('assessment', checkedInAt: now()->subMinutes(30)); // submitted → ghost
+        $waiting = $this->queueVisit('assessment', checkedInAt: now()->subMinutes(10));
 
-        $this->actingAs($physician)
-            ->post(route('nurse.visits.encode.store', $oldest), EncodePayload::make())
-            ->assertRedirect(route('nurse.queue'));
+        $this->submit($nurse, $oldest)->assertRedirect(route('nurse.queue'));
 
-        $page = $this->actingAs($physician)->get(route('nurse.queue'));
+        $page = $this->actingAs($nurse)->get(route('nurse.queue'));
         $page->assertOk();
 
         // The ghost row carries data-leaving but never data-next; the first
@@ -160,37 +87,44 @@ class QueueGhostRowTest extends TestCase
 
     public function test_plain_reload_does_not_show_the_ghost_again(): void
     {
-        $physician = $this->physician();
-        $visit = $this->makeVisit();
+        $nurse = $this->nurse();
+        $visit = $this->queueVisit('assessment');
 
-        $this->actingAs($physician)
-            ->post(route('nurse.visits.encode.store', $visit), EncodePayload::make());
+        $this->submit($nurse, $visit);
 
         // First load consumes the one-request flash…
-        $this->actingAs($physician)->get(route('nurse.queue'))->assertSee('data-leaving', false);
+        $this->actingAs($nurse)->get(route('nurse.queue'))->assertSee('data-leaving', false);
 
-        // …so a reload is a normal queue page: no ghost, no encoded reference.
-        $reload = $this->actingAs($physician)->get(route('nurse.queue'));
+        // …so a reload is a normal queue page: no ghost, no submitted reference.
+        $reload = $this->actingAs($nurse)->get(route('nurse.queue'));
         $reload->assertOk();
         $reload->assertDontSee('data-leaving', false);
         $reload->assertDontSee($visit->reference_no);
     }
 
-    public function test_bogus_or_unencoded_flash_id_fails_safe(): void
+    public function test_bogus_waiting_or_encoded_flash_id_fails_safe(): void
     {
-        $physician = $this->physician();
+        $nurse = $this->nurse();
 
         // Unknown id: page renders normally, no ghost, no error.
-        $this->actingAs($physician)
+        $this->actingAs($nurse)
             ->withSession(['left_queue_visit_id' => 999999])
             ->get(route('nurse.queue'))
             ->assertOk()
             ->assertDontSee('data-leaving', false);
 
-        // A visit that is still `captured` (never encoded) must not become a
+        // An encoded visit is never a ghost (D-127: nothing flashes one).
+        $encoded = $this->queueVisit('assessment', 'encoded');
+        $this->actingAs($nurse)
+            ->withSession(['left_queue_visit_id' => $encoded->id])
+            ->get(route('nurse.queue'))
+            ->assertOk()
+            ->assertDontSee('data-leaving', false);
+
+        // A visit that is still `captured` (never submitted) must not become a
         // ghost either — it is a real queue row, nothing more.
-        $visit = $this->makeVisit();
-        $page = $this->actingAs($physician)
+        $visit = $this->queueVisit('assessment');
+        $page = $this->actingAs($nurse)
             ->withSession(['left_queue_visit_id' => $visit->id])
             ->get(route('nurse.queue'));
         $page->assertOk();

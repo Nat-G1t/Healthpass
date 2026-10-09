@@ -185,7 +185,7 @@ class EncodeVitalsTest extends TestCase
             'bp_diastolic' => 84,
             'heart_rate_bpm' => 78,
             'respiratory_rate' => 18,
-        ]))->assertRedirect(route('nurse.queue'));
+        ]))->assertRedirect(route('nurse.visits.encode', $visit));
 
         $record = ClearanceRecord::firstWhere('clinic_visit_id', $visit->id);
 
@@ -259,7 +259,7 @@ class EncodeVitalsTest extends TestCase
             'bp_diastolic' => 72,
             'heart_rate_bpm' => 61,
             'respiratory_rate' => 15,
-        ]))->assertRedirect(route('nurse.queue'));
+        ]))->assertRedirect(route('nurse.visits.encode', $visit));
 
         $vitals = $visit->vitalSigns->fresh();
 
@@ -285,31 +285,13 @@ class EncodeVitalsTest extends TestCase
             'height_cm' => 160.0,
             'weight_kg' => 64.0,
             'bmi' => 1.1,   // forged — never reaches validated()
-        ]))->assertRedirect(route('nurse.queue'));
+        ]))->assertRedirect(route('nurse.visits.encode', $visit));
 
         // 64 ÷ 1.6² = 25.0
         $this->assertEquals(25.0, ClearanceRecord::firstWhere('clinic_visit_id', $visit->id)->encoded_vitals['bmi']);
     }
 
     // ── 3. What is shown and printed ──────────────────────────────────────────
-
-    public function test_the_preview_prints_the_posted_vitals_not_the_kiosk_reading(): void
-    {
-        $visit = $this->makeVisit();
-
-        $html = $this->actingAs($this->physician())
-            ->post(route('nurse.visits.print.preview', $visit), EncodePayload::make([
-                'bp_systolic' => 132,
-                'bp_diastolic' => 84,
-                'respiratory_rate' => 18,
-            ]))
-            ->assertOk()
-            ->getContent();
-
-        $this->assertStringContainsString('132/84 mmHg', $html);
-        $this->assertStringContainsString('18 breaths/min', $html);
-        $this->assertStringNotContainsString('150/95 mmHg', $html);
-    }
 
     public function test_the_printed_form_carries_the_confirmed_vitals_and_the_respiratory_rate(): void
     {

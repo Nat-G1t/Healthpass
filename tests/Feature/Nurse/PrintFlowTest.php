@@ -16,15 +16,14 @@ use Tests\Support\ReleasesForPrint;
 use Tests\TestCase;
 
 /**
- * FR-NRS-05 — the Preview & Print / Reprint flow around the printable form:
+ * FR-NRS-05 — the print flow around the printable form. D-127 removed the
+ * pre-save Preview & Print, so everything prints an ENCODED visit:
  *
- *  - POST print-preview: a CAPTURED visit renders the official form from the
- *    posted (unsaved) assessment — nothing touches the database.
- *  - POST print (reprint): an ENCODED visit re-stamps printed_at and returns
- *    the form; every reprint re-stamps.
- *  - Save & Close with printed=1 stamps printed_at on the new record — the
- *    pre-save Preview & Print happened before the row existed, so the encode
- *    screen carries the fact into the save.
+ *  - right after Save, the physician prints what they just saved (their own
+ *    encode, today — no release needed);
+ *  - POST print (reprint) re-stamps printed_at and returns the form; every
+ *    print re-stamps;
+ *  - Save itself never stamps printed_at, whatever is posted.
  */
 class PrintFlowTest extends TestCase
 {
@@ -132,64 +131,39 @@ class PrintFlowTest extends TestCase
         return $record;
     }
 
-    // ── 1. Preview (POST print-preview, captured visits) ─────────────────────
+    // ── 1. Print right after Save (D-127) ────────────────────────────────────
 
-    public function test_preview_renders_the_form_from_the_posted_unsaved_assessment(): void
-    {
-        $visit = $this->makeVisit();
-
-        $this->actingAs($this->physician())
-            ->post(route('nurse.visits.print.preview', $visit), [
-                ...EncodePayload::vitals(),
-                'result' => 'Unfit',
-                'nurse_notes' => 'Preview-only observation.',
-                'purpose' => 'Sports Activities',
-            ])
-            ->assertOk()
-            ->assertSee('MEDICAL CLEARANCE')
-            ->assertSee('Preview-only observation.')
-            ->assertSee('University Physician')
-            // The marker the encode screen's print script keys on.
-            ->assertSee('data-hp-print-doc', false);
-    }
-
-    public function test_a_nurse_cannot_preview_a_result(): void
-    {
-        // D-126: the preview is the physician's — a nurse is sent back to the
-        // Live Queue, and the hidden print frame never prints a page without
-        // data-hp-print-doc.
-        $visit = $this->makeVisit();
-
-        $this->actingAs($this->nurse())
-            ->post(route('nurse.visits.print.preview', $visit), EncodePayload::make())
-            ->assertRedirect(route('nurse.queue'))
-            ->assertSessionHas('error');
-    }
-
-    public function test_a_physician_preview_prints_their_own_name_and_license(): void
+    public function test_the_physicians_print_after_save_carries_their_own_name_and_license(): void
     {
         $visit = $this->makeVisit();
         $physician = User::factory()->physician('Ana B. Cruz', '123456')->create();
 
-        // Same rule as Save & Close, applied to the signed-in user (D-64).
+        // D-64: the physician block is stamped from the encoder.
         $this->actingAs($physician)
-            ->post(route('nurse.visits.print.preview', $visit), EncodePayload::make())
+            ->post(route('nurse.visits.encode.store', $visit), EncodePayload::make())
+            ->assertRedirect(route('nurse.visits.encode', $visit));
+
+        $this->actingAs($physician)
+            ->post(route('nurse.visits.print.reprint', $visit))
             ->assertOk()
             ->assertSee('ANA B. CRUZ, MD')
             ->assertSee('License No.')
             ->assertSee('123456');
     }
 
-    public function test_preview_shades_the_posted_result_and_physical_signs(): void
+    public function test_the_print_after_save_shades_the_saved_result_and_physical_signs(): void
     {
         $visit = $this->makeVisit();
+        $physician = $this->physician();
 
-        $html = $this->actingAs($this->physician())
-            ->post(route('nurse.visits.print.preview', $visit), [
-                ...EncodePayload::vitals(),
-                'result' => 'Unfit',
-                'ps_chest_lungs' => '1',
-            ])
+        $this->actingAs($physician)->post(route('nurse.visits.encode.store', $visit), [
+            ...EncodePayload::vitals(),
+            'result' => 'Unfit',
+            'ps_chest_lungs' => '1',
+        ]);
+
+        $html = $this->actingAs($physician)
+            ->post(route('nurse.visits.print.reprint', $visit))
             ->assertOk()
             ->getContent();
 
@@ -198,58 +172,11 @@ class PrintFlowTest extends TestCase
             '~<span class="bb"></span> <b>FIT</b>\s*<span class="bb on"[^>]*></span> <b>UNFIT</b>~u',
             $html
         );
-        // Posted '1' → CHEST/LUNGS YES box marked, NO box blank.
+        // Saved '1' → CHEST/LUNGS YES box marked, NO box blank.
         $this->assertMatchesRegularExpression(
             '~<td class="sname">CHEST/LUNGS</td>\s*<td class="sbox"><span class="bx on"></span></td>\s*<td class="sbox"><span class="bx"></span></td>~u',
             $html
         );
-    }
-
-    public function test_preview_writes_nothing_and_leaves_the_visit_captured(): void
-    {
-        $visit = $this->makeVisit();
-
-        $this->actingAs($this->physician())
-            ->post(route('nurse.visits.print.preview', $visit), EncodePayload::make())
-            ->assertOk();
-
-        $this->assertDatabaseCount('clearance_records', 0);
-        $this->assertSame('captured', $visit->fresh()->status);
-    }
-
-    public function test_preview_requires_a_result(): void
-    {
-        $visit = $this->makeVisit();
-
-        $this->actingAs($this->physician())
-            ->from(route('nurse.visits.encode', $visit))
-            ->post(route('nurse.visits.print.preview', $visit), [])
-            ->assertRedirect(route('nurse.visits.encode', $visit))
-            ->assertSessionHasErrors('result');
-    }
-
-    public function test_preview_on_an_encoded_visit_returns_404(): void
-    {
-        $nurse = $this->nurse();
-        $visit = $this->makeVisit();
-        $this->encode($visit, $nurse);
-
-        $this->actingAs($nurse)
-            ->post(route('nurse.visits.print.preview', $visit), EncodePayload::make())
-            ->assertNotFound();
-    }
-
-    public function test_preview_requires_a_nurse(): void
-    {
-        $visit = $this->makeVisit();
-
-        $this->post(route('nurse.visits.print.preview', $visit), EncodePayload::make())
-            ->assertRedirect(route('login'));
-
-        $student = User::factory()->create(['role' => 'student']);
-        $this->actingAs($student)
-            ->post(route('nurse.visits.print.preview', $visit), EncodePayload::make())
-            ->assertRedirect('/student/dashboard');
     }
 
     // ── 1b. D-56: a kiosk YES detail reaches REMARKS through Nurse Notes ─────
@@ -275,7 +202,7 @@ class PrintFlowTest extends TestCase
                 'result' => 'Fit',
                 'nurse_notes' => 'SKIN: Itchy rash on left arm',
             ])
-            ->assertRedirect(route('nurse.queue'));
+            ->assertRedirect(route('nurse.visits.encode', $visit));
 
         // …and the printed form carries it under REMARKS.
         $this->releaseForPrint($visit);   // D-125: printing follows the release
@@ -350,34 +277,17 @@ class PrintFlowTest extends TestCase
         $this->assertNull($record->fresh()->printed_at);
     }
 
-    // ── 3. Save & Close carries the pre-save print into printed_at ───────────
+    // ── 3. Save never stamps printed_at ──────────────────────────────────────
 
-    public function test_save_with_printed_flag_stamps_printed_at(): void
+    public function test_save_leaves_printed_at_null_even_when_printed_is_posted(): void
     {
+        // The pre-save print and its `printed` flag are gone (D-127): a posted
+        // one is not validated, so it never reaches the record.
         $visit = $this->makeVisit();
 
         $this->actingAs($this->physician())
-            ->post(route('nurse.visits.encode.store', $visit), [
-                ...EncodePayload::vitals(),
-                'result' => 'Fit',
-                'printed' => '1',
-            ])
-            ->assertRedirect(route('nurse.queue'));
-
-        $this->assertNotNull($visit->fresh()->clearanceRecord->printed_at);
-    }
-
-    public function test_save_without_printed_flag_leaves_printed_at_null(): void
-    {
-        $visit = $this->makeVisit();
-
-        $this->actingAs($this->physician())
-            ->post(route('nurse.visits.encode.store', $visit), [
-                ...EncodePayload::vitals(),
-                'result' => 'Fit',
-                'printed' => '0',
-            ])
-            ->assertRedirect(route('nurse.queue'));
+            ->post(route('nurse.visits.encode.store', $visit), [...EncodePayload::make(), 'printed' => '1'])
+            ->assertSessionHasNoErrors();
 
         $this->assertNull($visit->fresh()->clearanceRecord->printed_at);
     }
