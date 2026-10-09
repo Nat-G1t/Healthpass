@@ -2665,6 +2665,54 @@ else, or any later day, follows the release.
 
 ---
 
+## E2E-41 — The encode history shows Release status; Reprint waits for the release (D-128)
+
+**Goal:** the Clinic Dashboard's encode history shows each record's **Release
+status** instead of who encoded it and whether it was printed, and **Reprint**
+can be pressed only once the Director has released the record's batch.
+
+**Accounts:** `nurse@healthpass.test`, `admin.ccs@healthpass.test`,
+`director@healthpass.test`, and one CCS batch with at least one **encoded**
+student whose documents have **not** been released (no request, or a pending
+or rejected one).
+
+**Part A — the columns**
+
+1. Sign in as the **nurse**. → **Expect:** the Clinic Dashboard. The encode
+   history's columns read **Reference No · Student · Student ID · College ·
+   Program · Result · Encoded at · Release status**, then View / Reprint.
+   There is **no Encoded by** and **no Printed** column.
+
+**Part B — before the release**
+
+2. Find the un-released student's row (search their student ID). →
+   **Expect:** Release status **No**. **Reprint** is greyed out; hovering it
+   shows "Available once the Director releases this batch's documents.";
+   clicking it does nothing.
+3. If the history has a record with no batch (an old walk-in), its Release
+   status reads **—** and its Reprint is greyed out too.
+
+**Part C — after the release**
+
+4. As the **College Admin**, ask for the batch's documents (E2E-36 Part A);
+   as the **Director**, approve the request (E2E-36 Part B).
+5. As the **nurse**, reload the dashboard and find the same row. →
+   **Expect:** Release status **Yes** and **Reprint** in normal colour.
+   Click it → Chrome's print dialog opens on the form, and the dashboard
+   stays where it was (same filters and page).
+
+**Part D — phone width**
+
+6. Narrow the window to a phone (about 390 px). → **Expect:** each record is
+   a stacked card with a **Release status** line and no Encoded by or
+   Printed line; Reprint is greyed out on a No / — card and works on a Yes
+   card.
+
+**Pass criteria:** no Encoded by or Printed column on any width; Release
+status reads Yes / No / — correctly; Reprint prints only on a Yes.
+
+---
+
 ## Recording results
 
 For each scenario, record: **Pass / Fail / Blocked (not built)**, the tester

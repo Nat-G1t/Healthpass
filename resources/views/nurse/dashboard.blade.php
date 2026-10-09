@@ -161,10 +161,15 @@
             </div>
         @else
             <div class="overflow-x-auto">
-                <x-hp.table :headers="['Reference No', 'Student', 'Student ID', 'College', 'Program', 'Result', 'Encoded by', 'Encoded at', 'Printed', '']">
+                <x-hp.table :headers="['Reference No', 'Student', 'Student ID', 'College', 'Program', 'Result', 'Encoded at', 'Release status', '']">
                     @foreach ($records as $record)
                         @php
                             $visit = $record->clinicVisit;
+                            // D-128: 'yes' = the Director approved a release for
+                            // this visit's batch, 'no' = not yet, 'none' = no batch.
+                            $releaseStatus = $record->visit_batch_id === null
+                                ? 'none'
+                                : ($record->has_approved_release ? 'yes' : 'no');
                         @endphp
                         <x-hp.table-row>
                             <x-hp.table-cell label="Reference No">
@@ -197,28 +202,15 @@
                                 </x-hp.badge>
                             </x-hp.table-cell>
 
-                            {{-- D-64: name + a role badge, so a shared history
-                                 shows at a glance whether a nurse or the
-                                 physician encoded (and so what prints). --}}
-                            <x-hp.table-cell label="Encoded by">
-                                {{ $record->encoder?->name ?? '—' }}
-                                @if ($record->encoder)
-                                    <x-hp.badge :variant="$record->encoder->isPhysician() ? 'positive' : 'neutral'" class="ml-1">
-                                        {{ $record->encoder->roleLabel() }}
-                                    </x-hp.badge>
-                                @endif
-                            </x-hp.table-cell>
-
                             <x-hp.table-cell label="Encoded at">
                                 <span class="text-xs">{{ $record->encoded_at?->format('M j, Y g:i A') ?? '—' }}</span>
                             </x-hp.table-cell>
 
-                            <x-hp.table-cell label="Printed">
-                                @if ($record->printed_at)
-                                    <span class="text-xs" title="Last printed {{ $record->printed_at->format('M j, Y g:i A') }}">Yes</span>
-                                @else
-                                    <span class="text-xs text-hp-slate/50">No</span>
-                                @endif
+                            <x-hp.table-cell label="Release status">
+                                <span class="text-xs {{ $releaseStatus === 'yes' ? 'font-semibold text-hp-slate' : 'text-hp-slate/50' }}"
+                                      data-release-status="{{ $releaseStatus }}">
+                                    {{ ['yes' => 'Yes', 'no' => 'No', 'none' => '—'][$releaseStatus] }}
+                                </span>
                             </x-hp.table-cell>
 
                             <x-hp.table-cell label="Actions">
@@ -236,15 +228,30 @@
                                          at the foot of this page and prints there — the print
                                          dialog is the preview, so the nurse never leaves the
                                          dashboard or loses their filters. It stays a POST, not
-                                         a link, because it writes printed_at. --}}
-                                    <form method="POST" action="{{ route('nurse.visits.print.reprint', $visit) }}"
-                                          target="hp-print-frame">
-                                        @csrf
-                                        <button type="submit" data-print-trigger
-                                                class="text-xs font-semibold text-hp-slate/60 hover:text-hp-slate hover:underline">
-                                            Reprint
-                                        </button>
-                                    </form>
+                                         a link, because it writes printed_at.
+
+                                         D-128: only when the Release status is Yes. Otherwise a
+                                         disabled button, its hint on the wrapper (a disabled
+                                         button shows no tooltip of its own). This is stricter
+                                         than the server's print rule on purpose — that rule
+                                         also lets the encoding physician print on the day. --}}
+                                    @if ($releaseStatus === 'yes')
+                                        <form method="POST" action="{{ route('nurse.visits.print.reprint', $visit) }}"
+                                              target="hp-print-frame">
+                                            @csrf
+                                            <button type="submit" data-print-trigger
+                                                    class="text-xs font-semibold text-hp-slate/60 hover:text-hp-slate hover:underline">
+                                                Reprint
+                                            </button>
+                                        </form>
+                                    @else
+                                        <span title="{{ App\Models\ClinicVisit::NOT_RELEASED_HINT }}">
+                                            <button type="button" disabled data-reprint-disabled
+                                                    class="cursor-not-allowed text-xs font-semibold text-hp-slate/60 opacity-40">
+                                                Reprint
+                                            </button>
+                                        </span>
+                                    @endif
                                 </div>
                             </x-hp.table-cell>
                         </x-hp.table-row>

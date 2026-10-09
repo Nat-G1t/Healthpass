@@ -617,11 +617,11 @@ class StaffAccountTest extends TestCase
             'encoded_by' => $departed->id,
         ]);
 
-        // And another nurse still sees the row, with their name on it.
+        // And another nurse still sees the row. (D-128 removed the Encoded by
+        // column, so the row no longer names the departed nurse.)
         $this->actingAs($this->nurse('On Duty'))
             ->get(route('nurse.dashboard'))
             ->assertOk()
-            ->assertSee('Departed Nurse')
             ->assertSee('Juan Dela Cruz');
     }
 

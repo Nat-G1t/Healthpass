@@ -1159,6 +1159,30 @@
 
 ### Changed
 
+* **The Clinic Dashboard's encode history shows each record's Release status,
+  and Reprint works only once released** (D-128, FR-NRS-09 amended; PRD
+  revision 2.12, 2026-10-09). Asked for by the Clinic Director. No schema
+  change, no new package, no new route.
+  * **Columns:** Reference No · Student · Student ID · College · Program ·
+    Result · Encoded at · **Release status** · (actions). **Encoded by** and
+    **Printed** are removed (desktop table and phone cards).
+  * **Release status:** **Yes** — the visit's batch has an approved release
+    request; **No** — a batch with none approved (none, pending, rejected);
+    **—** — no batch (legacy). `DashboardController::history()` learns it
+    with two correlated subqueries in the records query, so the page's query
+    count stays the same as rows grow; the unused `encoder` eager load is gone.
+  * **Reprint:** the same POST into the print frame on a Yes; otherwise a
+    disabled button titled with `ClinicVisit::NOT_RELEASED_HINT`. The
+    server's print rule (D-125 / D-127) is unchanged.
+  * **Filters:** none belonged only to the removed columns — unchanged.
+  * Tests: `tests/Feature/Nurse/DashboardPageTest.php` — the header list,
+    Yes / No (pending, rejected, no request) / — with Reprint enabled or
+    disabled, and a constant query count; the clinic-wide test no longer
+    expects the encoder's name; the helper's unused `printedAt` is dropped;
+    the Reprint print-frame test now uses a released visit.
+    `PhysicianAccessTest`'s shared-history test no longer expects the
+    Nurse / Physician encoder badges.
+
 * **The physician reviews the nurse's interview as a summary, saves without
   leaving the page, prints after saving, and clicks Finished** (D-127, amends
   D-125's print rule; FR-NRS-03…05 and FR-PRT-06 amended; PRD revision 2.11,

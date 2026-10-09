@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Nurse;
 
+use App\Models\Appointment;
+use App\Models\BatchRequest;
 use App\Models\ClearanceRecord;
 use App\Models\ClinicVisit;
 use App\Models\College;
@@ -11,6 +13,9 @@ use App\Models\StudentProfile;
 use App\Models\User;
 use App\Models\VitalSigns;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Support\ReleasesForPrint;
 use Tests\TestCase;
 
 /**
@@ -23,10 +28,14 @@ use Tests\TestCase;
  *
  * Encoding is what puts a row here: a still-`captured` visit belongs to the
  * Live Queue, not the history.
+ *
+ * D-128: each row shows its batch's Release status (Yes / No / —) instead of
+ * Encoded by and Printed, and Reprint is enabled only on a Yes.
  */
 class DashboardPageTest extends TestCase
 {
     use RefreshDatabase;
+    use ReleasesForPrint;
 
     /** Rows per page — must match DashboardController::PER_PAGE. */
     private const PER_PAGE = 15;
@@ -92,7 +101,6 @@ class DashboardPageTest extends TestCase
         string $result = 'Fit',
         ?string $encodedAt = null,
         ?string $course = 'Bachelor of Science in Information Technology',
-        ?string $printedAt = null,
     ): ClearanceRecord {
         $encodedAt ??= now()->toDateTimeString();
 
@@ -104,8 +112,48 @@ class DashboardPageTest extends TestCase
             'encoded_by' => $encoder->id,
             'result' => $result,
             'encoded_at' => $encodedAt,
-            'printed_at' => $printedAt,
         ]);
+    }
+
+    /**
+     * D-128 — put an encoded record's visit on a batch whose only release
+     * request (if any) has $releaseStatus: 'pending', 'rejected' or null for
+     * a batch the college never asked about. A released batch goes through
+     * ReleasesForPrint::releaseForPrint() instead.
+     */
+    private function onUnreleasedBatch(ClearanceRecord $record, ?string $releaseStatus): ClearanceRecord
+    {
+        $visit = $record->clinicVisit;
+        $admin = User::factory()->create(['role' => 'college_admin', 'managed_college_id' => $visit->college_id]);
+
+        $batch = BatchRequest::create([
+            'reference_no' => 'BR-2026-'.fake()->unique()->numerify('8##'),
+            'college_id' => $visit->college_id,
+            'requested_by' => $admin->id,
+            'form_type' => 'clearance',
+            'reason' => 'fieldtrip',
+            'service_type' => 'medical',
+            'scheduled_date' => today()->toDateString(),
+            'status' => 'approved',
+        ]);
+
+        $appointment = Appointment::factory()->medical()->create([
+            'student_id' => $visit->student_id,
+            'source' => 'batch',
+            'batch_request_id' => $batch->id,
+        ]);
+        $visit->update(['appointment_id' => $appointment->id]);
+
+        if ($releaseStatus !== null) {
+            $batch->releaseRequests()->create([
+                'requested_by' => $admin->id,
+                'reason' => 'The college needs the forms for its records.',
+                'status' => $releaseStatus,
+                'rejection_message' => $releaseStatus === 'rejected' ? 'Please attach the signed memo first.' : null,
+            ]);
+        }
+
+        return $record;
     }
 
     // ── 1. Access control (role gate) ─────────────────────────────────────────
@@ -211,18 +259,20 @@ class DashboardPageTest extends TestCase
 
     // ── 4. Clinic-wide, with an Encoded-by column ─────────────────────────────
 
-    public function test_history_is_clinic_wide_and_names_the_encoder(): void
+    public function test_history_is_clinic_wide(): void
     {
         $onShift = $this->nurse('Nurse Alpha');
         $otherNurse = $this->nurse('Nurse Bravo');
 
         $this->encodedVisit('Bravo Patient', $otherNurse);
 
-        // Nurse Alpha sees Nurse Bravo's encode, attributed to Bravo.
+        // Nurse Alpha sees Nurse Bravo's encode. D-128 dropped the Encoded by
+        // column, so the encoder's name is no longer on the row.
         $this->actingAs($onShift)
             ->get(route('nurse.dashboard'))
             ->assertOk()
-            ->assertSeeInOrder(['Bravo Patient', 'Nurse Bravo']);
+            ->assertSee('Bravo Patient')
+            ->assertDontSee('Nurse Bravo');
     }
 
     // ── 5. Filters ────────────────────────────────────────────────────────────
@@ -397,6 +447,110 @@ class DashboardPageTest extends TestCase
         });
     }
 
+    // ── 6b. Release status (D-128) ────────────────────────────────────────────
+
+    public function test_the_history_columns_show_release_status_instead_of_encoded_by_and_printed(): void
+    {
+        $nurse = $this->nurse();
+        $this->encodedVisit('Column Check', $nurse);
+
+        $this->actingAs($nurse)
+            ->get(route('nurse.dashboard'))
+            ->assertOk()
+            ->assertSeeInOrder([
+                'Reference No', 'Student', 'Student ID', 'College', 'Program',
+                'Result', 'Encoded at', 'Release status',
+            ])
+            ->assertDontSee('Encoded by')
+            ->assertDontSee('Printed');
+    }
+
+    public function test_a_released_batch_reads_yes_and_reprint_is_enabled(): void
+    {
+        $nurse = $this->nurse();
+        $record = $this->encodedVisit('Released Student', $nurse);
+        $visit = $this->releaseForPrint($record->clinicVisit);
+
+        $this->actingAs($nurse)
+            ->get(route('nurse.dashboard'))
+            ->assertOk()
+            ->assertSee('data-release-status="yes"', false)
+            ->assertSee('action="'.route('nurse.visits.print.reprint', $visit).'"', false)
+            ->assertDontSee('data-reprint-disabled', false);
+    }
+
+    /** @return array<string, array{0: string|null}> */
+    public static function unreleasedBatches(): array
+    {
+        return [
+            'pending request' => ['pending'],
+            'rejected request' => ['rejected'],
+            'no request' => [null],
+        ];
+    }
+
+    #[DataProvider('unreleasedBatches')]
+    public function test_an_unreleased_batch_reads_no_and_reprint_is_disabled(?string $releaseStatus): void
+    {
+        $nurse = $this->nurse();
+        $record = $this->onUnreleasedBatch($this->encodedVisit('Waiting Student', $nurse), $releaseStatus);
+
+        $this->actingAs($nurse)
+            ->get(route('nurse.dashboard'))
+            ->assertOk()
+            ->assertSee('data-release-status="no"', false)
+            ->assertSee('data-reprint-disabled', false)
+            ->assertSee(ClinicVisit::NOT_RELEASED_HINT)
+            ->assertDontSee('action="'.route('nurse.visits.print.reprint', $record->clinicVisit).'"', false);
+    }
+
+    public function test_a_visit_without_a_batch_reads_a_dash_and_reprint_is_disabled(): void
+    {
+        $nurse = $this->nurse();
+        $record = $this->encodedVisit('Legacy Walk-in', $nurse);
+
+        $this->actingAs($nurse)
+            ->get(route('nurse.dashboard'))
+            ->assertOk()
+            ->assertSee('data-release-status="none"', false)
+            ->assertSee('data-reprint-disabled', false)
+            ->assertDontSee('action="'.route('nurse.visits.print.reprint', $record->clinicVisit).'"', false);
+    }
+
+    public function test_release_status_costs_no_extra_query_per_row(): void
+    {
+        $nurse = $this->nurse();
+
+        $queriesFor = function () use ($nurse): int {
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+            $this->actingAs($nurse)->get(route('nurse.dashboard'))->assertOk();
+            DB::disableQueryLog();
+
+            return count(DB::getQueryLog());
+        };
+
+        // One row of each kind (released, pending, no batch), then three more of each.
+        $seed = function (int $n) use ($nurse): void {
+            $this->releaseForPrint($this->encodedVisit("Released {$n}", $nurse)->clinicVisit);
+            $this->onUnreleasedBatch($this->encodedVisit("Pending {$n}", $nurse), 'pending');
+            $this->encodedVisit("No batch {$n}", $nurse);
+        };
+
+        $seed(1);
+        // Warm-up: the first request also stamps users.last_active_at (once a
+        // minute), which has nothing to do with the rows — keep it out of both counts.
+        $queriesFor();
+        $few = $queriesFor();
+
+        foreach ([2, 3, 4] as $n) {
+            $seed($n);
+        }
+        $many = $queriesFor();
+
+        $this->assertSame($few, $many, 'The dashboard ran more queries with more rows.');
+    }
+
     // ── 7. Stat tiles ─────────────────────────────────────────────────────────
 
     public function test_reprint_prints_in_place_instead_of_opening_a_new_tab(): void
@@ -405,7 +559,8 @@ class DashboardPageTest extends TestCase
         // the page's hidden print frame rather than navigating a new tab —
         // the nurse keeps their filters and their place in the history.
         $nurse = $this->nurse();
-        $this->encodedVisit('Printable Visit', $nurse);
+        // D-128: Reprint is live only on a released batch.
+        $this->releaseForPrint($this->encodedVisit('Printable Visit', $nurse)->clinicVisit);
 
         $this->actingAs($nurse)
             ->get(route('nurse.dashboard'))

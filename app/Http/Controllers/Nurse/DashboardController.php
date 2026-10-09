@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Nurse;
 
 use App\Http\Controllers\Controller;
+use App\Models\Appointment;
 use App\Models\ClearanceRecord;
 use App\Models\ClinicVisit;
+use App\Models\DocumentReleaseRequest;
 use App\Models\User;
 use App\Support\VisitMonths;
 use Carbon\CarbonImmutable;
@@ -23,7 +25,8 @@ use Illuminate\View\View;
  * the Live Queue (ClinicVisit::scopeLiveQueue only sees `captured`), so before
  * this page the nurse had no way to look back at a day's work. The history is
  * CLINIC-WIDE, not per-nurse: two nurses on shift must still read one
- * continuous log, which is why every row names who encoded it.
+ * continuous log. D-128 replaced the Encoded by and Printed columns with
+ * each row's Release status — and Reprint is enabled only once released.
  *
  * `clearance_records` IS the encode log — one row per encoded visit — so the
  * history reads from there rather than re-deriving it from clinic_visits.
@@ -135,8 +138,27 @@ class DashboardController extends Controller
                 'clinicVisit.student:id,name',
                 'clinicVisit.student.studentProfile:id,user_id,student_number', // the Student ID column (D-100)
                 'clinicVisit.college:id,code,name',
-                'encoder:id,name,role', // role → the Nurse / Physician badge (D-64)
             ])
+            // D-128: the Release status column. Two small subqueries that the
+            // database answers inside this same SELECT, once per row — so the
+            // page costs no extra query however many rows it shows.
+            ->addSelect([
+                // The visit's batch, or NULL for a visit with no batch (legacy,
+                // pre-D-61) — which the table shows as "—".
+                'visit_batch_id' => Appointment::select('appointments.batch_request_id')
+                    ->join('clinic_visits', 'clinic_visits.appointment_id', '=', 'appointments.id')
+                    ->whereColumn('clinic_visits.id', 'clearance_records.clinic_visit_id'),
+                // 1 when the Director approved ANY release request for that
+                // batch (Q4), NULL otherwise — the same test as
+                // BatchRequest::hasReleasedDocuments().
+                'has_approved_release' => DocumentReleaseRequest::selectRaw('1')
+                    ->join('appointments', 'appointments.batch_request_id', '=', 'document_release_requests.batch_request_id')
+                    ->join('clinic_visits', 'clinic_visits.appointment_id', '=', 'appointments.id')
+                    ->whereColumn('clinic_visits.id', 'clearance_records.clinic_visit_id')
+                    ->where('document_release_requests.status', 'approved')
+                    ->limit(1),
+            ])
+            ->withCasts(['has_approved_release' => 'boolean'])
             ->when($bounds !== null, fn (Builder $query) => $query->whereBetween('encoded_at', $bounds))
             ->when($result !== null, fn (Builder $query) => $query->where('result', $result))
             ->when($search !== '', fn (Builder $query) => $this->applySearch($query, $search))

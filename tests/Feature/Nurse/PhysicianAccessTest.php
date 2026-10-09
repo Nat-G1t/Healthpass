@@ -148,7 +148,7 @@ class PhysicianAccessTest extends TestCase
 
     // ── Shared encode history (FR-NRS-09) ─────────────────────────────────────
 
-    public function test_history_is_shared_and_shows_a_role_badge_per_encoder(): void
+    public function test_history_is_shared_by_the_nurse_and_the_physician(): void
     {
         $nurse = User::factory()->create(['role' => 'nurse', 'name' => 'Head Nurse']);
         $physician = User::factory()->physician('Reynaldo S. Alipio')->create();
@@ -156,14 +156,14 @@ class PhysicianAccessTest extends TestCase
         $this->encode($this->makeVisit('HP-2026-P010'), $nurse);
         $this->encode($this->makeVisit('HP-2026-P011'), $physician);
 
-        // Both roles read the SAME rows, each naming who encoded and as what.
+        // Both roles read the SAME rows. D-128 removed the Encoded by column
+        // (and its Nurse / Physician badge) for Release status.
         foreach ([$nurse, $physician] as $viewer) {
             $html = $this->actingAs($viewer)->get(route('nurse.dashboard'))->assertOk()->getContent();
 
             $this->assertStringContainsString('HP-2026-P010', $html);
             $this->assertStringContainsString('HP-2026-P011', $html);
-            $this->assertMatchesRegularExpression('~Head Nurse\s*<span[^>]*>\s*Nurse\s*</span>~', $html);
-            $this->assertMatchesRegularExpression('~Reynaldo S\. Alipio\s*<span[^>]*>\s*Physician\s*</span>~', $html);
+            $this->assertStringNotContainsString('Encoded by', $html);
         }
     }
 
