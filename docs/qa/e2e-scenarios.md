@@ -307,9 +307,9 @@ students.
     (e.g. `14:05`), run `php artisan config:clear`, and reload after that time.
     → **Expect:** the no-shows read **Unattended** (then **Rescheduled**), and
     the batch reads **Still in progress** until their 2nd-chance day starts.
-    A student still **At the clinic** also keeps the batch **Still in
-    progress** after the cutoff, until the clinic encodes them. Ask the
-    developer to remove the setting afterwards.
+    A student still **At the clinic** at the cutoff is removed from the
+    queue by the same job and reads **Rescheduled** too (D-132, see E2E-44).
+    Ask the developer to remove the setting afterwards.
 14. In the requests table, click the Batch ID to open the **batch roster**. →
     **Expect:** clinic date, hour span, purpose and student count, and each
     student's appointment and hour — but **no** Status or Result columns and
@@ -2034,9 +2034,10 @@ put it back at the end.**
 
 **Part C — what is not rescheduled**
 
-1. A student who reached the kiosk and submitted (captured) but was not
+1. ~~A student who reached the kiosk and submitted (captured) but was not
    encoded before the cutoff. → **Expect:** after the job they still read
-   **At the clinic** and get no 2nd chance.
+   **At the clinic** and get no 2nd chance.~~ **Changed by D-132:** such a
+   student is removed from the queue and rescheduled — see E2E-44.
 2. A student who misses their **2nd-chance** day too (repeat Part B's clock
    trick on the new day). → **Expect:** **Unattended**, and the job books
    nothing more.
@@ -2047,7 +2048,8 @@ put it back at the end.**
 **Pass criteria:** the missed students — no-shows and the one who rested and
 never came back — are booked together on one day at its earliest hours, keep
 the same Batch ID, are emailed once each, see the red 2nd-chance card, and are
-never booked a third time; a captured student is not rescheduled.
+never booked a third time. (A captured student is rescheduled too since
+D-132 — E2E-44.)
 
 ---
 
@@ -2836,6 +2838,61 @@ and some rejected or cancelled batches).
 **Pass criteria:** each filter keeps only its own batches; they combine with
 College and the search; the pager counts and pages only the matches and keeps
 every filter; a bad value is ignored; the clinic's cards are unchanged.
+
+---
+
+## E2E-44 — At the 8 PM cutoff, students still in a clinic queue are removed and get the 2nd chance (D-132)
+
+**Goal:** confirm that a student left waiting in the nurse's or the
+physician's queue at the cutoff is removed from it, reads Unattended, and is
+rescheduled with the batch's absent students — and that an encoded student
+is left alone.
+
+**Accounts:** the CCS Admin `admin.ccs@healthpass.test`, the Director
+`director@healthpass.test`, the nurse `nurse@healthpass.test`, the physician
+`physician@healthpass.test`, four CCS students (passwords `password`), and
+the log mailer.
+
+**Setup (developer, on a laptop — never on the live site):** move the cutoff
+as in E2E-33: set `HEALTHPASS_ABSENT_CUTOFF` in `.env` to a few minutes from
+now, run `php artisan config:clear`, and write down the old value.
+
+**Steps:**
+
+1. As the CCS Admin, submit a **Medical Assessment Form** batch with **four**
+   students; as the Director, approve it for **today**.
+2. Student A: leave alone (absent). Student B: put through the kiosk and
+   leave in the **nurse's** queue. Student C: put through the kiosk; as the
+   nurse, interview and **Submit to physician**, and leave them in the
+   **physician's** queue. Student D: put through the kiosk, interview, and
+   have the physician **encode** them.
+3. Before the cutoff, open the Live Queue as the nurse and as the physician.
+   → **Expect:** B in the nurse's queue, C in the physician's.
+4. After the cutoff minute has passed, run
+   `php artisan healthpass:second-chances`. → **Expect:** first a line
+   "Removed 2 visits still waiting in a clinic queue at the cutoff: HP-…,
+   HP-….", then "BR-…: 3 students rescheduled to …" and "Done — 3
+   rescheduled, 0 left Unattended."
+5. Reload both Live Queues. → **Expect:** B and C are gone.
+6. Open `storage/logs/laravel.log`. → **Expect:** one line "D-132: removed 2
+   visits …" listing visit ids and HP- references — **no student names**.
+7. As the Director, open the batch's results page. → **Expect:** A, B and C
+   read **Rescheduled** (red) on the same 2nd-chance day; D reads
+   **Completed**.
+8. Run `php artisan healthpass:second-chances` again. → **Expect:** "No missed
+   students to reschedule." — nothing removed or booked.
+9. **On the 2nd-chance day** (repeat the clock trick on that day): put B
+   through the kiosk again and leave them waiting; run the command after the
+   cutoff. → **Expect:** B is removed and reads **Unattended** — no 3rd
+   chance.
+
+**Clean up:** put `HEALTHPASS_ABSENT_CUTOFF` back, run
+`php artisan config:clear`.
+
+**Pass criteria:** waiting students leave both queues at the cutoff, with
+their readings; they are rescheduled together with the absent students and
+emailed once; an encoded student is untouched; a leftover on the 2nd-chance
+day ends Unattended; the log names no student.
 
 ---
 

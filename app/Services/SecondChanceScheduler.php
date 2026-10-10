@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Models\Appointment;
 use App\Models\BatchRequest;
 use App\Models\BatchRequestStudent;
+use App\Models\ClinicVisit;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -23,8 +24,10 @@ use Illuminate\Support\Facades\DB;
  *
  * "Missed" (Q3): an appointment of an APPROVED batch whose cutoff has passed
  * with no clinic visit at all, or with only a `resting` one (sent to rest,
- * never came back — D-72). A `captured` visit the clinic hasn't encoded is the
- * clinic's delay, not the student's, so it is never rescheduled.
+ * never came back — D-72). D-132 amends Q3: a visit still waiting in the
+ * nurse's or the physician's queue at the cutoff is first removed
+ * (removeStaleQueueVisits()), so that student is missed too and joins the
+ * batch's other missed students.
  *
  * Like the Director's approval (BatchApprovalController::approve()), the day
  * is chosen and booked inside ONE transaction with the capacity reads locked,
@@ -58,7 +61,7 @@ class SecondChanceScheduler
      */
     public function missedAppointments(Carbon $now): Collection
     {
-        $windowStart = $now->copy()->subHours((int) config('healthpass.second_chance.catch_up_hours'));
+        $windowStart = $this->windowStart($now);
 
         return Appointment::query()
             ->where('status', 'scheduled')
@@ -72,12 +75,63 @@ class SecondChanceScheduler
             ->with('batchRequest')
             ->orderBy('id')
             ->get()
-            ->filter(function (Appointment $appointment) use ($now, $windowStart): bool {
-                $cutoff = Appointment::absentCutoffOn($appointment->scheduled_date);
-
-                return $cutoff->lte($now) && $cutoff->gt($windowStart);
-            })
+            ->filter(fn (Appointment $appointment): bool => $this->cutoffIsInWindow($appointment, $now, $windowStart))
             ->values();
+    }
+
+    /**
+     * D-132 — at the cutoff, take every student still waiting in a clinic
+     * queue out of it, and return the visits removed (oldest first).
+     *
+     * A visit goes when it is still `captured` or `interviewed` (not encoded,
+     * not resting — D-110 already reschedules a resting student without
+     * deleting anything) and its APPOINTMENT's cutoff passed within the same
+     * catch-up window as missedAppointments(). Older visits — history, and
+     * anything waiting from before D-132 — are never touched here; the clinic
+     * can still Remove them by hand. A visit with no appointment (legacy) is
+     * never touched either.
+     *
+     * Each removal is the queue's own Remove (ClinicVisit::removeFromQueue()),
+     * one locked transaction per visit: a physician who saved a moment before
+     * wins, and that visit is skipped.
+     *
+     * Run BEFORE missedAppointments(): the appointment is left `scheduled`
+     * with no submitted visit, so the same run books the student's 2nd chance
+     * with the batch's other missed students — or, on a 2nd-chance day, leaves
+     * them Unattended (no 3rd chance, D-110 Q6).
+     *
+     * @return Collection<int, ClinicVisit>
+     */
+    public function removeStaleQueueVisits(Carbon $now): Collection
+    {
+        $windowStart = $this->windowStart($now);
+
+        return ClinicVisit::query()
+            ->whereIn('status', ['captured', 'interviewed'])
+            ->whereHas('appointment', fn (Builder $appointment) => $appointment
+                ->whereDate('scheduled_date', '>=', $windowStart->toDateString())
+                ->whereDate('scheduled_date', '<=', $now->toDateString()))
+            ->with('appointment')
+            ->orderBy('id')
+            ->get()
+            ->filter(fn (ClinicVisit $visit): bool => $this->cutoffIsInWindow($visit->appointment, $now, $windowStart))
+            // Removes each visit; keeps only those actually removed (false = encoded meanwhile).
+            ->filter(fn (ClinicVisit $visit): bool => $visit->removeFromQueue())
+            ->values();
+    }
+
+    /** The start of the catch-up window: `second_chance.catch_up_hours` (24) before $now. */
+    private function windowStart(Carbon $now): Carbon
+    {
+        return $now->copy()->subHours((int) config('healthpass.second_chance.catch_up_hours'));
+    }
+
+    /** Did $appointment's absent cutoff pass at or before $now, and after $windowStart? */
+    private function cutoffIsInWindow(Appointment $appointment, Carbon $now, Carbon $windowStart): bool
+    {
+        $cutoff = Appointment::absentCutoffOn($appointment->scheduled_date);
+
+        return $cutoff->lte($now) && $cutoff->gt($windowStart);
     }
 
     /**

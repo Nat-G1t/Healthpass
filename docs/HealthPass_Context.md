@@ -182,12 +182,19 @@ Physician opens the visit ("Doctor's Assessment")
 8:00 PM on the clinic day — the healthpass:second-chances job (D-110)
          │  (scheduler, every 5 min; cron must run schedule:run)
          │
+         └── FIRST (D-132): every visit still waiting in a clinic queue
+         │   (captured / interviewed) is removed, as the queue's Remove
+         │   does (ClinicVisit::removeFromQueue) — vitals, screening and
+         │   assessment row with it. Same 24-hour window; older visits
+         │   and visits with no appointment are never touched.
+         │
          └── Students with NO visit, or only a RESTING one → booked
              TOGETHER on the nearest day from tomorrow that fits them all,
              earliest free hours + free arrival times, SAME batch; roster
              row re-pointed to the new appointment; "2nd chance" email.
-             One chance only — missing it is final (Unattended). A captured
-             student the clinic hasn't encoded is NOT missed.
+             One chance only — missing it is final (Unattended). A student
+             removed from a queue above is missed too, and joins their
+             batch's group (D-132).
 
 Director analytics and flagged anomalies update from encoded records
 ```

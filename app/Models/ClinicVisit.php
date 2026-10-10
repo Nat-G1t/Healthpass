@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Facades\DB;
 
 class ClinicVisit extends Model
 {
@@ -325,6 +326,47 @@ class ClinicVisit extends Model
     public static function queueActionLabel(User $viewer): string
     {
         return $viewer->isPhysician() ? 'Encode Result' : 'Interview';
+    }
+
+    /**
+     * D-93 / D-132 — take this visit out of the Live Queue, if it is still
+     * waiting there. Returns whether it was removed.
+     *
+     * The ONE removal both callers use: the queue's Remove button (pass the
+     * clinic user — each role removes only from its own queue, D-126) and the
+     * 8 PM job (pass no one — a visit waiting in EITHER queue goes).
+     *
+     * The visit is DELETED, not flagged: its vital signs and screening answers
+     * go with it (both tables cascade on delete). Nothing was ever encoded, so
+     * no clearance record or printed document refers to it. The appointment is
+     * untouched and has no submitted visit any more — so before the cutoff the
+     * kiosk offers it again (Appointment::todayFor()), and after it the
+     * student reads Unattended.
+     *
+     * The status is re-read under a row lock, so a colleague who submitted or
+     * encoded this visit a moment ago wins, and an encoded record can never be
+     * deleted. An `interviewed` visit also has the nurse's
+     * `medical_assessments` row, whose foreign key RESTRICTS the visit's
+     * delete — so it is deleted explicitly first, inside the same transaction.
+     */
+    public function removeFromQueue(?User $remover = null): bool
+    {
+        return DB::transaction(function () use ($remover): bool {
+            $locked = self::whereKey($this->id)->lockForUpdate()->first();
+
+            $isWaiting = $remover === null
+                ? $locked?->queueRole() !== null
+                : $locked?->isInQueueOf($remover) === true;
+
+            if (! $isWaiting) {
+                return false;
+            }
+
+            $locked->medicalAssessment()->delete();
+            $locked->delete();
+
+            return true;
+        });
     }
 
     // ── D-125 printing gate ──────────────────────────────────────────────────

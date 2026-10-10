@@ -8,7 +8,8 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-// D-110: the 2nd-chance job. Laravel's scheduler only runs if cron calls
+// D-110: the 2nd-chance job — since D-132 it first removes the students still
+// waiting in a clinic queue at the cutoff, so they are rescheduled too. Laravel's scheduler only runs if cron calls
 // `php artisan schedule:run` every minute — on the hosted server AND on the
 // Pi (docs/deployment-hosted.md, docs/deployment-pi.md); without that line
 // nothing here ever fires.

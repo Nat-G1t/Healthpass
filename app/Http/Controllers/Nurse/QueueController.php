@@ -9,7 +9,6 @@ use App\Models\ClinicVisit;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 
@@ -103,38 +102,17 @@ class QueueController extends Controller
      *
      * A student finishes the kiosk, lands in the queue, and then leaves the
      * clinic without being seen. Before D-93 their row sat at the top of the
-     * queue for the rest of the day with no way to clear it.
-     *
-     * The visit is DELETED, not flagged: its vital signs and screening answers
-     * go with it (both tables cascade on delete). Nothing was ever encoded, so
-     * no clearance record or printed document refers to it. The student's
-     * appointment is untouched and has no submitted visit any more, so
-     * Appointment::todayFor() offers it again — if they come back, they simply
-     * go through the kiosk again.
+     * queue for the rest of the day with no way to clear it. If they come
+     * back, they simply go through the kiosk again.
      *
      * Only a visit still WAITING in the remover's OWN queue can be removed
-     * (D-126: each role removes only from its own queue). The status is
-     * re-read under a row lock, so a colleague who submitted or encoded this
-     * visit a moment ago wins, and an encoded record can never be deleted.
-     *
-     * D-126: an `interviewed` visit also has the nurse's `medical_assessments`
-     * row, whose foreign key RESTRICTS the visit's delete — so it is deleted
-     * explicitly first, inside the same transaction.
+     * (D-126). The deletion itself — locked, with the visit's vitals,
+     * screening and assessment — is ClinicVisit::removeFromQueue(), which the
+     * 8 PM job uses too (D-132).
      */
     public function remove(Request $request, ClinicVisit $visit): RedirectResponse
     {
-        $removed = DB::transaction(function () use ($request, $visit): bool {
-            $locked = ClinicVisit::whereKey($visit->id)->lockForUpdate()->first();
-
-            if ($locked === null || ! $locked->isInQueueOf($request->user())) {
-                return false;
-            }
-
-            $locked->medicalAssessment()->delete();
-            $locked->delete();
-
-            return true;
-        });
+        $removed = $visit->removeFromQueue($request->user());
 
         $name = $visit->student->name ?? 'The student';
 

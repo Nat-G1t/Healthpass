@@ -317,7 +317,8 @@ class BatchRequest extends Model
      *   still_in_progress   — no clinic day is happening, but some student is
      *                         not final yet (OPEN_PROGRESS): booked for the
      *                         2nd-chance day, or captured at the kiosk and still
-     *                         waiting for the clinic's encode.
+     *                         waiting for the clinic's encode (until the 8 PM
+     *                         job removes that visit, D-132).
      *   no_one_attended     — finished, and every student is Unattended.
      *   finished_incomplete — finished, and some students are Unattended.
      *

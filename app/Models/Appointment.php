@@ -240,8 +240,9 @@ class Appointment extends Model
      *                 it, before the cutoff (was `rechecking`)
      *   in_clinic   — vitals captured at the kiosk, waiting on the nurse or (an
      *                 `interviewed` visit, D-126) the physician — ALSO
-     *                 after the cutoff: an un-encoded student is the clinic's
-     *                 delay, not the student's (replaces D-86's did_not_finish)
+     *                 after the cutoff, until the 8 PM job removes the visit
+     *                 (D-132; the student then reads unattended, and gets
+     *                 the 2nd chance). Replaces D-86's did_not_finish.
      *   completed   — the nurse has encoded it; clearanceResult() has a value
      *   unattended  — the cutoff (`healthpass.absent_cutoff`, 8:00 PM on the
      *                 clinic date, server clock) has passed with no visit, or

@@ -134,7 +134,8 @@ Do not silently reconcile conflicts.
   `bootstrap/app.php` — that middleware closure runs before the config files
   load, so `config()` is unavailable and `env()` reads empty once
   `config:cache` has run.
-- The 2nd-chance job (D-110) needs `php artisan schedule:run` from cron every
+- The 2nd-chance job (D-110) — which also clears un-encoded queue visits at
+  the cutoff (D-132) — needs `php artisan schedule:run` from cron every
   minute — on the droplet **and** the Pi.
 
 ## Run / dev commands

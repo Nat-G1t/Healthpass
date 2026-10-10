@@ -554,25 +554,29 @@ class BatchResultsTest extends TestCase
         $this->tracking()->assertSee('No one attended');
     }
 
-    public function test_a_captured_visit_waiting_for_the_encode_keeps_the_batch_still_in_progress_past_the_cutoff(): void
+    public function test_a_captured_visit_still_waiting_at_the_cutoff_is_removed_and_rescheduled(): void
     {
         $batch = $this->makeBatch();
         $this->addStudent($batch, 'Fit', 'Ana Cleared');
         $cara = $this->addStudent($batch, 'in_clinic', 'Cara Waiting');
+        $visit = $cara->clinicVisit;
 
-        // D-110: an un-encoded student is the clinic's delay — no 2nd chance,
-        // still At the clinic, and the batch stays open for her.
+        // Before 8 PM she is At the clinic and the day is in progress.
+        $this->travelTo(Carbon::parse(self::CLINIC_DAY.' 19:00:00'));
+        $this->assertSame('in_clinic', $this->studentStatuses($batch)['Cara Waiting']);
+
+        // D-132 (amends D-110 Q3): still waiting at the cutoff, so the job
+        // removes her visit and books her 2nd chance like an absent student.
         $this->runSecondChanceJobAtTheCutoff();
         $this->travelTo(Carbon::parse(self::CLINIC_DAY.' 21:00:00'));
 
-        $this->assertSame('in_clinic', $this->studentStatuses($batch)['Cara Waiting']);
+        $this->assertModelMissing($visit);
+        $this->assertSame('rescheduled', $this->studentStatuses($batch)['Cara Waiting']);
         $this->assertSame('still_in_progress', $this->statusOf($batch));
 
-        // The clinic encodes her the next morning: the batch is done.
-        $this->travelTo(Carbon::parse(self::NEXT_DAY.' 08:00:00'));
-        $this->encode($cara->clinicVisit, 'Fit');
-
-        $this->assertSame('completed', $this->statusOf($batch));
+        // Her 2nd-chance day: the batch is in progress again.
+        $this->travelTo(Carbon::parse(self::NEXT_DAY.' 10:00:00'));
+        $this->assertSame('in_progress', $this->statusOf($batch));
     }
 
     public function test_a_resting_student_reads_rest_retake_and_keeps_the_day_in_progress(): void
@@ -633,14 +637,15 @@ class BatchResultsTest extends TestCase
 
         $response = $this->results($batch)->assertOk();
 
-        // Fina (withdrawn before D-87) is in none of the counts.
+        // Fina (withdrawn before D-87) is in none of the counts. Cara, still
+        // waiting at the cutoff, is rescheduled with Dino and Elmo (D-132).
         $this->assertSame(
-            ['total' => 6, 'completed' => 3, 'fit' => 2, 'rescheduled' => 2],
+            ['total' => 6, 'completed' => 3, 'fit' => 2, 'rescheduled' => 3],
             $response->viewData('results')['summary'],
         );
         $response->assertSeeInOrder(['Completed', '3', 'out of 6 students completed'], false);
         $response->assertSeeInOrder(['Fit', '2', 'out of 3 completed students are fit'], false);
-        $response->assertSeeInOrder(['Rescheduled', '2', 'out of 6 students were rescheduled'], false);
+        $response->assertSeeInOrder(['Rescheduled', '3', 'out of 6 students were rescheduled'], false);
     }
 
     public function test_a_rescheduled_student_is_still_counted_after_completing(): void

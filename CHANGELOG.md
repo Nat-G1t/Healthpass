@@ -1159,6 +1159,39 @@
 
 ### Changed
 
+* **At the 8 PM cutoff, students still waiting in a clinic queue are removed
+  and get the 2nd chance** (D-132, amends D-110 Q3; FR-ADM-14, FR-ADM-12,
+  FR-NRS-11, BR-12 and BR-27 amended; PRD revision 2.16, 2026-10-10). Asked
+  for by the Clinic Director. No schema change, no new package, no new route.
+  * **What:** every visit still `captured` or `interviewed` — in the nurse's
+    or the physician's queue — whose appointment's 8 PM cutoff has passed.
+    Encoded and resting visits are untouched; a visit with no appointment is
+    never touched.
+  * **How:** the queue's own Remove (D-93), now one method,
+    `ClinicVisit::removeFromQueue()`, used by the Remove button (own queue
+    only) and by the job (either queue). The visit goes with its vitals,
+    screening answers and, if interviewed, its assessment row; each delete
+    re-reads the visit under a row lock, so a physician who saves first wins.
+  * **Afterwards:** the appointment reads **Unattended**, and the same run of
+    `healthpass:second-chances` books the student's 2nd chance with the
+    batch's other missed students (`SecondChanceScheduler::removeStaleQueueVisits()`
+    runs before `missedAppointments()`). A leftover on a 2nd-chance day ends
+    Unattended — no 3rd chance.
+  * **Window:** the same 24-hour catch-up window as the 2nd chance; older
+    stale visits are never removed automatically (the clinic can still
+    Remove them by hand).
+  * **Log:** one `Log::info` per run that removes something — count, visit ids
+    and HP- references, no student names.
+  * Tests: 10 cases in `tests/Feature/SecondChance/QueueCutoffRemovalTest.php`
+    — a captured visit removed with its vitals and screening, reading
+    Unattended and booked with the batch's absent student (emails queued); an
+    interviewed visit removed with its assessment row; encoded and resting
+    visits kept; no appointment → kept; 19:55 → kept; a cutoff 30 h ago →
+    kept; a 2nd-chance-day leftover removed with no 3rd chance; a visit
+    encoded after it was read is skipped; the batch moving from Still in
+    progress to In progress to Done / Incomplete; the log line. The old
+    "captured is not rescheduled" test in `SecondChanceSchedulerTest` is
+    replaced by these; `QueueRemoveTest` is unchanged and green.
 * **Previous / Next carry a dot when another page has unseen updates**
   (D-131, FR-UI-05 and FR-UI-06 amended; PRD revision 2.15, 2026-10-10).
   Asked for by the Clinic Director. No schema change, no new package, no new

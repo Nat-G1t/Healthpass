@@ -21,7 +21,8 @@ use Tests\TestCase;
  * D-110 / BR-27 — the healthpass:second-chances job.
  *
  * At the 8 PM cutoff of a clinic day, the students of each batch who missed it
- * (no visit, or sent to rest and never back) are booked TOGETHER on the
+ * (no visit, or sent to rest and never back — or, since D-132, still waiting
+ * in a clinic queue; QueueCutoffRemovalTest) are booked TOGETHER on the
  * nearest day from tomorrow that fits all of them, at its earliest free hours,
  * on the same batch — once. Each is emailed after the booking commits.
  */
@@ -104,21 +105,6 @@ class SecondChanceSchedulerTest extends TestCase
 
         $this->assertNotNull($this->secondChanceOf($original));
         $this->assertSame('rescheduled', $this->rosterAppointment($batch, $original->student_id)->clearanceProgress());
-    }
-
-    public function test_a_captured_visit_the_clinic_has_not_encoded_is_not_rescheduled(): void
-    {
-        $batch = $this->makeBatch();
-        $original = $this->addStudent($batch);
-        $this->visit($original, 'captured');
-
-        $this->atCutoffOf(self::CLINIC_DAY);
-        $this->runJob();
-
-        // The clinic's delay, not the student's: still "At the clinic".
-        $this->assertNull($this->secondChanceOf($original));
-        $this->assertSame('in_clinic', $this->rosterAppointment($batch, $original->student_id)->clearanceProgress());
-        Queue::assertNothingPushed();
     }
 
     public function test_an_encoded_student_is_not_rescheduled(): void
