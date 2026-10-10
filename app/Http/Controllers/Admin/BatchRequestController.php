@@ -78,17 +78,19 @@ class BatchRequestController extends Controller
 
         // FR-UI-06: ten per page. `id` breaks ties between batches submitted
         // in the same second, so no row can land on two pages or on none.
-        $batchRequests = $college->batchRequests()
+        $requestsQuery = $college->batchRequests()->getQuery()
             ->with('reviewer:id,name')
             // D-129: a batch the Clinic Director cancelled gets the reason popup.
             ->with('canceller:id,name,role')
             ->withCount(['batchRequestStudents' => fn ($query) => $query->notWithdrawn()])
             ->latest()
-            ->orderByDesc('id')
+            ->orderByDesc('id');
+
+        $batchRequests = $requestsQuery->clone()
             ->paginate(config('healthpass.ui.rows_per_page'))
             ->withQueryString();
 
-        $approvedBatches = $college->batchRequests()
+        $approvedQuery = $college->batchRequests()->getQuery()
             ->where('status', 'approved')
             ->when($search !== '', fn ($query) => $query->where('reference_no', 'like', '%'.$search.'%'))
             // Only what each row's Status reads — the student names and the
@@ -98,7 +100,9 @@ class BatchRequestController extends Controller
             // whole page, not one query per row.
             ->withExists(['releaseRequests as has_approved_release' => fn ($query) => $query->where('status', 'approved')])
             ->orderByDesc('scheduled_date')
-            ->orderByDesc('id')
+            ->orderByDesc('id');
+
+        $approvedBatches = $approvedQuery->clone()
             // FR-UI-06: ten per page. Its own page name, because the requests
             // list below pages on this same URL — paging one card must not
             // move the other.
@@ -119,8 +123,15 @@ class BatchRequestController extends Controller
         $dots = BatchNotifications::dots($request->user(), $approvedBatches->getCollection())
             + BatchNotifications::dots($request->user(), $batchRequests->getCollection()->whereIn('status', ['rejected', 'cancelled']));
 
+        // D-131: each card's Previous / Next dot — a row with a dot on an
+        // earlier / later page, under the card's search. The requests card
+        // dots the same rows as above: rejected and cancelled only.
+        $resultsPagerDots = BatchNotifications::pagerDots($request->user(), $approvedQuery, $approvedBatches);
+        $requestsPagerDots = BatchNotifications::pagerDots($request->user(), $requestsQuery, $batchRequests, ['rejected', 'cancelled']);
+
         return view('admin.batches.index', compact(
             'college', 'batchRequests', 'approvedBatches', 'hasApprovedBatches', 'search', 'dots',
+            'resultsPagerDots', 'requestsPagerDots',
         ));
     }
 

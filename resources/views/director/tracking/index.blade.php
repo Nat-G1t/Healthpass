@@ -127,7 +127,7 @@
             @endforeach
         </x-hp.table>
 
-        <x-hp.pager :paginator="$approvedBatches" />
+        <x-hp.pager :paginator="$approvedBatches" :previous-dot="$resultsPagerDots['previous']" :next-dot="$resultsPagerDots['next']" />
     @endif
 </x-hp.card>
 
@@ -199,7 +199,7 @@
             @endforeach
         </x-hp.table>
 
-        <x-hp.pager :paginator="$closedBatches" />
+        <x-hp.pager :paginator="$closedBatches" :previous-dot="$rejectedPagerDots['previous']" :next-dot="$rejectedPagerDots['next']" />
     @endif
 </x-hp.card>
 

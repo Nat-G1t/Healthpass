@@ -95,14 +95,16 @@ class BatchController extends Controller
         $today = today()->toDateString();
         $filters = BatchCardFilters::fromRequest($request, 'past');
 
-        $completedBatches = $this->approvedBatches($filters)
+        $completedQuery = $this->approvedBatches($filters)
             ->where(fn (Builder $query) => $query
                 ->whereNull('scheduled_date')
                 ->orWhereDate('scheduled_date', '<', $today))
             ->whereDoesntHave('appointments', $this->hasClinicDayFrom($today))
             ->with('approvedReleaseRequest')
             ->orderByDesc('scheduled_date')
-            ->orderByDesc('id')
+            ->orderByDesc('id');
+
+        $completedBatches = $completedQuery->clone()
             ->paginate(config('healthpass.ui.rows_per_page'), pageName: $filters->pageName())
             ->withQueryString();
 
@@ -111,6 +113,8 @@ class BatchController extends Controller
             'completedFilters' => $filters,
             'colleges' => College::orderBy('code')->get(['id', 'code']),
             'dots' => BatchNotifications::dots($request->user(), $completedBatches->getCollection()),
+            // D-131: Previous / Next carry a dot when another page holds one.
+            'pagerDots' => BatchNotifications::pagerDots($request->user(), $completedQuery, $completedBatches),
         ]);
     }
 

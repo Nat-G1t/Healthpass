@@ -1,4 +1,4 @@
-@props(['paginator'])
+@props(['paginator', 'previousDot' => false, 'nextDot' => false])
 
 {{--
     The house pager (FR-UI-06): "Showing X–Y of N" on the left, Previous /
@@ -11,7 +11,16 @@
     a dead <a>. The controller calls withQueryString() on the paginator, so its
     URLs carry the page's active filters. Renders nothing when everything fits
     on one page, so callers stay one line.
+
+    D-131: on a table with notification dots, `previous-dot` / `next-dot` put
+    the rows' orange dot on the button's top-right corner — an earlier / later
+    page holds a row with news (App\Support\BatchNotifications::pagerDots()
+    decides). Both are off by default, and a disabled button never shows one.
 --}}
+@php
+    $dot = 'pointer-events-none absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-hp-orange ring-2 ring-hp-peach';
+@endphp
+
 @if ($paginator->hasPages())
     <div class="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-hp-slate/10 pt-4">
         <p class="text-xs text-hp-slate/50">
@@ -23,7 +32,12 @@
                 <span class="rounded-lg border border-hp-slate/15 px-3 py-1.5 text-xs font-medium text-hp-slate/30">Previous</span>
             @else
                 <a href="{{ $paginator->previousPageUrl() }}"
-                   class="rounded-lg border border-hp-slate/25 px-3 py-1.5 text-xs font-medium text-hp-slate hover:bg-hp-slate/8">Previous</a>
+                   @class(['rounded-lg border border-hp-slate/25 px-3 py-1.5 text-xs font-medium text-hp-slate hover:bg-hp-slate/8', 'relative' => $previousDot])>
+                    Previous
+                    @if ($previousDot)
+                        <span class="{{ $dot }}" data-pager-dot="previous" aria-hidden="true"></span><span class="sr-only"> — has updates</span>
+                    @endif
+                </a>
             @endif
 
             <span class="px-1 text-xs text-hp-slate/50">
@@ -32,7 +46,12 @@
 
             @if ($paginator->hasMorePages())
                 <a href="{{ $paginator->nextPageUrl() }}"
-                   class="rounded-lg border border-hp-slate/25 px-3 py-1.5 text-xs font-medium text-hp-slate hover:bg-hp-slate/8">Next</a>
+                   @class(['rounded-lg border border-hp-slate/25 px-3 py-1.5 text-xs font-medium text-hp-slate hover:bg-hp-slate/8', 'relative' => $nextDot])>
+                    Next
+                    @if ($nextDot)
+                        <span class="{{ $dot }}" data-pager-dot="next" aria-hidden="true"></span><span class="sr-only"> — has updates</span>
+                    @endif
+                </a>
             @else
                 <span class="rounded-lg border border-hp-slate/15 px-3 py-1.5 text-xs font-medium text-hp-slate/30">Next</span>
             @endif

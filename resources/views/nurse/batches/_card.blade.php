@@ -18,6 +18,9 @@
                   page's back link returns here ('completed')
       $dots     — optional (D-125): batch id => bool, this user's row dots
                   (App\Support\BatchNotifications). Left out, no dots.
+      $pagerDots — optional (D-131): ['previous' => bool, 'next' => bool],
+                  the pager's dots (BatchNotifications::pagerDots()). Left
+                  out, none.
       $printTags — optional (D-125): show "Print Requested" / "Printed" under
                   the Batch ID. The batches must have `approvedReleaseRequest`
                   loaded.
@@ -34,6 +37,7 @@
     $headers = ['Batch ID', 'College', 'Form Type', 'Purpose', 'Date scheduled', 'Status', ''];
     $from ??= null;
     $dots ??= null;
+    $pagerDots ??= ['previous' => false, 'next' => false];
     $printTags ??= false;
 
     // The Director's and the College Admin's View link, so the pages match.
@@ -117,6 +121,6 @@
             @endforeach
         </x-hp.table>
 
-        <x-hp.pager :paginator="$batches" />
+        <x-hp.pager :paginator="$batches" :previous-dot="$pagerDots['previous']" :next-dot="$pagerDots['next']" />
     @endif
 </x-hp.card>

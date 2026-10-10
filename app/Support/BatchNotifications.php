@@ -10,6 +10,7 @@ use App\Models\BatchSeen;
 use App\Models\DocumentReleaseRequest;
 use App\Models\User;
 use Closure;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -112,6 +113,89 @@ final class BatchNotifications
         };
     }
 
+    /**
+     * D-131 — does Previous / Next of a card's pager carry a dot? Previous
+     * when a row on ANY earlier page has one, Next when a row on any later
+     * page does.
+     *
+     * $card is the card's whole list under its current filters, in its own
+     * order: its query (read here as ids only — one query), or, when the card
+     * was filtered in PHP (the Director's status filter, D-130), the batches
+     * themselves. The rows on $page are skipped — their own dots show.
+     * $statuses limits which batches can carry a dot on this card, as the
+     * controller limits its row dots (the College Admin's Batch requests card
+     * dots only rejected and cancelled rows); empty means any.
+     *
+     * Queries: one for the ids, then dotIds()'s (none when nothing is off the
+     * page).
+     *
+     * @param  Builder<BatchRequest>|Collection<int, BatchRequest>  $card
+     * @param  list<string>  $statuses
+     * @return array{previous: bool, next: bool}
+     */
+    public static function pagerDots(User $user, Builder|Collection $card, LengthAwarePaginator $page, array $statuses = []): array
+    {
+        $ids = $card instanceof Builder
+            ? $card->clone()->select($card->qualifyColumn('id'))->pluck('id')
+            : $card->pluck('id');
+
+        $start = ($page->currentPage() - 1) * $page->perPage();
+        $before = $ids->slice(0, $start);
+        $after = $ids->slice($start + $page->perPage());
+        $dotted = self::dotIds($user, $before->merge($after)->all(), $statuses);
+
+        return [
+            'previous' => $before->intersect($dotted)->isNotEmpty(),
+            'next' => $after->intersect($dotted)->isNotEmpty(),
+        ];
+    }
+
+    /**
+     * D-131 — which of $ids carry a dot, from the ids alone: dots() with the
+     * loading done here, and an approved batch's status worked out only where
+     * the badge would work it out (approvedDotIds()). The same rules, so a
+     * pager dot cannot disagree with the rows it points at.
+     *
+     * Queries: the batches (with their last clinic day), their cancellers,
+     * the seen rows, the release times — and, only if some approved batch's
+     * status is still unsure, one batch query plus statusRelations()' four.
+     *
+     * @param  list<int>  $ids
+     * @param  list<string>  $statuses  only these statuses can carry a dot; empty means any
+     * @return list<int>
+     */
+    private static function dotIds(User $user, array $ids, array $statuses = []): array
+    {
+        if ($ids === []) {
+            return [];
+        }
+
+        $batches = self::withDotColumns(BatchRequest::query()->whereIn('id', $ids))
+            ->when($statuses !== [], fn (Builder $query) => $query->whereIn('status', $statuses))
+            ->with('canceller:id,role')
+            ->get();
+
+        if ($batches->isEmpty()) {
+            return [];
+        }
+
+        $batchIds = $batches->pluck('id')->all();
+        $seen = self::seenRows($user, $batchIds);
+        $release = self::releaseTimes($batchIds);
+
+        // The clinic's dot never reads the status, so only the College Admin's
+        // and the Director's approved batches take the status path.
+        [$approved, $others] = $batches->partition(
+            fn (BatchRequest $batch): bool => $batch->status === 'approved' && ! $user->isClinicStaff(),
+        );
+
+        $dotted = $others->filter(fn (BatchRequest $batch): bool => self::hasDot(
+            $user, $batch, $seen->get($batch->id), $release->get($batch->id), fn (): string => $batch->resultsStatus(),
+        ))->pluck('id')->all();
+
+        return [...$dotted, ...self::approvedDotIds($user, $approved, $seen, $release)];
+    }
+
     // ── Per role ─────────────────────────────────────────────────────────────
 
     private static function collegeAdminCount(User $user): int
@@ -211,9 +295,24 @@ final class BatchNotifications
             && ($seen === null || $approvedAt->gt($seen->seen_at));
     }
 
+    /** How many of $approved's batches carry a dot — approvedDotIds() over the whole query. */
+    private static function approvedDotCount(User $user, Builder $approved): int
+    {
+        $batches = self::withDotColumns($approved)->get();
+
+        if ($batches->isEmpty()) {
+            return 0;
+        }
+
+        $ids = $batches->pluck('id')->all();
+
+        return count(self::approvedDotIds($user, $batches, self::seenRows($user, $ids), self::releaseTimes($ids)));
+    }
+
     /**
-     * How many of $approved's batches carry a dot, working resultsStatus() out
-     * only where the answer is not already known:
+     * Which of the approved $batches carry a dot (loaded through
+     * withDotColumns()), working resultsStatus() out only where the answer
+     * is not already known:
      *
      *   - release news → a dot
      *   - never opened, first hour already started → a dot (it can no longer
@@ -221,22 +320,15 @@ final class BatchNotifications
      *   - opened while Completed, or while Finished incomplete / No one
      *     attended AFTER its last clinic day ended → no dot (settled)
      *   - anything else → load its students and compare
+     *
+     * @param  Collection<int, BatchRequest>  $batches
+     * @param  Collection<int, BatchSeen>  $seen  keyed by batch id
+     * @param  Collection<int, array{requested: ?Carbon, decided: ?Carbon, copies_approved: ?Carbon}>  $release  keyed by batch id
+     * @return list<int>
      */
-    private static function approvedDotCount(User $user, Builder $approved): int
+    private static function approvedDotIds(User $user, Collection $batches, Collection $seen, Collection $release): array
     {
-        $batches = $approved
-            ->select(['id', 'status', 'scheduled_date', 'scheduled_time', 'reviewed_at'])
-            ->withMax(['appointments as last_clinic_date' => fn ($query) => $query->where('status', '!=', 'cancelled')], 'scheduled_date')
-            ->get();
-
-        if ($batches->isEmpty()) {
-            return 0;
-        }
-
-        $ids = $batches->pluck('id')->all();
-        $seen = self::seenRows($user, $ids);
-        $release = self::releaseTimes($ids);
-        $count = 0;
+        $dotted = [];
         $unsure = [];
 
         foreach ($batches as $batch) {
@@ -244,25 +336,39 @@ final class BatchNotifications
             $firstHour = $batch->firstHourStart();
 
             if (self::hasReleaseNews($user, $batch, $row, $release->get($batch->id))) {
-                $count++;
+                $dotted[] = $batch->id;
             } elseif ($row === null && $firstHour !== null && now()->gte($firstHour)) {
-                $count++;
+                $dotted[] = $batch->id;
             } elseif ($row === null || ! self::isSettled($row, $batch->last_clinic_date)) {
                 $unsure[] = $batch->id;
             }
         }
 
-        if ($unsure !== []) {
-            $count += BatchRequest::query()
-                ->whereIn('id', $unsure)
-                ->with(BatchResults::statusRelations())
-                ->get()
-                ->filter(fn (BatchRequest $batch): bool => $batch->resultsStatus()
-                    !== ($seen->get($batch->id)->seen_status ?? self::APPROVED_STATUS))
-                ->count();
+        if ($unsure === []) {
+            return $dotted;
         }
 
-        return $count;
+        $moved = BatchRequest::query()
+            ->whereIn('id', $unsure)
+            ->with(BatchResults::statusRelations())
+            ->get()
+            ->filter(fn (BatchRequest $batch): bool => $batch->resultsStatus()
+                !== ($seen->get($batch->id)->seen_status ?? self::APPROVED_STATUS))
+            ->pluck('id')
+            ->all();
+
+        return [...$dotted, ...$moved];
+    }
+
+    /**
+     * The columns the dot rules read, plus each batch's last clinic day (a
+     * 2nd chance, D-110, can move it past scheduled_date) for isSettled().
+     */
+    private static function withDotColumns(Builder $query): Builder
+    {
+        return $query
+            ->select(['id', 'status', 'scheduled_date', 'scheduled_time', 'reviewed_at', 'cancelled_by'])
+            ->withMax(['appointments as last_clinic_date' => fn ($query) => $query->where('status', '!=', 'cancelled')], 'scheduled_date');
     }
 
     /** Was $row taken at a status the batch can no longer leave? */

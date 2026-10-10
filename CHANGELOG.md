@@ -1159,6 +1159,36 @@
 
 ### Changed
 
+* **Previous / Next carry a dot when another page has unseen updates**
+  (D-131, FR-UI-05 and FR-UI-06 amended; PRD revision 2.15, 2026-10-10).
+  Asked for by the Clinic Director. No schema change, no new package, no new
+  route.
+  * **Where:** every table with row dots — the College Admin's Batch requests
+    and Batch Results cards, the Director's Batch Results and Rejected and
+    Cancelled cards, and the clinic's Completed batches card. Previous gets
+    the dot when a row on any earlier page has one, Next when a row on any
+    later page does, under the card's current filters and order.
+  * **Look:** the rows' orange dot at the button's top-right corner, with the
+    visually hidden text " — has updates". A disabled Previous / Next never
+    shows one. `<x-hp.pager>` gained `previous-dot` / `next-dot`, both off by
+    default, so every other pager is unchanged.
+  * **Rules:** `BatchNotifications::pagerDots()` reads the card's full id list
+    (ids only) and checks the ids off the page through a new id-based
+    `dotIds()` — the same `hasDot()` rules as the rows, with approved batches
+    going through the badge's shortcut path, now `approvedDotIds()` (shared
+    with `count()`). The Batch requests card only considers rejected and
+    cancelled batches, like its row dots.
+  * **Cost:** 4 queries per card typically (ids, batches, seen rows, release
+    times), at most 10 when an approved batch's status must be worked out
+    from its roster — never one per batch.
+  * Tests: 14 cases in `tests/Feature/PagerDotsTest.php` — the component
+    (both dots + hidden text, none by default, none on a disabled button);
+    Director Batch Results with 25 batches (page 1 / 2 / 3), a dot on page 1
+    seen from page 2, a filter hiding the dot, the status-filtered list, View
+    clearing it; one Next case each for Rejected and Cancelled, both admin
+    cards (and the requests card ignoring an approved batch's news) and the
+    clinic's Completed batches; and the fixed query count.
+
 * **The Director's Batch Tracking filters by month on both cards, and by form
   type, status and release request on Batch Results** (D-130, FR-DIRA-09
   amended; PRD revision 2.14, 2026-10-10). Asked for by the Clinic Director.

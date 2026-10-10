@@ -15,7 +15,7 @@ use App\Support\BatchCardFilters;
 use App\Support\BatchNotifications;
 use App\Support\BatchResults;
 use App\Support\SignedMemo;
-use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
@@ -81,9 +81,18 @@ class BatchTrackingController extends Controller
             ->orderByDesc('scheduled_date')
             ->orderByDesc('id');
 
-        $approvedBatches = $resultsFilters->status === ''
-            ? $approvedQuery->paginate($perPage, pageName: $resultsFilters->pageName())->withQueryString()
-            : $this->pageByStatus($request, $approvedQuery, $resultsFilters, $perPage);
+        // D-130: the status is computed, so a status-filtered card is the
+        // matching batches themselves, paged by hand — and it is also the
+        // list D-131's pager dots read.
+        $statusMatches = $resultsFilters->status === ''
+            ? null
+            : $approvedQuery->get()
+                ->filter(fn (BatchRequest $batch) => $batch->resultsStatus() === $resultsFilters->status)
+                ->values();
+
+        $approvedBatches = $statusMatches === null
+            ? $approvedQuery->clone()->paginate($perPage, pageName: $resultsFilters->pageName())->withQueryString()
+            : $this->pageByHand($request, $statusMatches, $resultsFilters, $perPage);
 
         // Card 2: rejected or cancelled, newest DECISION first — the
         // cancellation for a cancelled batch (even one approved before it was
@@ -91,7 +100,7 @@ class BatchTrackingController extends Controller
         // and SQLite, and the SQL is a fixed string with no input in it.
         // D-130: the month filter reads that same decision date, written as
         // plain comparisons so no date function is needed.
-        $closedBatches = $rejectedFilters->apply(BatchRequest::whereIn('status', ['rejected', 'cancelled']))
+        $closedQuery = $rejectedFilters->apply(BatchRequest::whereIn('status', ['rejected', 'cancelled']))
             ->when($rejectedFilters->monthBounds(), fn ($query, array $month) => $query->where(fn ($decided) => $decided
                 ->where(fn ($cancelled) => $cancelled
                     ->where('cancelled_at', '>=', $month[0])
@@ -105,7 +114,9 @@ class BatchTrackingController extends Controller
             // "Cancelled by Director".
             ->with('canceller:id,role')
             ->orderByRaw('COALESCE(cancelled_at, reviewed_at) DESC')
-            ->orderByDesc('id')
+            ->orderByDesc('id');
+
+        $closedBatches = $closedQuery->clone()
             ->paginate($perPage, pageName: $rejectedFilters->pageName())
             ->withQueryString();
 
@@ -115,6 +126,9 @@ class BatchTrackingController extends Controller
             // D-120: which rows of both cards carry a notification dot.
             'dots' => BatchNotifications::dots($request->user(), $approvedBatches->getCollection())
                 + BatchNotifications::dots($request->user(), $closedBatches->getCollection()),
+            // D-131: each card's Previous / Next dot, under the card's filters.
+            'resultsPagerDots' => BatchNotifications::pagerDots($request->user(), $statusMatches ?? $approvedQuery, $approvedBatches),
+            'rejectedPagerDots' => BatchNotifications::pagerDots($request->user(), $closedQuery, $closedBatches),
             'resultsFilters' => $resultsFilters,
             'rejectedFilters' => $rejectedFilters,
             'colleges' => College::orderBy('code')->get(['id', 'code']),
@@ -132,15 +146,14 @@ class BatchTrackingController extends Controller
     /**
      * D-130: the Batch Results card filtered by status. resultsStatus() is
      * worked out from every student's appointment, not stored in a column, so
-     * SQL cannot filter on it: load the card's batches (already narrowed by
-     * the SQL filters), keep the picked status in PHP, and page that list
-     * ourselves. Fine at a clinic's batch counts.
+     * SQL cannot filter on it: index() loads the card's batches (already
+     * narrowed by the SQL filters) and keeps the picked status in PHP, and
+     * this pages that list ourselves. Fine at a clinic's batch counts.
+     *
+     * @param  Collection<int, BatchRequest>  $matching
      */
-    private function pageByStatus(Request $request, Builder $query, BatchCardFilters $filters, int $perPage): LengthAwarePaginator
+    private function pageByHand(Request $request, Collection $matching, BatchCardFilters $filters, int $perPage): LengthAwarePaginator
     {
-        $matching = $query->get()
-            ->filter(fn (BatchRequest $batch) => $batch->resultsStatus() === $filters->status)
-            ->values();
         $page = LengthAwarePaginator::resolveCurrentPage($filters->pageName());
 
         return (new LengthAwarePaginator(

@@ -314,6 +314,8 @@ Home, Calendar, FileText, QrCode, Plus, List, Activity, Edit, BarChart, Alert, C
 
 "Last seen" = when the user last opened that page: stamped in `users.nav_seen_at` before the page renders (so the page you're on shows no badge); a page never opened counts from the account's `created_at`. Every other item has no badge. Counts come from `App\Support\NavBadges`, handed to the sidebar by a view composer.
 
+**Pager dots (D-131):** on every table with notification dots — the College Admin's Batch requests and Batch Results cards, the Director's Batch Tracking Batch Results and Rejected and Cancelled cards, the clinic's Completed batches card (D-125) — the pager's **Previous** carries the same orange dot when a row on any earlier page has one, and **Next** when a row on any later page does, under the card's current filters and order. A disabled button never shows one; screen readers hear " — has updates". The server decides it per card (`BatchNotifications::pagerDots()`, the same rules as the rows, a fixed handful of queries); `<x-hp.pager>`'s `previous-dot` / `next-dot` props are off everywhere else.
+
 ---
 
 ## 7. Page-by-page build specification

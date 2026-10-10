@@ -38,6 +38,7 @@
     'empty' => 'No completed batches yet.',
     'from' => 'completed',
     'dots' => $dots,
+    'pagerDots' => $pagerDots,
     'printTags' => true,
 ])
 
