@@ -146,6 +146,35 @@ class Appointment extends Model
     }
 
     /**
+     * D-133 — the appointments the nurse may screen by hand on Manual
+     * Screening (the kiosk is down): THE one definition the search, the form
+     * page and the save (re-checked under the row lock) all use.
+     *
+     *  - today's date on the server, still `scheduled` — the same "open
+     *    appointment" todayFor() means, so a 2nd-chance day counts (D-110)
+     *    and a cancelled or completed one does not;
+     *  - and the student has NO clinic visit today in any status (Q12: only
+     *    students who haven't used the kiosk yet). Unlike todayFor(), that
+     *    excludes a `resting` student too — they are mid re-check at the
+     *    kiosk (D-72), and a second, manual visit would split their answers.
+     *
+     * whereDoesntHave() is a NOT EXISTS subquery on the student's visits.
+     */
+    public function scopeManuallyScreenable(Builder $query): Builder
+    {
+        return $query
+            ->whereDate('scheduled_date', Carbon::today())
+            ->where('status', 'scheduled')
+            ->whereDoesntHave('student.clinicVisits', fn (Builder $visit) => $visit->whereDate('checked_in_at', Carbon::today()));
+    }
+
+    /** D-133 — may the nurse screen this appointment by hand right now? */
+    public function isManuallyScreenable(): bool
+    {
+        return self::query()->manuallyScreenable()->whereKey($this->id)->exists();
+    }
+
+    /**
      * Which official form this appointment's batch named — 'clearance' or
      * 'assessment' (D-62). A legacy appointment with no batch behind it used
      * the Medical Clearance.

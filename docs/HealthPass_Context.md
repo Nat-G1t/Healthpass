@@ -154,6 +154,15 @@ Student arrives at clinic (scheduled by their college)
                                        recomputed, status: resting → captured,
                                        checked_in_at = now() (back of the queue)
 
+Kiosk down? → the NURSE's Manual Screening (D-133)
+         │  Live Queue → Manual Screening → search today's scheduled
+         │  students with NO visit today (name or student ID)
+         │
+         └── Types what the kiosk collects (+ the interview on a
+             Medical Assessment) → login_method = manual, no rest &
+             re-check → Clearance: captured / Assessment: interviewed
+             → straight into the PHYSICIAN's queue
+
 The visit's FORM picks its queue (D-126 — two Live Queues, one per role)
          │
          ├── Medical Assessment → NURSE's queue
@@ -307,7 +316,7 @@ Home, Calendar, FileText, QrCode, Plus, List, Activity, Edit, BarChart, Alert, C
 |---|---|
 | Student | Dashboard · My Records (+ the D-73 Clinic Record page) · My ID (D-61 removed Book Appointment and My Appointments) |
 | College Admin | Dashboard · New Batch Request · Batch Tracking · Data Summary (FR-ADM-08; "Analytics" before D-103) |
-| Nurse | Live Queue · Upcoming Batches (D-114) · Batch Results (D-125) · Encode Result · Enable Kiosk Mode (Kiosk Devices: enroll/revoke trusted terminals, D-27) |
+| Nurse | Live Queue (with the **Manual Screening** button, D-133) · Upcoming Batches (D-114) · Batch Results (D-125) · Encode Result · Enable Kiosk Mode (Kiosk Devices: enroll/revoke trusted terminals, D-27) |
 | Clinic Director | Dashboard · Batch Approvals · Batch Tracking (D-112) · Data Summary (D-103; was "Analytics") · Flagged Anomalies |
 
 **Unread badges (D-57, FR-UI-05):** a solid orange badge on a menu item — a dot for 1, the number for 2–9, "9+" from 10, nothing at 0 — at the top-right of the item's label (expanded sidebar, phone drawer) or of its icon (collapsed rail). Orange even on the active item. Refreshed on page load only; no polling.
@@ -453,8 +462,14 @@ Students are scheduled only through their college (a batch request the Clinic Di
 
 Every page in this section is shared by the nurse and the University Physician — **except that each has its own Live Queue (D-126)**: the nurse interviews Medical Assessment students and submits them to the physician; only the physician encodes Fit / Unfit. The sidebar's first item is **Clinic Dashboard** (the stat tiles + the clinic-wide encode history, D-44), and the sidebar role label reads "Nurse" or "Physician". ~~The history's **Encoded by** column shows the encoder's name plus a **Nurse / Physician** badge;~~ Both roles see the same rows. **(D-128)** The history's columns are **Reference No · Student · Student ID · College · Program · Result · Encoded at · Release status** · (View / Reprint) — Encoded by and Printed are gone. **Release status** is **Yes** when the visit's batch has an approved release request (any one), **No** when it has a batch but none approved, **—** when it has no batch (legacy); the history query learns it through subqueries, never one query per row. **Reprint** works only on a Yes — otherwise it is a disabled button titled "Available once the Director releases this batch's documents." (stricter than the server's print rule, which also lets the encoding physician print on the day — D-127). On a phone the stacked cards show the same fields. (A separate clinic logs page was considered and dropped — this history is the log.) Opening a record with View shows '← Back to Clinic Dashboard', returning to the dashboard with the same year / month / result / search filters and page; opened from the Live Queue, the page links back to the Live Queue (2026-09-23). **(D-100)** The history filters by **Year** (All years, 2021 → now) then **Month** (All months, January–December — usable once a year is picked, months with no encoded results greyed out) and Result, applied with Apply; the search box matches the **reference number or student ID** (not the name), and a **Student ID** column sits beside the student's name.
 
+#### Manual Screening (D-133, FR-NRS-14 — nurse only)
+- For when the kiosk is down. Reached from the Live Queue's **Manual Screening** button; routes under `role:nurse` (a physician is sent to their dashboard).
+- **Search** (`/nurse/manual-screening`): one box, "Name or student ID", at least 2 characters, at most 20 rows — name, student ID, college, Batch ID, form badge, hour + arrival time, **Screen**. Only today's `scheduled` appointments (a 2nd-chance day included) whose student has **no clinic visit today in any status** (`Appointment::scopeManuallyScreenable()`).
+- **Form** (`/nurse/manual-screening/{appointment}`): the student header, then by form type — consent, the six vitals (live BMI, recomputed on the server), the twelve Physical Signs rows (Clearance Yes → details ≥ 3 chars), pregnancy / LMP for female students; on a Medical Assessment also the Personal / Social History and the interview (the encode page's partials + respiratory rate). Never Fit / Unfit.
+- **Send / Submit to physician**: Clearance → `captured`, Assessment → `interviewed` + `medical_assessments` row; `login_method = manual`, `entry_method = manual`; no rest & re-check. The save locks the appointment and re-checks; a kiosk visit that got there first wins ("{name} has just been screened at the kiosk.").
+
 #### Live Queue (`nurse-dashboard`)
-- **Header**: blinking LIVE dot + "LIVE QUEUE" pill (peach bg, orange text) + "{n} students waiting · updated just now".
+- **Header**: blinking LIVE dot + "LIVE QUEUE" pill (peach bg, orange text) + "{n} students waiting · updated just now". **(D-133)** On the **nurse's** queue only, a large primary **Manual Screening** button at the top right.
 - **Queue table** (full-width card, no outer padding): Student (avatar initials + name; first row tagged "NEXT" badge + highlighted peach-35 row — the longest-waiting student), College, **Vitals Summary** (all values inline, flagged values bold orange), **Flags** (flagged-variant badges for temp/bp/bmi **and HR since D-66**, or "—" — there is no RR badge here: that vital is only measured at encode), Time (waiting since), Action ("Encode Result" button — primary for row 1, ghost for others).
 - Queue = clinic visits with status `captured`, ordered by `checked_in_at` asc (oldest first = top row — **first come, first served**). The top row is the next student to serve; new kiosk submissions append at the bottom.
 - **Two queues, one page (D-126).** Same URL, route and 4 s feed; the contents depend on who is logged in (`ClinicVisit::scopeLiveQueue($viewer)`): the **nurse** sees `captured` Medical Assessment visits; the **physician** sees `captured` Medical Clearance visits plus every `interviewed` visit, ordered by `COALESCE(interviewed_at, checked_in_at)`, then `id` (when the visit entered that queue). Each role sees only its own. The row action reads **Interview** (nurse) or **Encode Result** (physician); Remove works only on the remover's own queue.
@@ -904,7 +919,7 @@ student_id            bigint FK → users.id
 college_id            bigint FK → colleges.id   -- SCHEMA ADD: snapshot of the student's college at capture time, so analytics stay transfer-proof (FR-STU-09)
 course                varchar(120) NULL     -- SCHEMA ADD (D-43): snapshot of the student's PROGRAM at capture time, frozen beside college_id above. student_profiles.course stays live, so without this a program shift would restate every past per-program report. NULLABLE and NEVER BACKFILLED — a pre-D-43 visit has no honest answer and renders "—" (the pattern appointments.scheduled_time uses for pre-D-37 rows); a profile with no program also stores NULL rather than blocking the kiosk.
 appointment_id        bigint NULL FK → appointments.id   -- always set since D-61 (no walk-ins); NULL only on legacy walk-in rows
-login_method          enum('qr','email')
+login_method          enum('qr','email','manual')  -- SCHEMA ADD (D-133): 'manual' = typed in by the nurse on Manual Screening because the kiosk was down
 status                enum('resting','captured','interviewed','encoded') DEFAULT 'captured'  -- SCHEMA ADD (D-126): 'interviewed' = a Medical Assessment visit the nurse submitted, waiting in the PHYSICIAN's queue; a submitted visit. SCHEMA ADD (D-72): 'resting' = a first pass whose temp/BP/HR was flagged, parked while the student rests. Not a submitted visit — ClinicVisit::scopeSubmitted() (captured|encoded) is the one definition every count uses. resting → captured → encoded, at most once, never in reverse.
 privacy_consent_at    timestamp NULL
 checked_in_at         timestamp NULL        -- re-stamped by the D-72 re-check, so a returning student joins the BACK of the FCFS queue

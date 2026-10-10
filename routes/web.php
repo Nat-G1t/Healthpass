@@ -27,6 +27,7 @@ use App\Http\Controllers\Nurse\DashboardController as NurseDashboardController;
 use App\Http\Controllers\Nurse\EncodeController as NurseEncodeController;
 use App\Http\Controllers\Nurse\InterviewController as NurseInterviewController;
 use App\Http\Controllers\Nurse\KioskDeviceController as NurseKioskDeviceController;
+use App\Http\Controllers\Nurse\ManualScreeningController as NurseManualScreeningController;
 use App\Http\Controllers\Nurse\PrintClearanceController as NursePrintClearanceController;
 use App\Http\Controllers\Nurse\QueueController as NurseQueueController;
 use App\Http\Controllers\ProfileController;
@@ -314,6 +315,29 @@ Route::middleware(['auth', 'role:nurse,physician'])
             ->middleware('throttle:15,1,kioskdev-store')->name('kiosk-devices.store');
         Route::delete('/kiosk-devices/{device}', [NurseKioskDeviceController::class, 'destroy'])
             ->middleware('throttle:15,1,kioskdev-destroy')->name('kiosk-devices.destroy');
+    });
+
+// ── Manual Screening (D-133): the NURSE's only ──────────────────────────────
+// When the kiosk is down, the nurse finds one of today's scheduled students
+// who hasn't used the kiosk, types in what the kiosk would collect, and sends
+// them to the physician's queue. `role:nurse` — a physician (or anyone else)
+// is redirected to their own dashboard. {appointment} is route-model-bound;
+// `missing()` lands an unknown id back on the search with a sentence. The
+// search and the save have their own throttle buckets (3rd arg).
+Route::middleware(['auth', 'role:nurse'])
+    ->prefix('nurse/manual-screening')
+    ->name('nurse.manual.')
+    ->group(function () {
+        $notFound = fn () => redirect()->route('nurse.manual.index')
+            ->with('error', 'That appointment could not be found.');
+
+        Route::get('/', [NurseManualScreeningController::class, 'index'])
+            ->middleware('throttle:60,1,manual-search')->name('index');
+        Route::get('/{appointment}', [NurseManualScreeningController::class, 'show'])
+            ->whereNumber('appointment')->missing($notFound)->name('show');
+        Route::post('/{appointment}', [NurseManualScreeningController::class, 'store'])
+            ->whereNumber('appointment')->missing($notFound)
+            ->middleware('throttle:20,1,manual-store')->name('store');
     });
 
 // ── Director (FR-AUTH-03) ────────────────────────────────────────────────────

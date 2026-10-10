@@ -71,6 +71,20 @@
              so the rendered text still reads "{n} students waiting …". --}}
         <p class="mt-0.5 text-sm text-hp-slate/50" data-queue-subtitle><span data-queue-count>{{ $count }}</span> <span data-queue-subtitle-rest>{{ \Illuminate\Support\Str::plural('student', $count) }} waiting · updated just now</span></p>
     </div>
+
+    {{-- D-133: Manual Screening — for when the kiosk is down. The NURSE's
+         only (its routes sit under role:nurse), so the physician never sees
+         it. A link styled as the largest primary button (<x-hp.button xl>). --}}
+    @if (auth()->user()->role === 'nurse')
+        <a href="{{ route('nurse.manual.index') }}" data-manual-screening
+           class="inline-flex items-center justify-center gap-2 rounded-full bg-hp-orange px-12 py-4
+                  text-base font-semibold text-white transition-[color,background-color,transform]
+                  duration-hp-fast ease-hp-out hover:bg-orange-500 active:scale-[0.97]
+                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hp-orange
+                  focus-visible:ring-offset-1">
+            Manual Screening
+        </a>
+    @endif
 </div>
 
 {{-- Save & Close success flash (FR-NRS-04) — one-shot, gone on the next load.

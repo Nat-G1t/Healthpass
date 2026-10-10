@@ -92,24 +92,16 @@ final class SubmitKioskVisit
 
     private function write(array $data, bool $resting): ClinicVisit
     {
-        $vitals = $data['vitals'];
-        $screening = $data['screening'];
-        $thresholds = config('healthpass.thresholds');
-
-        $bmi = VitalSigns::computeBmi((float) $vitals['height'], (float) $vitals['weight']);
-
         // §7.4 flag rules, computed HERE from the posted numbers — the browser's
-        // own orange ⚑ are display hints and are never read (BR-14). The rest
-        // decision below uses this same one computation.
-        $flags = self::flagsFor($vitals, $thresholds, $bmi);
-
-        if ($resting && VitalSigns::recheckStepsFor($flags) === []) {
+        // own orange ⚑ are display hints and are never read (BR-14).
+        // recordVisit() stores flags from this same one computation.
+        if ($resting && VitalSigns::recheckStepsFor(self::flagsForVitals($data['vitals'])) === []) {
             throw ValidationException::withMessages(['vitals' => self::NOTHING_TO_RECHECK_MESSAGE]);
         }
 
         // generateVisitRef() locks its sequence row for the life of this
         // transaction, so the reference number and the INSERT are atomic.
-        return DB::transaction(function () use ($data, $vitals, $screening, $bmi, $flags, $resting) {
+        return DB::transaction(function () use ($data, $resting) {
             // D-61: no walk-ins. Resolved before anything is written, so a
             // refusal leaves no row behind. A ValidationException is Laravel's
             // "the input is not acceptable" error: for the kiosk's JSON request
@@ -144,74 +136,123 @@ final class SubmitKioskVisit
                 throw ValidationException::withMessages(['appointment' => self::ALREADY_SCREENED_MESSAGE]);
             }
 
-            // Freeze the student's college AND program NOW (FR-STU-09 snapshot —
-            // D-17 for the college, D-43 for the program): a later transfer or
-            // program shift must not re-attribute this visit's flags, cases, or
-            // per-program report row.
-            $snapshot = $this->studentSnapshot($studentId);
-
-            $visit = ClinicVisit::create([
-                'reference_no' => $this->references->generateVisitRef(),
-                'student_id' => $data['studentUserId'],
-                'college_id' => $snapshot['college_id'],
-                'course' => $snapshot['course'],
-                'appointment_id' => $appointment->id, // always set since D-61 (BR-10)
+            return $this->recordVisit($appointment, $data, [
                 'login_method' => $data['loginMethod'],
                 // BR-11: resting → captured → encoded (D-72). A rest pass parks
                 // here until the student comes back and re-takes the reading.
                 'status' => $resting ? 'resting' : 'captured',
-                // Consent is captured seconds earlier in the same session; the
-                // client asserts it by sending privacyConsentAt (KioskSubmitRequest
-                // requires its presence), but the STORED timestamp is stamped
-                // server-side. /kiosk/submit is public, so a client-supplied date is
-                // forgeable/back-datable — this legal audit field must not be trusted
-                // from the browser (FR-KSK-04). Same trust rule as identity + flags.
-                'privacy_consent_at' => now(),
-                'checked_in_at' => now(),
                 // D-72: the SERVER's "come back at" moment — the only clock the
                 // Rest screen shows. Null on a normal submit.
                 'resting_until' => $resting
                     ? now()->addMinutes((int) config('healthpass.kiosk.recheck_rest_minutes'))
                     : null,
             ]);
-
-            $visit->vitalSigns()->create([
-                'height_cm' => $vitals['height'],
-                'weight_kg' => $vitals['weight'],
-                'bmi' => $bmi,
-                'temperature_c' => $vitals['temperature'],
-                'heart_rate_bpm' => $vitals['heartRate'],
-                'bp_systolic' => $vitals['systolic'],
-                'bp_diastolic' => $vitals['diastolic'],
-                'entry_method' => $this->entryMethod($data['vitalMethods']),
-                // D-58: the Bluetooth monitor's own record of the BP reading
-                // (irregular pulse, raw bytes, …), or null.
-                'bp_device_reading' => $this->bpDeviceReading($data['bpReading'] ?? null, $vitals),
-                // §7.4 flag rules — computed above by flagsFor(), stored as
-                // queryable booleans (BR-14).
-                ...$flags,
-            ]);
-
-            $visit->screeningResponse()->create([
-                // The official forms' twelve Physical Signs rows, one boolean column each (D-63).
-                ...Arr::only($screening, array_keys(ScreeningResponse::QUESTIONS)),
-                // Already cleaned by KioskSubmitRequest: known questions answered
-                // YES only, control characters stripped, ≤ 120 chars, null if none.
-                'details' => $screening['details'] ?? null,
-                // D-68: section I of the Medical Assessment Form, or four
-                // NULLs on a Medical Clearance visit. The form type is
-                // RE-RESOLVED here from the appointment this action just
-                // picked — the browser's copy is never consulted.
-                ...$this->socialHistory($appointment->formType(), $data['socialHistory'] ?? null),
-                // D-79: asked of female students only. A male student is
-                // stored as not pregnant with no LMP, whatever was posted —
-                // sex is read from his profile here, never from the body.
-                'is_pregnant' => $snapshot['is_female'] ? $screening['isPregnant'] : false,
-                'last_menstrual_period' => $snapshot['is_female'] ? ($screening['lastMenstrualPeriod'] ?? null) : null,
-            ]);
-
-            return $visit;
         });
+    }
+
+    /**
+     * Write one screening of $appointment as its three linked rows:
+     * clinic_visits + its 1:1 vital_signs + its 1:1 screening_responses.
+     *
+     * Shared by the kiosk (write() above) and the nurse's Manual Screening
+     * (D-133, SubmitManualScreening), so a visit typed in by the nurse is
+     * stored exactly as a kiosk visit is: the same snapshot, reference number,
+     * BMI, flags and screening columns.
+     *
+     * It decides NOTHING about whether the student may be screened. The
+     * caller must already be inside a DB transaction, holding $appointment's
+     * row lock, and must have checked the appointment is still open.
+     *
+     * @param  array  $data  The validated vitals / screening / socialHistory,
+     *                       plus vitalMethods and bpReading (D-58, or null).
+     * @param  array  $visitAttributes  The clinic_visits columns that differ
+     *                                  by caller: login_method, status, and
+     *                                  resting_until or interviewed_by / _at.
+     */
+    public function recordVisit(Appointment $appointment, array $data, array $visitAttributes): ClinicVisit
+    {
+        $vitals = $data['vitals'];
+        $screening = $data['screening'];
+        $bmi = VitalSigns::computeBmi((float) $vitals['height'], (float) $vitals['weight']);
+
+        // The student is the APPOINTMENT's — the row the caller resolved and
+        // locked on the server (the kiosk session's student, or the
+        // route-bound appointment on Manual Screening), never the request body.
+        $studentId = (int) $appointment->student_id;
+
+        // Freeze the student's college AND program NOW (FR-STU-09 snapshot —
+        // D-17 for the college, D-43 for the program): a later transfer or
+        // program shift must not re-attribute this visit's flags, cases, or
+        // per-program report row.
+        $snapshot = $this->studentSnapshot($studentId);
+
+        $visit = ClinicVisit::create([
+            'reference_no' => $this->references->generateVisitRef(),
+            'student_id' => $studentId,
+            'college_id' => $snapshot['college_id'],
+            'course' => $snapshot['course'],
+            'appointment_id' => $appointment->id, // always set since D-61 (BR-10)
+            // Consent is captured seconds earlier in the same session; the
+            // client asserts it by sending privacyConsentAt (KioskSubmitRequest
+            // requires its presence), but the STORED timestamp is stamped
+            // server-side. /kiosk/submit is public, so a client-supplied date is
+            // forgeable/back-datable — this legal audit field must not be trusted
+            // from the browser (FR-KSK-04). Same trust rule as identity + flags.
+            'privacy_consent_at' => now(),
+            'checked_in_at' => now(),
+            ...$visitAttributes,
+        ]);
+
+        $visit->vitalSigns()->create([
+            'height_cm' => $vitals['height'],
+            'weight_kg' => $vitals['weight'],
+            'bmi' => $bmi,
+            'temperature_c' => $vitals['temperature'],
+            'heart_rate_bpm' => $vitals['heartRate'],
+            'bp_systolic' => $vitals['systolic'],
+            'bp_diastolic' => $vitals['diastolic'],
+            'entry_method' => $this->entryMethod($data['vitalMethods']),
+            // D-58: the Bluetooth monitor's own record of the BP reading
+            // (irregular pulse, raw bytes, …), or null.
+            'bp_device_reading' => $this->bpDeviceReading($data['bpReading'] ?? null, $vitals),
+            // §7.4 flag rules (flagsForVitals()), stored as queryable
+            // booleans (BR-14).
+            ...self::flagsForVitals($vitals),
+        ]);
+
+        $visit->screeningResponse()->create([
+            // The official forms' twelve Physical Signs rows, one boolean column each (D-63).
+            ...Arr::only($screening, array_keys(ScreeningResponse::QUESTIONS)),
+            // Already cleaned by KioskSubmitRequest: known questions answered
+            // YES only, control characters stripped, ≤ 120 chars, null if none.
+            'details' => $screening['details'] ?? null,
+            // D-68: section I of the Medical Assessment Form, or four
+            // NULLs on a Medical Clearance visit. The form type is
+            // RE-RESOLVED here from the appointment this action just
+            // picked — the browser's copy is never consulted.
+            ...$this->socialHistory($appointment->formType(), $data['socialHistory'] ?? null),
+            // D-79: asked of female students only. A male student is
+            // stored as not pregnant with no LMP, whatever was posted —
+            // sex is read from his profile here, never from the body.
+            'is_pregnant' => $snapshot['is_female'] ? $screening['isPregnant'] : false,
+            'last_menstrual_period' => $snapshot['is_female'] ? ($screening['lastMenstrualPeriod'] ?? null) : null,
+        ]);
+
+        return $visit;
+    }
+
+    /**
+     * flagsFor() for one posted reading, with its BMI computed from the same
+     * height and weight and the thresholds from config — the form both the
+     * D-72 rest decision and recordVisit() use.
+     *
+     * @return array{is_temp_flagged: bool, is_bp_flagged: bool, is_bmi_flagged: bool, is_hr_flagged: bool}
+     */
+    private static function flagsForVitals(array $vitals): array
+    {
+        $bmi = VitalSigns::computeBmi((float) $vitals['height'], (float) $vitals['weight']);
+
+        return self::flagsFor($vitals, config('healthpass.thresholds'), $bmi);
     }
 
     /**

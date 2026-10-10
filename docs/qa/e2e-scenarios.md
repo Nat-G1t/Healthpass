@@ -2896,6 +2896,63 @@ day ends Unattended; the log names no student.
 
 ---
 
+## E2E-45 — The kiosk is down: the nurse screens students by hand (D-133)
+
+**Goal:** confirm that, with the kiosk unavailable, the nurse can find
+today's scheduled students who haven't been screened, type in what the kiosk
+would have collected, and send them to the physician — one Medical Clearance
+student and one Medical Assessment student — and that the physician then
+encodes them as usual.
+
+**Accounts:** the CCS Admin `admin.ccs@healthpass.test`, the Director
+`director@healthpass.test`, the nurse `nurse@healthpass.test`, the physician
+`physician@healthpass.test`, three CCS students (passwords `password`).
+
+**Steps:**
+
+1. As the CCS Admin, submit a **Medical Clearance** batch with student A and
+   a **Medical Assessment Form** batch with students B and C; as the Director,
+   approve both for **today**, in hours that do not overlap.
+2. Put student C through the **kiosk** as usual and leave them in the
+   nurse's queue. Treat the kiosk as **down** from now on.
+3. As the nurse, open the Live Queue. → **Expect:** a large orange **Manual
+   Screening** button at the top right.
+4. As the physician, open the Live Queue. → **Expect:** no Manual Screening
+   button. Type `/nurse/manual-screening` in the address bar. → **Expect:**
+   sent back to the Clinic Dashboard; the page never opens.
+5. As the nurse, press **Manual Screening** and search a single letter. →
+   **Expect:** "Type at least 2 characters." Search student C's name. →
+   **Expect:** no result (C already used the kiosk). Search student A's
+   student ID. → **Expect:** one row — name, student ID, college, Batch ID,
+   **Medical Clearance**, the hour and arrival time.
+6. Press **Screen** for A. Answer **Yes** to SKIN, leave its details empty,
+   fill the rest and press **Send to physician**. → **Expect:** the page
+   comes back with "You answered Yes to SKIN. Please add details." Type
+   "Rash on the left arm", tick the consent box and enter BP **150 / 95**,
+   then **Send to physician**. → **Expect:** the Live Queue with "{A} sent to
+   the physician — HP-…"; A is **not** in the nurse's queue.
+7. Search student B and press **Screen**. → **Expect:** the form also shows
+   **Personal / Social History**, the respiratory rate and every interview
+   section (Past Medical History … Pertinent Physical Examination). Fill
+   them and press **Submit to physician**.
+8. Search A or B again. → **Expect:** "No student matches …" — both are
+   screened.
+9. As the physician, open the Live Queue. → **Expect:** A (with a ⚑ BP flag)
+   and B are both there. Open B. → **Expect:** the nurse's interview as a
+   summary, "Interviewed/Assessed by" the nurse. Encode A as **Fit** and Save.
+10. Put student A in front of the kiosk (if it is back up) and scan their
+    ID. → **Expect:** "You're all done for today" with A's HP- reference.
+11. As the CCS Admin, try to cancel the Medical Clearance batch. → **Expect:**
+    refused — "a student from this batch has already used the clinic kiosk."
+
+**Pass criteria:** only the nurse sees and reaches Manual Screening; the
+search lists only today's unscreened students; a Clearance student lands in
+the physician's queue as Awaiting encode and an Assessment student with the
+interview; flags are computed from the typed numbers; the kiosk and the
+cancel guard treat the manual visit like any other.
+
+---
+
 ## Recording results
 
 For each scenario, record: **Pass / Fail / Blocked (not built)**, the tester

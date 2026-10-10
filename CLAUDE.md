@@ -215,6 +215,9 @@ npm run dev                       # terminal 2
   reason is the printed purpose.
 - **Manual vitals entry is a first-class kiosk path**, sensors are
   progressive enhancement. Every reading records `entry_method`.
+- When the kiosk is down, the nurse's **Manual Screening** page (D-133) does
+  the kiosk's job for today's scheduled students: server-side identity and
+  flags, `login_method = manual`, no rest & re-check.
 - **Clinic capacity is TWO config values, never constants in a controller
   (D-37):** `hourly_capacity` (**20** since D-95 — a 3-minute kiosk budget
   against the measured 2:20 average) and `daily_capacity` (**160**). The

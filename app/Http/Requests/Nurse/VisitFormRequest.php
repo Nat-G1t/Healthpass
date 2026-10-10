@@ -203,8 +203,12 @@ abstract class VisitFormRequest extends FormRequest
         return $rules;
     }
 
-    /** D-70 — the female gate, decided on the server from the bound visit. */
-    private function studentIsFemale(): bool
+    /**
+     * D-70 — the female gate, decided on the server from the bound visit.
+     * Protected so Manual Screening (D-133), which has an appointment and no
+     * visit yet, can answer it from the appointment's student instead.
+     */
+    protected function studentIsFemale(): bool
     {
         $visit = $this->route('visit');
 

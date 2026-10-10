@@ -4,6 +4,64 @@
 
 ### Added
 
+* **The nurse can screen a scheduled student by hand when the kiosk is
+  down — Manual Screening** (D-133, new FR-NRS-14; PRD revision 2.17,
+  2026-10-10). Asked for by the Clinic Director. No new package.
+  **FLAGGED SCHEMA CHANGE (approved by Nat, 2026-10-08):**
+  `clinic_visits.login_method` gains `manual` (`qr | email | manual`);
+  migration `2026_10_10_000001_d133_add_manual_login_method_to_clinic_visits`
+  (SQLite rebuild pattern; `down()` refuses while manual rows exist).
+  * **Button:** a large primary **Manual Screening** at the top right of the
+    **nurse's** Live Queue. The physician never sees it.
+  * **Search** — `GET /nurse/manual-screening` (`nurse.manual.index`, own
+    `manual-search` throttle bucket): one box, name or student ID, at least
+    2 characters, at most 20 results with name, student ID, college, Batch
+    ID, form badge, hour and arrival time. Only students with an open
+    appointment **today** (2nd-chance days included) and **no clinic visit
+    today in any status** — resting, captured, interviewed and encoded are
+    all excluded (Q12). One definition: `Appointment::scopeManuallyScreenable()`.
+  * **Form** — `GET /nurse/manual-screening/{appointment}` (`nurse.manual.show`):
+    the student header, then by the batch's form — consent, the six vitals
+    (BMI shown live, recomputed on the server), the twelve Physical Signs
+    rows (a Clearance "Yes" needs details ≥ 3 characters, D-75), pregnancy /
+    LMP for female students (D-79), and on a Medical Assessment the Personal
+    / Social History plus the nurse's interview (the encode page's own
+    partials + respiratory rate). Never Fit / Unfit.
+  * **Save** — `POST /nurse/manual-screening/{appointment}`
+    (`nurse.manual.store`, own `manual-store` throttle bucket). A Clearance
+    becomes a `captured` visit; an Assessment an `interviewed` visit with
+    `interviewed_by` / `interviewed_at` and its `medical_assessments` row —
+    both in the **physician's** queue. Recorded as `login_method = manual`,
+    `entry_method = manual`, `checked_in_at = now()`. No rest & re-check:
+    flagged readings go straight through, flagged. Back to the Live Queue with
+    "{name} sent to the physician — HP-…".
+  * **Same rules as the kiosk, not a copy:** the kiosk's screening rules moved
+    into a shared trait, `App\Http\Requests\Concerns\ValidatesScreening`
+    (KioskSubmitRequest uses it, behaviour unchanged); the kiosk's three-row
+    write moved into `SubmitKioskVisit::recordVisit()`, which the new
+    `App\Actions\Nurse\SubmitManualScreening` calls. The student comes from
+    the route-bound appointment; BMI and flags are computed on the server.
+  * **Race with the kiosk:** the save locks the appointment row and re-checks
+    "no visit today" under the lock; if the kiosk got there first nothing is
+    written and the nurse reads "{name} has just been screened at the kiosk."
+  * **Counts:** a manual visit is an ordinary submitted visit — it blocks a
+    batch cancel (`BatchRequest::hasKioskVisit()` never filtered on login
+    method, so it needed no change), the kiosk later tells the student they
+    are already screened, and the 8 PM cutoff (D-132) removes it like any
+    other waiting visit.
+  * Tests: `tests/Feature/Nurse/ManualScreeningAccessTest.php` (14) — the
+    button for the nurse only, the physician sent home from every route,
+    other roles and guests refused, search by name and ID, only today's
+    unscreened students (resting / captured / interviewed / encoded,
+    tomorrow and cancelled excluded; a 2nd-chance day included), the 2-character
+    minimum, the 20 cap, the form's cards per form type, no Fit / Unfit;
+    `ManualScreeningSubmitTest.php` (16) — Clearance and Assessment saves, a
+    forged BMI / flag / student / status ignored, flagged readings with no
+    rest, D-75, consent and ranges, the male-student pregnancy rule, the
+    kiosk winning the race, the action's locked re-check, a double submit,
+    the kiosk's "already screened", the cancel guard, the cutoff removal;
+    `tests/Feature/Migrations/ManualLoginMethodMigrationTest.php` (2).
+
 * **The kiosk's BP result shows the blood-pressure monitor's five checks**
   (D-82, supersedes the kiosk clause of D-58 (8), FR-KSK-07a amended, PRD
   revision 1.66, 2026-09-25). No schema change, no new package, no new route.
