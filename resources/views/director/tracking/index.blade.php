@@ -14,7 +14,8 @@
                              (batches/_clinic-calendar)
       3. Rejected and Cancelled batches — D-116's name for the batches the
                              Director rejected and the ones a college
-                             cancelled (Q20), newest decision first; View
+                             (Q20) or the Director (D-129) cancelled,
+                             newest decision first; View
                              opens the details page with the reason
 
     D-114: each card has its own College dropdown and Batch ID search
@@ -41,6 +42,19 @@
                  focus-visible:outline-none focus-visible:ring-2
                  focus-visible:ring-hp-slate focus-visible:ring-offset-1';
 @endphp
+
+{{-- D-129: where the Director's Cancel batch lands — its success, and a
+     refusal for a batch its college cancelled meanwhile. --}}
+@if (session('status'))
+    <div data-hp-flash class="mb-6 rounded-lg border border-hp-orange/30 bg-hp-peach/40 px-4 py-3 text-sm text-hp-slate">
+        {{ session('status') }}
+    </div>
+@endif
+@if (session('error'))
+    <div data-hp-flash data-flash-sticky class="mb-6 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">
+        {{ session('error') }}
+    </div>
+@endif
 
 {{-- ── Page header ─────────────────────────────────────────────────────── --}}
 <div class="mb-6">
@@ -124,7 +138,7 @@
     <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
             <p class="hp-card-title">Rejected and Cancelled batches</p>
-            <p class="mt-1 text-xs text-hp-slate/50">Batches you rejected and batches a college cancelled, newest first.</p>
+            <p class="mt-1 text-xs text-hp-slate/50">Batches you rejected or cancelled and batches a college cancelled, newest first.</p>
         </div>
 
         {{-- This card's own College dropdown + Batch ID search (D-114). --}}
@@ -158,12 +172,13 @@
                             <span class="text-hp-slate/50">&mdash;</span>
                         @endif
                     </x-hp.table-cell>
-                    {{-- FR-ADM-11: a cancellation is never worded as a Director's rejection. --}}
+                    {{-- FR-ADM-11: a cancellation is never worded as a Director's rejection.
+                         D-129: who cancelled it comes from the canceller's role. --}}
                     <x-hp.table-cell label="Status">
                         @if ($batch->status === 'rejected')
                             <x-hp.badge variant="rejected">Rejected</x-hp.badge>
                         @else
-                            <x-hp.badge variant="neutral">Cancelled by college</x-hp.badge>
+                            <x-hp.badge variant="neutral">{{ $batch->wasCancelledByDirector() ? 'Cancelled by Director' : 'Cancelled by college' }}</x-hp.badge>
                             @if ($batch->wasCancelledAfterApproval())
                                 <span class="mt-0.5 block text-xs text-hp-slate/60">after approval</span>
                             @endif

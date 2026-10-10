@@ -576,8 +576,11 @@ class BatchApprovalController extends Controller
      */
     private function unchangedMessage(BatchRequest $batch): string
     {
-        return $batch->refresh()->status === 'cancelled'
-            ? "{$batch->reference_no} was cancelled by the college — nothing was changed."
-            : "{$batch->reference_no} has already been decided — nothing was changed.";
+        // D-129: the Director can cancel an approved batch too.
+        return match (true) {
+            $batch->refresh()->status !== 'cancelled' => "{$batch->reference_no} has already been decided — nothing was changed.",
+            $batch->wasCancelledByDirector() => "{$batch->reference_no} was cancelled by the Clinic Director — nothing was changed.",
+            default => "{$batch->reference_no} was cancelled by the college — nothing was changed.",
+        };
     }
 }

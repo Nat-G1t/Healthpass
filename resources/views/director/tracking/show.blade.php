@@ -9,14 +9,17 @@
       1. Batch details  — what the college sent, and the signed memo if it
                           attached one (D-109)
       2. Students       — ten rows tall, then it scrolls inside the card
-      3. The reason     — the Director's rejection reason, or the college's
-                          cancellation reason (D-92), with who and when
+      3. The reason     — the Director's rejection reason, or the
+                          cancellation reason — the college's (D-92) or,
+                          since D-129, the Director's — with who and when
 
     Free text (the reasons) is printed with {{ }}, which escapes it.
 --}}
 
 @php
     $isRejected = $batch->status === 'rejected';
+    // D-129: a cancellation is the college's or the Director's — never both.
+    $cancelledLabel = $batch->wasCancelledByDirector() ? 'Cancelled by Director' : 'Cancelled by college';
     $afterApproval = $batch->wasCancelledAfterApproval();
     $stamp = 'M j, Y · g:i A';
 @endphp
@@ -34,7 +37,7 @@
     <div class="mt-3 flex flex-wrap items-start justify-between gap-3">
         <h2 class="text-xl font-semibold text-hp-slate">Batch {{ $batch->reference_no }}</h2>
         <x-hp.badge :variant="$isRejected ? 'rejected' : 'neutral'">
-            {{ $isRejected ? 'Rejected' : 'Cancelled by college' }}
+            {{ $isRejected ? 'Rejected' : $cancelledLabel }}
         </x-hp.badge>
     </div>
 </div>
@@ -116,7 +119,7 @@
 {{-- ── Card 3: why it ended ─────────────────────────────────────────────── --}}
 <x-hp.card class="mt-6" data-closed-reason>
     <p class="mb-4 hp-card-title">
-        {{ $isRejected ? 'Rejection reason' : 'Cancelled by college' }}
+        {{ $isRejected ? 'Rejection reason' : $cancelledLabel }}
     </p>
 
     @php
@@ -140,7 +143,11 @@
             @endif
         @else
             Cancelled by <span class="font-semibold text-hp-slate">{{ $batch->canceller?->name ?? 'the College Admin' }}</span>
-            ({{ $batch->college->code }} College Admin)
+            @if ($batch->wasCancelledByDirector())
+                (Clinic Director)
+            @else
+                ({{ $batch->college->code }} College Admin)
+            @endif
             @if ($batch->cancelled_at !== null)
                 on {{ $batch->cancelled_at->format($stamp) }}
             @endif

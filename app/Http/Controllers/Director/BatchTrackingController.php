@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Director;
 
+use App\Actions\CancelBatch;
+use App\Exceptions\BatchNotCancellable;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Director\CancelBatchRequest;
 use App\Models\BatchRequest;
 use App\Models\College;
 use App\Services\BatchDocumentZip;
@@ -12,7 +15,9 @@ use App\Support\BatchCardFilters;
 use App\Support\BatchNotifications;
 use App\Support\BatchResults;
 use App\Support\SignedMemo;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -24,12 +29,15 @@ use Symfony\Component\HttpFoundation\Response;
  * batches — like Batch Approvals there is NO college scope here.
  *
  *   index()    two cards: Batch Results (approved) and Rejected batches
- *              (rejected by the Director, or cancelled by the college — Q20)
+ *              (rejected by the Director, or cancelled by the college — Q20 —
+ *              or by the Director — D-129)
  *   results()  an approved batch's results page — the same body the college
  *              sees (D-111), built by the same App\Support\BatchResults
  *   show()     a rejected or cancelled batch's details, students and reason
  *   documents() an approved batch's encoded students' forms (one PDF, or a ZIP for two or more — D-118) —
  *              the Director needs no release request (D-113)
+ *   cancel()   D-129: cancel an approved batch before its first hour, with a
+ *              reason — the College Admin's own rule and action
  */
 class BatchTrackingController extends Controller
 {
@@ -72,6 +80,9 @@ class BatchTrackingController extends Controller
         // and SQLite, and the SQL is a fixed string with no input in it.
         $closedBatches = $rejectedFilters->apply(BatchRequest::whereIn('status', ['rejected', 'cancelled']))
             ->with('college:id,code')
+            // D-129: the canceller's role tells "Cancelled by college" from
+            // "Cancelled by Director".
+            ->with('canceller:id,role')
             ->orderByRaw('COALESCE(cancelled_at, reviewed_at) DESC')
             ->orderByDesc('id')
             ->paginate($perPage, pageName: $rejectedFilters->pageName())
@@ -127,6 +138,9 @@ class BatchTrackingController extends Controller
             'approvedRelease' => $batch->releaseRequests->firstWhere('status', 'approved'),
             // Only the review popup shows the memo.
             'memoSize' => $pendingRelease !== null ? SignedMemo::sizeLabel($batch) : null,
+            // D-129: the Cancel batch button beside the status — the College
+            // Admin's rule (approved, first hour not started, no kiosk visit).
+            'canCancel' => $batch->isCancellable(),
         ]);
     }
 
@@ -156,7 +170,7 @@ class BatchTrackingController extends Controller
         // D-120: opening a college-cancelled batch clears its dot.
         BatchNotifications::markSeen($request->user(), $batch, $batch->status);
 
-        $batch->load(['college', 'requester:id,name', 'reviewer:id,name', 'canceller:id,name']);
+        $batch->load(['college', 'requester:id,name', 'reviewer:id,name', 'canceller:id,name,role']);
 
         // Pivot-row order, as on the Review page. notWithdrawn() hides seats
         // pulled before D-87 but keeps a cancelled batch's students (D-92).
@@ -167,5 +181,39 @@ class BatchTrackingController extends Controller
             ->get();
 
         return view('director.tracking.show', compact('batch', 'students'));
+    }
+
+    /**
+     * D-129: the Director cancels an approved batch, with a written reason
+     * (FR-DIRA-12) — on the College Admin's rule and through the College
+     * Admin's own action (App\Actions\CancelBatch), so the lock, the
+     * isCancellable() re-check, the freed seats and the student emails are
+     * one piece of code for both. cancelled_by is the Director.
+     *
+     * Approved only: a pending batch has Reject on its Review page, so it is
+     * a 404 here. (An approved batch can never go back to pending, so checking
+     * this before the lock is safe; the lock re-checks everything else.)
+     */
+    public function cancel(CancelBatchRequest $request, BatchRequest $batch, CancelBatch $cancelBatch): RedirectResponse
+    {
+        abort_unless($batch->status === 'approved', 404);
+
+        try {
+            $count = $cancelBatch->handle($batch, $request->user(), $request->validated('cancellation_reason'));
+        } catch (BatchNotCancellable $refusal) {
+            // Back to the results page while the batch still has one; a batch
+            // its college cancelled meanwhile has none, so Batch Tracking.
+            $back = $batch->refresh()->status === 'approved'
+                ? route('director.tracking.results', $batch)
+                : route('director.tracking.index');
+
+            return redirect($back)->with('error', $refusal->getMessage());
+        }
+
+        return redirect()->route('director.tracking.index')->with(
+            'status',
+            "{$batch->reference_no} has been cancelled. Its {$count} ".Str::plural('appointment', $count)
+                .' '.($count === 1 ? 'was' : 'were').' cancelled and each student is being emailed your reason.',
+        );
     }
 }

@@ -13,6 +13,9 @@
     request needed), and "Review request of documents" under the card opens
     the college's pending release request. D-124: once a request is approved,
     a dated "Documents released on …" note takes the button's place.
+
+    D-129: while the batch may still be cancelled, a Cancel batch button
+    sits beside the status (director.tracking.partials.cancel-batch).
 --}}
 
 @if (session('status'))
@@ -32,6 +35,9 @@
     'backUrl' => route('director.tracking.index'),
     'backLabel' => 'Batch Tracking',
     'showCollege' => true,
+    // D-129: Cancel batch beside the status, only while the College Admin's
+    // cancel rule still holds (approved, first hour not started, no visit).
+    'headerAction' => $canCancel ? 'director.tracking.partials.cancel-batch' : null,
 ])
 
 @include('batches.results._summary', ['summary' => $results['summary']])

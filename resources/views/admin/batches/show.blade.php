@@ -127,6 +127,10 @@
             This request was cancelled
             @if ($batch->canceller !== null)
                 by <strong class="font-semibold">{{ $batch->canceller->name }}</strong>
+                {{-- D-129: the Clinic Director can cancel an approved batch too. --}}
+                @if ($batch->wasCancelledByDirector())
+                    (Clinic Director)
+                @endif
             @endif
             @if ($batch->cancelled_at !== null)
                 on {{ $batch->cancelled_at->format('M j, Y \a\t g:i A') }}

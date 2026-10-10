@@ -29,13 +29,15 @@ use Illuminate\Support\Facades\DB;
  *     - Batch Results row: the batch's status changed (Scheduled → In
  *       progress → …), or the Director approved or rejected its document
  *       release request (D-113)
- *     - Batch requests row: the Director REJECTED it (its View opens the
- *       reason). An approval has no View button, so it is no dot — it raises
- *       the badge until the admin next opens Batch Tracking.
+ *     - Batch requests row: the Director REJECTED it, or (D-129) CANCELLED
+ *       it (its View opens the reason). An approval has no View button, so
+ *       it is no dot — it raises the badge until the admin next opens Batch
+ *       Tracking.
  *   Director
  *     - Batch Results row: the status changed, or the college asked for the
  *       batch's documents
- *     - Rejected and Cancelled row: a college cancelled the batch
+ *     - Rejected and Cancelled row: a college cancelled the batch (the
+ *       Director's own cancellations, D-129, are no news — like rejections)
  *   Clinic staff (D-125) — per user, so the nurse and the physician each
  *   have their own
  *     - Completed batches row: the Director approved a release request that
@@ -77,7 +79,8 @@ final class BatchNotifications
 
     /**
      * Which of the rows on a page carry a dot: batch id => bool. An approved
-     * batch must have BatchResults::statusRelations() loaded.
+     * batch must have BatchResults::statusRelations() loaded, a cancelled one
+     * its `canceller` (with `role`) — who cancelled decides whose news it is.
      *
      * @param  iterable<BatchRequest>  $batches
      * @return array<int, bool>
@@ -126,17 +129,24 @@ final class BatchNotifications
             ->whereNotIn('id', BatchSeen::query()->where('user_id', $user->id)->select('batch_request_id'))
             ->count();
 
-        return $approvals + $rejections + self::approvedDotCount($user, $college()->where('status', 'approved'));
+        // D-129: a cancellation is news to the college only when the Director made it.
+        $directorCancels = $college()
+            ->where('status', 'cancelled')
+            ->whereHas('canceller', fn (Builder $query) => $query->where('role', 'director'))
+            ->whereNotIn('id', self::seenAs($user, 'cancelled'))
+            ->count();
+
+        return $approvals + $rejections + $directorCancels + self::approvedDotCount($user, $college()->where('status', 'approved'));
     }
 
     private static function directorCount(User $user): int
     {
+        // D-129: only a COLLEGE's cancellation — the Director's own is no news.
+        // whereDoesntHave also keeps a cancellation with no recorded canceller.
         $cancellations = BatchRequest::query()
             ->where('status', 'cancelled')
-            ->whereNotIn('id', BatchSeen::query()
-                ->where('user_id', $user->id)
-                ->where('seen_status', 'cancelled')
-                ->select('batch_request_id'))
+            ->whereDoesntHave('canceller', fn (Builder $query) => $query->where('role', 'director'))
+            ->whereNotIn('id', self::seenAs($user, 'cancelled'))
             ->count();
 
         return $cancellations + self::approvedDotCount($user, BatchRequest::query()->where('status', 'approved'));
@@ -161,7 +171,12 @@ final class BatchNotifications
             'approved' => self::hasReleaseNews($user, $batch, $seen, $release)
                 || $status() !== ($seen->seen_status ?? self::APPROVED_STATUS),
             'rejected' => $user->role === 'college_admin' && $seen === null,
-            'cancelled' => $user->role === 'director' && $seen?->seen_status !== 'cancelled',
+            // D-129: whoever did NOT cancel it gets the news.
+            'cancelled' => $seen?->seen_status !== 'cancelled' && match ($user->role) {
+                'director' => ! $batch->wasCancelledByDirector(),
+                'college_admin' => $batch->wasCancelledByDirector(),
+                default => false,
+            },
             default => false,
         };
     }
@@ -263,6 +278,15 @@ final class BatchNotifications
     }
 
     // ── Loading ──────────────────────────────────────────────────────────────
+
+    /** The ids of the batches $user last opened while they were at $status. */
+    private static function seenAs(User $user, string $status): Builder
+    {
+        return BatchSeen::query()
+            ->where('user_id', $user->id)
+            ->where('seen_status', $status)
+            ->select('batch_request_id');
+    }
 
     /**
      * @param  list<int>  $batchIds

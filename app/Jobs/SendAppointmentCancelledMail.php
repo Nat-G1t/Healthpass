@@ -8,8 +8,9 @@ use App\Mail\AppointmentCancelledMail;
 use Illuminate\Mail\Mailable;
 
 /**
- * D-92 — tell ONE student their college cancelled the approved batch their
- * appointment belonged to, and why.
+ * D-92 — tell ONE student their college (or, since D-129, the Clinic
+ * Director) cancelled the approved batch their appointment belonged to, and
+ * why.
  *
  * The closing half of FR-STU-12: the student was emailed when the Director
  * approved the batch, and cannot cancel a batch appointment themselves, so

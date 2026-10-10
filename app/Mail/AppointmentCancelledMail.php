@@ -15,8 +15,9 @@ use Illuminate\Queue\SerializesModels;
  * D-92 — "your college cancelled your approved schedule" notice.
  *
  * The counterpart of [[AppointmentScheduledMail]], sent to every student whose
- * appointment a College Admin's batch cancel (FR-ADM-11) just cancelled. It
- * names the Batch ID and carries the college's written reason. Since D-61 the
+ * appointment a batch cancel just cancelled — the College Admin's (FR-ADM-11)
+ * or, since D-129, the Clinic Director's (FR-DIRA-12). It names the Batch ID,
+ * who cancelled, and carries their written reason. Since D-61 the
  * student cannot book for themselves, so it points them back to their college.
  *
  * SCHEDULING ONLY, exactly as the scheduling notice: no clearance outcome, no
@@ -54,6 +55,8 @@ class AppointmentCancelledMail extends Mailable
                 'formLabel' => $batch?->formTypeLabel() ?? 'Medical Clearance',
                 'reason' => $batch?->cancellation_reason,
                 'collegeName' => $batch?->college?->name,
+                // D-129: "The Clinic Director has cancelled…" instead of the college.
+                'cancelledByDirector' => $batch?->wasCancelledByDirector() ?? false,
             ],
         );
     }

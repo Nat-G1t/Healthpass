@@ -1159,6 +1159,48 @@
 
 ### Changed
 
+* **The Clinic Director can cancel an approved batch before its first hour,
+  with a reason** (D-129, adds FR-DIRA-12; amends FR-ADM-11, FR-DIRA-09 and
+  FR-DIRA-10; PRD revision 2.13, 2026-10-10). Asked for by the Clinic
+  Director. No schema change, no new package; one route.
+  * **Button:** a red outline **Cancel batch** beside the status badge on the
+    Director's results page, only while `BatchRequest::isCancellable()` holds
+    — the College Admin's rule: approved, first clinic hour not started, no
+    student has a visit. The shared results header gained an opt-in
+    (`headerAction`), so the college's and the clinic's pages are unchanged.
+  * **Popup:** "Cancel {Batch ID}?", the date and hours it frees, a required
+    reason (10–500, live counter), "Each student is emailed this reason.",
+    **Keep batch** / **Cancel batch**. A reason the server bounces reopens the
+    popup with the text and the error.
+  * **Server:** `POST /director/batches/{batch}/cancel`
+    (`director.batches.cancel`, Director only, throttle bucket
+    `director-batch-cancel`; not approved → 404), validated by the new
+    `Director\CancelBatchRequest` (extends the College Admin's, so the bounds
+    are one). The College Admin's cancel body moved into
+    **`App\Actions\CancelBatch`** (+ `App\Exceptions\BatchNotCancellable` for
+    a refusal under the lock), now used by both controllers — the admin's
+    behaviour and messages are unchanged.
+  * **Who cancelled** is read from `cancelled_by`'s role
+    (`BatchRequest::wasCancelledByDirector()`): the email opens "The Clinic
+    Director has cancelled…"; the Director's Rejected and Cancelled card tags
+    **Cancelled by Director** and the details page says "(Clinic Director)";
+    the College Admin's Batch requests row gets a View whose popup reads
+    **"Cancelled by the Clinic Director"** with the reason (column "Director's
+    Reason" while one is listed); the roster notice, the Activity Log's actor
+    role and Batch Approvals' "nothing was changed" message name the Director.
+  * **Dots (D-120):** a Director cancel is a dot for the college until its
+    reason popup is opened (`admin.batches.seen` accepts it) and counts in its
+    badge; the Director gets no dot for their own cancel.
+  * Tests: new `tests/Feature/Director/BatchCancelTest.php` (21) — button
+    shown / hidden (first hour started, visit, pending / rejected / cancelled,
+    college and clinic headers), 10–500 reason, batch + appointments
+    cancelled with `cancelled_by` = the Director, one mail job per student
+    with the Director's wording (and the college's for a college cancel), a
+    visit created before the POST refused under the lock with nothing
+    changed, non-directors refused, the Tracking tags, the college's popup and
+    dot clearing, the Activity Log and roster, and the freed hour accepting a
+    new batch. `tests/Feature/Admin/BatchCancelTest.php` unchanged and green.
+
 * **The Clinic Dashboard's encode history shows each record's Release status,
   and Reprint works only once released** (D-128, FR-NRS-09 amended; PRD
   revision 2.12, 2026-10-09). Asked for by the Clinic Director. No schema

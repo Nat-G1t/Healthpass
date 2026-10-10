@@ -12,6 +12,10 @@
       $showCollege — optional, default false: name the batch's college under
                    the Batch ID, for the roles that see every college (D-112).
                    The batch must then have `college` loaded.
+      $headerAction — optional: a view drawn beside the status badge, with
+                   $batch passed in. Only the Director's page uses it, for
+                   its Cancel batch button (D-129); every other page
+                   leaves it out and its header is unchanged.
 --}}
 @php
     $secondChance = $batch->secondChanceStart();
@@ -45,6 +49,11 @@
             </p>
         </div>
 
-        @include('batches.results._status', ['status' => $status])
+        <div class="flex flex-wrap items-center gap-3">
+            @include('batches.results._status', ['status' => $status])
+            @if ($headerAction ?? null)
+                @include($headerAction, ['batch' => $batch])
+            @endif
+        </div>
     </div>
 </div>

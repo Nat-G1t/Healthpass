@@ -172,6 +172,16 @@ class BatchRequest extends Model
     }
 
     /**
+     * D-129: did the Clinic Director cancel this batch, rather than its
+     * college? Read from the canceller's role, so load `canceller` (with its
+     * `role`) before asking this of many rows.
+     */
+    public function wasCancelledByDirector(): bool
+    {
+        return $this->status === 'cancelled' && $this->canceller?->role === 'director';
+    }
+
+    /**
      * D-108: the contiguous clinic slots the Director scheduled this batch
      * into, or [] while it has none — every pending, rejected or
      * never-approved batch, and an approved batch from before D-37.
@@ -457,9 +467,9 @@ class BatchRequest extends Model
     }
 
     /**
-     * The college admin who cancelled this request (null unless cancelled).
-     * A college may have more than one admin (D-47), so this is NOT the same
-     * person as [[requester]] by construction.
+     * Who cancelled this request (null unless cancelled): a college admin, or
+     * since D-129 the Clinic Director. A college may have more than one admin
+     * (D-47), so this is NOT the same person as [[requester]] by construction.
      */
     public function canceller(): BelongsTo
     {

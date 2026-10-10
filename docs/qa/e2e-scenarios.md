@@ -1,4 +1,4 @@
-# HealthPass — End-to-End UAT Scenarios (E2E-1…E2E-40)
+# HealthPass — End-to-End UAT Scenarios (E2E-1…E2E-42)
 
 Source: `docs/HealthPass_PRD.md` §13 (Acceptance & UAT). These are the
 Week-11 end-to-end acceptance runs, written as step-by-step checklists a
@@ -2710,6 +2710,81 @@ or rejected one).
 
 **Pass criteria:** no Encoded by or Printed column on any width; Release
 status reads Yes / No / — correctly; Reprint prints only on a Yes.
+
+---
+
+## E2E-42 — The Director cancels an approved batch, with a reason (D-129)
+
+**Goal:** the Clinic Director can cancel an **approved** batch from its
+results page before its first clinic hour, with a written reason; the
+students are emailed, and the college sees that the Director cancelled it.
+
+**Accounts:** `director@healthpass.test`, `admin.ccs@healthpass.test`, and
+one CCS batch the Director **approved for a future day** (E2E-31) that no
+student has used the kiosk for yet.
+
+**Part A — where the button is**
+
+1. Sign in as the **Director** → **Batch Tracking** → the batch's **View**.
+   → **Expect:** the results page, with a red **Cancel batch** button right
+   beside the status badge (Scheduled) in the header.
+2. Open the results page of a batch whose first hour has **already started**
+   (or that a student has used the kiosk for). → **Expect:** no Cancel batch
+   button.
+3. As the **College Admin**, open the same future batch's results page. →
+   **Expect:** no Cancel batch button there.
+
+**Part B — the popup**
+
+4. As the Director, click **Cancel batch**. → **Expect:** a popup titled
+   "Cancel BR-…?", the date and hours it frees, a reason box with a
+   0/500 counter, "Each student is emailed this reason.", and **Keep batch** /
+   **Cancel batch**. Cancel batch stays greyed out until the reason has 10
+   characters.
+5. Click **Keep batch** (or press Esc). → **Expect:** the popup closes and
+   nothing changes.
+
+**Part C — cancelling**
+
+6. Open the popup again, type a reason of at least 10 characters, and click
+   **Cancel batch**. → **Expect:** back on Batch Tracking with "BR-… has been
+   cancelled. Its N appointments were cancelled and each student is being
+   emailed your reason." The batch is gone from **Batch Results** and is in
+   **Rejected and Cancelled batches** tagged **Cancelled by Director** with
+   "after approval" beneath — and **no** dot on that row.
+7. Click its **View**. → **Expect:** the details page, badge **Cancelled by
+   Director**, and the reason card "Cancelled by Director" with your reason
+   and "Cancelled by *your name* (Clinic Director) on …".
+8. A batch a **college** cancelled still reads **Cancelled by college**.
+9. Check a student's inbox (or `storage/logs/laravel.log` with the log
+   mailer). → **Expect:** one email per student, "The Clinic Director has
+   cancelled the batch your clinic appointment was booked in", with the Batch
+   ID and your reason.
+
+**Part D — the college's side**
+
+10. Sign in as the **College Admin** → **Batch Tracking**. → **Expect:** the
+    Batch Tracking menu badge counts it, and in **Batch requests** the row
+    reads **Cancelled**, with a **View** under "Director's Reason" and an
+    orange dot beside it.
+11. Click **View**. → **Expect:** "Why BR-… was cancelled", **Cancelled by the
+    Clinic Director**, the reason, and "Cancelled by *the Director's name* on
+    …". Close it and reload → the dot is gone.
+12. Open the batch roster (click its Batch ID) and the **Activity Log**. →
+    **Expect:** both name the Director as the one who cancelled (the log's
+    Who column reads the Director's name over "Clinic Director").
+
+**Part E — the freed hours**
+
+13. As the Director, schedule another pending batch (E2E-31) on the same day
+    and hours. → **Expect:** the hours show the freed seats and the approval
+    goes through.
+
+**Pass criteria:** the button appears only on an approved batch before its
+first hour with no visit; the reason is required (10–500); the batch and its
+appointments are cancelled and each student is emailed; every label names
+the Director, never the college; the college's dot clears when the reason is
+opened.
 
 ---
 

@@ -4,6 +4,10 @@
     // D-36: the Rejection Reason column only exists once something has been
     // rejected — an all-approved list shouldn't carry a column of em dashes.
     $hasRejected = $batchRequests->contains(fn ($batch) => $batch->status === 'rejected');
+    // D-129: the Clinic Director can cancel an approved batch, with a reason
+    // the college reads in the same popup — so the column is then the
+    // Director's reason, for a rejection or a cancellation.
+    $hasDirectorCancel = $batchRequests->contains(fn ($batch) => $batch->wasCancelledByDirector());
     // D-62: Form Type sits immediately before Purpose — the purpose list is the
     // form's. "Purpose" is the batch's `reason` column, renamed on screen by D-105.
     // D-108: the Scheduled date is the Director's schedule — the college no
@@ -12,8 +16,8 @@
 
     // The Director's written reason for rejecting (D-36) keeps the word
     // "reason" — it really is one; the batch's own reason reads "Purpose".
-    if ($hasRejected) {
-        $headers[] = 'Rejection Reason';
+    if ($hasRejected || $hasDirectorCancel) {
+        $headers[] = $hasDirectorCancel ? "Director's Reason" : 'Rejection Reason';
     }
 
     // FR-ADM-11 (D-52): the Cancel column follows the same rule as the one
@@ -30,8 +34,9 @@
 
 {{--
     One page-level Alpine component holds both modals' state: `detail` is null
-    or the { ref, reason, reviewer, reviewedAt } of the rejected row whose View
-    button was clicked; `cancelTarget` (D-52) is null or the
+    or the { ref, reason, cancelled, reviewer, reviewedAt } of the rejected
+    (or, D-129, Director-cancelled) row whose View button was clicked —
+    `reviewer` is then whoever decided or cancelled; `cancelTarget` (D-52) is null or the
     { id, ref, students, date } of the row whose Cancel button was clicked.
     (D-111 moved the Batch Results popup to its own page.)
 
@@ -39,7 +44,7 @@
     different payloads, and only one can be open at a time, so closing one
     never has to reset the others.
 
-    D-120: `seen` lists the rejected rows whose reason was opened on this page,
+    D-120: `seen` lists the rejected (D-129: or Director-cancelled) rows whose reason was opened on this page,
     so their notification dot hides at once; openReason() also tells the
     server (admin.batches.seen) in the background, so it stays gone.
 --}}
@@ -244,10 +249,16 @@
 
                     {{-- D-36: why the Director turned this batch down. The cell
                          exists on every row so the desktop table stays aligned;
-                         non-rejected rows just carry an em dash. --}}
-                    @if ($hasRejected)
-                        <x-hp.table-cell label="Rejection Reason">
-                            @if ($batch->status === 'rejected' && $batch->rejection_reason !== null)
+                         non-rejected rows just carry an em dash.
+                         D-129: also why the Director CANCELLED it — the same
+                         popup, worded "Cancelled by the Clinic Director". --}}
+                    @if ($hasRejected || $hasDirectorCancel)
+                        @php
+                            $byDirector = $batch->wasCancelledByDirector();
+                            $directorReason = $byDirector ? $batch->cancellation_reason : ($batch->status === 'rejected' ? $batch->rejection_reason : null);
+                        @endphp
+                        <x-hp.table-cell :label="$hasDirectorCancel ? 'Director\'s Reason' : 'Rejection Reason'">
+                            @if ($directorReason !== null)
                                 {{-- Plain <button> (not <x-hp.button>): the payload is
                                      built with Js::from(), and Blade output isn't
                                      compiled inside a component tag's attribute.
@@ -256,9 +267,10 @@
                                     <button type="button"
                                         @click="openReason({{ $batch->id }}, {{ Illuminate\Support\Js::from(route('admin.batches.seen', $batch->id)) }}, {{ Illuminate\Support\Js::from([
                                             'ref' => $batch->reference_no,
-                                            'reason' => $batch->rejection_reason,
-                                            'reviewer' => $batch->reviewer?->name,
-                                            'reviewedAt' => $batch->reviewed_at?->format('M j, Y g:i A'),
+                                            'reason' => $directorReason,
+                                            'cancelled' => $byDirector,
+                                            'reviewer' => $byDirector ? $batch->canceller?->name : $batch->reviewer?->name,
+                                            'reviewedAt' => ($byDirector ? $batch->cancelled_at : $batch->reviewed_at)?->format('M j, Y g:i A'),
                                         ]) }})"
                                         class="inline-flex items-center justify-center gap-2 rounded-full
                                                border-[1.5px] border-hp-slate/30 px-4 py-1 text-xs font-semibold
@@ -362,8 +374,12 @@
             class="relative w-full max-w-md rounded-2xl bg-hp-white p-6 shadow-xl"
         >
             <h2 id="rejection-reason-title" class="text-lg font-semibold text-hp-slate">
-                Why <span x-text="detail?.ref"></span> was rejected
+                Why <span x-text="detail?.ref"></span> was <span x-text="detail?.cancelled ? 'cancelled' : 'rejected'"></span>
             </h2>
+            {{-- D-129: a Director's cancellation, never worded as the college's own. --}}
+            <p x-show="detail?.cancelled" x-cloak class="mt-1 text-sm font-semibold text-hp-slate/70">
+                Cancelled by the Clinic Director
+            </p>
 
             {{-- x-text sets textContent, so Director-written free text is never
                  parsed as markup (the server side of this is Js::from above). --}}
@@ -371,7 +387,8 @@
                x-text="detail?.reason"></p>
 
             <p class="mt-3 text-xs text-hp-slate/50">
-                Reviewed by <span class="font-semibold" x-text="detail?.reviewer ?? 'the Clinic Director'"></span>
+                <span x-text="detail?.cancelled ? 'Cancelled by' : 'Reviewed by'"></span>
+                <span class="font-semibold" x-text="detail?.reviewer ?? 'the Clinic Director'"></span>
                 <span x-show="detail?.reviewedAt" x-cloak>
                     on <span x-text="detail?.reviewedAt"></span>
                 </span>

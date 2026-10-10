@@ -59,7 +59,7 @@ class ActivityLogController extends Controller
 
         // Start from the college's own relationship, never a request value.
         $batches = $college->batchRequests()
-            ->with(['requester:id,name', 'reviewer:id,name', 'canceller:id,name'])
+            ->with(['requester:id,name', 'reviewer:id,name', 'canceller:id,name,role'])
             ->withCount('batchRequestStudents')
             ->latest('created_at')
             // Tie-break so batches submitted in the same second always come
@@ -139,12 +139,15 @@ class ActivityLogController extends Controller
             //
             // D-92: the college's written reason, when there is one (batches
             // cancelled before D-92 have none).
+            //
+            // D-129: the Clinic Director can cancel an approved batch too, so
+            // the role comes from the canceller, not from an assumption.
             if ($batch->cancelled_at !== null && $batch->status === 'cancelled') {
                 $entries[] = [
                     'type' => 'cancelled',
                     'at' => $batch->cancelled_at,
                     'actor' => $batch->canceller?->name,
-                    'actorRole' => 'College Admin',
+                    'actorRole' => $batch->wasCancelledByDirector() ? 'Clinic Director' : 'College Admin',
                     'batch' => $batch,
                     'detail' => $batch->cancellation_reason ?? ($batch->wasCancelledAfterApproval()
                         ? 'Cancelled after approval — its appointments were cancelled.'

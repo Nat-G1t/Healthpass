@@ -386,6 +386,11 @@ Route::middleware(['auth', 'role:director'])
         // locked. Each has its own throttle bucket.
         Route::post('/batch-tracking/{batch}/documents', [DirectorBatchTrackingController::class, 'documents'])
             ->whereNumber('batch')->middleware('throttle:10,1,director-documents')->name('tracking.documents');
+        // D-129 (FR-DIRA-12): cancel an approved batch from its results page,
+        // with a reason, on the College Admin's rule — the same shared action
+        // as admin.batches.cancel. Its own throttle bucket (3rd arg).
+        Route::post('/batches/{batch}/cancel', [DirectorBatchTrackingController::class, 'cancel'])
+            ->whereNumber('batch')->middleware('throttle:20,1,director-batch-cancel')->name('batches.cancel');
         // Clinic Calendar card (D-119) — the clinic's read-only feeds, routed
         // here too so the Director's card answers under role:director.
         Route::get('/clinic-calendar/month', [ClinicCalendarController::class, 'month'])

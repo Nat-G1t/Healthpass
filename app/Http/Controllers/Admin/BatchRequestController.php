@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Admin;
 
+use App\Actions\CancelBatch;
+use App\Exceptions\BatchNotCancellable;
 use App\Http\Controllers\Admin\Concerns\ScopedToManagedCollege;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\CancelBatchRequest;
 use App\Http\Requests\Admin\StoreBatchRequestRequest;
-use App\Jobs\SendAppointmentCancelledMail;
-use App\Models\Appointment;
 use App\Models\BatchRequest;
 use App\Models\StudentProfile;
 use App\Services\ClinicScheduleService;
@@ -80,6 +80,8 @@ class BatchRequestController extends Controller
         // in the same second, so no row can land on two pages or on none.
         $batchRequests = $college->batchRequests()
             ->with('reviewer:id,name')
+            // D-129: a batch the Clinic Director cancelled gets the reason popup.
+            ->with('canceller:id,name,role')
             ->withCount(['batchRequestStudents' => fn ($query) => $query->notWithdrawn()])
             ->latest()
             ->orderByDesc('id')
@@ -111,9 +113,11 @@ class BatchRequestController extends Controller
             : $college->batchRequests()->where('status', 'approved')->exists();
 
         // D-120: the notification dots — Batch Results rows with news, and
-        // rejected requests whose reason has not been opened yet.
+        // rejected requests whose reason has not been opened yet. D-129: and
+        // batches the Clinic Director cancelled (a college's own cancel is no
+        // news to it — BatchNotifications decides).
         $dots = BatchNotifications::dots($request->user(), $approvedBatches->getCollection())
-            + BatchNotifications::dots($request->user(), $batchRequests->getCollection()->where('status', 'rejected'));
+            + BatchNotifications::dots($request->user(), $batchRequests->getCollection()->whereIn('status', ['rejected', 'cancelled']));
 
         return view('admin.batches.index', compact(
             'college', 'batchRequests', 'approvedBatches', 'hasApprovedBatches', 'search', 'dots',
@@ -124,15 +128,19 @@ class BatchRequestController extends Controller
      * D-120: the rejected request's View opened its reason popup, so its dot
      * is cleared. The popup opens without leaving the page, so it posts here
      * in the background. Found through the managed college, rejected only —
-     * anything else is a 404.
+     * anything else is a 404. D-129: or cancelled BY THE CLINIC DIRECTOR,
+     * whose reason opens in the same popup.
      */
     public function markSeen(Request $request, int $batchId): Response
     {
         $batch = $this->managedCollege()->batchRequests()
-            ->where('status', 'rejected')
+            ->whereIn('status', ['rejected', 'cancelled'])
+            ->with('canceller:id,role')
             ->findOrFail($batchId);
 
-        BatchNotifications::markSeen($request->user(), $batch, 'rejected');
+        abort_if($batch->status === 'cancelled' && ! $batch->wasCancelledByDirector(), 404);
+
+        BatchNotifications::markSeen($request->user(), $batch, $batch->status);
 
         return response()->noContent();
     }
@@ -381,7 +389,7 @@ class BatchRequestController extends Controller
             ->with([
                 'reviewer:id,name',
                 // D-52: who cancelled it, for the cancelled-batch notice.
-                'canceller:id,name',
+                'canceller:id,name,role',
             ])
             ->findOrFail($batchId);
 
@@ -413,94 +421,34 @@ class BatchRequestController extends Controller
      * seat that no longer exists. A pending batch has no appointments and no
      * student has been told anything, so it emails nobody.
      *
-     * Guards, all resolved server-side:
-     *   - the batch is fetched through the managed college, so another
-     *     college's id is a plain 404 (FR-ADM-06)
-     *   - CancelBatchRequest validates the reason (10–500 characters)
-     *   - BatchRequest::isCancellable() — the SAME rule the page used to decide
-     *     whether to draw the button — is re-read under a ROW LOCK, so a
-     *     double-click, or a race with the Director approving it in the next
-     *     tab, cannot slip past the unlocked read the page did
+     * The cancel itself — the row lock, the isCancellable() re-check, the
+     * appointments and the emails — is App\Actions\CancelBatch, shared with
+     * the Clinic Director's Cancel (D-129). This method owns what is the
+     * college's alone: the batch is fetched through the managed college, so
+     * another college's id is a plain 404 (FR-ADM-06), and CancelBatchRequest
+     * validates the reason (10–500 characters).
      */
-    public function cancel(CancelBatchRequest $request, int $batchId): RedirectResponse
+    public function cancel(CancelBatchRequest $request, int $batchId, CancelBatch $cancelBatch): RedirectResponse
     {
         $batch = $this->managedCollege()->batchRequests()->findOrFail($batchId);
 
-        // [refusal message or null, ids of the appointments this cancelled]
-        [$refusal, $cancelledIds] = DB::transaction(function () use ($batch, $request): array {
-            $locked = BatchRequest::whereKey($batch->id)->lockForUpdate()->firstOrFail();
-
-            // D-92: hold the batch's appointment rows as well. The kiosk locks
-            // the appointment it submits against (SubmitKioskVisit), so a
-            // student finishing the kiosk right now either commits their visit
-            // before hasKioskVisit() below reads it, or waits for this
-            // transaction and then finds their appointment cancelled.
-            $locked->appointments()->lockForUpdate()->get(['id']);
-
-            if (! $locked->isCancellable()) {
-                return [$this->cancelRefusal($locked), []];
-            }
-
-            $wasApproved = $locked->status === 'approved';
-
-            // cancelled_by is the admin who PRESSED THE BUTTON, not the batch's
-            // original requester — a college can have more than one admin
-            // (D-47), and the Activity Log names the person who acted.
-            $locked->update([
-                'status' => 'cancelled',
-                'cancelled_at' => now(),
-                'cancelled_by' => $request->user()->id,
-                'cancellation_reason' => $request->validated('cancellation_reason'),
-            ]);
-
-            if (! $wasApproved) {
-                return [null, []];
-            }
-
-            // Only the still-scheduled ones: a seat freed by an earlier
-            // withdrawal (D-87) was emailed about back then.
-            $ids = $locked->appointments()->where('status', 'scheduled')->pluck('id')->all();
-            Appointment::whereKey($ids)->update(['status' => 'cancelled']);
-
-            return [null, $ids];
-        });
-
-        if ($refusal !== null) {
-            return redirect()->route('admin.batches.index')->with('error', $refusal);
+        try {
+            $count = $cancelBatch->handle($batch, $request->user(), $request->validated('cancellation_reason'));
+        } catch (BatchNotCancellable $refusal) {
+            return redirect()->route('admin.batches.index')->with('error', $refusal->getMessage());
         }
 
-        if ($cancelledIds === []) {
+        if ($count === 0) {
             return redirect()->route('admin.batches.index')->with(
                 'status',
                 "{$batch->reference_no} has been cancelled. It is no longer waiting for the Clinic Director.",
             );
         }
 
-        // Queued AFTER the commit, one job per student (the approve fan-out's
-        // shape): a single bad address loses one email, not the whole batch.
-        foreach (Appointment::whereKey($cancelledIds)->get() as $appointment) {
-            SendAppointmentCancelledMail::dispatch($appointment);
-        }
-
-        $count = count($cancelledIds);
-
         return redirect()->route('admin.batches.index')->with(
             'status',
             "{$batch->reference_no} has been cancelled. Its {$count} ".Str::plural('appointment', $count)
                 .' were cancelled and each student is being emailed your reason.',
         );
-    }
-
-    /** D-92: why a cancel was refused, worded for the state the locked row is in. */
-    private function cancelRefusal(BatchRequest $batch): string
-    {
-        $ref = $batch->reference_no;
-
-        return match (true) {
-            $batch->status === 'approved' && $batch->hasKioskVisit() => "{$ref} can no longer be cancelled — a student from this batch has already used the clinic kiosk.",
-            $batch->status === 'approved' => "{$ref} can no longer be cancelled — its first clinic hour has already started.",
-            $batch->status === 'cancelled' => "{$ref} has already been cancelled.",
-            default => "{$ref} can no longer be cancelled — the Clinic Director has already rejected it.",
-        };
     }
 }

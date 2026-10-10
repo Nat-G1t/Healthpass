@@ -1,5 +1,6 @@
 {{--
-    D-92 — approved-batch cancellation notice.
+    D-92 — approved-batch cancellation notice. D-129: when the Clinic Director
+    cancelled it, the opening line names the Director instead of the college.
 
     Same table-based inline-styled shape as mail/appointment-scheduled.blade.php
     (email clients ignore stylesheets and most modern CSS). Light palette only.
@@ -35,7 +36,9 @@
                         <p style="margin:0 0 8px;">Hi {{ $studentName }},</p>
 
                         <p style="margin:0 0 24px;color:#6B7280;">
-                            @if ($collegeName)
+                            @if ($cancelledByDirector)
+                                The Clinic Director has cancelled
+                            @elseif ($collegeName)
                                 <strong>{{ $collegeName }}</strong> has cancelled
                             @else
                                 Your college has cancelled
