@@ -2953,6 +2953,68 @@ cancel guard treat the manual visit like any other.
 
 ---
 
+## E2E-46 — The nurse and the physician upload signatures; the forms print them (D-134)
+
+**Goal:** confirm that the nurse and the physician can each upload a PNG
+signature on **My Signature**, that only a real PNG within the limits is
+accepted, and that a finished form prints each signer's signature above
+their name — on paper and in the PDF.
+
+**Accounts:** the nurse `nurse@healthpass.test`, the physician
+`physician@healthpass.test`, the Director `director@healthpass.test`, a CCS
+student on a **Medical Assessment Form** batch and one on a **Medical
+Clearance** batch, both approved for today (passwords `password`).
+
+**Before you start:** for each of the nurse and the physician, sign on plain
+white paper, photograph it, remove the background at remove.bg and download
+the result as PNG. Also keep a phone photo (JPEG) of a signature.
+
+**Steps:**
+
+1. As the nurse, open the sidebar. → **Expect:** **My Signature** is the
+   last item before Change Password. Open it. → **Expect:** a peach note
+   "Use a clear, transparent background." with the five steps and a
+   **remove.bg** link that opens in a new tab; "No signature yet — forms
+   print a blank line for you to sign by hand."
+2. Rename the JPEG photo to `signature.png` and upload it. → **Expect:**
+   "The signature must be a PNG image…"; nothing is saved.
+3. Upload the nurse's remove.bg PNG. → **Expect:** "Signature uploaded."; the
+   signature on a **checkerboard** (the squares show through around the
+   ink), "Uploaded {today, time}", **Replace** and **Remove**.
+4. As the physician, do steps 1 and 3 with the physician's PNG.
+5. Put the Medical Assessment student through the kiosk. As the nurse,
+   **Interview** them and **Submit to physician**. As the physician, open
+   them, choose **Fit** and **Save**.
+6. Press **Print back**. → **Expect:** in the print preview, "1 sheet of
+   paper"; the nurse's signature sits above the nurse's name
+   ("Interviewed/Assessed by:") and the physician's above
+   "REYNALDO S. ALIPIO, MD / University Physician"; the form code still shows
+   at the foot. **Print front.** → **Expect:** one sheet, no clinic
+   signature on the front.
+7. Put the Medical Clearance student through the kiosk; as the physician,
+   encode **Fit**, **Save** and **Print**. → **Expect:** one sheet; the
+   physician's signature above their name in the physician block.
+8. Press **Save as PDF** on both. → **Expect:** the Assessment PDF has two
+   pages and the Clearance one, each with the signatures as on paper.
+9. As the physician, open My Signature, press **Remove** → **Yes, remove**.
+   Reprint the Clearance (from the encode page, the same day). → **Expect:**
+   a blank signature line again — the print is never blocked.
+10. As the Director, after the batch's documents are released, download the
+    Assessment student's form from Batch Tracking. → **Expect:** the nurse's
+    signature prints (the physician's is gone since step 9 — always the
+    **current** signature).
+11. As the nurse, type `/nurse/signature/image` in the address bar. →
+    **Expect:** the nurse's own image. As the Director, the same URL →
+    **Expect:** sent back to the Director's dashboard.
+
+**Pass criteria:** only a real PNG within 2 MB and 150×50–3000×3000 pixels is
+accepted; each signature prints only above its owner's name, on the print and
+the PDF alike; each side of each form stays one sheet; with no signature the
+blank line prints and nothing is blocked; nobody but the owner can open the
+raw image.
+
+---
+
 ## Recording results
 
 For each scenario, record: **Pass / Fail / Blocked (not built)**, the tester

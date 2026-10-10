@@ -221,8 +221,17 @@
     .purposes td { vertical-align: top; width: 33.33%; padding: 2pt 6pt 2pt 0; }
 
     /* ── Signature footer ───────────────────────────────────────────────── */
-    .footer { width: 100%; border-collapse: collapse; margin-top: 20pt; }
+    /* D-134: the 20pt gap that used to sit above the two name lines (the
+       room for a wet signature) is now each signer's 30pt signature box —
+       forms/partials/signature — so the gap moved INTO the cells. */
+    .footer { width: 100%; border-collapse: collapse; margin-top: 0; }
     .footer td { vertical-align: bottom; }
+
+    /* The uploaded signature, fitted to 30pt by App\Support\Signature; an
+       empty box (none on file) is the blank space for a wet signature. */
+    .sig-box { width: 100%; border-collapse: collapse; }
+    .sig-box td { height: 30pt; padding: 0; text-align: center; vertical-align: bottom; }
+    .sig-box img { display: block; margin: 0 auto; }
     .footer .name {
         border-bottom: 1px solid #000;
         height: 14pt;
@@ -616,7 +625,9 @@
          interviewer and prints its ENCODER, nurse or physician (D-64). The
          University Physician's name and licence print only on a record a
          PHYSICIAN encoded — every record since D-126; an older nurse's
-         record leaves both for the physician to sign by hand. ─────────── --}}
+         record leaves both for the physician to sign by hand. D-134: each
+         name carries that person's uploaded signature above its line, when
+         they have one. ───────────────────────────────────────────────── --}}
     <table class="footer">
         <tr>
             <td style="width: 2.0in;">
@@ -624,10 +635,12 @@
                 <span class="fill-inline" style="width: 1.3in;">{{ $issuedOn }}</span>
             </td>
             <td style="width: 2.6in; padding: 0 12pt;">
+                @include('forms.partials.signature', ['signature' => $interviewerSignature])
                 <div class="name">{{ $encoderName }}</div>
                 <div class="center">Interviewed/Assessed by:</div>
             </td>
             <td>
+                @include('forms.partials.signature', ['signature' => $physicianSignature])
                 <div class="name">{{ $physicianName }}</div>
                 <div class="center">University Physician</div>
                 <div class="center">

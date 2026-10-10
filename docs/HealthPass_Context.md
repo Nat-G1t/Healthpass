@@ -316,7 +316,7 @@ Home, Calendar, FileText, QrCode, Plus, List, Activity, Edit, BarChart, Alert, C
 |---|---|
 | Student | Dashboard · My Records (+ the D-73 Clinic Record page) · My ID (D-61 removed Book Appointment and My Appointments) |
 | College Admin | Dashboard · New Batch Request · Batch Tracking · Data Summary (FR-ADM-08; "Analytics" before D-103) |
-| Nurse | Live Queue (with the **Manual Screening** button, D-133) · Upcoming Batches (D-114) · Batch Results (D-125) · Encode Result · Enable Kiosk Mode (Kiosk Devices: enroll/revoke trusted terminals, D-27) |
+| Nurse | Live Queue (with the **Manual Screening** button, D-133) · Upcoming Batches (D-114) · Batch Results (D-125) · Encode Result · Enable Kiosk Mode (Kiosk Devices: enroll/revoke trusted terminals, D-27) · My Signature (D-134 — the last item; the physician's menu has it too) |
 | Clinic Director | Dashboard · Batch Approvals · Batch Tracking (D-112) · Data Summary (D-103; was "Analytics") · Flagged Anomalies |
 
 **Unread badges (D-57, FR-UI-05):** a solid orange badge on a menu item — a dot for 1, the number for 2–9, "9+" from 10, nothing at 0 — at the top-right of the item's label (expanded sidebar, phone drawer) or of its icon (collapsed rail). Orange even on the active item. Refreshed on page load only; no polling.
@@ -468,6 +468,13 @@ Every page in this section is shared by the nurse and the University Physician �
 - **Form** (`/nurse/manual-screening/{appointment}`): the student header, then by form type — consent, the six vitals (live BMI, recomputed on the server), the twelve Physical Signs rows (Clearance Yes → details ≥ 3 chars), pregnancy / LMP for female students; on a Medical Assessment also the Personal / Social History and the interview (the encode page's partials + respiratory rate). Never Fit / Unfit.
 - **Send / Submit to physician**: Clearance → `captured`, Assessment → `interviewed` + `medical_assessments` row; `login_method = manual`, `entry_method = manual`; no rest & re-check. The save locks the appointment and re-checks; a kiosk visit that got there first wins ("{name} has just been screened at the kiosk.").
 
+#### My Signature (D-134, FR-NRS-15 — nurse and physician, `/nurse/signature`)
+- The **last** clinic sidebar item (pen icon). Each user manages only their **own** signature; no URL carries a user id.
+- **Guidance** (highlighted peach note above the upload): **"Use a clear, transparent background."** A signature on white or grey paper prints as a box over the form. Steps: sign on plain white paper → take a clear photo → remove the background at **remove.bg** (new tab) → download the result as **PNG** → upload it here.
+- **Preview**: the current signature on a **checkerboard** (a non-transparent image shows as a solid box) + "Uploaded {date}", then **Replace** (opens the file picker) and **Remove** (two-step confirm). With none: "No signature yet — forms print a blank line for you to sign by hand."
+- **Upload** — a plain file input `accept="image/png"` (not `<x-hp.file-capture>`): `.png` name **and** a sniffed `image/png`, ≤ 2 MB, 150×50 – 3000×3000 px (`config('healthpass.signatures')`). Stored privately in `storage/app/private/signatures/` with a random name; a replaced file is deleted only after the new one is saved. The preview image comes from `GET /nurse/signature/image`, which serves only the signed-in user's own file.
+- **What prints**: see the two official forms below — always the person's **current** signature; none on file → the blank line, and nobody is blocked from saving or printing.
+
 #### Live Queue (`nurse-dashboard`)
 - **Header**: blinking LIVE dot + "LIVE QUEUE" pill (peach bg, orange text) + "{n} students waiting · updated just now". **(D-133)** On the **nurse's** queue only, a large primary **Manual Screening** button at the top right.
 - **Queue table** (full-width card, no outer padding): Student (avatar initials + name; first row tagged "NEXT" badge + highlighted peach-35 row — the longest-waiting student), College, **Vitals Summary** (all values inline, flagged values bold orange), **Flags** (flagged-variant badges for temp/bp/bmi **and HR since D-66**, or "—" — there is no RR badge here: that vital is only measured at encode), Time (waiting since), Action ("Encode Result" button — primary for row 1, ghost for others).
@@ -539,7 +546,7 @@ Every page in this section is shared by the nurse and the University Physician �
 - Remarks — two ruled lines of Student remarks only (D-76); case details are the physician's hand-written annotation (D-22). **(D-67)** dompdf runs no JavaScript, so the old in-page shrink-to-fit script is replaced by a **server-side** rule in `ClearanceDocument::remarks()`: the note is wrapped to the two lines at one size chosen from 10pt down to a **7pt floor**, and anything still over is clipped. Print and PDF get the identical lines and size. **(D-76)** At the 7pt floor the two lines hold ~200 characters, so a long multi-Yes pre-fill is clipped on paper (the full text stays in the record); the page never grows.
 - Pregnancy question (YES/NO radio + LMP line) — pre-filled from the kiosk questionnaire (`screening_responses`).
 - Fitness declaration (D-67 wording, from the R04 scan): "He/She is physically / mentally ○ FIT ○ UNFIT **to participate in:**" + purpose bubbles — **the visit's form type's purposes (D-62)**, the saved batch-reason label shaded — incl. "Others, Specify: ___" — an Others purpose shades that bubble and prints the specified event on the line, clipped to fit (D-24). The college is NOT printed anywhere on the form (D-25).
-- Physician block (D-64, conditional): when a **physician** encoded — their name, "University Physician", "License No. {license}"; when a **nurse** encoded — a blank name line, "University Physician", "License No. ________". Always a blank signature line above for the wet signature. *(Was the pre-printed "REYNALDO S. ALIPIO, MD · License No. 60252".)*
+- Physician block (D-64, conditional): when a **physician** encoded — their name, "University Physician", "License No. {license}"; when a **nurse** encoded — a blank name line, "University Physician", "License No. ________". Always a blank signature line above for the wet signature. *(Was the pre-printed "REYNALDO S. ALIPIO, MD · License No. 60252".)* **(D-134)** When the encoding physician has uploaded a signature (My Signature), it prints in that signature space above their name — only where the name prints. It is embedded as a base64 `data:` URI built in `ClearanceDocument` (`physicianSignature`, sized by `App\Support\Signature` to fit the 30pt space), never a URL; with none, the line stays blank.
 - **Date** line — the encode date (today on a pre-save preview), never an input — and the form code **PSU-QSP-OSS-004-FO002-R04** bottom-**left**.
 - Print via `window.print()`; the same template is saved as a PDF via dompdf (FR-PRT-06).
 
@@ -585,6 +592,13 @@ Every page in this section is shared by the nurse and the University Physician �
   (D-62) · **"Interviewed/Assessed by:" = the ENCODER** (nurse or physician) ·
   the **University Physician** block, name and License No. only on a physician's
   encode (D-64) · **"Date:" = the encode date**, never an input.
+  **(D-126)** "Interviewed/Assessed by:" is the nurse who interviewed the student;
+  a pre-D-126 record keeps its encoder. **(D-134)** Each of those two names carries
+  its person's current uploaded signature above its line, when they have one — the
+  interviewing nurse's (`interviewerSignature`) and the encoding physician's
+  (`physicianSignature`), base64 `data:` URIs built in the document classes. The
+  footer's 20pt top margin became the two 30pt signature boxes; the back page still
+  fits one Letter page.
 - **Print front / Print back (manual duplex).** Clinic printers rarely duplex, so
   the encode screen shows two buttons instead of one; each posts the encode form to
   the existing preview (unsaved) or reprint (saved) endpoint with `side=front|back`,
@@ -822,6 +836,7 @@ created_at, updated_at
 id                    bigint PK
 role                  enum('student','college_admin','nurse','physician','director')  -- physician added by D-64
 license_number        varchar(20) NULL   -- D-64: PRC license, digits only (4–10); required for physician, NULL otherwise
+signature_path        varchar(255) NULL  -- SCHEMA ADD (D-134): private-disk path of a nurse's / physician's PNG signature (storage/app/private/signatures/…); hidden on User, never serialised
 name                  varchar(120)
 email                 varchar(191) UNIQUE
 email_verified_at     timestamp NULL

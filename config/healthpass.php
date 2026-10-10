@@ -122,6 +122,17 @@ return [
         'mimes' => ['jpg', 'jpeg', 'png', 'pdf'],
     ],
 
+    // D-134: a nurse's or physician's signature on the My Signature page — a
+    // PNG only (transparent background), stored on the PRIVATE `local` disk.
+    // Read by App\Http\Requests\Nurse\StoreSignatureRequest.
+    'signatures' => [
+        'max_kb' => 2048,       // 2 MB (Laravel's `max` rule on a file is KB)
+        'min_width' => 150,     // pixels — smaller is too blurry to print
+        'min_height' => 50,
+        'max_width' => 3000,    // larger only slows every PDF that embeds it
+        'max_height' => 3000,
+    ],
+
     // D-113: the batch document download (one ZIP, one official-form PDF per
     // student). Every PDF is rendered on request, so a download is capped to
     // keep it inside the live server's time and memory limits (1 GB droplet).

@@ -85,6 +85,10 @@ final class AssessmentDocument
             ],
             'examColumns' => self::examColumns($sections),
             'encoderName' => (string) ($visit->interviewer?->name ?? $record->encoder?->name ?? ''),
+            // D-134: the signature of whoever that name is — the interviewing
+            // nurse, or on a pre-D-126 record its encoder. (The physician's
+            // own comes from the shared half: physicianSignature.)
+            'interviewerSignature' => Signature::forPrint($visit->interviewer ?? $record->encoder),
         ];
     }
 
@@ -117,6 +121,7 @@ final class AssessmentDocument
             'surgical' => ['procedures' => '', 'dateDone' => ''],
             'examColumns' => self::examColumns(null),
             'encoderName' => '',
+            'interviewerSignature' => null,
         ];
     }
 

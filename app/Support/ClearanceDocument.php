@@ -59,7 +59,7 @@ final class ClearanceDocument
             'appointment.batchRequest',  // D-62: the form type's purpose list
             'vitalSigns',
             'screeningResponse',         // pregnancy / LMP (D-22)
-            'clearanceRecord',
+            'clearanceRecord.encoder',   // D-134: whose signature prints
         ]);
 
         $record = $visit->clearanceRecord;
@@ -136,6 +136,12 @@ final class ClearanceDocument
             // only on a record a physician encoded.
             'physicianName' => $record->physician_name,
             'physicianLicense' => $record->physician_license_no,
+            // D-134: the encoding physician's current signature, above their
+            // name — only where that name prints, so a nurse's pre-D-126
+            // record keeps its blank line. Null → the blank line, as before.
+            'physicianSignature' => $record->physician_name !== null
+                ? Signature::forPrint($record->encoder)
+                : null,
 
             'issuedOn' => $issuedOn->format('F j, Y'),
         ];
@@ -201,6 +207,7 @@ final class ClearanceDocument
 
             'physicianName' => null,
             'physicianLicense' => null,
+            'physicianSignature' => null,
 
             'issuedOn' => '',
         ];

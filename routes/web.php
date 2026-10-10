@@ -30,6 +30,7 @@ use App\Http\Controllers\Nurse\KioskDeviceController as NurseKioskDeviceControll
 use App\Http\Controllers\Nurse\ManualScreeningController as NurseManualScreeningController;
 use App\Http\Controllers\Nurse\PrintClearanceController as NursePrintClearanceController;
 use App\Http\Controllers\Nurse\QueueController as NurseQueueController;
+use App\Http\Controllers\Nurse\SignatureController as NurseSignatureController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Student\DashboardController as StudentDashboardController;
 use App\Http\Controllers\Student\ProfileController as StudentProfileController;
@@ -315,6 +316,19 @@ Route::middleware(['auth', 'role:nurse,physician'])
             ->middleware('throttle:15,1,kioskdev-store')->name('kiosk-devices.store');
         Route::delete('/kiosk-devices/{device}', [NurseKioskDeviceController::class, 'destroy'])
             ->middleware('throttle:15,1,kioskdev-destroy')->name('kiosk-devices.destroy');
+
+        // My Signature (FR-NRS-15, D-134): upload / replace / remove the
+        // signed-in user's own PNG signature, which the forms they sign
+        // print. No user id in any URL — every action is on the signed-in
+        // account. `image` serves only the owner's own file, for the
+        // page's preview. Each has its own throttle bucket (3rd arg).
+        Route::get('/signature', [NurseSignatureController::class, 'show'])->name('signature');
+        Route::post('/signature', [NurseSignatureController::class, 'store'])
+            ->middleware('throttle:10,1,signature-store')->name('signature.store');
+        Route::delete('/signature', [NurseSignatureController::class, 'destroy'])
+            ->middleware('throttle:10,1,signature-destroy')->name('signature.destroy');
+        Route::get('/signature/image', [NurseSignatureController::class, 'image'])
+            ->middleware('throttle:60,1,signature-image')->name('signature.image');
     });
 
 // ── Manual Screening (D-133): the NURSE's only ──────────────────────────────

@@ -26,11 +26,16 @@ class User extends Authenticatable
         'status',
         'must_change_password',
         'last_active_at',
+        // D-134: the private-disk path of a nurse's or physician's PNG
+        // signature — written only by Nurse\SignatureController.
+        'signature_path',
     ];
 
     protected $hidden = [
         'password',
         'remember_token',
+        // D-134: a storage path is never serialised (JSON feeds, toArray()).
+        'signature_path',
     ];
 
     /**

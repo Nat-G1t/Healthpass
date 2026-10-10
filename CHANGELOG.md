@@ -4,6 +4,55 @@
 
 ### Added
 
+* **Nurses and physicians upload a PNG signature that prints on the forms
+  they sign — My Signature** (D-134, new FR-NRS-15, FR-PRT-04 / FR-PRT-07
+  amended; PRD revision 2.18, 2026-10-10). Asked for by the Clinic Director
+  via Nat. No new package (GD was already on for dompdf).
+  **FLAGGED SCHEMA CHANGE (approved by Nat, 2026-10-08):**
+  `users.signature_path` (string, nullable) — the private-disk path of the
+  user's PNG; migration `2026_10_10_000002_d134_add_signature_path_to_users`.
+  Fillable and **hidden** (never serialised).
+  * **Page** — **My Signature**, the last clinic item in the nurse's and the
+    physician's sidebar (pen icon): `GET /nurse/signature` (`nurse.signature`),
+    `POST` (upload / replace, own `signature-store` throttle bucket), `DELETE`
+    (remove, own `signature-destroy` bucket) and `GET /nurse/signature/image`
+    (`nurse.signature.image`, the **owner's own** file for the preview, own
+    `signature-image` bucket). No user id in any URL. `Nurse\SignatureController`.
+  * **Guidance** — a highlighted peach note above the upload: "Use a clear,
+    transparent background." (a signature on paper prints as a box), then sign
+    on white paper → photo → **remove.bg** (new tab, `noopener noreferrer`) →
+    download as PNG → upload.
+  * **Preview** — the current signature on a checkerboard (a non-transparent
+    image shows as a solid box), "Uploaded {date}", **Replace** and **Remove**
+    (two-step confirm). With none: "No signature yet — forms print a blank
+    line for you to sign by hand."
+  * **Rules** (`Nurse\StoreSignatureRequest`, limits in
+    `config('healthpass.signatures')`): the name ends `.png` **and** fileinfo
+    finds a PNG in the bytes (a renamed JPEG or PDF is refused), at most 2 MB,
+    150×50 to 3000×3000 pixels. Stored on the private `local` disk under
+    `signatures/` with a random name; replacing deletes the old file only
+    after the new one is saved; removing deletes it and nulls the column.
+  * **Printing** — `App\Support\Signature::forPrint()` turns a user into the
+    image's base64 `data:` URI plus a width and height fitted to a 30pt × 2in
+    box (decided in PHP, so Chrome and dompdf draw it the same size; dompdf
+    does not reliably honour `max-width` on an image). `ClearanceDocument` adds
+    `physicianSignature` (the encoding physician's, only when the physician
+    name prints) and `AssessmentDocument` adds `interviewerSignature` (the
+    interviewing nurse's, or a pre-D-126 record's encoder). One partial,
+    `forms/partials/signature`, draws the slot. The Medical Clearance's 30pt
+    `.sig-space` is unchanged in height; the Medical Assessment footer's 20pt
+    top margin became the 30pt signature boxes. Always the **current**
+    signature; none → the blank line, as before. Nobody is blocked from saving
+    or printing. Print, PDF and the batch ZIP all go through `VisitDocument`.
+  * Tests: `SignaturePageTest` (access, owner-only image, real-PNG upload,
+    renamed JPEG / PDF / > 2 MB / 100×30 refused, replace / remove) and
+    `SignaturePrintTest` (each signature in its slot on both forms, pre-D-126
+    record, current signature on reprint, PDFs still 1 / 2 pages, an extreme
+    3000×50 signature still one page, the ZIP's PDF carries it).
+  * **Server step:** back up `storage/app/private` (signatures live in
+    `storage/app/private/signatures`); ask the nurse and the physician to
+    upload their signatures before go-live.
+
 * **The nurse can screen a scheduled student by hand when the kiosk is
   down — Manual Screening** (D-133, new FR-NRS-14; PRD revision 2.17,
   2026-10-10). Asked for by the Clinic Director. No new package.

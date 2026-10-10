@@ -264,6 +264,8 @@ npm run dev                       # terminal 2
   carries no headers/footers.
   Print and PDF share one template per form (`resources/views/forms/`),
   written in dompdf-safe CSS (tables, no flex/grid, no JS).
+  Signatures (D-134) are embedded as base64 data URIs built in the document
+  classes — never a URL the print iframe or dompdf must fetch.
 - Documents leave the clinic only through the clinic itself, the Director, or
   a Director-approved release to the batch's own college (D-113); students
   never download (D-106). **Since D-125 the clinic also prints and downloads a

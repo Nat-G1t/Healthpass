@@ -206,6 +206,13 @@
     /* ── Physician block (FR-PRT-04 / D-64) ─────────────────────────────── */
     .physician { width: 2.2in; margin: 18pt 0 0 0.2in; }
     .physician .sig-space { height: 30pt; }   /* blank space for a wet signature */
+
+    /* D-134: the uploaded signature (forms/partials/signature) fills that
+       same 30pt — App\Support\Signature fits the image inside it, so the
+       block is exactly as tall with or without one. */
+    .sig-box { width: 100%; border-collapse: collapse; }
+    .sig-box td { height: 30pt; padding: 0; text-align: center; vertical-align: bottom; }
+    .sig-box img { display: block; margin: 0 auto; }
     .physician .name {
         border-bottom: 1px solid #000;
         height: 14pt;
@@ -423,9 +430,10 @@
     {{-- ── Physician block (FR-PRT-04 / BR-17, D-64) — a blank line for the
          wet signature either way; the name and licence print only on a
          record a PHYSICIAN encoded, and a nurse's record leaves both for the
-         physician to fill in by hand. ─────────────────────────────────── --}}
+         physician to fill in by hand. D-134: the encoding physician's
+         uploaded signature, when there is one, sits in the signature space. ── --}}
     <div class="physician">
-        <div class="sig-space"></div>
+        <div class="sig-space">@include('forms.partials.signature', ['signature' => $physicianSignature])</div>
         <div class="name">{{ $physicianName }}</div>
         <div class="title">University Physician</div>
         <div class="license">
