@@ -570,6 +570,275 @@ class BatchTrackingPageTest extends TestCase
         $this->assertSame($withOne, $this->countQueries(fn () => $this->tracking()));
     }
 
+    // ── D-130: month, form type, status and release filters ─────────────────
+
+    /** A document release request on $batch with $status, from its college's admin. */
+    private function addReleaseRequest(BatchRequest $batch, string $status): void
+    {
+        $batch->releaseRequests()->create([
+            'requested_by' => $this->ccsAdmin->id,
+            'reason' => 'The OJT office needs the forms by Friday.',
+            'status' => $status,
+        ]);
+    }
+
+    /** @return list<int> the ids on the Batch Results card */
+    private function resultIds(array $query): array
+    {
+        return $this->tracking($query)->assertOk()->viewData('approvedBatches')->pluck('id')->all();
+    }
+
+    public function test_batch_results_filters_by_the_month_of_its_clinic_date(): void
+    {
+        $september = $this->makeBatch('approved', null, ['scheduled_date' => '2026-09-10']);
+        $october = $this->makeBatch('approved', null, ['scheduled_date' => '2026-10-01']);
+        $lastDay = $this->makeBatch('approved', null, ['scheduled_date' => '2026-10-31']);
+
+        $this->assertEqualsCanonicalizing([$october->id, $lastDay->id], $this->resultIds(['results_month' => '2026-10']));
+        $this->assertSame([$september->id], $this->resultIds(['results_month' => '2026-09']));
+        $this->assertSame([], $this->resultIds(['results_month' => '2026-11']));
+    }
+
+    public function test_the_month_dropdowns_list_each_cards_own_months_newest_first(): void
+    {
+        $this->makeBatch('approved', null, ['scheduled_date' => '2026-09-10']);
+        $this->makeBatch('approved', null, ['scheduled_date' => '2026-10-05']);
+        $this->makeBatch('approved', null, ['scheduled_date' => '2026-10-20']);
+        $this->makeBatch('rejected', null, ['reviewed_at' => '2026-08-20 10:00:00']);
+
+        $response = $this->tracking()->assertOk();
+
+        $this->assertSame(
+            ['2026-10' => 'October 2026', '2026-09' => 'September 2026'],
+            $response->viewData('resultsMonths'),
+        );
+        $this->assertSame(['2026-08' => 'August 2026'], $response->viewData('rejectedMonths'));
+
+        $this->assertMatchesRegularExpression(
+            '/name="results_month".*All months.*value="2026-10"[^>]*>October 2026.*value="2026-09"[^>]*>September 2026/s',
+            $this->cardForm($response, 'results'),
+        );
+        $this->assertStringContainsString('name="rejected_month"', $this->cardForm($response, 'rejected'));
+    }
+
+    public function test_the_rejected_card_filters_by_the_cancel_date_or_else_the_review_date(): void
+    {
+        // Rejected late on August 31 — still August.
+        $rejected = $this->makeBatch('rejected', null, ['reviewed_at' => '2026-08-31 22:00:00']);
+        // Approved in August, cancelled in September: its decision is the cancellation.
+        $cancelled = $this->makeBatch('cancelled_after_approval', null, [
+            'reviewed_at' => '2026-08-15 09:00:00',
+            'cancelled_at' => '2026-09-03 14:00:00',
+        ]);
+
+        $august = $this->tracking(['rejected_month' => '2026-08'])->assertOk();
+        $this->assertSame([$rejected->id], $august->viewData('closedBatches')->pluck('id')->all());
+
+        $september = $this->tracking(['rejected_month' => '2026-09'])->assertOk();
+        $this->assertSame([$cancelled->id], $september->viewData('closedBatches')->pluck('id')->all());
+
+        $this->assertSame(
+            ['2026-09' => 'September 2026', '2026-08' => 'August 2026'],
+            $september->viewData('rejectedMonths'),
+        );
+    }
+
+    public function test_the_rejected_card_gets_the_month_filter_only(): void
+    {
+        $this->makeBatch('rejected');
+
+        $form = $this->cardForm($this->tracking(), 'rejected');
+
+        $this->assertStringContainsString('name="rejected_month"', $form);
+        $this->assertStringNotContainsString('name="rejected_form"', $form);
+        $this->assertStringNotContainsString('name="rejected_status"', $form);
+        $this->assertStringNotContainsString('name="rejected_release"', $form);
+    }
+
+    public function test_batch_results_filters_by_form_type(): void
+    {
+        $clearance = $this->makeBatch('approved');
+        $assessment = $this->makeBatch('approved', null, ['form_type' => 'assessment', 'reason' => 'ojt']);
+
+        $this->assertSame([$clearance->id], $this->resultIds(['results_form' => 'clearance']));
+        $this->assertSame([$assessment->id], $this->resultIds(['results_form' => 'assessment']));
+
+        $this->tracking()->assertSeeInOrder(['All form types', 'Medical Clearance', 'Medical Assessment Form']);
+    }
+
+    public function test_batch_results_filters_by_status_and_the_pager_counts_only_the_matches(): void
+    {
+        $scheduled = $this->makeBatch('approved', null, ['scheduled_date' => '2026-09-10']);
+        $this->addStudent($scheduled, 'booked', 'Ana Booked');
+        $completed = $this->makeBatch('approved', null, ['scheduled_date' => '2026-09-07']);
+        $this->addStudent($completed, 'Fit', 'Ben Done');
+
+        $response = $this->tracking(['results_status' => 'completed'])->assertOk();
+
+        $this->assertSame([$completed->id], $response->viewData('approvedBatches')->pluck('id')->all());
+        $this->assertSame(1, $response->viewData('approvedBatches')->total());
+        $this->assertSame([$scheduled->id], $this->resultIds(['results_status' => 'scheduled']));
+
+        $this->tracking()->assertSeeInOrder([
+            'All statuses', 'Scheduled', 'In progress', 'Still in progress', 'Completed', 'Done / Incomplete', 'No one attended',
+        ]);
+    }
+
+    public function test_a_status_filtered_list_pages_at_ten_and_keeps_every_filter(): void
+    {
+        foreach (range(1, 12) as $day) {
+            $this->makeBatch('approved', null, ['scheduled_date' => sprintf('2026-10-%02d', $day)]);
+        }
+        $this->makeBatch('approved', $this->coe, ['scheduled_date' => '2026-10-20']);
+        $this->makeBatch('rejected');
+
+        $query = ['results_status' => 'scheduled', 'results_college' => $this->ccs->id, 'rejected_month' => '2026-09'];
+
+        $first = $this->tracking($query)->viewData('approvedBatches');
+        $this->assertCount(10, $first);
+        $this->assertSame(12, $first->total());
+
+        $next = $first->nextPageUrl();
+        $this->assertStringContainsString('results_page=2', $next);
+        $this->assertStringContainsString('results_status=scheduled', $next);
+        $this->assertStringContainsString('rejected_month=2026-09', $next);
+
+        $second = $this->tracking([...$query, 'results_page' => 2])->viewData('approvedBatches');
+        $this->assertCount(2, $second);
+        // Newest clinic date first, as unfiltered: page 2 holds October 2 and 1.
+        $this->assertSame(
+            ['2026-10-02', '2026-10-01'],
+            $second->getCollection()->map(fn (BatchRequest $batch) => $batch->scheduled_date->toDateString())->all(),
+        );
+    }
+
+    public function test_batch_results_filters_by_the_latest_release_request(): void
+    {
+        $none = $this->makeBatch('approved');
+        $pending = $this->makeBatch('approved');
+        $this->addReleaseRequest($pending, 'pending');
+        $approved = $this->makeBatch('approved');
+        $this->addReleaseRequest($approved, 'approved');
+        $rejected = $this->makeBatch('approved');
+        $this->addReleaseRequest($rejected, 'rejected');
+        // Rejected once, then asked again: its latest request is the pending one.
+        $askedAgain = $this->makeBatch('approved');
+        $this->addReleaseRequest($askedAgain, 'rejected');
+        $this->addReleaseRequest($askedAgain, 'pending');
+
+        $this->assertSame([$none->id], $this->resultIds(['results_release' => 'none']));
+        $this->assertEqualsCanonicalizing([$pending->id, $askedAgain->id], $this->resultIds(['results_release' => 'pending']));
+        $this->assertSame([$approved->id], $this->resultIds(['results_release' => 'approved']));
+        $this->assertSame([$rejected->id], $this->resultIds(['results_release' => 'rejected']));
+
+        $this->tracking()->assertSeeInOrder(['All release requests', 'None', 'Waiting for review', 'Approved', 'Rejected']);
+    }
+
+    public function test_the_new_filters_combine_with_the_college_dropdown_and_batch_id_search(): void
+    {
+        $assessment = ['form_type' => 'assessment', 'reason' => 'ojt'];
+        $target = $this->makeBatch('approved', $this->coe, [...$assessment, 'scheduled_date' => '2026-10-05']);
+        $this->addReleaseRequest($target, 'approved');
+        // Each of these misses exactly one filter.
+        $wrongCollege = $this->makeBatch('approved', null, [...$assessment, 'scheduled_date' => '2026-10-05']);
+        $this->addReleaseRequest($wrongCollege, 'approved');
+        $wrongForm = $this->makeBatch('approved', $this->coe, ['scheduled_date' => '2026-10-05']);
+        $this->addReleaseRequest($wrongForm, 'approved');
+        $wrongMonth = $this->makeBatch('approved', $this->coe, [...$assessment, 'scheduled_date' => '2026-09-10']);
+        $this->addReleaseRequest($wrongMonth, 'approved');
+        $noRelease = $this->makeBatch('approved', $this->coe, [...$assessment, 'scheduled_date' => '2026-10-06']);
+        $wrongStatus = $this->makeBatch('approved', $this->coe, [...$assessment, 'scheduled_date' => '2026-10-07']);
+        $this->addStudent($wrongStatus, 'Fit', 'Cara Done');
+        $this->addReleaseRequest($wrongStatus, 'approved');
+
+        $query = [
+            'results_college' => $this->coe->id,
+            'results_month' => '2026-10',
+            'results_form' => 'assessment',
+            'results_status' => 'scheduled',
+            'results_release' => 'approved',
+        ];
+
+        $this->assertSame([$target->id], $this->resultIds($query));
+        $this->assertSame([$target->id], $this->resultIds([...$query, 'results_q' => $target->reference_no]));
+        $this->assertSame([], $this->resultIds([...$query, 'results_q' => 'BR-1999']));
+    }
+
+    public function test_invalid_d130_values_read_as_all(): void
+    {
+        $approved = $this->makeBatch('approved');
+        $rejected = $this->makeBatch('rejected');
+
+        $response = $this->actingAs($this->director)
+            ->get(route('director.tracking.index').'?results_month=13-2026&results_status=x&results_form=dental'
+                .'&results_release[]=a&rejected_month=2026-13')
+            ->assertOk();
+
+        $this->assertSame([$approved->id], $response->viewData('approvedBatches')->pluck('id')->all());
+        $this->assertSame([$rejected->id], $response->viewData('closedBatches')->pluck('id')->all());
+        $this->assertFalse($response->viewData('resultsFilters')->isActive());
+        $this->assertFalse($response->viewData('rejectedFilters')->isActive());
+    }
+
+    public function test_one_cards_form_keeps_the_other_cards_new_filters(): void
+    {
+        $this->makeBatch('approved');
+        $this->makeBatch('rejected');
+
+        $response = $this->tracking(['results_status' => 'scheduled', 'results_month' => '2026-09', 'rejected_month' => '2026-09']);
+
+        $rejectedForm = $this->cardForm($response, 'rejected');
+        $this->assertStringContainsString('<input type="hidden" name="results_status" value="scheduled">', $rejectedForm);
+        $this->assertStringContainsString('<input type="hidden" name="results_month" value="2026-09">', $rejectedForm);
+
+        $resultsForm = $this->cardForm($response, 'results');
+        $this->assertStringContainsString('<input type="hidden" name="rejected_month" value="2026-09">', $resultsForm);
+        $this->assertStringNotContainsString('type="hidden" name="results_status"', $resultsForm);
+
+        // Clear resets this card's new filters too, and keeps the other card's.
+        $clear = $this->clearLink($resultsForm);
+        $this->assertStringNotContainsString('results_status=', $clear);
+        $this->assertStringNotContainsString('results_month=', $clear);
+        $this->assertStringContainsString('rejected_month=2026-09', $clear);
+    }
+
+    /** The href of a filter form's Clear link. */
+    private function clearLink(string $form): string
+    {
+        $found = preg_match('/<a href="([^"]*)"[^>]*>\s*Clear/', $form, $match);
+        $this->assertSame(1, $found, 'The form has no Clear link.');
+
+        return html_entity_decode($match[1]);
+    }
+
+    public function test_the_clinic_and_college_admin_cards_get_no_new_filters(): void
+    {
+        $upcoming = $this->makeBatch('approved', null, ['scheduled_date' => '2026-09-10']);
+        $this->addStudent($upcoming, 'booked', 'Ana Booked');
+        $past = $this->makeBatch('approved', null, ['scheduled_date' => '2026-09-07']);
+        $this->addStudent($past, 'Fit', 'Ben Done');
+
+        $pages = [
+            [$this->nurse, route('nurse.batches.index'), 'upcoming'],
+            [$this->nurse, route('nurse.batch-results'), 'past'],
+            [$this->ccsAdmin, route('admin.batches.index'), null],
+        ];
+
+        foreach ($pages as [$user, $url, $prefix]) {
+            $response = $this->actingAs($user)->get($url)->assertOk();
+
+            if ($prefix !== null) {
+                // The D-114 filters are still there…
+                $response->assertSee('name="'.$prefix.'_college"', false);
+            }
+
+            // …and none of D-130's.
+            foreach (['All months', 'All form types', 'All statuses', 'All release requests'] as $label) {
+                $response->assertDontSee($label);
+            }
+        }
+    }
+
     // ── The results page (approved) ──────────────────────────────────────────
 
     public function test_the_results_page_opens_for_an_approved_batch_of_any_college(): void

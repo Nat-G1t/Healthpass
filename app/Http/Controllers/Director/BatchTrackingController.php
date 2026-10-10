@@ -15,7 +15,9 @@ use App\Support\BatchCardFilters;
 use App\Support\BatchNotifications;
 use App\Support\BatchResults;
 use App\Support\SignedMemo;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
@@ -50,17 +52,24 @@ class BatchTrackingController extends Controller
      * (BatchCardFilters — keys "results_*" for Batch Results, "rejected_*"
      * for Rejected batches), applied on the server so they find a batch on
      * any page. Every value is a bound parameter.
+     *
+     * D-130: both cards also filter by MONTH — Batch Results by the clinic
+     * date, Rejected and Cancelled by the decision date it sorts on — and
+     * Batch Results by form type, status and release request.
      */
     public function index(Request $request): View
     {
         $perPage = config('healthpass.ui.rows_per_page');
-        $resultsFilters = BatchCardFilters::fromRequest($request, 'results');
-        $rejectedFilters = BatchCardFilters::fromRequest($request, 'rejected');
+        $resultsFilters = BatchCardFilters::fromRequest($request, 'results', ['month', 'form', 'status', 'release']);
+        $rejectedFilters = BatchCardFilters::fromRequest($request, 'rejected', ['month']);
 
         // Card 1: approved, newest clinic date first. statusRelations() is
         // everything resultsStatus() reads, so the card costs the same few
         // queries whether a batch has 4 students or 60.
-        $approvedBatches = $resultsFilters->apply(BatchRequest::where('status', 'approved'))
+        $approvedQuery = $resultsFilters->apply(BatchRequest::where('status', 'approved'))
+            ->when($resultsFilters->monthBounds(), fn ($query, array $month) => $query
+                ->where('scheduled_date', '>=', $month[0])
+                ->where('scheduled_date', '<', $month[1]))
             ->with('college:id,code')
             ->with(BatchResults::statusRelations())
             // D-113: the "Release requested" tag — a college is waiting for
@@ -70,15 +79,27 @@ class BatchTrackingController extends Controller
             // released this batch's documents to its college.
             ->withExists(['releaseRequests as has_approved_release' => fn ($query) => $query->where('status', 'approved')])
             ->orderByDesc('scheduled_date')
-            ->orderByDesc('id')
-            ->paginate($perPage, pageName: $resultsFilters->pageName())
-            ->withQueryString();
+            ->orderByDesc('id');
+
+        $approvedBatches = $resultsFilters->status === ''
+            ? $approvedQuery->paginate($perPage, pageName: $resultsFilters->pageName())->withQueryString()
+            : $this->pageByStatus($request, $approvedQuery, $resultsFilters, $perPage);
 
         // Card 2: rejected or cancelled, newest DECISION first — the
         // cancellation for a cancelled batch (even one approved before it was
         // cancelled), the rejection otherwise. COALESCE is the same in MySQL
         // and SQLite, and the SQL is a fixed string with no input in it.
+        // D-130: the month filter reads that same decision date, written as
+        // plain comparisons so no date function is needed.
         $closedBatches = $rejectedFilters->apply(BatchRequest::whereIn('status', ['rejected', 'cancelled']))
+            ->when($rejectedFilters->monthBounds(), fn ($query, array $month) => $query->where(fn ($decided) => $decided
+                ->where(fn ($cancelled) => $cancelled
+                    ->where('cancelled_at', '>=', $month[0])
+                    ->where('cancelled_at', '<', $month[1]))
+                ->orWhere(fn ($rejected) => $rejected
+                    ->whereNull('cancelled_at')
+                    ->where('reviewed_at', '>=', $month[0])
+                    ->where('reviewed_at', '<', $month[1]))))
             ->with('college:id,code')
             // D-129: the canceller's role tells "Cancelled by college" from
             // "Cancelled by Director".
@@ -97,7 +118,38 @@ class BatchTrackingController extends Controller
             'resultsFilters' => $resultsFilters,
             'rejectedFilters' => $rejectedFilters,
             'colleges' => College::orderBy('code')->get(['id', 'code']),
+            // D-130: each card's month dropdown — the months it has a batch in.
+            'resultsMonths' => BatchCardFilters::monthOptions(
+                BatchRequest::where('status', 'approved')->pluck('scheduled_date'),
+            ),
+            'rejectedMonths' => BatchCardFilters::monthOptions(
+                BatchRequest::whereIn('status', ['rejected', 'cancelled'])->get(['cancelled_at', 'reviewed_at'])
+                    ->map(fn (BatchRequest $batch) => $batch->cancelled_at ?? $batch->reviewed_at),
+            ),
         ]);
+    }
+
+    /**
+     * D-130: the Batch Results card filtered by status. resultsStatus() is
+     * worked out from every student's appointment, not stored in a column, so
+     * SQL cannot filter on it: load the card's batches (already narrowed by
+     * the SQL filters), keep the picked status in PHP, and page that list
+     * ourselves. Fine at a clinic's batch counts.
+     */
+    private function pageByStatus(Request $request, Builder $query, BatchCardFilters $filters, int $perPage): LengthAwarePaginator
+    {
+        $matching = $query->get()
+            ->filter(fn (BatchRequest $batch) => $batch->resultsStatus() === $filters->status)
+            ->values();
+        $page = LengthAwarePaginator::resolveCurrentPage($filters->pageName());
+
+        return (new LengthAwarePaginator(
+            $matching->forPage($page, $perPage)->values(),
+            $matching->count(),
+            $perPage,
+            $page,
+            ['path' => $request->url(), 'pageName' => $filters->pageName()],
+        ))->withQueryString();
     }
 
     /**

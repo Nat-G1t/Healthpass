@@ -291,6 +291,20 @@ class BatchRequest extends Model
     private const OPEN_PROGRESS = ['scheduled', 'rescheduled', 'rest_retake', 'in_clinic'];
 
     /**
+     * Every key resultsStatus() can return, in the order its rules run, with
+     * the label the badge (batches/results/_status) and the Director's status
+     * filter (D-130) show. D-121: `finished_incomplete` reads "Done / Incomplete".
+     */
+    public const RESULTS_STATUSES = [
+        'scheduled' => 'Scheduled',
+        'in_progress' => 'In progress',
+        'still_in_progress' => 'Still in progress',
+        'completed' => 'Completed',
+        'finished_incomplete' => 'Done / Incomplete',
+        'no_one_attended' => 'No one attended',
+    ];
+
+    /**
      * D-111: where this batch stands, as ONE key — the views word and badge it.
      * The rules are tried in this order, on the server clock:
      *

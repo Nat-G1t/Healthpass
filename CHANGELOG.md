@@ -1159,6 +1159,37 @@
 
 ### Changed
 
+* **The Director's Batch Tracking filters by month on both cards, and by form
+  type, status and release request on Batch Results** (D-130, FR-DIRA-09
+  amended; PRD revision 2.14, 2026-10-10). Asked for by the Clinic Director.
+  No schema change, no new package, no new route.
+  * **Month** on both cards: "All months" + every month the card has a batch
+    in, newest first ("October 2026"). Batch Results reads the clinic date;
+    Rejected and Cancelled reads the decision date it sorts on (the
+    cancellation, else the rejection). The bounds are worked out in PHP, so
+    the SQL has no date function (SQLite runs the suite).
+  * **Batch Results only:** Form type, Status (D-111's six, in order) and
+    Release request (None / Waiting for review / Approved / Rejected — the
+    batch's latest request, via an ORDER BY + LIMIT 1 subquery).
+  * **Status is computed** (`resultsStatus()`), so a status filter loads the
+    card's SQL-filtered batches, keeps the matches in PHP and pages them with
+    a `LengthAwarePaginator` that keeps the query string. Without it the card
+    pages in SQL as before.
+  * `App\Support\BatchCardFilters` gained opt-in extras
+    (`fromRequest($request, $prefix, ['month', 'form', 'status', 'release'])`),
+    each value whitelisted (unknown = "All"); `batches/_card-filters` renders
+    only the extras a card opted into, so the clinic's Upcoming / Completed
+    cards are unchanged. New `BatchRequest::RESULTS_STATUSES` holds the status
+    words; the status badge partial now reads them from there.
+  * Tests: 13 new cases in `tests/Feature/Director/BatchTrackingPageTest.php`
+    — each month (incl. the 31st and a late-evening decision), the month
+    options newest first, rejected vs cancelled dates, form type, status with
+    the pager count, paging a status-filtered list with every filter kept,
+    each release option (latest request wins), all filters combined with
+    College + search, invalid values ignored, the other card's filters kept
+    and cleared correctly, and the clinic and college admin cards showing no
+    new filters.
+
 * **The Clinic Director can cancel an approved batch before its first hour,
   with a reason** (D-129, adds FR-DIRA-12; amends FR-ADM-11, FR-DIRA-09 and
   FR-DIRA-10; PRD revision 2.13, 2026-10-10). Asked for by the Clinic

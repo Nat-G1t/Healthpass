@@ -2788,6 +2788,57 @@ opened.
 
 ---
 
+## E2E-43 — The Director filters Batch Tracking by month, form, status and release (D-130)
+
+**Goal:** the Director narrows both Batch Tracking cards by month, and Batch
+Results by form type, status and release request — together with the College
+dropdown and the Batch ID search, on every page of the list.
+
+**Accounts:** `director@healthpass.test`, with the demo batches (approved
+batches in at least two months, both form types, one with a release request,
+and some rejected or cancelled batches).
+
+**Steps**
+
+1. Sign in as the **Director** → **Batch Tracking**. → **Expect:** Batch
+   Results' filter bar has **All colleges**, **All months**, **All form
+   types**, **All statuses**, **All release requests**, the search and
+   Search. Rejected and Cancelled has **All colleges**, **All months** and the
+   search only.
+2. Open Batch Results' **month** dropdown. → **Expect:** "All months", then
+   only the months that have an approved batch, newest first ("October 2026",
+   "September 2026", …). Pick one. → **Expect:** the page reloads; every row's
+   Date scheduled is in that month.
+3. Pick **Medical Assessment Form** in the form dropdown. → **Expect:** only
+   Assessment batches of that month; the month stays picked.
+4. Pick a **status** (e.g. Completed). → **Expect:** every row's badge reads
+   Completed, and "Showing 1–N of N" counts only those.
+5. Pick **Waiting for review** in the release dropdown. → **Expect:** only rows
+   tagged **Release requested**. **Approved** → only rows tagged **Approved
+   Release**. **None** → only rows with neither tag.
+6. Pick a college and type part of a Batch ID → **Search**. → **Expect:** all
+   the filters apply together; with no match the card reads "No approved batch
+   matches these filters."
+7. On Rejected and Cancelled, pick a **month**. → **Expect:** rejected batches
+   by the month they were rejected, cancelled ones by the month they were
+   cancelled; Batch Results keeps its own filters.
+8. With more than ten matches, click **Next** on a filtered card. → **Expect:**
+   page 2 keeps every filter of both cards.
+9. Click **Clear** on Batch Results. → **Expect:** all its filters reset; the
+   Rejected and Cancelled month stays.
+10. Open `…/batch-tracking?results_month=13-2026&results_status=x`. →
+    **Expect:** the page loads unfiltered — no error.
+11. On a phone (390 px wide). → **Expect:** the dropdowns wrap onto several
+    lines; no sideways scrolling.
+12. As the **nurse**, open **Upcoming Batches** and **Batch Results**. →
+    **Expect:** only the College dropdown and the search, as before.
+
+**Pass criteria:** each filter keeps only its own batches; they combine with
+College and the search; the pager counts and pages only the matches and keeps
+every filter; a bad value is ignored; the clinic's cards are unchanged.
+
+---
+
 ## Recording results
 
 For each scenario, record: **Pass / Fail / Blocked (not built)**, the tester

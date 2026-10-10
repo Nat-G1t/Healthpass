@@ -19,7 +19,9 @@
                              opens the details page with the reason
 
     D-114: each card has its own College dropdown and Batch ID search
-    (batches/_card-filters — keys results_* and rejected_*).
+    (batches/_card-filters — keys results_* and rejected_*). D-130: both
+    also filter by month (Batch Results: clinic date; Rejected and Cancelled:
+    decision date), and Batch Results by form type, status and release request.
 
     D-120: a row with news the Director has not opened — a status change, a
     release request, a college's cancellation — ends in a notification dot
@@ -72,11 +74,13 @@
             <p class="mt-1 text-xs text-hp-slate/50">Approved batches from every college, newest clinic date first.</p>
         </div>
 
-        {{-- This card's own College dropdown + Batch ID search (D-114). --}}
+        {{-- This card's own College dropdown + Batch ID search (D-114), and
+             month, form type, status and release request (D-130). --}}
         @if ($resultsFilters->isActive() || $approvedBatches->total() > 0)
             @include('batches._card-filters', [
                 'filters' => $resultsFilters,
                 'colleges' => $colleges,
+                'months' => $resultsMonths,
                 'action' => route('director.tracking.index'),
             ])
         @endif
@@ -141,11 +145,12 @@
             <p class="mt-1 text-xs text-hp-slate/50">Batches you rejected or cancelled and batches a college cancelled, newest first.</p>
         </div>
 
-        {{-- This card's own College dropdown + Batch ID search (D-114). --}}
+        {{-- This card's own College dropdown + Batch ID search (D-114), and month (D-130). --}}
         @if ($rejectedFilters->isActive() || $closedBatches->total() > 0)
             @include('batches._card-filters', [
                 'filters' => $rejectedFilters,
                 'colleges' => $colleges,
+                'months' => $rejectedMonths,
                 'action' => route('director.tracking.index'),
             ])
         @endif
