@@ -208,7 +208,8 @@ class NavBadgesTest extends TestCase
         $this->assertSame(['admin.batches.index', 'admin.activity'], array_keys($this->badges($this->admin)));
         $this->assertSame(['nurse.queue'], array_keys($this->badges($this->nurse)));
         // D-113: Batch Tracking's work count (release requests to review).
-        $this->assertSame(['director.batches.index', 'director.tracking.index', 'director.anomalies'], array_keys($this->badges($this->director)));
+        // D-135 removed Flagged Anomalies and its badge.
+        $this->assertSame(['director.batches.index', 'director.tracking.index'], array_keys($this->badges($this->director)));
     }
 
     // ── Student ──────────────────────────────────────────────────────────────
@@ -403,23 +404,6 @@ class NavBadgesTest extends TestCase
         $this->assertSame(2, $this->badges($this->director)['director.batches.index']);
     }
 
-    public function test_flagged_anomalies_counts_flagged_visits_captured_since_last_seen(): void
-    {
-        $this->captureVisit($this->makeStudent(), flags: ['is_bp_flagged' => true]);
-        $this->captureVisit($this->makeStudent());
-        $this->assertSame(1, $this->badges($this->director)['director.anomalies'], 'An unflagged visit is not an anomaly.');
-
-        $this->actingAs($this->director)->get(route('director.anomalies'))
-            ->assertOk()
-            ->assertDontSee('data-nav-badge-for="director.anomalies"', false);
-        $this->assertSame(0, $this->badges($this->director)['director.anomalies']);
-
-        $this->travel(1)->minutes();
-        $this->captureVisit($this->makeStudent(), flags: ['is_temp_flagged' => true]);
-
-        $this->assertSame(1, $this->badges($this->director)['director.anomalies']);
-    }
-
     // ── The seen stamp ───────────────────────────────────────────────────────
 
     public function test_stamping_a_page_as_seen_never_changes_updated_at(): void
@@ -435,17 +419,18 @@ class NavBadgesTest extends TestCase
 
     public function test_a_key_never_stamped_falls_back_to_when_the_account_was_created(): void
     {
-        // Flagged at 09:05, before this Director's account exists.
-        $this->captureVisit($this->makeStudent(), flags: ['is_bp_flagged' => true]);
+        // Submitted at 09:05, before this College Admin's account exists.
+        // (Used the Director's Flagged Anomalies badge until D-135.)
+        $this->makeBatch();
 
         $this->travel(1)->minutes();
-        $newDirector = User::factory()->create(['role' => 'director']);
-        $this->assertSame(0, $this->badges($newDirector)['director.anomalies']);
+        $newAdmin = User::factory()->create(['role' => 'college_admin', 'managed_college_id' => $this->ccs->id]);
+        $this->assertSame(0, $this->badges($newAdmin)['admin.activity']);
 
         $this->travel(1)->minutes();
-        $this->captureVisit($this->makeStudent(), flags: ['is_bmi_flagged' => true]);
+        $this->makeBatch();
 
-        $this->assertSame(1, $this->badges($newDirector)['director.anomalies']);
-        $this->assertNull($newDirector->fresh()->nav_seen_at);
+        $this->assertSame(1, $this->badges($newAdmin)['admin.activity']);
+        $this->assertNull($newAdmin->fresh()->nav_seen_at);
     }
 }

@@ -239,9 +239,8 @@
             </div>
         @endif
 
-        {{-- No Flagged Anomalies screen for this role: row-level vitals are
-             clinical data the Nurse and Director act on (FR-ANL-05), so this
-             card is counts only. --}}
+        {{-- Counts only: row-level vitals are clinical data the clinic acts
+             on, not the college. --}}
         <p class="mt-3.5 text-xs text-hp-slate/50">
             Counts only — the clinic follows up flagged students directly.
         </p>

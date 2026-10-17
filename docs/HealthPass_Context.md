@@ -45,7 +45,7 @@ HealthPass is a **single Laravel application** (plus a clinic kiosk that is a Bl
 - Director approval that auto-generates appointments for listed students
 - Kiosk vitals capture (real sensors via Web Serial) + the new forms' twelve Physical Signs questions (D-63)
 - Nurse live queue, encode result (Fit/Unfit), and clearance printout
-- Director dashboard: KPIs, approvals, analytics, flagged anomalies
+- Director dashboard: KPIs (incl. a Flagged Visits count), approvals, analytics — ~~flagged anomalies~~ (page removed by D-135)
 
 **Out of scope**
 - AI / predictive risk profiling (fully dropped from earlier paper iterations)
@@ -79,7 +79,7 @@ Only **students** self-register. `nurse`, `physician` (D-64), `college_admin`, a
 | Preview / print clearance form | | | ✓ | ✓ | |
 | Enable Kiosk Mode · kiosk staff exit | | | ✓ | ✓ | |
 | View own clearance records | ✓ | | | | |
-| View analytics + flagged anomalies | | | | | ✓ |
+| View analytics + flagged-visits count (D-135) | | | | | ✓ |
 | Download own college's Yearly Clearance Report (PDF — FR-ADM-13, D-81; beside Print Monthly Report on the admin's Data Summary page — "Analytics" before D-103; both reports open with the PSU letterhead, D-104) | | ✓ | | | |
 | Provision staff accounts (College Admin / Nurse / Physician) and correct a physician's license | | | | | ✓ |
 | Seed colleges / the first Director | (admin seed) | | | | |
@@ -205,7 +205,7 @@ Physician opens the visit ("Doctor's Assessment")
              removed from a queue above is missed too, and joins their
              batch's group (D-132).
 
-Director analytics and flagged anomalies update from encoded records
+Director analytics (and the Dashboard's Flagged Visits count, D-135) update from encoded records
 ```
 
 ---
@@ -247,7 +247,7 @@ Director analytics and flagged anomalies update from encoded records
 | Heart rate **(D-66)** | 60–100 bpm | > 100 bpm — **no low-HR flag**, a resting rate under 60 is common in healthy young students |
 | Respiratory rate **(D-66)** | 12–20 breaths/min | < 12 **or** > 20 breaths/min |
 
-Flags appear in the nurse queue's "Flags" column and the Director's Flagged Anomalies screen. BMI = weight(kg) ÷ height(m)².
+Flags appear in the nurse queue's "Flags" column, and as counts on the Director's Dashboard (Flagged Visits) and Data Summary (Vital-Sign Flags). (D-135 removed the Director's Flagged Anomalies screen.) BMI = weight(kg) ÷ height(m)².
 
 **When each flag is computed (D-66).** Four of the five are computed at **kiosk capture**, in `SubmitKioskVisit`, and stored as booleans. `is_rr_flagged` is the exception: the kiosk has **no sensor** for a respiratory rate (D-65), so that flag is computed at **encode**, in the same transaction that writes `vital_signs.respiratory_rate`. Until then it is `false`, meaning "not measured yet" — not "normal". The rules live as static helpers on `App\Models\VitalSigns` (`isBmiFlagged()` — D-78, `isHeartRateFlagged()`, `isRespiratoryRateFlagged()`), shared by the kiosk submit, the encode controller and the seeders, and every threshold comes from `config('healthpass.thresholds')` (BR-13). Nothing is ever derived in the browser or read from a request body.
 
@@ -317,7 +317,7 @@ Home, Calendar, FileText, QrCode, Plus, List, Activity, Edit, BarChart, Alert, C
 | Student | Dashboard · My Records (+ the D-73 Clinic Record page) · My ID (D-61 removed Book Appointment and My Appointments) |
 | College Admin | Dashboard · New Batch Request · Batch Tracking · Data Summary (FR-ADM-08; "Analytics" before D-103) |
 | Nurse | Live Queue (with the **Manual Screening** button, D-133) · Upcoming Batches (D-114) · Batch Results (D-125) · Encode Result · Enable Kiosk Mode (Kiosk Devices: enroll/revoke trusted terminals, D-27) · My Signature (D-134 — the last item; the physician's menu has it too) |
-| Clinic Director | Dashboard · Batch Approvals · Batch Tracking (D-112) · Data Summary (D-103; was "Analytics") · Flagged Anomalies |
+| Clinic Director | Dashboard · Batch Approvals · Batch Tracking (D-112) · Data Summary (D-103; was "Analytics") · ~~Flagged Anomalies~~ (removed by D-135) |
 
 **Unread badges (D-57, FR-UI-05):** a solid orange badge on a menu item — a dot for 1, the number for 2–9, "9+" from 10, nothing at 0 — at the top-right of the item's label (expanded sidebar, phone drawer) or of its icon (collapsed rail). Orange even on the active item. Refreshed on page load only; no polling.
 
@@ -326,7 +326,7 @@ Home, Calendar, FileText, QrCode, Plus, List, Activity, Edit, BarChart, Alert, C
 | Student | My Records → results encoded since last seen · Kiosk Tutorial → a dot until the walkthrough reaches its last step (opening the page doesn't clear it) |
 | College Admin | Batch Tracking → **D-120:** the rows' notification dots (a Batch Results status change or release decision, a rejected request — or, D-129, a batch the Director cancelled — not yet read) + approvals since last seen · Activity Log → entries since last seen, minus the viewer's own submissions and cancellations |
 | Nurse | Live Queue → visits waiting right now (a work count — opening the page doesn't clear it, encoding does) |
-| Clinic Director | Batch Approvals → pending requests (a work count) · Batch Tracking → **D-120:** the rows' notification dots (a status change, a release request, a college's cancellation — never the Director's own, D-129), each cleared by its View · Flagged Anomalies → flagged visits captured since last seen |
+| Clinic Director | Batch Approvals → pending requests (a work count) · Batch Tracking → **D-120:** the rows' notification dots (a status change, a release request, a college's cancellation — never the Director's own, D-129), each cleared by its View · ~~Flagged Anomalies → flagged visits captured since last seen~~ (removed by D-135) |
 
 "Last seen" = when the user last opened that page: stamped in `users.nav_seen_at` before the page renders (so the page you're on shows no badge); a page never opened counts from the account's `created_at`. Every other item has no badge. Counts come from `App\Support\NavBadges`, handed to the sidebar by a view composer.
 
@@ -628,10 +628,10 @@ then nurse-edited — D-76).
 
 #### Director Dashboard (`director-dashboard`)
 - **4 KPI cards**: Total Cleared (orange accent, left border), Pending Approvals, Flagged Anomalies, Avg. Daily Visits.
-- **Two clickable preview cards** (side by side):
+- **One clickable preview card** (full width since D-135):
   - **Pending Batch Approvals** → navigates to `director-approvals`. Shows count badge + preview rows (college, count, date).
-  - **Flagged Anomalies** → navigates to `director-flagged`. Shows count badge + preview rows (student name, flag + value, college).
-- "View all →" link at bottom of each.
+  - ~~**Flagged Anomalies** → navigates to `director-flagged`. Shows count badge + preview rows (student name, flag + value, college).~~ Removed by D-135; the Flagged Visits KPI card stays.
+- "View all →" link at the bottom.
 
 #### Batch Approvals (`director-approvals`) — a queue since D-108
 - **Pending requests only, oldest first** (`created_at`, then `id`), ten per page, the order carried across pages. Columns: **Batch ID / College / Form Type / Purpose** (in quotes) **/ [Review]** — the Students, Requested Date, Clinic Hours, Submitted and Action columns are gone (D-108).
@@ -696,13 +696,8 @@ then nurse-edited — D-76).
 - **Flagged Vitals by Sex** (FR-ANL-14) — beside the donut: one Chart.js 100%-stacked bar per flag (BMI · Temp · BP · PR · RR) — every bar full height, split by each sex's share, Male (orange, on top) over Female (peach) — the flag's total count drawn above each bar, and hovering a segment shows that sex's count and share. Obeys both filters and counts only submitted visits (D-72). On the College Admin page too, and printed in the monthly report as a Flag / Male / Female / Total table.
 - **BMI Distribution** (FR-ANL-12, optional) — four rule-based buckets of captured screenings: Underweight (< 18.5), Normal (18.5–24.9), Overweight (25–29.9), Obese (≥ 30). Descriptive only, no profiling (no-AI lock).
 
-#### Flagged Anomalies (`director-flagged`)
-- **Year picker (D-102)** above the cards: 2021 → the current year, default the current year, reloads on change. Cards and table count visits checked in that year; View carries `?year=` so the record page's back link returns to it.
-- **5 stat cards** (orange left border, D-66): High Blood Pressure, Fever, Abnormal BMI, **High Heart Rate**, **Abnormal Respiratory Rate** — each subtitle quoting its threshold from config.
-- **Table**: Student (600), College (muted — capture-time `clinic_visits.college_id` snapshot, not the student's current college), Flag (flagged badge), Value (orange 700), View (link). **The Category column is dropped (D-32).**
-- Source: `ClinicVisit::scopeFlagged()` — clinic visits where `vital_signs.is_bp_flagged OR is_temp_flagged OR is_bmi_flagged OR is_hr_flagged OR is_rr_flagged` = true (D-66), joined to student name and the visit's snapshot college. That one scope is also what the Director dashboard preview and the D-57 sidebar badge count, so all three moved together.
-- No Export button (FR-ANL-06 removed by D-32).
-- **Phones (below `md`, 2026-10-05 fix):** each flagged visit is a stacked card — student, college, each flag badge beside its value, and View. The table shows from `md` up, in a `relative` scroll box so its screen-reader-only header label can't widen the page.
+#### ~~Flagged Anomalies (`director-flagged`)~~ — removed (D-135)
+The Director asked for this page to be removed (2026-10-17). Its list (year picker, five stat cards, flagged-visits table), its record page, its sidebar item and its D-57 badge are gone; `/director/anomalies` returns 404. Flag counts remain on the Dashboard's **Flagged Visits** card (`ClinicVisit::scopeFlagged()`) and the Data Summary's **Vital-Sign Flags** card; the flags themselves (thresholds, `vital_signs.is_*_flagged`, kiosk and clinic-queue badges) are unchanged.
 
 ---
 

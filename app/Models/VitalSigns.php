@@ -224,61 +224,6 @@ class VitalSigns extends Model
     // ── Display helpers ──────────────────────────────────────────────────────
 
     /**
-     * One ['label' => …, 'value' => …] pair per tripped flag — the Flagged
-     * Anomalies table (FR-ANL-05) renders label and value in separate
-     * columns. Reads the STORED flag booleans — the thresholds are applied
-     * once when the reading is written (capture, or encode for the
-     * respiratory rate), never here.
-     *
-     * @return list<array{label: string, value: string}>
-     */
-    public function flagDetails(): array
-    {
-        $flags = [];
-
-        if ($this->is_bp_flagged) {
-            $flags[] = ['label' => 'High Blood Pressure', 'value' => "{$this->bp_systolic}/{$this->bp_diastolic} mmHg"];
-        }
-
-        if ($this->is_temp_flagged) {
-            $flags[] = ['label' => 'Fever', 'value' => "{$this->temperature_c}°C"];
-        }
-
-        if ($this->is_bmi_flagged) {
-            $flags[] = ['label' => 'Abnormal BMI', 'value' => (string) $this->bmi];
-        }
-
-        // D-66. Heart rate is known from capture; respiratory rate only after
-        // the clinic types it at encode, so an un-encoded visit shows neither
-        // an RR value nor an RR flag.
-        if ($this->is_hr_flagged) {
-            $flags[] = ['label' => 'High Heart Rate', 'value' => "{$this->heart_rate_bpm} bpm"];
-        }
-
-        if ($this->is_rr_flagged) {
-            $flags[] = ['label' => 'Abnormal Respiratory Rate', 'value' => "{$this->respiratory_rate} breaths/min"];
-        }
-
-        return $flags;
-    }
-
-    /**
-     * Human-readable line per tripped flag, e.g. "High Blood Pressure —
-     * 145/92 mmHg" (Director dashboard preview, FR-ANL-01). Same data as
-     * flagDetails(), joined — the preview and the anomalies table can
-     * never disagree.
-     *
-     * @return list<string>
-     */
-    public function flagDescriptions(): array
-    {
-        return array_map(
-            fn (array $flag): string => "{$flag['label']} — {$flag['value']}",
-            $this->flagDetails(),
-        );
-    }
-
-    /**
      * Whether the Bluetooth BP monitor reported an irregular pulse for this
      * visit's reading (D-58). False when BP was typed or came over serial. Not a
      * §7.4 flag — it counts toward no analytics; the nurse simply sees it.

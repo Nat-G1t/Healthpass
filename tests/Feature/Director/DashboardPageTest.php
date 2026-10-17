@@ -15,10 +15,10 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * Director Dashboard (FR-ANL-01): four KPI cards from live data plus the two
- * preview panels (Pending Batch Approvals, Flagged Anomalies), each capped at
- * 3 rows with a "View all →" link. Empty states are intentional copy, not
- * blank space.
+ * Director Dashboard (FR-ANL-01): four KPI cards from live data plus the
+ * Pending Batch Approvals preview panel, capped at 3 rows with a "View all →"
+ * link. Empty states are intentional copy, not blank space. D-135 removed the
+ * Flagged Anomalies page and its dashboard panel; the Flagged Visits KPI stays.
  */
 class DashboardPageTest extends TestCase
 {
@@ -120,7 +120,6 @@ class DashboardPageTest extends TestCase
 
     public function test_dashboard_is_refused_for_guests_and_other_roles(): void
     {
-        // /director/anomalies has its own guard coverage in AnomaliesPageTest.
         $this->get('/director/dashboard')->assertRedirect('/login');
 
         foreach (['student', 'nurse', 'college_admin'] as $role) {
@@ -198,36 +197,25 @@ class DashboardPageTest extends TestCase
             ->assertSee(route('director.batches.index'));
     }
 
-    // ── 4. Flagged Anomalies panel ────────────────────────────────────────────
+    // ── 4. Flagged Anomalies is gone (D-135) ──────────────────────────────────
 
-    public function test_flagged_panel_previews_flag_details_and_caps_at_three_rows(): void
+    public function test_flagged_anomalies_page_and_panel_are_gone(): void
     {
-        // 4 flagged visits, distinct check-in times; the oldest drops off.
-        $bp = $this->makeVisit('Bp Flagged', ['is_bp_flagged' => true, 'bp_systolic' => 145, 'bp_diastolic' => 92]);
-        $bp->update(['checked_in_at' => now()->subMinutes(10)]);
+        $visit = $this->makeVisit('Bp Flagged', ['is_bp_flagged' => true, 'bp_systolic' => 145, 'bp_diastolic' => 92]);
 
-        $fever = $this->makeVisit('Fever Flagged', ['is_temp_flagged' => true, 'temperature_c' => 38.3]);
-        $fever->update(['checked_in_at' => now()->subMinutes(20)]);
+        // The page, its record view and its sidebar item no longer exist.
+        $this->actingAs($this->director)->get('/director/anomalies')->assertNotFound();
+        $this->actingAs($this->director)->get("/director/anomalies/{$visit->id}")->assertNotFound();
 
-        $bmi = $this->makeVisit('Bmi Flagged', ['is_bmi_flagged' => true, 'bmi' => 34.4]);
-        $bmi->update(['checked_in_at' => now()->subMinutes(30)]);
-
-        $oldest = $this->makeVisit('Oldest Flagged', ['is_bp_flagged' => true, 'bp_systolic' => 150, 'bp_diastolic' => 95]);
-        $oldest->update(['checked_in_at' => now()->subDays(2)]);
-
-        $this->makeVisit('Normal Student');
-
+        // The dashboard keeps the Flagged Visits count but previews no
+        // flagged student and links to no anomalies page.
         $this->actingAs($this->director)
             ->get('/director/dashboard')
             ->assertOk()
-            ->assertSee('4 flagged')
-            ->assertSee('Bp Flagged')
-            ->assertSee('High Blood Pressure — 145/92 mmHg')
-            ->assertSee('Fever — 38.3°C')
-            ->assertSee('Abnormal BMI — 34.4')
-            ->assertDontSee('Oldest Flagged')
-            ->assertDontSee('Normal Student')
-            ->assertSee(route('director.anomalies'));
+            ->assertSee('Flagged Visits')
+            ->assertDontSee('Flagged Anomalies')
+            ->assertDontSee('Bp Flagged')
+            ->assertDontSee('/director/anomalies');
     }
 
     // ── 5. Empty states ───────────────────────────────────────────────────────
@@ -238,8 +226,6 @@ class DashboardPageTest extends TestCase
             ->get('/director/dashboard')
             ->assertOk()
             ->assertSee('No pending batch approvals')
-            ->assertSee('New requests from College Admins will appear here.')
-            ->assertSee('No flagged visits')
-            ->assertSee('Kiosk vitals that trip a flag threshold will appear here.');
+            ->assertSee('New requests from College Admins will appear here.');
     }
 }

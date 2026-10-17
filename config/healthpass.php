@@ -145,7 +145,7 @@ return [
     ],
 
     // §7.4, D-10: Rule-based flag thresholds — screening signals, not diagnoses.
-    // All flag logic (kiosk badges, nurse queue, Director anomalies) reads ONLY from here. (NFR-7, BR-13)
+    // All flag logic (kiosk badges, nurse queue, Director analytics) reads ONLY from here. (NFR-7, BR-13)
     'thresholds' => [
         'temperature_max' => 37.2,   // > 37.2 °C  → is_temp_flagged ("Fever")
         'bp_systolic' => 140,    // systolic ≥ 140  → is_bp_flagged ("High Blood Pressure"); D-10 canonical

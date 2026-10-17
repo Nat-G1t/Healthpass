@@ -8,7 +8,6 @@ use App\Models\ClinicVisit;
 use App\Models\College;
 use App\Models\User;
 use App\Models\VitalSigns;
-use App\Support\NavBadges;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -19,9 +18,9 @@ use Tests\TestCase;
  * The rules live as static helpers on VitalSigns so the kiosk submit, the
  * clinic's encode and the seeders share one implementation (BR-13: thresholds
  * come from config/healthpass.php and nowhere else). Widening
- * ClinicVisit::scopeFlagged() is what carries the two new flags to Flagged
- * Anomalies, the Director dashboard preview and the D-57 nav badge for free —
- * this file checks each of those three.
+ * ClinicVisit::scopeFlagged() is what carries the two new flags to the
+ * Director dashboard's Flagged Visits count for free — this file checks it.
+ * (Flagged Anomalies and its nav badge were removed by D-135.)
  */
 class VitalSignFlagsTest extends TestCase
 {
@@ -154,33 +153,17 @@ class VitalSignFlagsTest extends TestCase
     }
 
     /**
-     * FR-ANL-01 — the Director dashboard's count and preview are the same
-     * scope, so both pick the new flags up without their own rule.
+     * FR-ANL-01 — the Director dashboard's Flagged Visits count is the same
+     * scope, so it picks the new flags up without a rule of its own.
      */
-    public function test_the_director_dashboard_preview_picks_up_the_new_flags(): void
+    public function test_the_director_dashboard_count_picks_up_the_new_flags(): void
     {
         $this->makeVisit(['heart_rate_bpm' => 118, 'is_hr_flagged' => true]);
+        $this->makeVisit(['respiratory_rate' => 26, 'is_rr_flagged' => true]);
+        $this->makeVisit(); // all clear
 
         $response = $this->actingAs($this->director)->get('/director/dashboard')->assertOk();
 
-        $this->assertSame(1, $response->viewData('stats')['flaggedVisits']);
-        $this->assertSame(
-            ['High Heart Rate — 118 bpm'],
-            $response->viewData('flaggedVisits')->first()->vitalSigns->flagDescriptions(),
-        );
-    }
-
-    /**
-     * D-57 — the sidebar's Flagged Anomalies badge counts the same scope,
-     * narrowed to what was captured since the Director last opened the page.
-     */
-    public function test_the_nav_badge_counts_the_new_flags(): void
-    {
-        $visit = $this->makeVisit(['respiratory_rate' => 26, 'is_rr_flagged' => true]);
-        // The badge counts check-ins AFTER the Director's last visit to the
-        // page, which for a fresh account is when it was created.
-        $visit->update(['checked_in_at' => now()->addMinute()]);
-
-        $this->assertSame(1, NavBadges::forUser($this->director)['director.anomalies']);
+        $this->assertSame(2, $response->viewData('stats')['flaggedVisits']);
     }
 }

@@ -12,7 +12,6 @@ use App\Models\StudentProfile;
 use App\Models\User;
 use App\Models\VitalSigns;
 use App\Services\ClinicAnalytics;
-use App\Support\NavBadges;
 use App\Support\VisitMonths;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -164,10 +163,8 @@ class KioskRestAndRecheckTest extends TestCase
         // The Live Queue.
         $this->assertSame(0, ClinicVisit::liveQueue(User::factory()->physician()->create())->count());
 
-        // Flagged Anomalies + the Director dashboard preview + the nav badge.
+        // The Director dashboard's Flagged Visits count.
         $this->assertSame(0, ClinicVisit::flagged()->count());
-        $director = User::factory()->create(['role' => 'director']);
-        $this->assertSame(0, NavBadges::forUser($director)['director.anomalies'] ?? 0);
 
         // Every analytics card, and the month picker.
         $analytics = new ClinicAnalytics(CarbonImmutable::now()->startOfMonth());

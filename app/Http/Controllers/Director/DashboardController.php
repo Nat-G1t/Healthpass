@@ -12,16 +12,17 @@ use App\Models\ClinicVisit;
 use Illuminate\View\View;
 
 /**
- * Director Dashboard (FR-ANL-01): four KPI cards plus two preview panels —
- * Pending Batch Approvals (→ Batch Approvals) and Flagged Anomalies
- * (→ Flagged Anomalies) — each with a "View all →" link.
+ * Director Dashboard (FR-ANL-01): four KPI cards plus the Pending Batch
+ * Approvals preview panel (→ Batch Approvals) with a "View all →" link.
+ * D-135 removed the Flagged Anomalies panel with its page; the Flagged
+ * Visits KPI card stays.
  *
- * Query budget: 4 KPI counts + 2 preview fetches, all eager-loaded — the
- * view never triggers a per-row query (no N+1).
+ * Query budget: 4 KPI counts + 1 preview fetch, eager-loaded — the view
+ * never triggers a per-row query (no N+1).
  */
 class DashboardController extends Controller
 {
-    /** How many rows each preview panel shows before "View all →". */
+    /** How many rows the preview panel shows before "View all →". */
     private const PREVIEW_ROWS = 3;
 
     public function __invoke(): View
@@ -50,15 +51,6 @@ class DashboardController extends Controller
             ->take(self::PREVIEW_ROWS)
             ->get();
 
-        // Newest flagged visits, by kiosk check-in time. college = the
-        // capture-time snapshot (FR-STU-09), not the student's current one.
-        $flaggedVisits = ClinicVisit::flagged()
-            ->with(['student:id,name', 'college:id,code', 'vitalSigns'])
-            ->latest('checked_in_at')
-            ->latest('id')
-            ->take(self::PREVIEW_ROWS)
-            ->get();
-
-        return view('director.dashboard', compact('stats', 'pendingBatches', 'flaggedVisits'));
+        return view('director.dashboard', compact('stats', 'pendingBatches'));
     }
 }

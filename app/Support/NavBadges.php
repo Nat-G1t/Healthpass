@@ -30,7 +30,7 @@ use Illuminate\Support\Facades\DB;
  *    each clears when that row's View is clicked. The admin's count adds the
  *    approvals since they last opened the page, which carry no dot.
  *
- * Each badge reuses its page's own definition (liveQueue(), flagged(), the
+ * Each badge reuses its page's own definition (liveQueue(), the
  * Activity Log's event set, the rows' dots) so a badge and its page cannot
  * disagree. The counts are plain COUNT queries — a badge fed by two tables is
  * two counts added together, because one query across both would need a
@@ -46,15 +46,15 @@ final class NavBadges
     public const TUTORIAL_COMPLETED = 'student.tutorial_completed';
 
     /**
-     * The four "since last seen" pages: route name (which is also the
+     * The three "since last seen" pages: route name (which is also the
      * nav_seen_at key) => the role whose visit stamps it. (Five until D-61
-     * removed the student's My Appointments page.)
+     * removed the student's My Appointments page, four until D-135 removed
+     * the Director's Flagged Anomalies page.)
      */
     public const SEEN_PAGES = [
         'student.records' => 'student',
         'admin.batches.index' => 'college_admin',
         'admin.activity' => 'college_admin',
-        'director.anomalies' => 'director',
     ];
 
     /** Director decisions — the only statuses that carry a reviewed_at. */
@@ -196,10 +196,6 @@ final class NavBadges
             // D-120 (replaced D-113's work count): the rows' dots — status
             // changes, release requests and college cancellations not opened yet.
             'director.tracking.index' => BatchNotifications::count($user),
-            // The Flagged Anomalies page's own definition, captured since last seen.
-            'director.anomalies' => ClinicVisit::flagged()
-                ->where('checked_in_at', '>', self::lastSeen($user, 'director.anomalies'))
-                ->count(),
         ];
     }
 }

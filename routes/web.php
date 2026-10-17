@@ -11,7 +11,6 @@ use App\Http\Controllers\Admin\YearlyReportController as AdminYearlyReportContro
 use App\Http\Controllers\Auth\PasswordChangeController;
 use App\Http\Controllers\ClinicCalendarController;
 use App\Http\Controllers\Director\AnalyticsController as DirectorAnalyticsController;
-use App\Http\Controllers\Director\AnomaliesController as DirectorAnomaliesController;
 use App\Http\Controllers\Director\BatchApprovalController as DirectorBatchApprovalController;
 use App\Http\Controllers\Director\BatchMemoController as DirectorBatchMemoController;
 use App\Http\Controllers\Director\BatchTrackingController as DirectorBatchTrackingController;
@@ -375,14 +374,6 @@ Route::middleware(['auth', 'role:director'])
         // as the College Admin's report. Its own throttle bucket, like theirs.
         Route::get('/analytics/yearly-report', DirectorYearlyReportController::class)
             ->middleware('throttle:10,1,director-yearly-report')->name('analytics.yearly-report');
-        // Flagged Anomalies (FR-ANL-05): stat cards + the flagged-visits
-        // table. Flags surface from CAPTURE (FR-ANL-07) — un-encoded visits
-        // are included, unlike every case statistic on Analytics.
-        Route::get('/anomalies', [DirectorAnomaliesController::class, 'index'])
-            ->middleware('nav.seen:director.anomalies')->name('anomalies');
-        // Read-only record detail behind each table row's "View" link.
-        Route::get('/anomalies/{visit}', [DirectorAnomaliesController::class, 'show'])
-            ->whereNumber('visit')->name('anomalies.show');
         // Batch Approvals (FR-DIRA-01, D-108): the queue of ALL colleges'
         // pending requests, oldest first — no college scope.
         Route::get('/batches', [DirectorBatchApprovalController::class, 'index'])->name('batches.index');

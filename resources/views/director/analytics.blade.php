@@ -233,8 +233,10 @@
             </div>
         @endif
 
+        {{-- D-135 removed the Flagged Anomalies screen this note pointed to;
+             the card is counts only, like the College Admin's. --}}
         <p class="mt-3.5 text-xs text-hp-slate/50">
-            Row-level detail lives on the <span class="font-semibold">Flagged Anomalies</span> screen.
+            Counts only — the clinic follows up flagged students directly.
         </p>
     </x-hp.card>
 

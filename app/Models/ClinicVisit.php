@@ -131,7 +131,7 @@ class ClinicVisit extends Model
     }
 
     /**
-     * FR-ANL-01/05 — visits whose vitals tripped ANY flag threshold.
+     * FR-ANL-01 — visits whose vitals tripped ANY flag threshold.
      *
      * whereHas() filters by a related table: it compiles to an EXISTS
      * subquery on vital_signs, so no join/duplicate rows. The closure's
@@ -144,8 +144,8 @@ class ClinicVisit extends Model
         // D-72: a resting visit's flags are exactly WHY it is resting — they
         // must not appear as clinic anomalies before the student has even
         // re-taken the reading. submitted() sits here, on the shared scope, so
-        // every flag consumer (Anomalies, the Director dashboard, the nav
-        // badge) gets the exclusion without repeating it.
+        // every flag consumer (the Director dashboard's Flagged Visits count)
+        // gets the exclusion without repeating it.
         return $query->submitted()->whereHas('vitalSigns', function (Builder $vitals): void {
             $vitals->where('is_bp_flagged', true)
                 ->orWhere('is_temp_flagged', true)

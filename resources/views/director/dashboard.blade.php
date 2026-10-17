@@ -48,8 +48,9 @@
 
     </div>
 
-    {{-- ── Preview panels (FR-ANL-01) ───────────────────────────────────── --}}
-    <div class="grid grid-cols-1 gap-5 xl:grid-cols-2">
+    {{-- ── Preview panel (FR-ANL-01) — full width since D-135 removed its
+         Flagged Anomalies neighbour ──────────────────────────────────────── --}}
+    <div>
 
         {{-- Pending Batch Approvals → Batch Approvals --}}
         <x-hp.card>
@@ -95,56 +96,6 @@
             @endif
 
             <a href="{{ route('director.batches.index') }}"
-               class="mt-4 inline-block text-xs font-semibold text-hp-orange hover:underline">
-                View all &rarr;
-            </a>
-        </x-hp.card>
-
-        {{-- Flagged Anomalies → /director/anomalies --}}
-        <x-hp.card>
-            <div class="mb-2 flex items-center justify-between">
-                <h3 class="text-sm font-bold text-hp-slate">Flagged Anomalies</h3>
-                <x-hp.badge :variant="$stats['flaggedVisits'] > 0 ? 'flagged' : 'neutral'">
-                    {{ $stats['flaggedVisits'] }} flagged
-                </x-hp.badge>
-            </div>
-
-            @if ($flaggedVisits->isEmpty())
-                <div class="flex flex-col items-center py-10 text-center">
-                    <div class="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-hp-bg">
-                        <svg class="h-6 w-6 text-hp-slate/30" fill="none" viewBox="0 0 24 24"
-                             stroke="currentColor" stroke-width="1.5">
-                            <path stroke-linecap="round" stroke-linejoin="round"
-                                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                        </svg>
-                    </div>
-                    <p class="text-sm font-medium text-hp-slate">No flagged visits</p>
-                    <p class="mt-0.5 text-xs text-hp-slate/50">
-                        Kiosk vitals that trip a flag threshold will appear here.
-                    </p>
-                </div>
-            @else
-                <div class="divide-y divide-hp-slate/10">
-                    @foreach ($flaggedVisits as $visit)
-                        <div class="flex items-center justify-between gap-4 py-3">
-                            <div class="min-w-0">
-                                <p class="truncate text-sm font-semibold text-hp-slate">
-                                    {{ $visit->student->name ?? '—' }}
-                                </p>
-                                <p class="truncate text-xs text-hp-orange">
-                                    {{ implode(' · ', $visit->vitalSigns?->flagDescriptions() ?? []) }}
-                                </p>
-                            </div>
-                            {{-- Capture-time college snapshot (FR-STU-09) --}}
-                            <span class="shrink-0 text-xs text-hp-slate/50">
-                                {{ $visit->college->code ?? '—' }}
-                            </span>
-                        </div>
-                    @endforeach
-                </div>
-            @endif
-
-            <a href="{{ route('director.anomalies') }}"
                class="mt-4 inline-block text-xs font-semibold text-hp-orange hover:underline">
                 View all &rarr;
             </a>

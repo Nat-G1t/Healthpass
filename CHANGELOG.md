@@ -1266,6 +1266,23 @@
 
 ### Changed
 
+* **The Director's Flagged Anomalies page is removed** (D-135, FR-ANL-05
+  superseded; FR-ANL-01, FR-ANL-07, FR-UI-05, FR-UI-06 amended; PRD revision
+  2.19, 2026-10-17). Asked for by the Clinic Director. No schema change, no
+  new package.
+  * **Gone:** the sidebar item and its badge, `GET /director/anomalies` and
+    `GET /director/anomalies/{visit}` (both 404 now),
+    `Director\AnomaliesController`, `director/anomalies/{index,show}` views,
+    the Dashboard's Flagged Anomalies preview panel, and
+    `VitalSigns::flagDetails()` / `flagDescriptions()` (used only there).
+  * **Kept:** the Dashboard's **Flagged Visits** KPI card; the Pending Batch
+    Approvals panel now spans the full row. The Data Summary's Vital-Sign
+    Flags footnote reads "Counts only — the clinic follows up flagged
+    students directly." Flags, thresholds and the clinic queue are unchanged.
+  * **Tests:** `AnomaliesPageTest` deleted; `DashboardPageTest` checks both
+    routes 404 and the panel is gone; `NavBadgesTest`'s never-stamped
+    fallback test now uses the College Admin's Activity Log badge.
+
 * **At the 8 PM cutoff, students still waiting in a clinic queue are removed
   and get the 2nd chance** (D-132, amends D-110 Q3; FR-ADM-14, FR-ADM-12,
   FR-NRS-11, BR-12 and BR-27 amended; PRD revision 2.16, 2026-10-10). Asked
