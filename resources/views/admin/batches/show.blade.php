@@ -112,6 +112,17 @@
                 @endif
             </dd>
         </div>
+        {{-- D-136: printed copies asked for on the request, and the Director's answer. --}}
+        @if ($batch->earlyCopiesStatus() !== null)
+            <div class="sm:col-span-2">
+                <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">
+                    Printed copies
+                </dt>
+                <dd class="mt-1 text-sm font-semibold text-hp-slate">
+                    @include('admin.batches.partials.early-copies', ['batch' => $batch])
+                </dd>
+            </div>
+        @endif
     </dl>
 </x-hp.card>
 

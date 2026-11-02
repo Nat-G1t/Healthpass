@@ -47,6 +47,11 @@ use Symfony\Component\HttpFoundation\Response;
  * disabled before then, and the server refuses them too (here for the
  * download, PrintClearanceController for each form, both through the release
  * rule ClinicVisit::isReleasedForPrint() reads).
+ *
+ * D-136: a batch whose printed copies the Director approved WITH it opens the
+ * row Print buttons from approval (ClinicVisit::canPrintHardCopy()) and is
+ * tagged Print Requested on both cards; its row PDF and the download still
+ * wait for the release.
  */
 class BatchController extends Controller
 {
@@ -68,6 +73,8 @@ class BatchController extends Controller
             ->where(fn (Builder $query) => $query
                 ->whereDate('scheduled_date', '>=', $today)
                 ->orWhereHas('appointments', $this->hasClinicDayFrom($today)))
+            // D-136: the Print Requested tag, loaded for every row in one query.
+            ->with('approvedReleaseRequest')
             ->orderBy($this->nextClinicHour($today, 'scheduled_date'))
             ->orderBy($this->nextClinicHour($today, 'scheduled_time'))
             ->orderBy('id')
@@ -133,7 +140,8 @@ class BatchController extends Controller
      *
      * D-125: opening the batch clears this user's row dot. The printing tools
      * work only once the batch is released; the banner shows a printed-copies
-     * request and Mark as printed.
+     * request and Mark as printed. D-136: early printed copies open the row
+     * Print buttons (not the PDF) and show the banner from approval.
      */
     public function results(Request $request, BatchRequest $batch): View
     {
@@ -141,7 +149,9 @@ class BatchController extends Controller
 
         $batch->load('college:id,code,name')
             ->load(BatchResults::pageRelations())
-            ->load('approvedReleaseRequest.copiesPrinter:id,name');
+            ->load('approvedReleaseRequest.copiesPrinter:id,name')
+            // D-136: who marked early printed copies done.
+            ->load('copiesPrinter:id,name');
 
         BatchNotifications::markSeen($request->user(), $batch, $batch->resultsStatus());
 
@@ -179,27 +189,35 @@ class BatchController extends Controller
 
     /**
      * D-125 — Mark as printed: the clinic has printed the copies the college
-     * asked for. Re-checked on the LOCKED release row — lockForUpdate() holds
-     * it until the transaction ends, so two presses at once cannot both stamp
-     * it: the request must be approved, want copies, and not be marked yet.
-     * A second press is a friendly no-op.
+     * asked for. Re-checked on the LOCKED row that holds the copies —
+     * lockForUpdate() holds it until the transaction ends, so two presses at
+     * once cannot both stamp it. A second press is a friendly no-op.
+     *
+     * D-136: copies the Director approved WITH the batch are marked on the
+     * batch row; otherwise on the approved release, which must want copies.
      */
     public function copiesPrinted(Request $request, BatchRequest $batch): RedirectResponse
     {
         abort_unless($batch->status === 'approved', 404);
 
         $outcome = DB::transaction(function () use ($request, $batch): string {
-            $release = $batch->approvedReleaseRequest()->lockForUpdate()->first();
+            $lockedBatch = BatchRequest::whereKey($batch->id)->lockForUpdate()->firstOrFail();
 
-            if ($release === null || ! $release->asksClinicToPrint()) {
-                return 'refused';
+            if ($lockedBatch->printed_copies_approved) {
+                $copies = $lockedBatch;
+            } else {
+                $copies = $lockedBatch->approvedReleaseRequest()->lockForUpdate()->first();
+
+                if ($copies === null || ! $copies->asksClinicToPrint()) {
+                    return 'refused';
+                }
             }
 
-            if ($release->copies_printed_at !== null) {
+            if ($copies->copies_printed_at !== null) {
                 return 'already';
             }
 
-            $release->update(['copies_printed_at' => now(), 'copies_printed_by' => $request->user()->id]);
+            $copies->update(['copies_printed_at' => now(), 'copies_printed_by' => $request->user()->id]);
 
             return 'marked';
         });

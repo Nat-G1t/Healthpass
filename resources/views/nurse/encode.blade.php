@@ -222,6 +222,19 @@
     </div>
 @endif
 
+{{-- D-136: the batch's printed copies were approved with it — a paper copy
+     of this student's form is wanted right after the result is saved. --}}
+@if ($needsPrintedCopy)
+    <div class="mb-5 flex items-start gap-3 rounded-xl border border-hp-orange/40 bg-hp-peach/40 px-4 py-3 text-sm text-hp-slate"
+         data-encode-print-copies>
+        <x-hp.badge variant="live">Print copies</x-hp.badge>
+        <p>
+            The college asked for this batch’s forms on paper right after the clinic, and the Director approved it.
+            Print this student’s form once the result is saved.
+        </p>
+    </div>
+@endif
+
 {{-- Read-only notice — encoding is one-time (BR-11 / FR-NRS-04). --}}
 @if ($readOnly)
     <div class="mb-5 rounded-xl border border-hp-peach bg-hp-peach/30 px-4 py-3 text-sm text-hp-slate">

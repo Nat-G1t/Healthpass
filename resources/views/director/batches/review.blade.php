@@ -112,6 +112,17 @@
                     <dt class="text-sm text-hp-slate/50">Submitted by</dt>
                     <dd class="text-right text-sm font-semibold text-hp-slate">{{ $batch->requester?->name ?? '—' }}</dd>
                 </div>
+                {{-- D-136: the college needs printed copies right after the
+                     clinic. The Director answers in the approve popup. --}}
+                @if ($batch->wants_printed_copies)
+                    <div class="flex items-start justify-between gap-4" data-review-printed-copies>
+                        <dt class="text-sm text-hp-slate/50">Printed copies</dt>
+                        <dd class="text-right text-sm font-semibold text-hp-orange">
+                            Requested
+                            <span class="block text-xs font-normal text-hp-slate/50">printed as each student is encoded</span>
+                        </dd>
+                    </div>
+                @endif
             </dl>
 
             {{-- Legacy rows only: what the college asked for before D-108.
@@ -314,6 +325,24 @@
                     @csrf
                     <input type="hidden" name="scheduled_date" :value="selectedDate">
                     <input type="hidden" name="start_time" :value="startTime">
+
+                    {{-- D-136: only when the college asked. Ticked by default;
+                         untick to approve the batch without the copies.
+                         text-hp-orange, not accent-*: @tailwindcss/forms paints
+                         a checked box with currentColor. --}}
+                    @if ($batch->wants_printed_copies)
+                        <label class="mb-6 flex items-start gap-3 rounded-lg bg-hp-bg px-3 py-3 text-sm text-hp-slate">
+                            <input type="checkbox" name="approve_printed_copies" value="1" checked
+                                   class="mt-0.5 rounded border-hp-slate/30 text-hp-orange focus:ring-hp-orange" data-approve-printed-copies>
+                            <span>
+                                <span class="font-semibold">Approve printed copies</span>
+                                <span class="mt-0.5 block text-xs text-hp-slate/60">
+                                    The college asked for them right after the clinic. The clinic may print each
+                                    student’s form as soon as it is encoded. Untick to approve the batch without them.
+                                </span>
+                            </span>
+                        </label>
+                    @endif
 
                     <div class="flex flex-wrap justify-end gap-3">
                         <x-hp.button variant="muted" @click="approveOpen = false">Cancel</x-hp.button>

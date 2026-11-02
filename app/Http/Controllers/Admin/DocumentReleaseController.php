@@ -34,7 +34,8 @@ class DocumentReleaseController extends Controller
 
     /**
      * D-123: no attachment — the Director reviews the batch's own signed memo
-     * (D-109). The college may ask for printed copies of the forms.
+     * (D-109). The college may ask for printed copies of the forms, unless
+     * they were already approved with the batch (D-136).
      *
      * The rules are checked on the LOCKED batch row, so two clicks (or two
      * admins of the same college) can't both create a pending request.
@@ -62,8 +63,10 @@ class DocumentReleaseController extends Controller
             $locked->releaseRequests()->create([
                 'requested_by' => $request->user()->id,
                 'reason' => $request->validated('reason'),
-                // An unticked checkbox sends nothing — that means no.
-                'wants_printed_copies' => $request->boolean('wants_printed_copies'),
+                // An unticked checkbox sends nothing — that means no. D-136:
+                // never once the Director approved copies with the batch (the
+                // popup hides the box; a posted tick is ignored, not trusted).
+                'wants_printed_copies' => ! $locked->printed_copies_approved && $request->boolean('wants_printed_copies'),
                 'status' => 'pending',
             ]);
 

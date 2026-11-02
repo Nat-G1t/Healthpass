@@ -56,7 +56,7 @@ class QueueController extends Controller
         if ($leftId !== null) {
             $ghost = ClinicVisit::query()
                 ->where('status', 'interviewed')
-                ->with(['student:id,name', 'college:id,name', 'vitalSigns', 'appointment:id,batch_request_id', 'appointment.batchRequest:id,form_type'])
+                ->with(['student:id,name', 'college:id,name', 'vitalSigns', 'appointment:id,batch_request_id', 'appointment.batchRequest:id,form_type,printed_copies_approved'])
                 ->find($leftId);
         }
         if ($ghost !== null) {
@@ -145,6 +145,9 @@ class QueueController extends Controller
             // D-62: which official form this student is on ('clearance' |
             // 'assessment'); the row shows it as a small badge.
             'form_type' => $visit->formType(),
+            // D-136: the batch's printed copies were approved with it — the
+            // row shows a "Print copies" chip.
+            'print_copies' => (bool) $visit->appointment?->batchRequest?->printed_copies_approved,
             // Vitals summary + flags are the server-frozen values (never client-recomputed).
             'vitals' => $vs ? [
                 'temperature_c' => $vs->temperature_c,

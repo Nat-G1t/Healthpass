@@ -89,6 +89,9 @@ class StoreBatchRequestRequest extends FormRequest
                 'mimes:'.implode(',', config('healthpass.uploads.mimes')),
                 'max:'.config('healthpass.uploads.max_kb'),
             ],
+            // D-136: the college needs printed copies right after the clinic.
+            // An unticked checkbox sends nothing, which reads as no.
+            'wants_printed_copies' => ['nullable', 'boolean'],
             // BR-07 (D-105): at least MIN_STUDENTS students per batch.
             'students' => ['required', 'array', 'min:'.self::MIN_STUDENTS],
             'students.*' => [

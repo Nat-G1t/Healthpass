@@ -19,7 +19,9 @@
       ready, never asked   the button → the popup
 
     The popup (D-123): a reason (10–500 characters, live counter) and a
-    "printed copies" checkbox, unchecked by default. No attachment — the
+    "printed copies" checkbox, unchecked by default (D-136: replaced by a note
+    when the Director already approved copies with the batch, whose answer
+    also shows above the button). No attachment — the
     Director reviews the batch's own signed memo (D-109). Send stays disabled
     until the reason is valid; StoreReleaseRequest and the controller's locked
     checks are the real gate.
@@ -31,6 +33,8 @@
     $isPending = $latestRelease?->isPending() ?? false;
     $isRejected = $latestRelease?->status === 'rejected';
     $hasFormErrors = $errors->hasAny(['reason', 'wants_printed_copies']);
+    // D-136: copies approved with the batch — the popup no longer offers them.
+    $hasEarlyCopies = $batch->printed_copies_approved;
 @endphp
 
 <section class="mt-6" data-release-section
@@ -41,6 +45,14 @@
             get reasonLength() { return this.reason.trim().length; },
             get reasonIsValid() { return this.reasonLength >= {{ $reasonMin }} && this.reasonLength <= {{ $reasonMax }}; },
          }">
+
+    {{-- D-136: the answer to printed copies asked for on the batch request. --}}
+    @if ($batch->earlyCopiesStatus() !== null)
+        <p class="mb-3 text-sm text-hp-slate/70">
+            <span class="font-semibold text-hp-slate">Printed copies:</span>
+            @include('admin.batches.partials.early-copies', ['batch' => $batch])
+        </p>
+    @endif
 
     @if ($isReleased)
         <div class="rounded-2xl border border-hp-orange/30 bg-hp-peach/40 px-5 py-4 text-sm text-hp-slate" data-release-state="approved">
@@ -118,6 +130,13 @@
                                 <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
                             @enderror
 
+                            {{-- D-136: copies approved with the batch — nothing to ask
+                                 here (DocumentReleaseController ignores a posted tick). --}}
+                            @if ($hasEarlyCopies)
+                            <p class="mt-5 rounded-lg bg-hp-bg px-3 py-2 text-xs text-hp-slate/70" data-release-early-copies>
+                                Printed copies were approved with this batch — the clinic prints each form as soon as it is encoded.
+                            </p>
+                            @else
                             {{-- D-123. text-hp-orange, not accent-*: @tailwindcss/forms paints a checked box with currentColor. --}}
                             <label class="mt-5 flex items-start gap-3 text-sm text-hp-slate">
                                 <input type="checkbox" name="wants_printed_copies" value="1" @checked(old('wants_printed_copies'))
@@ -127,6 +146,7 @@
                                     <span class="mt-0.5 block text-xs text-hp-slate/60">If the Director approves, the clinic is asked to print them.</span>
                                 </span>
                             </label>
+                            @endif
 
                             <div class="mt-6 flex flex-wrap justify-end gap-3">
                                 <x-hp.button variant="muted" @click="requestOpen = false">Cancel</x-hp.button>

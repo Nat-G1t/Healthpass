@@ -4,6 +4,40 @@
 
 ### Added
 
+* **A college can ask for printed copies on the batch request, and the clinic
+  prints them as soon as each student is encoded** (D-136; amends D-123, D-125
+  and D-128; FR-ADM-02, FR-ADM-15, FR-DIRA-07, FR-DIRA-11, FR-NRS-01/03/05/09/12/13
+  amended; PRD revision 2.20, 2026-11-03). Asked for by Nat: a batch may need
+  its paper forms right after the clinic, before it is finished and released.
+  No new route, no new package.
+  **FLAGGED SCHEMA CHANGE (approved by Nat, 2026-11-03):** four
+  `batch_requests` columns — `wants_printed_copies`, `printed_copies_approved`
+  (boolean, default false), `copies_printed_at`, `copies_printed_by` (nullable,
+  FK → users, null on delete); migration
+  `2026_11_03_000001_d136_batch_requests_early_printed_copies`, no backfill.
+  * **New Batch** — optional checkbox "The college needs printed copies right
+    after the clinic". The College Admin's pages read "Printed copies:
+    Requested / Approved / Not approved" (`BatchRequest::earlyCopiesStatus()`,
+    `admin/batches/partials/early-copies`).
+  * **Review page** — "Printed copies: Requested" in Batch details; the approve
+    popup's **Approve printed copies** checkbox is ticked by default. `approve()`
+    stores asked AND ticked on the locked row.
+  * **Printing** — new `ClinicVisit::canPrintHardCopy($user)`:
+    `isReleasedForPrint($user)` or the batch's `printed_copies_approved`. It
+    gates Print / Reprint (`nurse.visits.print`, `.reprint`), the encode page's
+    print buttons and the clinic batch results rows. Save as PDF, the row PDF
+    and every ZIP keep `isReleasedForPrint()`. D-127 unchanged.
+  * **Clinic signals** — a **Print copies** chip on Live Queue rows (page and
+    feed, `print_copies`), a note on the encode page, and **Print Requested** on
+    Upcoming Batches as well as Batch Results (`BatchRequest::asksClinicToPrint()`
+    / `copiesPrintedAt()`). Mark as printed stamps the batch row for these
+    copies (`copiesPrinted()` locks the batch, then the release). No new dot.
+  * **Release popup** — once copies were approved with the batch, its checkbox
+    becomes a note and a posted tick is ignored; the Director's review popup
+    reads "Already approved with the batch".
+  * **Clinic Dashboard** — Release status gains **Print only**; Reprint works
+    on it.
+
 * **Nurses and physicians upload a PNG signature that prints on the forms
   they sign — My Signature** (D-134, new FR-NRS-15, FR-PRT-04 / FR-PRT-07
   amended; PRD revision 2.18, 2026-10-10). Asked for by the Clinic Director

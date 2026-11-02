@@ -1,10 +1,12 @@
 {{-- The encode page's button bar (FR-NRS-04/05), one branch per mode
      (moved out of nurse/encode.blade.php by D-126 to keep that page readable).
      Variables from the parent view: $mode, $readOnly, $canPrint,
-     $showFinished, $isAssessment, $visit.
+     $canSavePdf, $showFinished, $isAssessment, $visit.
        'view'      → Print / Print front & back + Save as PDF, only when the
                      print rule allows (D-125 + D-127 — otherwise hidden, with
-                     a one-line reason); Finished after a Save (D-127)
+                     a one-line reason); Finished after a Save (D-127).
+                     D-136: Print follows $canPrint (early printed copies
+                     count), Save as PDF follows $canSavePdf (they don't).
        'interview' → the nurse's Submit to physician (D-126)
        'encode'    → the physician's Back + Save — no print buttons before
                      Save (D-127)
@@ -48,7 +50,10 @@
         {{-- Save as PDF (FR-PRT-06, D-67): a plain GET link, not a
              submit — the response is the same document rendered by
              dompdf and sent as a download, so nothing on this page
-             navigates and printed_at is NOT re-stamped. --}}
+             navigates and printed_at is NOT re-stamped.
+             D-136: a file waits for the release even when early printed
+             copies opened Print — the pdf route refuses it too. --}}
+        @if ($canSavePdf)
         <a href="{{ route('nurse.visits.pdf', $visit) }}"
            class="inline-flex w-full items-center justify-center gap-2 rounded-full
                   border-[1.5px] border-hp-slate/30 px-6 py-2.5 text-sm font-semibold
@@ -57,6 +62,9 @@
                   focus-visible:ring-hp-slate focus-visible:ring-offset-1">
             Save as PDF
         </a>
+        @else
+        <p class="text-xs text-hp-slate/60" data-pdf-disabled-hint>Save as PDF: {{ App\Models\ClinicVisit::NOT_RELEASED_HINT }}</p>
+        @endif
     @elseif ($mode === 'interview')
         {{-- D-126: the nurse's only action — no print buttons. It moves the
              student to the physician's queue (InterviewController); the

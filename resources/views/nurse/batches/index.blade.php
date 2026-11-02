@@ -34,6 +34,9 @@
     'title' => 'Upcoming',
     'caption' => 'Batches with a clinic day today or later — including a 2nd-chance day — soonest first.',
     'empty' => 'No upcoming batches.',
+    // D-136: a batch whose printed copies were approved with it is tagged
+    // from approval, so the clinic knows before its clinic day.
+    'printTags' => true,
 ])
 
 @include('batches._clinic-calendar', [

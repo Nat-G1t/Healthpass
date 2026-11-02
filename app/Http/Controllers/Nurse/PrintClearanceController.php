@@ -47,14 +47,17 @@ use Illuminate\View\View;
  * D-125 (O2): show, reprint and pdf work only once the Director has released
  * the visit's batch (ClinicVisit::isReleasedForPrint()) — or, since D-127,
  * for the physician who encoded the visit, on the day they encoded it.
- * Refused, a JSON caller gets a 403 and a page goes back with a plain message.
+ * D-136: show and reprint (paper) also work for a batch whose printed copies
+ * the Director approved with it (ClinicVisit::canPrintHardCopy()); pdf (a
+ * file) does not. Refused, a JSON caller gets a 403 and a page goes back with
+ * a plain message.
  */
 class PrintClearanceController extends Controller
 {
     public function show(Request $request, ClinicVisit $visit): View
     {
         abort_unless($visit->status === 'encoded', 404);
-        $this->ensureReleased($request, $visit);
+        $this->ensureAllowed($request, $visit->canPrintHardCopy($request->user()));
 
         return $this->render($visit, $this->side($request));
     }
@@ -67,7 +70,7 @@ class PrintClearanceController extends Controller
     public function reprint(Request $request, ClinicVisit $visit): View
     {
         abort_unless($visit->status === 'encoded', 404);
-        $this->ensureReleased($request, $visit);
+        $this->ensureAllowed($request, $visit->canPrintHardCopy($request->user()));
 
         $view = $this->render($visit, $this->side($request));
 
@@ -93,7 +96,8 @@ class PrintClearanceController extends Controller
     public function pdf(Request $request, ClinicVisit $visit): Response
     {
         abort_unless($visit->status === 'encoded', 404);
-        $this->ensureReleased($request, $visit);
+        // D-136: a file is a soft copy — early printed copies don't open it.
+        $this->ensureAllowed($request, $visit->isReleasedForPrint($request->user()));
 
         return Pdf::loadView(VisitDocument::template($visit), VisitDocument::data($visit))
             ->setPaper(VisitDocument::paper($visit))
@@ -101,16 +105,15 @@ class PrintClearanceController extends Controller
     }
 
     /**
-     * D-125 — stop here unless the visit's batch is released (or, D-127, the
-     * signed-in physician encoded it today). An HttpResponseException ends
-     * the request with the response it carries: a 403 for a JSON caller, else
-     * back to the page with the message (a Print posted into the hidden print
-     * frame lands that page in the frame, which never prints a page without
-     * data-hp-print-doc).
+     * D-125 — stop here unless the rule the caller asked says yes. An
+     * HttpResponseException ends the request with the response it carries: a
+     * 403 for a JSON caller, else back to the page with the message (a Print
+     * posted into the hidden print frame lands that page in the frame, which
+     * never prints a page without data-hp-print-doc).
      */
-    private function ensureReleased(Request $request, ClinicVisit $visit): void
+    private function ensureAllowed(Request $request, bool $isAllowed): void
     {
-        if ($visit->isReleasedForPrint($request->user())) {
+        if ($isAllowed) {
             return;
         }
 

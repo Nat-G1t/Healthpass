@@ -274,6 +274,24 @@ function batchForm() {
                 <x-hp.file-capture name="memo" noun="memo" />
             </x-hp.card>
 
+            {{-- D-136: printed copies right after the clinic — the Director
+                 decides it when approving. Optional; Submit doesn't wait on it.
+                 text-hp-orange, not accent-*: @tailwindcss/forms paints a
+                 checked box with currentColor. --}}
+            <x-hp.card>
+                <label class="flex items-start gap-3 text-sm text-hp-slate">
+                    <input type="checkbox" name="wants_printed_copies" value="1" @checked(old('wants_printed_copies'))
+                           class="mt-0.5 rounded border-hp-slate/30 text-hp-orange focus:ring-hp-orange" data-batch-printed-copies>
+                    <span>
+                        <span class="font-semibold">The college needs printed copies right after the clinic</span>
+                        <span class="mt-0.5 block text-xs text-hp-slate/60">
+                            If the Director approves, the clinic prints each student’s form as soon as it is encoded,
+                            without waiting for the batch to finish.
+                        </span>
+                    </span>
+                </label>
+            </x-hp.card>
+
             {{-- Submit — disabled until purpose valid + memo + ≥ minStudents students (FR-ADM-03, D-105, D-109) --}}
             <x-hp.card>
                 <x-hp.button type="submit" class="w-full" x-bind:disabled="!canSubmit" data-pending-label="Submitting…">

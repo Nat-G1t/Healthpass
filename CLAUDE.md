@@ -274,6 +274,13 @@ npm run dev                       # terminal 2
   print / reprint / PDF routes and its batch download (no batch → refused).
   One exception (D-127), inside that same method: the physician who encoded a
   visit may print it on the day they encoded it.
+  **D-136 splits paper from files:** a college may ask for printed copies on
+  the batch request and the Director decides it at approval
+  (`batch_requests.printed_copies_approved`). Then the clinic may PRINT that
+  batch's encoded forms before any release — `ClinicVisit::canPrintHardCopy()`
+  (= `isReleasedForPrint()` or that flag) gates Print / Reprint; Save as PDF and
+  every download still ask `isReleasedForPrint()`. Never let early copies open
+  a file.
 
 ## Database
 

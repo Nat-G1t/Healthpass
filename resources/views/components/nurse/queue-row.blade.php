@@ -53,6 +53,11 @@
                     {{-- D-62: which official form this student is on --}}
                     <span class="ml-1 inline-flex items-center rounded-full bg-hp-slate/10 px-2 py-0.5 align-middle text-[10px] font-semibold text-hp-slate"
                           data-cell="form-type">{{ $visit->formType() === 'assessment' ? 'Assessment' : 'Clearance' }}</span>
+                    {{-- D-136: the batch's printed copies were approved with it --}}
+                    @if ($visit->appointment?->batchRequest?->printed_copies_approved)
+                        <span class="ml-1 inline-flex items-center rounded-full bg-hp-orange/15 px-2 py-0.5 align-middle text-[10px] font-semibold text-hp-orange"
+                              data-cell="print-copies">Print copies</span>
+                    @endif
                 </p>
                 <span class="queue-next-tag mt-0.5 inline-flex items-center rounded-full bg-hp-orange
                              px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-white">

@@ -157,8 +157,16 @@ class DashboardController extends Controller
                     ->whereColumn('clinic_visits.id', 'clearance_records.clinic_visit_id')
                     ->where('document_release_requests.status', 'approved')
                     ->limit(1),
+                // D-136: 1 when the Director approved printed copies WITH the
+                // visit's batch — "Print only": Reprint works, nothing else.
+                'has_early_copies' => Appointment::selectRaw('1')
+                    ->join('batch_requests', 'batch_requests.id', '=', 'appointments.batch_request_id')
+                    ->join('clinic_visits', 'clinic_visits.appointment_id', '=', 'appointments.id')
+                    ->whereColumn('clinic_visits.id', 'clearance_records.clinic_visit_id')
+                    ->where('batch_requests.printed_copies_approved', true)
+                    ->limit(1),
             ])
-            ->withCasts(['has_approved_release' => 'boolean'])
+            ->withCasts(['has_approved_release' => 'boolean', 'has_early_copies' => 'boolean'])
             ->when($bounds !== null, fn (Builder $query) => $query->whereBetween('encoded_at', $bounds))
             ->when($result !== null, fn (Builder $query) => $query->where('result', $result))
             ->when($search !== '', fn (Builder $query) => $this->applySearch($query, $search))

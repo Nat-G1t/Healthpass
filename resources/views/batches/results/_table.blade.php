@@ -15,7 +15,10 @@
                    ['twoSided' => is this batch's form the two-page Medical
                     Assessment Form,
                     'enabled' => may the buttons be used now (D-125: only
-                    once the Director has released the batch; default true)]
+                    once the Director has released the batch; default true),
+                    'pdfEnabled' => may the PDF be used now (D-136: Print can
+                    open for early printed copies while the PDF waits for the
+                    release; defaults to 'enabled')]
                    A fifth column, Document, on every encoded row: Print
                    (Print front + Print back when two-sided) and PDF — the
                    encode page's own buttons. Print POSTs to the row's
@@ -67,6 +70,8 @@
     $rowDocuments ??= null;
     $hasRowDocuments = $rowDocuments !== null;
     $rowDocumentsEnabled = $rowDocuments['enabled'] ?? true;
+    // D-136: the PDF can stay locked while Print is open (early printed copies).
+    $rowPdfEnabled = $rowDocuments['pdfEnabled'] ?? $rowDocumentsEnabled;
     // D-71: the Medical Assessment Form is two pages and clinic printers
     // rarely duplex, so it prints one side at a time, as on the encode page.
     $printButtons = ($rowDocuments['twoSided'] ?? false)
@@ -207,8 +212,14 @@
                                                 @click="flipHintFor = {{ $side === 'front' ? 'row.name' : 'null' }}"
                                                 :aria-label="'{{ $label }} — ' + row.name" data-row-print>{{ $label }}</button>
                                     @endforeach
+                                    @if ($rowPdfEnabled)
                                     <a :href="row.pdf_url" class="whitespace-nowrap {{ $rowLink }}" data-no-progress
                                        :aria-label="'Download the PDF of ' + row.name" data-row-pdf>PDF</a>
+                                    @else
+                                    {{-- D-136: printed copies may print; the file waits for the release. --}}
+                                    <span class="cursor-not-allowed whitespace-nowrap opacity-40 {{ $rowLink }}" aria-disabled="true"
+                                          title="{{ $documents['hint'] ?? '' }}" data-disabled-row-pdf>PDF</span>
+                                    @endif
                                 </form>
                                 @else
                                 {{-- D-125: not released yet — the same pills, greyed

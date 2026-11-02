@@ -287,6 +287,8 @@ class BatchApprovalController extends Controller
      * failure anywhere leaves zero partial state:
      *
      *   1. batch → approved, + reviewer stamps + scheduled_date / _time / _blocks
+     *      + (D-136) printed_copies_approved, the Director's answer to copies
+     *      the college asked for on the request
      *   2. one appointment per batch_request_students row
      *   3. each new appointment_id back-written onto its pivot row
      *
@@ -317,13 +319,15 @@ class BatchApprovalController extends Controller
         $director = $request->user();
         $scheduledDate = $request->validated('scheduled_date');
         $startTime = $request->validated('start_time');
+        // D-136: an unticked checkbox sends nothing — that means no.
+        $approveCopies = $request->boolean('approve_printed_copies');
 
         // 'approved' | 'already_decided'
         // | ['span_overrun', <student count>]
         // | ['span_elapsed'|'span_full', <offending slot>]
         // | ['day_full', <student count>]
         // | ['span_clash', <clashing student user ids>]
-        $outcome = DB::transaction(function () use ($batch, $director, $refService, $scheduledDate, $startTime): string|array {
+        $outcome = DB::transaction(function () use ($batch, $director, $refService, $scheduledDate, $startTime, $approveCopies): string|array {
             $locked = BatchRequest::whereKey($batch->id)->lockForUpdate()->firstOrFail();
 
             // A decided (or cancelled) batch cannot be re-decided (FR-DIRA-05).
@@ -381,6 +385,10 @@ class BatchApprovalController extends Controller
                 'scheduled_blocks' => count($span),
                 'reviewed_by' => $director->id,
                 'reviewed_at' => now(),
+                // D-136: copies only if the college asked AND the Director
+                // left the box ticked — a posted tick on a batch that never
+                // asked is ignored.
+                'printed_copies_approved' => $locked->wants_printed_copies && $approveCopies,
             ]);
 
             // BR-08 fan-out — since D-61 the ONLY way an appointment is

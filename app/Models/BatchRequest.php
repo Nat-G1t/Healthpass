@@ -76,6 +76,12 @@ class BatchRequest extends Model
         'memo_path',
         'memo_original_name',
         'memo_mime',
+        // D-136: printed copies asked for ON the batch request, the Director's
+        // answer at approval, and the clinic's Mark as printed for them.
+        'wants_printed_copies',
+        'printed_copies_approved',
+        'copies_printed_at',
+        'copies_printed_by',
         'service_type',
         // Legacy since D-108: what a college asked for before the Director
         // started choosing the schedule. New batches leave all three NULL.
@@ -102,6 +108,9 @@ class BatchRequest extends Model
             'scheduled_date' => 'date',
             'reviewed_at' => 'datetime',
             'cancelled_at' => 'datetime',
+            'wants_printed_copies' => 'boolean',
+            'printed_copies_approved' => 'boolean',
+            'copies_printed_at' => 'datetime',
         ];
     }
 
@@ -253,6 +262,58 @@ class BatchRequest extends Model
     public function memoIsImage(): bool
     {
         return str_starts_with((string) $this->memo_mime, 'image/');
+    }
+
+    // ── Printed copies (D-125, D-136) ────────────────────────────────────────
+
+    /**
+     * D-136: where the college's early printed-copies request stands, for the
+     * pages that show it — null when the college did not ask, or the batch is
+     * rejected or cancelled (nothing will be printed either way):
+     *
+     *   'requested'    — pending: the Director decides it with the batch
+     *   'approved'     — the clinic prints each form as soon as it is encoded
+     *   'not_approved' — the batch was approved without the copies; the
+     *                    college can still ask through a release (D-123)
+     */
+    public function earlyCopiesStatus(): ?string
+    {
+        if (! $this->wants_printed_copies) {
+            return null;
+        }
+
+        return match ($this->status) {
+            'pending' => 'requested',
+            'approved' => $this->printed_copies_approved ? 'approved' : 'not_approved',
+            default => null,
+        };
+    }
+
+    /**
+     * Does the clinic have printed copies to make for this batch? Either the
+     * Director approved them with the batch (D-136), or an approved release
+     * asked for them (D-123 / D-125). The release popup cannot ask once the
+     * batch has early copies, so at most one of the two applies.
+     *
+     * Reads `approvedReleaseRequest` — eager-load it before asking this of
+     * many rows.
+     */
+    public function asksClinicToPrint(): bool
+    {
+        return $this->printed_copies_approved
+            || ($this->approvedReleaseRequest?->asksClinicToPrint() ?? false);
+    }
+
+    /**
+     * When the clinic pressed Mark as printed for those copies — on the batch
+     * for early copies (D-136), on the release otherwise (D-125) — or null
+     * while they are still to print.
+     */
+    public function copiesPrintedAt(): ?Carbon
+    {
+        return $this->printed_copies_approved
+            ? $this->copies_printed_at
+            : $this->approvedReleaseRequest?->copies_printed_at;
     }
 
     /** "Medical Clearance" / "Medical Assessment Form" (D-62). */
@@ -489,6 +550,15 @@ class BatchRequest extends Model
     public function canceller(): BelongsTo
     {
         return $this->belongsTo(User::class, 'cancelled_by');
+    }
+
+    /**
+     * D-136: the nurse or physician who marked this batch's early printed
+     * copies done (null until then, or if that account is deleted).
+     */
+    public function copiesPrinter(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'copies_printed_by');
     }
 
     /** The individual student pivot rows included in this batch. */

@@ -90,8 +90,13 @@ class EncodeController extends Controller
             // D-125 (O2) + D-127: the read-only page's Print / Print front /
             // back and Save as PDF show only when the print rule allows — a
             // released batch, or the physician who encoded it, today. The
-            // same rule the print routes enforce.
-            'canPrint' => $visit->isReleasedForPrint($request->user()),
+            // same rules the print routes enforce. D-136: paper and file part
+            // ways — early printed copies open Print, never Save as PDF.
+            'canPrint' => $visit->canPrintHardCopy($request->user()),
+            'canSavePdf' => $visit->isReleasedForPrint($request->user()),
+            // D-136: the college asked for printed copies with the batch and
+            // the Director approved them — the page says to print after Save.
+            'needsPrintedCopy' => $visit->appointment?->batchRequest?->printed_copies_approved ?? false,
             // D-127: Save lands on this page; Finished takes the physician
             // back to the Live Queue. Not when the record was opened from the
             // Clinic Dashboard's View — there the back link is the way out.

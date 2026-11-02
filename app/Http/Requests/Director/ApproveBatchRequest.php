@@ -39,6 +39,10 @@ class ApproveBatchRequest extends FormRequest
         return [
             'scheduled_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:today'],
             'start_time' => ['required', 'string', Rule::in(app(ClinicScheduleService::class)->slots())],
+            // D-136: the Director's answer to printed copies asked for on the
+            // request — the checkbox in the approve popup. Read only when the
+            // college asked (approve() checks the locked row).
+            'approve_printed_copies' => ['nullable', 'boolean'],
         ];
     }
 

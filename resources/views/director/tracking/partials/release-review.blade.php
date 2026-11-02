@@ -23,6 +23,10 @@
     The memo loads from director.batches.memo. Both decisions are re-checked
     under a lock.
 
+    D-136: a batch whose printed copies the Director approved with the batch
+    says so above the button, and the popup's Printed copies line says they
+    were already approved.
+
     D-124: once a request is APPROVED the button, the line under it and the
     popup are not rendered. In their place is the same highlighted note the
     College Admin sees — "Documents released on {date}." — and the history
@@ -43,6 +47,14 @@
             get messageLength() { return this.message.trim().length; },
             get messageIsValid() { return this.messageLength >= {{ $messageMin }} && this.messageLength <= {{ $messageMax }}; },
          }">
+
+    {{-- D-136: copies the Director approved with the batch itself. --}}
+    @if ($batch->printed_copies_approved)
+        <p class="mb-3 text-sm text-hp-slate/70" data-early-copies="approved">
+            <span class="font-semibold text-hp-slate">Printed copies:</span>
+            approved with the batch on {{ $batch->reviewed_at?->format('M j, Y') }} — the clinic prints each form as soon as it is encoded.
+        </p>
+    @endif
 
     @if ($approvedRelease !== null)
         {{-- The College Admin's released note (admin/batches/partials/release-request), worded for the Director. --}}
@@ -143,7 +155,12 @@
                         <div>
                             <dt class="text-[11px] font-semibold uppercase tracking-widest text-hp-slate/40">Printed copies</dt>
                             <dd class="mt-0.5 text-hp-slate" data-release-printed-copies>
-                                Printed copies: {{ $pendingRelease->wants_printed_copies ? 'Yes' : 'No' }}
+                                {{-- D-136: copies approved with the batch — this request can't ask again. --}}
+                                @if ($batch->printed_copies_approved)
+                                    Already approved with the batch on {{ $batch->reviewed_at?->format('M j, Y') }}.
+                                @else
+                                    Printed copies: {{ $pendingRelease->wants_printed_copies ? 'Yes' : 'No' }}
+                                @endif
                             </dd>
                         </div>
                         <div>

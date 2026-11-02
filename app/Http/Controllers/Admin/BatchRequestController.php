@@ -307,6 +307,8 @@ class BatchRequestController extends Controller
                     'memo_path' => $memoPath,
                     'memo_original_name' => PrivateUpload::displayName($memo->getClientOriginalName(), 'signed-memo'),
                     'memo_mime' => $memo->getMimeType(),
+                    // D-136: only the ASK — the Director decides it at approval.
+                    'wants_printed_copies' => $request->boolean('wants_printed_copies'),
                     // D-60: dental is gone. The server always writes 'medical' and
                     // never reads a service type from the request body.
                     'service_type' => 'medical',

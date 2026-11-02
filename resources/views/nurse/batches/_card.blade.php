@@ -22,8 +22,9 @@
                   the pager's dots (BatchNotifications::pagerDots()). Left
                   out, none.
       $printTags — optional (D-125): show "Print Requested" / "Printed" under
-                  the Batch ID. The batches must have `approvedReleaseRequest`
-                  loaded.
+                  the Batch ID (BatchRequest::asksClinicToPrint() — a release
+                  that asked, or D-136's copies approved with the batch). The
+                  batches must have `approvedReleaseRequest` loaded.
 
     Columns as the Director's Batch Results card (D-112): Batch ID · College ·
     Form Type · Purpose · Date scheduled · Status · View. A batch with a
@@ -79,12 +80,13 @@
                     <x-hp.table-cell label="Batch ID" class="whitespace-nowrap font-semibold">
                         {{ $batch->reference_no }}
                         {{-- D-125: the college's approved release asked for printed
-                             copies. "Print Requested" until the clinic presses Mark
-                             as printed on the batch's page, then a muted "Printed"
-                             for the record (Q5). --}}
-                        @if ($printTags && $batch->approvedReleaseRequest?->asksClinicToPrint())
+                             copies — or, D-136, the Director approved them with
+                             the batch. "Print Requested" until the clinic presses
+                             Mark as printed on the batch's page, then a muted
+                             "Printed" for the record (Q5). --}}
+                        @if ($printTags && $batch->asksClinicToPrint())
                             <span class="mt-1 block">
-                                @if ($batch->approvedReleaseRequest->copies_printed_at === null)
+                                @if ($batch->copiesPrintedAt() === null)
                                     <x-hp.badge variant="live" data-print-requested>Print Requested</x-hp.badge>
                                 @else
                                     <x-hp.badge variant="neutral" data-copies-printed>Printed</x-hp.badge>

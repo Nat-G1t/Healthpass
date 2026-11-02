@@ -124,6 +124,16 @@
             </dd>
         </div>
 
+        {{-- D-136: printed copies asked for on the request. --}}
+        @if ($batch->earlyCopiesStatus() !== null)
+            <div class="flex items-start justify-between gap-4">
+                <dt class="shrink-0 text-sm text-hp-slate/50">Printed copies</dt>
+                <dd class="text-right text-sm font-semibold text-hp-slate">
+                    @include('admin.batches.partials.early-copies', ['batch' => $batch])
+                </dd>
+            </div>
+        @endif
+
         {{-- Submitted date --}}
         <div class="flex items-center justify-between gap-4">
             <dt class="text-sm text-hp-slate/50">Submitted</dt>

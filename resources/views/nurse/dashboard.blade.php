@@ -167,9 +167,14 @@
                             $visit = $record->clinicVisit;
                             // D-128: 'yes' = the Director approved a release for
                             // this visit's batch, 'no' = not yet, 'none' = no batch.
-                            $releaseStatus = $record->visit_batch_id === null
-                                ? 'none'
-                                : ($record->has_approved_release ? 'yes' : 'no');
+                            // D-136: 'print' = not released, but its printed
+                            // copies were approved with the batch.
+                            $releaseStatus = match (true) {
+                                $record->visit_batch_id === null => 'none',
+                                $record->has_approved_release => 'yes',
+                                $record->has_early_copies => 'print',
+                                default => 'no',
+                            };
                         @endphp
                         <x-hp.table-row>
                             <x-hp.table-cell label="Reference No">
@@ -207,9 +212,9 @@
                             </x-hp.table-cell>
 
                             <x-hp.table-cell label="Release status">
-                                <span class="text-xs {{ $releaseStatus === 'yes' ? 'font-semibold text-hp-slate' : 'text-hp-slate/50' }}"
+                                <span class="text-xs {{ in_array($releaseStatus, ['yes', 'print'], true) ? 'font-semibold text-hp-slate' : 'text-hp-slate/50' }}"
                                       data-release-status="{{ $releaseStatus }}">
-                                    {{ ['yes' => 'Yes', 'no' => 'No', 'none' => '—'][$releaseStatus] }}
+                                    {{ ['yes' => 'Yes', 'print' => 'Print only', 'no' => 'No', 'none' => '—'][$releaseStatus] }}
                                 </span>
                             </x-hp.table-cell>
 
@@ -234,8 +239,9 @@
                                          disabled button, its hint on the wrapper (a disabled
                                          button shows no tooltip of its own). This is stricter
                                          than the server's print rule on purpose — that rule
-                                         also lets the encoding physician print on the day. --}}
-                                    @if ($releaseStatus === 'yes')
+                                         also lets the encoding physician print on the day.
+                                         D-136: also on Print only — a reprint is paper. --}}
+                                    @if (in_array($releaseStatus, ['yes', 'print'], true))
                                         <form method="POST" action="{{ route('nurse.visits.print.reprint', $visit) }}"
                                               target="hp-print-frame">
                                             @csrf

@@ -123,9 +123,10 @@ class ClinicVisit extends Model
         }
 
         return $query
-            // appointment.batchRequest: the D-62 form-type badge on every row,
-            // loaded here so the page and the feed never query per row (N+1).
-            ->with(['student:id,name', 'college:id,name', 'vitalSigns', 'appointment:id,batch_request_id', 'appointment.batchRequest:id,form_type'])
+            // appointment.batchRequest: the D-62 form-type badge and the D-136
+            // "Print copies" tag on every row, loaded here so the page and the
+            // feed never query per row (N+1).
+            ->with(['student:id,name', 'college:id,name', 'vitalSigns', 'appointment:id,batch_request_id', 'appointment.batchRequest:id,form_type,printed_copies_approved'])
             ->orderByRaw('COALESCE(interviewed_at, checked_in_at)')
             ->orderBy('id');
     }
@@ -393,6 +394,22 @@ class ClinicVisit extends Model
         }
 
         return $this->appointment?->batchRequest?->hasReleasedDocuments() ?? false;
+    }
+
+    /**
+     * D-136 — may the clinic PRINT this visit's form on paper? Everything
+     * isReleasedForPrint() allows (a released batch, D-125, or the encoding
+     * physician on the day, D-127), plus a batch whose college asked for
+     * printed copies on the request and the Director approved them with it.
+     *
+     * The hard-copy rule — Print, Print front / back and Reprint ask it.
+     * Save as PDF and every download keep asking isReleasedForPrint(), so an
+     * early-copies batch has no electronic copy before its release.
+     */
+    public function canPrintHardCopy(?User $user = null): bool
+    {
+        return $this->isReleasedForPrint($user)
+            || ($this->appointment?->batchRequest?->printed_copies_approved ?? false);
     }
 
     /** D-127 — true when $user saved this visit's encode today (server clock). */
