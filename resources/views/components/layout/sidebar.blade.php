@@ -384,8 +384,15 @@
 
         {{-- Main content — hp-page-enter gives every navigation a soft landing
              on the CONTENT only; the sidebar/header chrome stays stationary
-             like a native app (§5.5). --}}
-        <main class="hp-page-enter flex-1 overflow-y-auto bg-hp-bg p-4 sm:p-6 lg:p-7">
+             like a native app (§5.5).
+
+             `relative` makes <main> the containing block of every absolutely
+             positioned element inside it — chiefly the `sr-only` filter labels.
+             Without it they are placed against the page instead, so a filter
+             bar far down a long page (the Director's Batch Tracking, second
+             card) stretched the PAGE as well as <main>, and the page showed a
+             second scrollbar once scrolled to the bottom. --}}
+        <main class="hp-page-enter relative flex-1 overflow-y-auto bg-hp-bg p-4 sm:p-6 lg:p-7">
             {{ $slot }}
         </main>
 

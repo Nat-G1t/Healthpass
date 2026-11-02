@@ -2210,6 +2210,16 @@
 
 ### Fixed
 
+* **The Director's Batch Tracking no longer shows a second scrollbar at the
+  bottom** (reported by Nat 2026-11-03; no schema change, no new route). The
+  page shell scrolls inside `<main>`, but `<main>` was not positioned, so the
+  `sr-only` filter labels (`position: absolute`) of the Rejected and Cancelled
+  card's filter bar were laid out against the PAGE: they stretched it to their
+  depth (~1,750 px in a 927 px window), and the page scrolled as well as
+  `<main>`. `<main>` in `components/layout/sidebar` is now `relative`, so they
+  stay inside it. A sweep of every Director, College Admin and clinic page
+  found no other absolutely positioned element relying on the old behaviour.
+
 * **Flagged Anomalies fits a phone and no longer slides sideways** (reported
   by Nat 2026-10-05; the bug the Batch Approvals fix found in its 390 px sweep;
   no schema change, no new route). Below `md` each flagged visit is a stacked
