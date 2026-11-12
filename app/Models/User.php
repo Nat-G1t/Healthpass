@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Database\Factories\UserFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -92,6 +93,15 @@ class User extends Authenticatable
     public function roleLabel(): string
     {
         return self::ROLE_LABELS[$this->role] ?? '';
+    }
+
+    /**
+     * D-137 — who the clinic's batch emails go to: every ACTIVE nurse and
+     * physician. A query scope, called as `User::activeClinicStaff()->get()`.
+     */
+    public function scopeActiveClinicStaff(Builder $query): void
+    {
+        $query->whereIn('role', self::CLINIC_STAFF_ROLES)->where('status', 'active');
     }
 
     // ── Relationships ────────────────────────────────────────────────────────

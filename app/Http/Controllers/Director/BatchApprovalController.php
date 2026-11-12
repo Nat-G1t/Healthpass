@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Director\ApproveBatchRequest;
 use App\Http\Requests\Director\RejectBatchRequest;
 use App\Jobs\SendAppointmentScheduledMail;
+use App\Jobs\SendClinicBatchApprovedMail;
 use App\Models\Appointment;
 use App\Models\BatchRequest;
 use App\Models\User;
@@ -463,6 +464,12 @@ class BatchApprovalController extends Controller
 
         $batch->refresh();
         $studentCount = $appointments->count();
+
+        // D-137: tell the clinic too — one job per active nurse and physician,
+        // queued after the commit for the same reasons as the students' emails.
+        foreach (User::activeClinicStaff()->get() as $staff) {
+            SendClinicBatchApprovedMail::dispatch($staff, $batch, $studentCount);
+        }
 
         return redirect()->route('director.batches.index')
             ->with('status', "{$batch->reference_no} approved for {$this->dateLabel($scheduledDate)}, "

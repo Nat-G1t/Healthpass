@@ -6,6 +6,7 @@ namespace App\Actions;
 
 use App\Exceptions\BatchNotCancellable;
 use App\Jobs\SendAppointmentCancelledMail;
+use App\Jobs\SendClinicBatchCancelledMail;
 use App\Models\Appointment;
 use App\Models\BatchRequest;
 use App\Models\User;
@@ -35,7 +36,8 @@ use Illuminate\Support\Facades\DB;
  * Cancelling an APPROVED batch cancels its still-scheduled appointments —
  * which frees their seats, since every capacity count skips cancelled rows —
  * and emails each student the reason, so nobody turns up to a seat that no
- * longer exists. A pending batch has no appointments and emails nobody.
+ * longer exists, and (D-137) each active nurse and physician, so the clinic
+ * stops expecting them. A pending batch has no appointments and emails nobody.
  */
 final class CancelBatch
 {
@@ -47,7 +49,7 @@ final class CancelBatch
      */
     public function handle(BatchRequest $batch, User $by, string $reason): int
     {
-        $cancelledIds = DB::transaction(function () use ($batch, $by, $reason): array {
+        [$wasApproved, $cancelledIds] = DB::transaction(function () use ($batch, $by, $reason): array {
             $locked = BatchRequest::whereKey($batch->id)->lockForUpdate()->firstOrFail();
             $locked->appointments()->lockForUpdate()->get(['id']);
 
@@ -69,7 +71,7 @@ final class CancelBatch
             ]);
 
             if (! $wasApproved) {
-                return [];
+                return [false, []];
             }
 
             // Only the still-scheduled ones: a seat freed by an earlier
@@ -77,13 +79,21 @@ final class CancelBatch
             $ids = $locked->appointments()->where('status', 'scheduled')->pluck('id')->all();
             Appointment::whereKey($ids)->update(['status' => 'cancelled']);
 
-            return $ids;
+            return [true, $ids];
         });
 
         // Queued AFTER the commit, one job per student (the approve fan-out's
         // shape): a single bad address loses one email, not the whole batch.
         foreach (Appointment::whereKey($cancelledIds)->get() as $appointment) {
             SendAppointmentCancelledMail::dispatch($appointment);
+        }
+
+        // D-137: the clinic was told this batch was coming — tell every active
+        // nurse and physician it is off. A pending batch never reached them.
+        if ($wasApproved) {
+            foreach (User::activeClinicStaff()->get() as $staff) {
+                SendClinicBatchCancelledMail::dispatch($staff, $batch, count($cancelledIds));
+            }
         }
 
         return count($cancelledIds);

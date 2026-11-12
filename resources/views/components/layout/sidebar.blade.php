@@ -35,6 +35,7 @@
             ['Live Queue',        'nurse.queue',         'M4 6h16M4 10h16M4 14h16M4 18h16'],
             // FR-NRS-12 (D-114): every college's approved batches, upcoming
             // first — a calendar, since the list is ordered by clinic day.
+            // D-137: badged with the batches this user has not opened yet.
             ['Upcoming Batches',  'nurse.batches.index', 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z'],
             // FR-NRS-13 (D-125): the completed batches, with Print Requested
             // and row dots (no count badge — O4) — a checklist clipboard.

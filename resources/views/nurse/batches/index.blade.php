@@ -16,6 +16,9 @@
     ("Completed batches", nurse/batches/completed). View opens the batch's
     results page, where the clinic prints or downloads the students' forms
     once the Director has released them.
+
+    D-137: each batch this nurse or physician has not opened yet carries a
+    dot beside its View, and the sidebar's Upcoming Batches badge counts them.
 --}}
 
 {{-- ── Page header ─────────────────────────────────────────────────────── --}}
@@ -37,6 +40,9 @@
     // D-136: a batch whose printed copies were approved with it is tagged
     // from approval, so the clinic knows before its clinic day.
     'printTags' => true,
+    // D-137: a dot on each batch this user has not opened yet.
+    'dots' => $dots,
+    'pagerDots' => $pagerDots,
 ])
 
 @include('batches._clinic-calendar', [

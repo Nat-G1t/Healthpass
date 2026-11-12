@@ -28,7 +28,8 @@ use Illuminate\Support\Facades\DB;
  *  - BATCH NEWS (D-120) — Batch Tracking, for the College Admin and the
  *    Director, counts the dots on its rows (App\Support\BatchNotifications):
  *    each clears when that row's View is clicked. The admin's count adds the
- *    approvals since they last opened the page, which carry no dot.
+ *    approvals since they last opened the page, which carry no dot. D-137:
+ *    the clinic's Upcoming Batches counts its rows' dots the same way.
  *
  * Each badge reuses its page's own definition (liveQueue(), the
  * Activity Log's event set, the rows' dots) so a badge and its page cannot
@@ -74,7 +75,12 @@ final class NavBadges
             // Work count: the Live Queue's own query. reorder() drops its
             // ORDER BY, which a COUNT has no use for.
             // D-126: each clinic role counts its OWN queue.
-            'nurse', 'physician' => ['nurse.queue' => ClinicVisit::liveQueue($user)->reorder()->count()],
+            'nurse', 'physician' => [
+                'nurse.queue' => ClinicVisit::liveQueue($user)->reorder()->count(),
+                // D-137: the dots on Upcoming Batches — approved batches this
+                // user has not opened yet.
+                'nurse.batches.index' => BatchNotifications::count($user),
+            ],
             'director' => self::director($user),
             default => [],
         };

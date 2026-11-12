@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Services\ClinicScheduleService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -520,6 +521,27 @@ class BatchRequest extends Model
             ->map(fn (BatchRequestStudent $row): ?Appointment => $row->appointment)
             ->filter(fn (?Appointment $appointment): bool => $appointment !== null
                 && $appointment->clearanceProgress() !== 'withdrawn');
+    }
+
+    // ── Query scopes ─────────────────────────────────────────────────────────
+
+    /**
+     * D-137 — batches with a clinic day on $date or later: their first day,
+     * or a 2nd-chance day (D-110 books those on the same batch). This is the
+     * clinic's Upcoming Batches list, and that page's row dots and sidebar
+     * badge read this same rule, so the badge never counts a batch the page
+     * does not list.
+     *
+     * A "local scope" is a reusable WHERE clause: called as
+     * `->hasClinicDayFrom($today)` on any BatchRequest query. $date is a
+     * plain 'Y-m-d' string from the server clock; whereDate() is written by
+     * Laravel for each database, so MySQL and the SQLite suite agree.
+     */
+    public function scopeHasClinicDayFrom(Builder $query, string $date): void
+    {
+        $query->where(fn (Builder $query) => $query
+            ->whereDate('scheduled_date', '>=', $date)
+            ->orWhereHas('appointments', fn (Builder $appointments) => $appointments->whereDate('scheduled_date', '>=', $date)));
     }
 
     // ── Relationships ────────────────────────────────────────────────────────

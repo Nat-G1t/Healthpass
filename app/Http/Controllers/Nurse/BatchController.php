@@ -29,7 +29,8 @@ use Symfony\Component\HttpFoundation\Response;
  *   index()         Upcoming Batches (FR-NRS-12, D-114): APPROVED batches
  *                   with a clinic day today or later — the first day or a
  *                   2nd-chance day, D-110 — soonest first, and the Clinic
- *                   Calendar (D-119)
+ *                   Calendar (D-119); a per-user row dot on each batch not
+ *                   opened yet (D-137)
  *   completed()     Batch Results (FR-NRS-13, D-125): one "Completed batches"
  *                   card — every other approved batch, newest first — with
  *                   the Print Requested / Printed tag and a per-user row dot
@@ -63,21 +64,25 @@ class BatchController extends Controller
      * "Today" comes from the server clock and goes into the SQL as a plain
      * date string — no date function in raw SQL, so MySQL and the SQLite test
      * suite agree. whereDate() is written by Laravel for each database.
+     *
+     * D-137: which batches are upcoming is BatchRequest::scopeHasClinicDayFrom()
+     * — the rule the row dots and the sidebar badge read too. A row carries
+     * this user's dot until they click its View (BatchNotifications).
      */
     public function index(Request $request): View
     {
         $today = today()->toDateString();
         $filters = BatchCardFilters::fromRequest($request, 'upcoming');
 
-        $upcomingBatches = $this->approvedBatches($filters)
-            ->where(fn (Builder $query) => $query
-                ->whereDate('scheduled_date', '>=', $today)
-                ->orWhereHas('appointments', $this->hasClinicDayFrom($today)))
+        $upcomingQuery = $this->approvedBatches($filters)
+            ->hasClinicDayFrom($today)
             // D-136: the Print Requested tag, loaded for every row in one query.
             ->with('approvedReleaseRequest')
             ->orderBy($this->nextClinicHour($today, 'scheduled_date'))
             ->orderBy($this->nextClinicHour($today, 'scheduled_time'))
-            ->orderBy('id')
+            ->orderBy('id');
+
+        $upcomingBatches = $upcomingQuery->clone()
             ->paginate(config('healthpass.ui.rows_per_page'), pageName: $filters->pageName())
             ->withQueryString();
 
@@ -85,6 +90,9 @@ class BatchController extends Controller
             'upcomingBatches' => $upcomingBatches,
             'upcomingFilters' => $filters,
             'colleges' => College::orderBy('code')->get(['id', 'code']),
+            'dots' => BatchNotifications::dots($request->user(), $upcomingBatches->getCollection()),
+            // D-131: Previous / Next carry a dot when another page holds one.
+            'pagerDots' => BatchNotifications::pagerDots($request->user(), $upcomingQuery, $upcomingBatches),
         ]);
     }
 

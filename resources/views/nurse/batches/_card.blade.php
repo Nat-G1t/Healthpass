@@ -16,8 +16,9 @@
       $empty    — what to say when there is nothing to list
       $from     — optional: the `from` value View carries, so the results
                   page's back link returns here ('completed')
-      $dots     — optional (D-125): batch id => bool, this user's row dots
-                  (App\Support\BatchNotifications). Left out, no dots.
+      $dots     — optional (D-125, Upcoming since D-137): batch id => bool,
+                  this user's row dots (App\Support\BatchNotifications).
+                  Left out, no dots.
       $pagerDots — optional (D-131): ['previous' => bool, 'next' => bool],
                   the pager's dots (BatchNotifications::pagerDots()). Left
                   out, none.

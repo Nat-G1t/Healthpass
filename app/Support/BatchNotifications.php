@@ -19,7 +19,8 @@ use Illuminate\Support\Facades\DB;
 /**
  * D-120 — the notification DOTS on Batch Tracking rows, and the number on the
  * Batch Tracking sidebar badge, for the College Admin and the Director. D-125
- * adds the clinic's dots (nurse and physician) on its Completed batches card.
+ * adds the clinic's dots (nurse and physician) on its Completed batches card,
+ * and D-137 on its Upcoming card, with a badge on Upcoming Batches.
  *
  * A dot is a small circle at the end of a row whose batch has news the viewer
  * has not opened yet. It goes away when they click that row's View button,
@@ -39,18 +40,23 @@ use Illuminate\Support\Facades\DB;
  *       batch's documents
  *     - Rejected and Cancelled row: a college cancelled the batch (the
  *       Director's own cancellations, D-129, are no news — like rejections)
- *   Clinic staff (D-125) — per user, so the nurse and the physician each
- *   have their own
- *     - Completed batches row: the Director approved a release request that
- *       asks for PRINTED COPIES since this user last opened the batch (or
- *       they never have). Nothing else makes a clinic dot, and the clinic
- *       has no badge (count() is 0 — O4).
+ *   Clinic staff (D-125, D-137) — per user, so the nurse and the physician
+ *   each have their own; clinicDotIds() is the one rule
+ *     - Upcoming row (D-137): the Director approved the batch and this user
+ *       has never opened it — the panel's "tell the clinic a schedule was
+ *       approved". Only while the batch is upcoming: a batch nobody opened
+ *       before its clinic days ended does not light up on Batch Results.
+ *     - any row (D-125): the Director approved a release request that asks
+ *       for PRINTED COPIES since this user last opened the batch (or they
+ *       never have).
+ *     The badge sits on Upcoming Batches only and counts that card's dots;
+ *     Batch Results still has none (O4).
  *
  * The badge = the viewer's dots (+ the admin's approvals since they last
- * opened the page — NavBadges' "since last seen" stamp). An approved batch
- * starts out "seen" as Scheduled: its approval is the Director's own act, and
- * the college hears of it through the badge, so only what happens AFTER is a
- * dot.
+ * opened the page — NavBadges' "since last seen" stamp). For the college and
+ * the Director, an approved batch starts out "seen" as Scheduled: its approval
+ * is the Director's own act, and the college hears of it through the badge,
+ * so only what happens AFTER is a dot.
  *
  * Every dot reads the same rules, so a row and the badge cannot disagree.
  * resultsStatus() needs every student's appointment, so the badge works it out
@@ -95,6 +101,13 @@ final class BatchNotifications
         }
 
         $ids = $batches->pluck('id')->all();
+
+        if ($user->isClinicStaff()) {
+            $dotted = array_flip(self::clinicDotIds($user, $ids));
+
+            return $batches->mapWithKeys(fn (BatchRequest $batch): array => [$batch->id => isset($dotted[$batch->id])])->all();
+        }
+
         $seen = self::seenRows($user, $ids);
         $release = self::releaseTimes($ids);
 
@@ -103,9 +116,23 @@ final class BatchNotifications
         ])->all();
     }
 
-    /** The Batch Tracking badge: the admin's dots + approvals since last opened, or the Director's dots. */
+    /**
+     * The Batch Tracking badge: the admin's dots + approvals since last
+     * opened, or the Director's dots. D-137: the clinic's Upcoming Batches
+     * badge — the dots on every upcoming batch, whatever page they sit on.
+     */
     public static function count(User $user): int
     {
+        if ($user->isClinicStaff()) {
+            $upcoming = BatchRequest::query()
+                ->where('status', 'approved')
+                ->hasClinicDayFrom(today()->toDateString())
+                ->pluck('id')
+                ->all();
+
+            return count(self::clinicDotIds($user, $upcoming));
+        }
+
         return match ($user->role) {
             'college_admin' => self::collegeAdminCount($user),
             'director' => self::directorCount($user),
@@ -170,6 +197,11 @@ final class BatchNotifications
             return [];
         }
 
+        // The clinic's cards pass no status limit (O4 / D-137).
+        if ($user->isClinicStaff()) {
+            return self::clinicDotIds($user, $ids);
+        }
+
         $batches = self::withDotColumns(BatchRequest::query()->whereIn('id', $ids))
             ->when($statuses !== [], fn (Builder $query) => $query->whereIn('status', $statuses))
             ->with('canceller:id,role')
@@ -183,10 +215,8 @@ final class BatchNotifications
         $seen = self::seenRows($user, $batchIds);
         $release = self::releaseTimes($batchIds);
 
-        // The clinic's dot never reads the status, so only the College Admin's
-        // and the Director's approved batches take the status path.
         [$approved, $others] = $batches->partition(
-            fn (BatchRequest $batch): bool => $batch->status === 'approved' && ! $user->isClinicStaff(),
+            fn (BatchRequest $batch): bool => $batch->status === 'approved',
         );
 
         $dotted = $others->filter(fn (BatchRequest $batch): bool => self::hasDot(
@@ -239,18 +269,15 @@ final class BatchNotifications
     // ── The rules ────────────────────────────────────────────────────────────
 
     /**
-     * One row's dot. $status works the approved batch's status out only when
-     * it is needed — it is the expensive part.
+     * One College Admin or Director row's dot (the clinic's is
+     * clinicDotIds()). $status works the approved batch's status out only
+     * when it is needed — it is the expensive part.
      *
      * @param  array{requested: ?Carbon, decided: ?Carbon, copies_approved: ?Carbon}|null  $release
      * @param  Closure(): string  $status
      */
     private static function hasDot(User $user, BatchRequest $batch, ?BatchSeen $seen, ?array $release, Closure $status): bool
     {
-        if ($user->isClinicStaff()) {
-            return self::hasPrintRequestNews($batch, $seen, $release);
-        }
-
         return match ($batch->status) {
             'approved' => self::hasReleaseNews($user, $batch, $seen, $release)
                 || $status() !== ($seen->seen_status ?? self::APPROVED_STATUS),
@@ -281,18 +308,47 @@ final class BatchNotifications
     }
 
     /**
-     * D-125 — the clinic's only news: a printed-copies release approved after
-     * this user last opened the batch, or one they have never opened.
+     * The clinic's dots (D-125, D-137): which of $ids carry this nurse's or
+     * physician's dot. Approved batches only —
+     *   - an UPCOMING batch (BatchRequest::scopeHasClinicDayFrom()) this user
+     *     has never opened, or
+     *   - one with a printed-copies release approved since they last opened it.
+     * Every clinic row, pager and badge reads this, so they cannot disagree.
+     *
+     * Queries: the approved ids, the upcoming ids, the seen rows, the release
+     * times.
+     *
+     * @param  list<int>  $ids
+     * @return list<int>
+     */
+    private static function clinicDotIds(User $user, array $ids): array
+    {
+        $approved = BatchRequest::query()->whereIn('id', $ids)->where('status', 'approved');
+        $approvedIds = $approved->clone()->pluck('id')->all();
+
+        if ($approvedIds === []) {
+            return [];
+        }
+
+        $upcoming = $approved->clone()->hasClinicDayFrom(today()->toDateString())->pluck('id')->flip();
+        $seen = self::seenRows($user, $approvedIds);
+        $release = self::releaseTimes($approvedIds);
+
+        return array_values(array_filter($approvedIds, fn (int $id): bool => ($upcoming->has($id) && ! $seen->has($id))
+            || self::hasPrintRequestNews($seen->get($id), $release->get($id))));
+    }
+
+    /**
+     * D-125 — a printed-copies release approved after this user last opened
+     * the batch, or one they have never opened.
      *
      * @param  array{requested: ?Carbon, decided: ?Carbon, copies_approved: ?Carbon}|null  $release
      */
-    private static function hasPrintRequestNews(BatchRequest $batch, ?BatchSeen $seen, ?array $release): bool
+    private static function hasPrintRequestNews(?BatchSeen $seen, ?array $release): bool
     {
         $approvedAt = $release['copies_approved'] ?? null;
 
-        return $batch->status === 'approved'
-            && $approvedAt !== null
-            && ($seen === null || $approvedAt->gt($seen->seen_at));
+        return $approvedAt !== null && ($seen === null || $approvedAt->gt($seen->seen_at));
     }
 
     /** How many of $approved's batches carry a dot — approvedDotIds() over the whole query. */

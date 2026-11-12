@@ -206,7 +206,8 @@ class NavBadgesTest extends TestCase
         // Appointment and My Appointments items.)
         $this->assertSame(['student.records', 'student.tutorial'], array_keys($this->badges($this->student)));
         $this->assertSame(['admin.batches.index', 'admin.activity'], array_keys($this->badges($this->admin)));
-        $this->assertSame(['nurse.queue'], array_keys($this->badges($this->nurse)));
+        // D-137: Upcoming Batches counts the batches the nurse has not opened.
+        $this->assertSame(['nurse.queue', 'nurse.batches.index'], array_keys($this->badges($this->nurse)));
         // D-113: Batch Tracking's work count (release requests to review).
         // D-135 removed Flagged Anomalies and its badge.
         $this->assertSame(['director.batches.index', 'director.tracking.index'], array_keys($this->badges($this->director)));
